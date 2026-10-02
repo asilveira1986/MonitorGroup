@@ -128,7 +128,6 @@ export class WhatsAppManager {
       browser: Browsers.ubuntu('MonitorGroup'),
       markOnlineOnConnect: false, // mantém as notificações no celular
       syncFullHistory: false,
-      shouldSyncHistoryMessage: () => false,
       generateHighQualityLinkPreview: false,
     });
 

@@ -1,0 +1,63 @@
+import { LogOut } from 'lucide-react';
+import { RealtimeListener } from '@/components/realtime-listener';
+import { Sidebar } from '@/components/sidebar';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { requireProfile } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/server';
+
+export default async function AppLayout({ children }: LayoutProps<'/'>) {
+  const profile = await requireProfile();
+  const supabase = await createClient();
+
+  const [{ count: pending }, { count: alerts }] = await Promise.all([
+    supabase.from('pending_queue').select('id', { count: 'exact', head: true }),
+    supabase.from('alerts').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+  ]);
+
+  const initials = (profile.full_name || profile.email)
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]!.toUpperCase())
+    .join('');
+
+  return (
+    <div className="min-h-screen">
+      <Sidebar counts={{ pending: pending ?? 0, alerts: alerts ?? 0 }} />
+      <RealtimeListener />
+      <div className="lg:pl-64">
+        <header className="sticky top-0 z-20 hidden items-center justify-end gap-2 border-b border-line bg-bg/80 px-8 py-3 backdrop-blur lg:flex">
+          <ThemeToggle />
+          <div className="ml-2 flex items-center gap-3 rounded-xl px-2 py-1">
+            {profile.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={profile.avatar_url} alt="" className="h-8 w-8 rounded-full" />
+            ) : (
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand">
+                {initials}
+              </div>
+            )}
+            <div className="leading-tight">
+              <p className="text-sm font-medium">{profile.full_name || profile.email.split('@')[0]}</p>
+              <p className="text-[11px] text-muted">{profile.role === 'admin' ? 'Administrador' : 'Atendente'}</p>
+            </div>
+          </div>
+          <form action="/auth/signout" method="post">
+            <button className="rounded-xl p-2 text-ink-2 hover:bg-surface-2 hover:text-ink" title="Sair" aria-label="Sair">
+              <LogOut className="h-5 w-5" />
+            </button>
+          </form>
+        </header>
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-8">{children}</main>
+        <div className="flex items-center justify-center gap-2 pb-6 lg:hidden">
+          <ThemeToggle />
+          <form action="/auth/signout" method="post">
+            <button className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-ink-2 hover:bg-surface-2">
+              <LogOut className="h-4 w-4" /> Sair
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}

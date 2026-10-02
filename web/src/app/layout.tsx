@@ -1,0 +1,28 @@
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import { Toaster } from 'sonner';
+import './globals.css';
+
+const inter = Inter({ variable: '--font-inter', subsets: ['latin'] });
+
+export const metadata: Metadata = {
+  title: 'MonitorGroup',
+  description: 'Monitoramento de grupos de WhatsApp: garanta que todo cliente seja respondido.',
+};
+
+// aplica o tema salvo antes da primeira pintura (evita "piscar")
+const themeScript = `try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch(e){}`;
+
+export default function RootLayout({ children }: LayoutProps<'/'>) {
+  return (
+    <html lang="pt-BR" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body className="min-h-full">
+        {children}
+        <Toaster richColors position="top-right" />
+      </body>
+    </html>
+  );
+}
