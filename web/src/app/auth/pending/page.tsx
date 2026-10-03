@@ -6,6 +6,10 @@ export default async function PendingAccessPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // diferencia "perfil bloqueado" de "banco sem as tabelas do sistema"
+  const { error: schemaError } = user
+    ? await supabase.from('profiles').select('id').eq('id', user.id).maybeSingle()
+    : { error: null };
 
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
@@ -13,7 +17,15 @@ export default async function PendingAccessPage() {
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-warning/15 text-warning-ink">
           <ShieldAlert className="h-6 w-6" />
         </div>
-        <h1 className="text-lg font-semibold">Acesso não liberado</h1>
+        <h1 className="text-lg font-semibold">{schemaError ? 'Banco de dados não preparado' : 'Acesso não liberado'}</h1>
+        {schemaError ? (
+          <p className="mt-2 text-sm text-ink-2">
+            O login funcionou, mas as tabelas do sistema não foram encontradas. No Supabase, abra o SQL Editor e
+            execute, em ordem, os arquivos <code>0001</code> a <code>0004</code> da pasta{' '}
+            <code>supabase/migrations</code>. Depois entre novamente.
+            <span className="mt-2 block text-xs text-muted">Detalhe: {schemaError.message}</span>
+          </p>
+        ) : (
         <p className="mt-2 text-sm text-ink-2">
           {user?.email ? (
             <>
@@ -24,6 +36,7 @@ export default async function PendingAccessPage() {
           )}{' '}
           Peça a um administrador para cadastrá-lo em <em>Configurações &gt; Usuários</em>.
         </p>
+        )}
         <form action="/auth/signout" method="post" className="mt-6">
           <button className="h-10 w-full rounded-xl border border-line text-sm font-medium hover:bg-surface-2">
             Sair e usar outra conta

@@ -8,10 +8,19 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next');
   const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
 
+  // O Supabase/Google devolve o motivo quando o login é recusado
+  let reason = searchParams.get('error_description') ?? searchParams.get('error');
+
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) return NextResponse.redirect(`${origin}${safeNext}`);
+    reason = error.message;
+  } else if (!reason) {
+    reason = 'O retorno do login veio sem código de autorização.';
   }
-  return NextResponse.redirect(`${origin}/login?error=auth`);
+
+  const url = new URL('/login', origin);
+  url.searchParams.set('error', reason);
+  return NextResponse.redirect(url);
 }

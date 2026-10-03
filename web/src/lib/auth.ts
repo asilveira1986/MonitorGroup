@@ -11,7 +11,12 @@ export const requireProfile = cache(async (): Promise<Profile> => {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  let { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  if (!profile) {
+    // usuário criado antes de o banco estar pronto: cria o perfil agora
+    const { data } = await supabase.rpc('ensure_profile');
+    profile = data;
+  }
   if (!profile || !profile.active) redirect('/auth/pending');
   return profile as Profile;
 });

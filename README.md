@@ -38,6 +38,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    1. `supabase/migrations/0001_schema.sql`
    2. `supabase/migrations/0002_metrics.sql`
    3. `supabase/migrations/0003_ingest.sql`
+   4. `supabase/migrations/0004_profile_fallback.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -100,6 +101,22 @@ O worker precisa ficar ligado 24 horas por dia, porque mantém a conexão com o 
 6. Em **Configurações › Usuários**, cadastre as outras pessoas:
    - **com senha**: elas entram com e-mail e senha;
    - **sem senha**: elas entram com a conta Google desse e-mail.
+
+## Problemas no login
+
+A tela de login mostra o motivo do erro. Os casos mais comuns:
+
+| Mensagem | O que fazer |
+|---|---|
+| *Configuração incompleta* | Cadastre `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` na Vercel e faça **Redeploy** (variáveis novas só valem após um novo deploy). |
+| *E-mail ou senha incorretos* | Confira os dados ou recrie o usuário em **Authentication › Users** marcando *Auto confirm user*. |
+| *E-mail ainda não confirmado* | Em **Authentication › Users**, confirme o usuário ou recrie com *Auto confirm user*. |
+| *Não foi possível conectar ao Supabase* | URL errada ou projeto pausado (projetos gratuitos pausam após 7 dias sem uso; reative no painel do Supabase). |
+| *Banco de dados não preparado* | Execute os scripts `0001` a `0004` no SQL Editor. |
+| *Acesso não liberado* | O e-mail não está autorizado; um administrador precisa cadastrá-lo em **Configurações › Usuários**. |
+| Volta para o login após entrar com Google | Configure **Site URL** e **Redirect URLs** em **Authentication › URL Configuration**. |
+
+Criou o usuário antes de rodar os scripts? Basta executar o `0004`: ele cria os perfis que faltam e torna administrador o usuário mais antigo.
 
 ## Custos estimados
 

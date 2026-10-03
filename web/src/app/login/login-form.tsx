@@ -18,7 +18,28 @@ function GoogleIcon() {
   );
 }
 
-export function LoginForm() {
+/** Traduz as mensagens do Supabase para algo que diga o que fazer. */
+function explain(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('invalid login credentials')) return 'E-mail ou senha incorretos.';
+  if (m.includes('email not confirmed'))
+    return 'E-mail ainda não confirmado. No Supabase, abra Authentication › Users, clique no usuário e confirme o e-mail (ou recrie com "Auto confirm user").';
+  if (m.includes('invalid api key') || m.includes('no api key'))
+    return 'Chave do Supabase inválida. Confira NEXT_PUBLIC_SUPABASE_ANON_KEY na Vercel e faça um novo deploy.';
+  if (m.includes('failed to fetch') || m.includes('network') || m.includes('load failed'))
+    return 'Não foi possível conectar ao Supabase. Confira NEXT_PUBLIC_SUPABASE_URL na Vercel e se o projeto do Supabase está ativo (projetos gratuitos pausam após 7 dias sem uso).';
+  if (m.includes('provider is not enabled') || m.includes('unsupported provider'))
+    return 'O login com Google ainda não foi ativado no Supabase (Authentication › Sign In / Providers › Google).';
+  if (m.includes('signups not allowed') || m.includes('signup is disabled'))
+    return 'Cadastro de novos usuários desativado no Supabase. Ative "Allow new users to sign up" em Authentication › Sign In / Providers.';
+  if (m.includes('database error saving new user'))
+    return 'Erro no banco ao criar o usuário. Verifique se os scripts SQL (0001 a 0004) foram executados no Supabase.';
+  if (m.includes('redirect') || m.includes('code verifier') || m.includes('pkce'))
+    return 'Falha no retorno do login. No Supabase, em Authentication › URL Configuration, coloque o endereço do painel em Site URL e em Redirect URLs (com /** no final). Abra o login sempre pelo mesmo endereço.';
+  return message;
+}
+
+export function LoginForm({ configProblem }: { configProblem: string | null }) {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get('next') ?? '/dashboard';
@@ -29,13 +50,19 @@ export function LoginForm() {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     setLoading('password');
-    const { error } = await createClient().auth.signInWithPassword({
-      email: String(form.get('email')).trim().toLowerCase(),
-      password: String(form.get('password')),
-    });
-    if (error) {
+    let message: string | null = null;
+    try {
+      const { error } = await createClient().auth.signInWithPassword({
+        email: String(form.get('email')).trim().toLowerCase(),
+        password: String(form.get('password')),
+      });
+      message = error?.message ?? null;
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    if (message) {
       setLoading(null);
-      toast.error(error.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : error.message);
+      toast.error(explain(message), { duration: 12_000 });
       return;
     }
     router.replace(next);
@@ -44,13 +71,15 @@ export function LoginForm() {
 
   async function signInWithGoogle() {
     setLoading('google');
-    const { error } = await createClient().auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
-    });
-    if (error) {
+    try {
+      const { error } = await createClient().auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
+      });
+      if (error) throw error;
+    } catch (err) {
       setLoading(null);
-      toast.error(error.message);
+      toast.error(explain(err instanceof Error ? err.message : String(err)), { duration: 12_000 });
     }
   }
 
@@ -60,20 +89,32 @@ export function LoginForm() {
       return;
     }
     setLoading('reset');
-    const { error } = await createClient().auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: `${window.location.origin}/auth/callback?next=/auth/update-password`,
-    });
-    setLoading(null);
-    if (error) toast.error(error.message);
-    else toast.success('Enviamos um link para redefinir sua senha.');
+    try {
+      const { error } = await createClient().auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: `${window.location.origin}/auth/callback?next=/auth/update-password`,
+      });
+      if (error) throw error;
+      toast.success('Enviamos um link para redefinir sua senha.');
+    } catch (err) {
+      toast.error(explain(err instanceof Error ? err.message : String(err)));
+    } finally {
+      setLoading(null);
+    }
   }
 
   return (
     <div className="mt-8 space-y-6">
+      {configProblem && (
+        <div className="rounded-xl border border-critical/30 bg-critical/10 px-3 py-2 text-sm text-critical-ink">
+          <p className="font-semibold">Configuração incompleta</p>
+          <p className="mt-1">{configProblem}</p>
+        </div>
+      )}
       {params.get('error') && (
-        <p className="rounded-xl bg-critical/10 px-3 py-2 text-sm text-critical-ink">
-          Não foi possível concluir o login. Tente novamente.
-        </p>
+        <div className="rounded-xl bg-critical/10 px-3 py-2 text-sm text-critical-ink">
+          <p className="font-semibold">Não foi possível concluir o login</p>
+          {params.get('error') !== 'auth' && <p className="mt-1">{explain(params.get('error')!)}</p>}
+        </div>
       )}
 
       <Button type="button" variant="secondary" className="w-full" onClick={signInWithGoogle} disabled={loading !== null}>
