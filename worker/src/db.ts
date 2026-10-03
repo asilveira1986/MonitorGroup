@@ -10,7 +10,7 @@ export type InstanceRow = {
   name: string;
   phone: string | null;
   status: 'disconnected' | 'connecting' | 'qr' | 'connected';
-  requested_action: 'connect' | 'logout' | null;
+  requested_action: 'connect' | 'logout' | 'reimport' | null;
   connected_at: string | null;
 };
 
@@ -44,6 +44,7 @@ export type AppSettings = {
   default_sla_minutes: number;
   auto_monitor_new_groups: boolean;
   ignore_acknowledgements: boolean;
+  history_import_days: number;
 };
 
 export type AlertRule = {

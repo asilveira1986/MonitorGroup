@@ -1,65 +1,49 @@
-import { ArrowLeft, CheckCheck, Clock, Hourglass, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, CheckCheck, Hourglass, Trash2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ActionButton } from '@/components/action-button';
-import { Badge, Card, CardHeader, EmptyState } from '@/components/ui';
-import { cn, formatDateTime, formatDuration, formatNumber, formatPhone, formatTime, REMOVED_REASON_LABEL, timeAgo } from '@/lib/format';
+import { Card, CardHeader } from '@/components/ui';
+import { formatDateTime, formatDuration, formatNumber, REMOVED_REASON_LABEL, timeAgo } from '@/lib/format';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { Group, Message } from '@/lib/types';
 import { markGroupAnswered } from '../../actions';
-import { LiveMessages, MarkTeamButton, MonitorToggle, SlaForm } from '../group-controls';
+import { LiveMessages, MonitorToggle, SlaForm } from '../group-controls';
+import { PAGE_SIZE } from './constants';
+import { Conversation } from './conversation';
 import { DeleteRemovedGroupButton } from '../removed-groups';
-
-const TYPE_LABEL: Record<string, string> = {
-  image: '📷 Imagem',
-  video: '🎬 Vídeo',
-  audio: '🎤 Áudio',
-  document: '📄 Documento',
-  sticker: '🙂 Figurinha',
-  contact: '👤 Contato',
-  location: '📍 Localização',
-  poll: '📊 Enquete',
-};
-
-const daysAgoIso = (days: number) => new Date(Date.now() - days * 86400_000).toISOString();
 
 export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
   const { id } = await params;
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const since = daysAgoIso(30);
   const [{ data: group }, { data: msgs }, { data: settings }, { data: stats }] = await Promise.all([
     supabase.from('groups').select('*').eq('id', id).maybeSingle(),
-    supabase.from('messages').select('*').eq('group_id', id).order('sent_at', { ascending: false }).limit(200),
-    supabase.from('app_settings').select('timezone, default_sla_minutes').eq('id', 1).single(),
+    // só as mais recentes; as anteriores são carregadas ao rolar a conversa
     supabase
       .from('messages')
-      .select('from_team, response_time_seconds')
+      .select('*')
       .eq('group_id', id)
-      .gte('sent_at', since)
-      .limit(10000),
+      .order('sent_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(PAGE_SIZE),
+    supabase.from('app_settings').select('timezone, default_sla_minutes').eq('id', 1).single(),
+    // indicadores calculados no banco
+    supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
   if (!group) notFound();
   const g = group as Group;
   const tz = settings?.timezone;
-  const messages = ((msgs ?? []) as Message[]).reverse();
-
-  const s = stats ?? [];
-  const received = s.filter((m) => !m.from_team).length;
-  const sent = s.length - received;
-  const times = s.map((m) => m.response_time_seconds).filter((v): v is number => v != null);
-  const avg = times.length ? times.reduce((a, b) => a + b, 0) / times.length : null;
+  const st = (stats ?? {}) as {
+    received?: number;
+    sent?: number;
+    responses?: number;
+    avg_response_seconds?: number | null;
+    in_sla?: number;
+  };
   const sla = (g.sla_minutes ?? settings?.default_sla_minutes ?? 30) * 60;
-  const inSla = times.length ? (times.filter((t) => t <= sla).length / times.length) * 100 : null;
-
-  const dayFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: tz });
-  const rows = messages.map((m, i) => {
-    const day = dayFormat.format(new Date(m.sent_at));
-    const prev = i > 0 ? dayFormat.format(new Date(messages[i - 1].sent_at)) : null;
-    return { m, day, showDay: day !== prev };
-  });
+  const inSla = st.responses ? ((st.in_sla ?? 0) / st.responses) * 100 : null;
 
   return (
     <>
@@ -124,9 +108,9 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
       <div className="grid gap-4 lg:grid-cols-4">
         <div className="grid grid-cols-2 gap-4 lg:col-span-1 lg:grid-cols-1 lg:content-start">
           {[
-            { label: 'Msgs de clientes (30d)', value: formatNumber(received) },
-            { label: 'Msgs da equipe (30d)', value: formatNumber(sent) },
-            { label: 'Tempo médio de resposta', value: formatDuration(avg) },
+            { label: 'Msgs de clientes (30d)', value: formatNumber(st.received) },
+            { label: 'Msgs da equipe (30d)', value: formatNumber(st.sent) },
+            { label: 'Tempo médio de resposta', value: formatDuration(st.avg_response_seconds) },
             { label: 'Dentro do SLA', value: inSla == null ? '—' : `${inSla.toFixed(0)}%` },
           ].map((k) => (
             <Card key={k.label} className="p-4">
@@ -139,62 +123,15 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
         <Card className="lg:col-span-3">
           <CardHeader
             title="Conversa"
-            description="Últimas 200 mensagens · azul = cliente, verde = equipe"
+            description="Role para cima para ver as anteriores · azul = cliente, verde = equipe"
           />
-          {/* flex-col-reverse mantém a rolagem ancorada nas mensagens mais recentes */}
-          <div className="flex max-h-[70vh] flex-col-reverse overflow-y-auto p-3 sm:max-h-[640px] sm:p-5">
-            <div className="space-y-2">
-            {messages.length === 0 && (
-              <EmptyState icon={<Clock />} title="Nenhuma mensagem registrada ainda" description="As mensagens novas aparecem aqui em tempo real." />
-            )}
-            {rows.map(({ m, day, showDay }) => {
-              const sender = m.sender_name || formatPhone(m.sender_phone) || (m.from_me ? 'Número conectado' : 'Cliente');
-              return (
-                <div key={m.id}>
-                  {showDay && (
-                    <div className="my-3 flex justify-center">
-                      <span className="rounded-full bg-surface-2 px-3 py-1 text-[11px] text-muted">{day}</span>
-                    </div>
-                  )}
-                  <div className={cn('flex', m.from_team ? 'justify-end' : 'justify-start')}>
-                    <div
-                      className={cn(
-                        'max-w-[88%] rounded-2xl px-3.5 py-2 text-sm shadow-sm sm:max-w-[80%]',
-                        m.from_team
-                          ? 'rounded-br-md bg-brand-soft'
-                          : 'rounded-bl-md border border-line bg-surface',
-                        g.pending_since && !m.from_team && m.sent_at >= g.pending_since && 'ring-2 ring-warning/60',
-                      )}
-                    >
-                      <div className="mb-0.5 flex items-center gap-2">
-                        <span className={cn('text-xs font-semibold', m.from_team ? 'text-brand' : 'text-series-1')}>
-                          {sender}
-                        </span>
-                        {!m.from_team && m.sender_jid && (
-                          <MarkTeamButton jid={m.sender_jid} name={m.sender_name ?? ''} phone={m.sender_phone} />
-                        )}
-                      </div>
-                      <p className="whitespace-pre-wrap break-words text-ink">
-                        {m.message_type !== 'text' && (
-                          <span className="text-ink-2">{TYPE_LABEL[m.message_type] ?? m.message_type} </span>
-                        )}
-                        {m.body}
-                      </p>
-                      <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-muted">
-                        {m.response_time_seconds != null && (
-                          <Badge tone={m.response_time_seconds <= sla ? 'good' : 'critical'} className="py-0 text-[10px]">
-                            respondeu em {formatDuration(m.response_time_seconds)}
-                          </Badge>
-                        )}
-                        <span className="tabular">{formatTime(m.sent_at, tz)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            </div>
-          </div>
+          <Conversation
+            groupId={g.id}
+            initial={(msgs ?? []) as Message[]}
+            timeZone={tz}
+            slaSeconds={sla}
+            pendingSince={g.pending_since}
+          />
         </Card>
       </div>
     </>

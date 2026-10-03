@@ -28,7 +28,30 @@ type Session = {
   stopped: boolean;
   queue: Promise<void>;
   groupCache: Map<string, GroupRow>;
+  /** resolvida quando a lista de grupos foi sincronizada (o histórico espera por ela) */
+  groupsReady: Promise<void>;
+  markGroupsReady: () => void;
+  history: HistoryImport | null;
 };
+
+type HistoryImport = {
+  queue: Promise<void>;
+  imported: number;
+  touchedGroups: Set<string>;
+  liveSince: string;
+  finishTimer: ReturnType<typeof setTimeout> | null;
+};
+
+/** messageTimestamp pode vir como number ou Long */
+const toSeconds = (ts: unknown): number => {
+  if (typeof ts === 'number') return ts;
+  if (ts && typeof (ts as { toNumber?: () => number }).toNumber === 'function') return (ts as { toNumber: () => number }).toNumber();
+  const n = Number(ts);
+  return Number.isFinite(n) && n > 0 ? n : Math.floor(Date.now() / 1000);
+};
+
+const HISTORY_BATCH = 500;
+const HISTORY_IDLE_MS = 30_000; // sem novos lotes por 30s = importação concluída
 
 const baileysLogger = logger.child({ module: 'baileys' });
 baileysLogger.level = process.env.BAILEYS_LOG_LEVEL ?? 'warn';
@@ -93,6 +116,18 @@ export class WhatsAppManager {
         } else if (row.requested_action === 'logout') {
           await this.updateInstance(row.id, { requested_action: null });
           await this.logout(row.id);
+        } else if (row.requested_action === 'reimport') {
+          // o WhatsApp só envia o histórico no pareamento: desconecta e gera novo QR code
+          await this.updateInstance(row.id, {
+            requested_action: null,
+            history_status: 'idle',
+            history_imported: 0,
+            history_started_at: null,
+            history_finished_at: null,
+          });
+          await this.logout(row.id);
+          this.reconnectAttempts.delete(row.id);
+          await this.start(row.id);
         }
       }
 
@@ -125,14 +160,18 @@ export class WhatsAppManager {
 
     await this.updateInstance(instanceId, { status: 'connecting', last_error: null });
     const { state, saveCreds } = await usePostgresAuthState(instanceId);
+    const importHistory = (await getSettings()).history_import_days > 0;
 
     const sock = makeWASocket({
       version: this.version,
       auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, baileysLogger) },
       logger: baileysLogger,
-      browser: Browsers.ubuntu('Chrome'),
+      // o histórico completo só é enviado para clientes "Desktop"
+      browser: importHistory ? Browsers.macOS('Desktop') : Browsers.ubuntu('Chrome'),
       markOnlineOnConnect: false, // mantém as notificações no celular
-      syncFullHistory: false,
+      syncFullHistory: importHistory,
+      // com a importação ligada, aceita também o lote "FULL" (o padrão da biblioteca o ignora)
+      ...(importHistory ? { shouldSyncHistoryMessage: () => true } : {}),
       generateHighQualityLinkPreview: false,
     });
 
@@ -143,7 +182,11 @@ export class WhatsAppManager {
       stopped: false,
       queue: Promise.resolve(),
       groupCache: new Map(),
+      groupsReady: Promise.resolve(),
+      markGroupsReady: () => {},
+      history: null,
     };
+    session.groupsReady = new Promise((resolve) => (session.markGroupsReady = resolve));
     this.sessions.set(instanceId, session);
 
     sock.ev.on('creds.update', () => {
@@ -183,6 +226,7 @@ export class WhatsAppManager {
           });
           await resolveDisconnectAlerts(instanceId);
           await this.syncGroups(session);
+          session.markGroupsReady();
         }
 
         if (connection === 'close') {
@@ -244,6 +288,11 @@ export class WhatsAppManager {
           .then(() => this.handleMessage(session, msg))
           .catch((err) => log.error({ err, id: msg.key.id }, 'falha ao processar mensagem'));
       }
+    });
+
+    // histórico enviado pelo WhatsApp após o pareamento
+    sock.ev.on('messaging-history.set', ({ messages }) => {
+      if (messages.length) this.enqueueHistory(session, messages);
     });
 
     sock.ev.on('groups.upsert', (groups) => {
@@ -446,18 +495,9 @@ export class WhatsAppManager {
       if (!fresh.monitored) return;
     }
 
-    const fromMe = Boolean(msg.key.fromMe);
-    const participant = fromMe ? jidNormalizedUser(session.sock.user?.id) : msg.key.participant ?? null;
-    const participantAlt = (msg.key as { participantAlt?: string }).participantAlt ?? null;
-    const member = fromMe ? null : await findTeamMember(participant, participantAlt);
-    const fromTeam = fromMe || Boolean(member);
-
-    const ts = Number(msg.messageTimestamp ?? Math.floor(Date.now() / 1000));
-    const senderPhone = phoneFromJid(participant) ?? phoneFromJid(participantAlt);
-    const senderName = fromMe ? session.sock.user?.name ?? 'Número conectado' : member?.name ?? msg.pushName ?? null;
-
-    const settings = await getSettings();
-    const opensPending = !(settings.ignore_acknowledgements && isAcknowledgement(content.type, content.body));
+    const d = await this.describeMessage(session, msg, content);
+    const { fromMe, participant, member, fromTeam, senderPhone, senderName, opensPending } = d;
+    const ts = d.sentAtSeconds;
 
     const result = check(
       await db.rpc('ingest_message', {
@@ -483,5 +523,146 @@ export class WhatsAppManager {
         { id: result.message_id, body: content.body, senderName },
       );
     }
+  }
+
+  /** Dados comuns de uma mensagem de grupo (remetente, equipe, horário). */
+  private async describeMessage(session: Session, msg: WAMessage, content: { type: string; body: string | null }) {
+    const fromMe = Boolean(msg.key.fromMe);
+    const participant = fromMe ? jidNormalizedUser(session.sock.user?.id) : (msg.key.participant ?? null);
+    const participantAlt = (msg.key as { participantAlt?: string }).participantAlt ?? null;
+    const member = fromMe ? null : await findTeamMember(participant, participantAlt);
+    const settings = await getSettings();
+    return {
+      fromMe,
+      participant,
+      member,
+      fromTeam: fromMe || Boolean(member),
+      senderPhone: phoneFromJid(participant) ?? phoneFromJid(participantAlt),
+      senderName: fromMe ? (session.sock.user?.name ?? 'Número conectado') : (member?.name ?? msg.pushName ?? null),
+      sentAtSeconds: toSeconds(msg.messageTimestamp),
+      opensPending: !(settings.ignore_acknowledgements && isAcknowledgement(content.type, content.body)),
+    };
+  }
+
+  // -------------------------------------------------------------------
+  // Importação do histórico
+  // -------------------------------------------------------------------
+
+  private enqueueHistory(session: Session, messages: WAMessage[]) {
+    if (!session.history) {
+      session.history = {
+        queue: Promise.resolve(),
+        imported: 0,
+        touchedGroups: new Set(),
+        liveSince: new Date().toISOString(),
+        finishTimer: null,
+      };
+    }
+    const h = session.history;
+    if (h.finishTimer) clearTimeout(h.finishTimer);
+    h.queue = h.queue
+      .then(() => this.importHistoryBatch(session, messages))
+      .catch((err) => logger.error({ err }, 'falha ao importar lote do histórico'))
+      .finally(() => {
+        if (h.finishTimer) clearTimeout(h.finishTimer);
+        h.finishTimer = setTimeout(() => {
+          h.queue = h.queue.then(() => this.finishHistory(session)).catch((err) =>
+            logger.error({ err }, 'falha ao concluir a importação do histórico'),
+          );
+        }, HISTORY_IDLE_MS);
+      });
+  }
+
+  private async importHistoryBatch(session: Session, messages: WAMessage[]) {
+    const settings = await getSettings();
+    if (settings.history_import_days <= 0 || session.stopped) return;
+    const cutoff = Date.now() / 1000 - settings.history_import_days * 86400;
+
+    // só grupos já sincronizados, monitorados e ativos (não cria grupos de que o número já saiu)
+    await session.groupsReady;
+    const groups = (check(
+      await db
+        .from('groups')
+        .select('id, jid')
+        .eq('instance_id', session.instanceId)
+        .eq('monitored', true)
+        .is('removed_at', null),
+      'history groups',
+    ) ?? []) as { id: string; jid: string }[];
+    const groupByJid = new Map(groups.map((g) => [g.jid, g.id]));
+
+    const rows: Record<string, unknown>[] = [];
+    for (const msg of messages) {
+      const jid = msg.key.remoteJid;
+      if (!jid || !msg.key.id || !msg.message) continue;
+      const groupId = groupByJid.get(jid);
+      if (!groupId) continue;
+      if (toSeconds(msg.messageTimestamp) < cutoff) continue;
+      const content = extractContent(msg.message);
+      if (!content) continue;
+
+      const d = await this.describeMessage(session, msg, content);
+      rows.push({
+        group_id: groupId,
+        wa_message_id: msg.key.id,
+        sender_jid: d.participant,
+        sender_phone: d.senderPhone,
+        sender_name: d.senderName,
+        from_me: d.fromMe,
+        from_team: d.fromTeam,
+        team_member_id: d.member?.id ?? null,
+        message_type: content.type,
+        body: content.body,
+        sent_at: new Date(d.sentAtSeconds * 1000).toISOString(),
+        opens_pending: d.opensPending,
+      });
+    }
+    if (!rows.length) return;
+
+    const h = session.history!;
+    if (h.imported === 0) {
+      await this.updateInstance(session.instanceId, {
+        history_status: 'importing',
+        history_imported: 0,
+        history_started_at: new Date().toISOString(),
+        history_finished_at: null,
+      });
+    }
+
+    for (let i = 0; i < rows.length; i += HISTORY_BATCH) {
+      const chunk = rows.slice(i, i + HISTORY_BATCH);
+      // mensagens já existentes são ignoradas; retorna só as inseridas
+      const inserted = (check(
+        await db
+          .from('messages')
+          .upsert(chunk, { onConflict: 'group_id,wa_message_id', ignoreDuplicates: true })
+          .select('group_id'),
+        'history insert',
+      ) ?? []) as { group_id: string }[];
+      for (const r of inserted) h.touchedGroups.add(r.group_id);
+      h.imported += inserted.length;
+    }
+    await this.updateInstance(session.instanceId, { history_imported: h.imported });
+    logger.info({ instanceId: session.instanceId, total: h.imported }, 'histórico importado (parcial)');
+  }
+
+  /** Recalcula tempos de resposta e situação dos grupos que receberam histórico. */
+  private async finishHistory(session: Session) {
+    const h = session.history;
+    if (!h) return;
+    session.history = null;
+    if (h.imported === 0) return;
+
+    for (const groupId of h.touchedGroups) {
+      const { error } = await db.rpc('rebuild_group_state', { p_group_id: groupId, p_live_since: h.liveSince });
+      if (error) logger.error({ error: error.message, groupId }, 'falha ao recalcular grupo');
+      session.groupCache.clear();
+    }
+    await this.updateInstance(session.instanceId, {
+      history_status: 'done',
+      history_imported: h.imported,
+      history_finished_at: new Date().toISOString(),
+    });
+    logger.info({ instanceId: session.instanceId, total: h.imported, groups: h.touchedGroups.size }, 'histórico importado');
   }
 }

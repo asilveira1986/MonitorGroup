@@ -34,6 +34,9 @@ export async function saveGeneralSettings(form: FormData): Promise<Result> {
       default_sla_minutes: intOrNull(form.get('default_sla_minutes')) ?? 30,
       auto_monitor_new_groups: form.get('auto_monitor_new_groups') === 'on',
       ignore_acknowledgements: form.get('ignore_acknowledgements') === 'on',
+      history_import_days: [0, 7, 30, 60, 90].includes(Number(form.get('history_import_days')))
+        ? Number(form.get('history_import_days'))
+        : 30,
       updated_at: new Date().toISOString(),
     })
     .eq('id', 1);
@@ -52,12 +55,15 @@ export async function createInstance(name: string): Promise<Result> {
   return result(error);
 }
 
-export async function requestInstanceAction(id: string, action: 'connect' | 'logout'): Promise<Result> {
+export async function requestInstanceAction(id: string, action: 'connect' | 'logout' | 'reimport'): Promise<Result> {
   await requireAdmin();
   const supabase = await createClient();
   const { error } = await supabase
     .from('whatsapp_instances')
-    .update({ requested_action: action, ...(action === 'connect' ? { status: 'connecting', last_error: null } : {}) })
+    .update({
+      requested_action: action,
+      ...(action !== 'logout' ? { status: 'connecting', last_error: null } : {}),
+    })
     .eq('id', id);
   revalidatePath('/settings/whatsapp');
   return result(error);

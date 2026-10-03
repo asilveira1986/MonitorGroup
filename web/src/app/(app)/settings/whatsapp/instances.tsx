@@ -1,11 +1,11 @@
 'use client';
 
-import { CheckCircle2, Loader2, LogOut, Plus, QrCode, RefreshCw, Smartphone, Trash2, WifiOff } from 'lucide-react';
+import { CheckCircle2, History, Loader2, LogOut, Plus, QrCode, RefreshCw, Smartphone, Trash2, WifiOff } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Badge, Button, Card, EmptyState, Input } from '@/components/ui';
-import { formatPhone, timeAgo } from '@/lib/format';
+import { formatNumber, formatPhone, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import type { Instance } from '@/lib/types';
 import { useRealtime } from '@/lib/use-realtime';
@@ -25,7 +25,9 @@ export function InstancesPanel({ initial, isAdmin }: { initial: Instance[]; isAd
   const [name, setName] = useState('');
   const [workerOnline, setWorkerOnline] = useState<boolean | null>(null);
   const onWorkerChange = useCallback((online: boolean | null) => setWorkerOnline(online), []);
-  const waiting = instances.some((i) => i.status === 'connecting' || i.status === 'qr' || i.requested_action);
+  const waiting = instances.some(
+    (i) => i.status === 'connecting' || i.status === 'qr' || i.requested_action || i.history_status === 'importing',
+  );
 
   // Reserva caso o tempo real não esteja disponível: consulta enquanto aguarda o QR code
   useEffect(() => {
@@ -124,6 +126,19 @@ export function InstancesPanel({ initial, isAdmin }: { initial: Instance[]; isAd
                     Conectado {timeAgo(inst.connected_at)} · último sinal {timeAgo(inst.last_seen_at)}
                   </p>
                 )}
+                {inst.history_status === 'importing' && (
+                  <p className="flex items-center gap-2 rounded-lg bg-series-1/10 px-3 py-2 text-xs text-series-1">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Importando histórico dos grupos… {formatNumber(inst.history_imported)} mensagens até agora
+                  </p>
+                )}
+                {inst.history_status === 'done' && (
+                  <p className="flex items-center gap-2 text-xs text-muted">
+                    <History className="h-3.5 w-3.5" />
+                    Histórico importado: {formatNumber(inst.history_imported)} mensagens{' '}
+                    {inst.history_finished_at && `(${timeAgo(inst.history_finished_at)})`}
+                  </p>
+                )}
                 {inst.status === 'connecting' && workerOnline === false && (
                   <p className="rounded-lg bg-critical/10 px-3 py-2 text-xs text-critical-ink">
                     O QR code não vai aparecer enquanto o worker estiver fora do ar (veja o aviso acima).
@@ -158,6 +173,23 @@ export function InstancesPanel({ initial, isAdmin }: { initial: Instance[]; isAd
                           : inst.status === 'connecting'
                             ? 'Tentar novamente'
                             : 'Conectar'}
+                      </Button>
+                    )}
+                    {inst.status === 'connected' && inst.history_status !== 'importing' && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={pending}
+                        onClick={() => {
+                          if (
+                            confirm(
+                              'Importar o histórico dos grupos?\n\nO WhatsApp só envia as mensagens antigas no momento da conexão. Por isso será gerado um novo QR code para você ler com o celular. O período importado é definido em Configurações › Geral.',
+                            )
+                          )
+                            run(() => requestInstanceAction(inst.id, 'reimport'), 'Gerando novo QR code…');
+                        }}
+                      >
+                        <History className="h-3.5 w-3.5" /> Importar histórico
                       </Button>
                     )}
                     {inst.status === 'connected' && (

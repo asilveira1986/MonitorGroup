@@ -70,7 +70,20 @@ export function GeneralForm({ settings, disabled }: { settings: AppSettings; dis
             </Field>
           </div>
 
-          <div className="space-y-3">
+          <Field
+            label="Importar histórico ao conectar o WhatsApp"
+            hint="Ao ler o QR code, traz as mensagens anteriores dos grupos monitorados (só texto) e já calcula as métricas do período. Mais dias = mais espaço no banco."
+          >
+            <Select name="history_import_days" defaultValue={String(settings.history_import_days ?? 30)}>
+              <option value="0">Não importar</option>
+              <option value="7">Últimos 7 dias</option>
+              <option value="30">Últimos 30 dias (recomendado)</option>
+              <option value="60">Últimos 60 dias</option>
+              <option value="90">Últimos 90 dias</option>
+            </Select>
+          </Field>
+
+          <div className="flex flex-col items-start gap-3">
             <Toggle
               name="auto_monitor_new_groups"
               defaultChecked={settings.auto_monitor_new_groups}
