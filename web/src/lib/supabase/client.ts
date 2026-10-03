@@ -1,10 +1,10 @@
 import { createBrowserClient } from '@supabase/ssr';
+import { getSupabaseConfig } from './config';
 
 export function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!url || !key) {
-    throw new Error('Supabase não configurado: faltam NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+  const config = getSupabaseConfig();
+  if (!config) {
+    throw new Error('Supabase não configurado: confira NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.');
   }
-  return createBrowserClient(url.replace(/\/$/, ''), key);
+  return createBrowserClient(config.url, config.key);
 }
