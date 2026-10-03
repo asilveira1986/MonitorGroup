@@ -72,13 +72,13 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
       </Link>
 
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex items-center gap-4">
-          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-soft text-lg font-semibold text-brand">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-base font-semibold text-brand sm:h-14 sm:w-14 sm:text-lg">
             {g.name.slice(0, 2).toUpperCase()}
           </span>
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{g.name}</h1>
-            <p className="mt-0.5 flex items-center gap-2 text-sm text-ink-2">
+            <h1 className="text-xl font-semibold tracking-tight break-words sm:text-2xl">{g.name}</h1>
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-ink-2">
               <Users className="h-4 w-4" /> {g.participants_count} participantes · última atividade {timeAgo(g.last_message_at)}
             </p>
           </div>
@@ -142,7 +142,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
             description="Últimas 200 mensagens · azul = cliente, verde = equipe"
           />
           {/* flex-col-reverse mantém a rolagem ancorada nas mensagens mais recentes */}
-          <div className="flex max-h-[640px] flex-col-reverse overflow-y-auto p-5">
+          <div className="flex max-h-[70vh] flex-col-reverse overflow-y-auto p-3 sm:max-h-[640px] sm:p-5">
             <div className="space-y-2">
             {messages.length === 0 && (
               <EmptyState icon={<Clock />} title="Nenhuma mensagem registrada ainda" description="As mensagens novas aparecem aqui em tempo real." />
@@ -159,7 +159,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
                   <div className={cn('flex', m.from_team ? 'justify-end' : 'justify-start')}>
                     <div
                       className={cn(
-                        'max-w-[80%] rounded-2xl px-3.5 py-2 text-sm shadow-sm',
+                        'max-w-[88%] rounded-2xl px-3.5 py-2 text-sm shadow-sm sm:max-w-[80%]',
                         m.from_team
                           ? 'rounded-br-md bg-brand-soft'
                           : 'rounded-bl-md border border-line bg-surface',

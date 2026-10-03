@@ -16,7 +16,7 @@ export function CardHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 px-5 pt-5">
+    <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
       <div className="min-w-0">
         <h3 className="text-sm font-semibold text-ink">{title}</h3>
         {description && <p className="mt-0.5 text-xs text-muted">{description}</p>}
@@ -30,7 +30,7 @@ export function PageHeader({ title, description, action }: { title: string; desc
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">{title}</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">{title}</h1>
         {description && <p className="mt-1 text-sm text-ink-2">{description}</p>}
       </div>
       {action && <div className="flex flex-wrap items-center gap-2">{action}</div>}
@@ -56,7 +56,7 @@ export function Button({
     <button
       className={cn(
         'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition disabled:cursor-not-allowed disabled:opacity-50',
-        size === 'sm' ? 'h-8 px-3 text-xs' : 'h-10 px-4 text-sm',
+        size === 'sm' ? 'h-9 px-3 text-xs sm:h-8' : 'h-11 px-4 text-sm sm:h-10',
         buttonVariants[variant],
         className,
       )}
@@ -65,11 +65,12 @@ export function Button({
   );
 }
 
+// text-base (16px) no celular evita o zoom automático do iPhone ao tocar no campo
 const fieldClass =
-  'w-full rounded-xl border border-line bg-surface px-3 text-sm text-ink placeholder:text-muted outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-soft';
+  'w-full rounded-xl border border-line bg-surface px-3 text-base sm:text-sm text-ink placeholder:text-muted outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-soft';
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cn(fieldClass, 'h-10', className)} {...props} />;
+  return <input className={cn(fieldClass, 'h-11 sm:h-10', className)} {...props} />;
 }
 
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -78,7 +79,7 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
 
 export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select className={cn(fieldClass, 'h-10 pr-8', className)} {...props}>
+    <select className={cn(fieldClass, 'h-11 pr-8 sm:h-10', className)} {...props}>
       {children}
     </select>
   );

@@ -51,13 +51,13 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
         }
       />
 
-      <div className="mb-4 inline-flex rounded-xl border border-line bg-surface p-1">
+      <div className="mb-4 flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-1 sm:inline-flex sm:flex-nowrap sm:gap-0">
         {TABS.map((t) => (
           <Link
             key={t.value}
             href={`/alerts?status=${t.value}`}
             className={cn(
-              'rounded-lg px-3 py-1.5 text-xs font-medium',
+              'whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium sm:py-1.5',
               status === t.value ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink',
             )}
           >
@@ -114,7 +114,7 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
                 </div>
               </div>
               {a.status !== 'resolved' && (
-                <div className="flex shrink-0 gap-2">
+                <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex">
                   {a.status === 'open' && (
                     <ActionButton action={updateAlertStatus.bind(null, a.id, 'acknowledged')} variant="ghost">
                       <Eye className="h-3.5 w-3.5" /> Estou vendo

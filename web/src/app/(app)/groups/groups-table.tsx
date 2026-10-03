@@ -5,9 +5,48 @@ import { cn, formatNumber, timeAgo } from '@/lib/format';
 import type { Group } from '@/lib/types';
 import { MonitorToggle } from './group-controls';
 
+function Status({ g }: { g: Group }) {
+  if (!g.monitored) return <Badge>Ignorado</Badge>;
+  if (g.pending_since)
+    return (
+      <Badge tone="warning">
+        <Hourglass className="h-3 w-3" /> {g.pending_count} aguardando
+      </Badge>
+    );
+  return <Badge tone="good">Em dia</Badge>;
+}
+
 export function GroupsTable({ groups }: { groups: Group[] }) {
   return (
-    <div className="overflow-x-auto">
+    <>
+      {/* Celular: cartões */}
+      <ul className="divide-y divide-line sm:hidden">
+        {groups.map((g) => (
+          <li key={g.id} className={cn('flex items-start gap-3 px-4 py-3', !g.monitored && 'opacity-60')}>
+            <Link href={`/groups/${g.id}`} className="flex min-w-0 flex-1 items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand">
+                {g.name.slice(0, 2).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="truncate font-medium">{g.name}</span>
+                  <span className="shrink-0 text-[11px] text-muted">{timeAgo(g.last_message_at)}</span>
+                </span>
+                <span className="mt-0.5 block truncate text-sm text-ink-2">{g.last_message_preview ?? '—'}</span>
+                <span className="mt-1.5 block">
+                  <Status g={g} />
+                </span>
+              </span>
+            </Link>
+            <div className="pt-2">
+              <MonitorToggle groupId={g.id} monitored={g.monitored} />
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {/* Telas maiores: tabela */}
+      <div className="hidden overflow-x-auto sm:block">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-muted">
@@ -35,15 +74,7 @@ export function GroupsTable({ groups }: { groups: Group[] }) {
               </td>
               <td className="tabular px-3 py-3 text-right">{formatNumber(g.participants_count)}</td>
               <td className="px-3 py-3">
-                {!g.monitored ? (
-                  <Badge>Ignorado</Badge>
-                ) : g.pending_since ? (
-                  <Badge tone="warning">
-                    <Hourglass className="h-3 w-3" /> {g.pending_count} aguardando
-                  </Badge>
-                ) : (
-                  <Badge tone="good">Em dia</Badge>
-                )}
+                <Status g={g} />
               </td>
               <td className="px-5 py-3">
                 <MonitorToggle groupId={g.id} monitored={g.monitored} />
@@ -52,6 +83,7 @@ export function GroupsTable({ groups }: { groups: Group[] }) {
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }

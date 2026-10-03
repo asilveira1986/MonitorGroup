@@ -15,7 +15,7 @@ const TABS = [
 export function SettingsTabs() {
   const pathname = usePathname();
   return (
-    <div className="flex gap-1 overflow-x-auto border-b border-line">
+    <div className="flex flex-wrap gap-2 sm:flex-nowrap sm:gap-1 sm:overflow-x-auto sm:border-b sm:border-line">
       {TABS.map((t) => {
         const active = pathname === t.href;
         return (
@@ -23,8 +23,12 @@ export function SettingsTabs() {
             key={t.href}
             href={t.href}
             className={cn(
-              '-mb-px whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition',
-              active ? 'border-brand text-ink' : 'border-transparent text-ink-2 hover:text-ink',
+              // celular: "pílulas" que quebram linha; telas maiores: abas sublinhadas
+              'whitespace-nowrap rounded-full border px-3.5 py-2 text-sm font-medium transition',
+              'sm:-mb-px sm:rounded-none sm:border-0 sm:border-b-2 sm:px-4 sm:py-2.5',
+              active
+                ? 'border-brand bg-brand-soft text-brand sm:border-brand sm:bg-transparent sm:text-ink'
+                : 'border-line text-ink-2 hover:text-ink sm:border-transparent',
             )}
           >
             {t.label}

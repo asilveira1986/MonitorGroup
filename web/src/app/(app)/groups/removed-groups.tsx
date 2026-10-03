@@ -49,7 +49,7 @@ export function RemovedGroups({ groups, isAdmin }: { groups: RemovedGroup[]; isA
         disponível para consulta. Se o número voltar ao grupo, ele é reativado automaticamente.
       </div>
       {isAdmin && selected.size > 0 && (
-        <div className="flex items-center justify-between gap-3 border-b border-line bg-critical/5 px-5 py-3">
+        <div className="sticky top-14 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 sm:static sm:bg-critical/5 sm:px-5 lg:top-0">
           <span className="text-sm font-medium">{selected.size} grupo(s) selecionado(s)</span>
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} disabled={pending}>
@@ -61,7 +61,47 @@ export function RemovedGroups({ groups, isAdmin }: { groups: RemovedGroup[]; isA
           </div>
         </div>
       )}
-      <div className="overflow-x-auto">
+      {/* Celular: cartões */}
+      <ul className="divide-y divide-line sm:hidden">
+        {groups.map((g) => (
+          <li key={g.id} className="flex items-start gap-3 px-4 py-3">
+            {isAdmin && (
+              <input
+                type="checkbox"
+                aria-label={`Selecionar ${g.name}`}
+                checked={selected.has(g.id)}
+                onChange={() => toggle(g.id)}
+                className="mt-1 h-5 w-5 shrink-0 accent-[var(--brand)]"
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <Link href={`/groups/${g.id}`} className="block truncate font-medium hover:text-brand">
+                {g.name}
+              </Link>
+              <p className="mt-0.5 text-sm text-ink-2">
+                {REMOVED_REASON_LABEL[g.removed_reason ?? ''] ?? 'Saiu do WhatsApp'}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                Excluído {timeAgo(g.removed_at)} · {formatNumber(g.message_count)} mensagens
+              </p>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="-ml-3 mt-1 text-critical-ink"
+                  disabled={pending}
+                  onClick={() => remove([g.id], `o grupo "${g.name}"`)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir definitivamente
+                </Button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {/* Telas maiores: tabela */}
+      <div className="hidden overflow-x-auto sm:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-muted">

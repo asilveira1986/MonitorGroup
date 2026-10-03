@@ -27,14 +27,14 @@ export function DashboardFilters({ groups }: { groups: { id: string; name: strin
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="inline-flex rounded-xl border border-line bg-surface p-1">
+    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+      <div className="flex w-full rounded-xl border border-line bg-surface p-1 sm:inline-flex sm:w-auto">
         {PERIODS.map((p) => (
           <Link
             key={p.value}
             href={hrefWith('period', p.value)}
             className={cn(
-              'rounded-lg px-3 py-1.5 text-xs font-medium transition',
+              'flex-1 rounded-lg px-3 py-2 text-center text-xs font-medium transition sm:flex-none sm:py-1.5',
               period === p.value ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink',
             )}
           >
@@ -42,9 +42,9 @@ export function DashboardFilters({ groups }: { groups: { id: string; name: strin
           </Link>
         ))}
       </div>
-      <div className="w-56">
+      <div className="w-full sm:w-56">
         <Select
-          className="h-9 text-xs"
+          className="sm:h-9 sm:text-xs"
           value={group}
           onChange={(e) => router.push(hrefWith('group', e.target.value))}
           aria-label="Filtrar por grupo"

@@ -66,13 +66,13 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
           <Input name="q" defaultValue={q} placeholder="Buscar grupo…" className="pl-9" />
           {filter !== 'all' && <input type="hidden" name="filter" value={filter} />}
         </form>
-        <div className="inline-flex overflow-x-auto rounded-xl border border-line bg-surface p-1">
+        <div className="flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-1 sm:inline-flex sm:flex-nowrap sm:gap-0">
           {FILTERS.map((f) => (
             <Link
               key={f.value}
               href={`/groups?filter=${f.value}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
               className={cn(
-                'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium',
+                'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium sm:py-1.5',
                 filter === f.value ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink',
               )}
             >

@@ -55,7 +55,7 @@ export default async function PendingPage() {
             >
               <div
                 className={cn(
-                  'flex h-14 w-full shrink-0 flex-col items-center justify-center rounded-xl sm:w-24',
+                  'flex w-full shrink-0 items-center justify-between gap-2 rounded-xl px-3 py-2 sm:h-14 sm:w-24 sm:flex-col sm:justify-center sm:gap-0 sm:px-0 sm:py-0',
                   item.overdue ? 'bg-critical/12 text-critical-ink' : 'bg-warning/15 text-warning-ink',
                 )}
               >
@@ -84,10 +84,10 @@ export default async function PendingPage() {
                   Desde {formatDateTime(item.pending_since, settings?.timezone)}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-2">
+              <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex">
                 <Link
                   href={`/groups/${item.id}`}
-                  className="inline-flex h-8 items-center rounded-xl border border-line px-3 text-xs font-medium hover:bg-surface-2"
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-line px-3 text-xs font-medium hover:bg-surface-2 sm:h-8"
                 >
                   Ver conversa
                 </Link>

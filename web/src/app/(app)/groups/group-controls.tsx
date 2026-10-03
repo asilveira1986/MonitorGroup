@@ -49,7 +49,7 @@ export function SlaForm({ groupId, sla, defaultSla }: { groupId: string; sla: nu
         min={1}
         defaultValue={sla ?? ''}
         placeholder={`${defaultSla} (padrão)`}
-        className="h-8 w-32 text-xs"
+        className="w-32 sm:h-8 sm:text-xs"
         aria-label="SLA em minutos"
       />
       <span className="text-xs text-muted">min</span>

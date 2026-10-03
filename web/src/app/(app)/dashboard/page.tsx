@@ -194,7 +194,32 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
       <div className="mt-4 grid gap-4 xl:grid-cols-5">
         <Card className="xl:col-span-3">
           <CardHeader title="Grupos com mais movimento" description="No período selecionado" />
-          <div className="overflow-x-auto p-2">
+          {/* Celular: cartões */}
+          <ul className="divide-y divide-line px-2 pb-2 pt-2 sm:hidden">
+            {m.top_groups.map((g) => (
+              <li key={g.id}>
+                <Link href={`/groups/${g.id}`} className="block rounded-xl px-2 py-3 hover:bg-surface-2">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="truncate font-medium">{g.name}</span>
+                    {g.pending_since ? (
+                      <Badge tone="warning" className="shrink-0 whitespace-nowrap">
+                        <Hourglass className="h-3 w-3" /> {formatDuration(secondsSince(g.pending_since))}
+                      </Badge>
+                    ) : (
+                      <Badge tone="good" className="shrink-0">
+                        Em dia
+                      </Badge>
+                    )}
+                  </span>
+                  <span className="tabular mt-1 block text-xs text-ink-2">
+                    {formatNumber(g.received)} recebidas · {formatNumber(g.sent)} enviadas · média{' '}
+                    {formatDuration(g.avg_response_seconds)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto p-2 sm:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted">
@@ -229,14 +254,14 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
                 ))}
               </tbody>
             </table>
-            {m.top_groups.length === 0 && (
-              <EmptyState
-                icon={<Users />}
-                title="Nenhum grupo monitorado ainda"
-                description="Conecte o WhatsApp em Configurações para começar."
-              />
-            )}
           </div>
+          {m.top_groups.length === 0 && (
+            <EmptyState
+              icon={<Users />}
+              title="Nenhum grupo monitorado ainda"
+              description="Conecte o WhatsApp em Configurações para começar."
+            />
+          )}
         </Card>
 
         <Card className="xl:col-span-2">

@@ -1,5 +1,6 @@
 import { formatDistanceToNowStrict } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { twMerge } from 'tailwind-merge';
 
 export function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null || Number.isNaN(seconds)) return '—';
@@ -49,7 +50,8 @@ export function formatPhone(phone: string | null | undefined): string {
   return `+${d}`;
 }
 
-export const cn = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ');
+/** Junta classes CSS; em conflito (ex.: h-10 x h-8) vale a última. */
+export const cn = (...classes: (string | false | null | undefined)[]) => twMerge(classes.filter(Boolean).join(' '));
 
 export const ALERT_TYPE_LABEL: Record<string, string> = {
   no_response: 'Cliente sem resposta',

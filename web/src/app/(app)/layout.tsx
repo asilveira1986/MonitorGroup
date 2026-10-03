@@ -23,7 +23,10 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
 
   return (
     <div className="min-h-screen">
-      <Sidebar counts={{ pending: pending ?? 0, alerts: alerts ?? 0 }} />
+      <Sidebar
+        counts={{ pending: pending ?? 0, alerts: alerts ?? 0 }}
+        user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role }}
+      />
       <RealtimeListener />
       <div className="lg:pl-64">
         <header className="sticky top-0 z-20 hidden items-center justify-end gap-2 border-b border-line bg-bg/80 px-8 py-3 backdrop-blur lg:flex">
@@ -48,15 +51,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
             </button>
           </form>
         </header>
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-8">{children}</main>
-        <div className="flex items-center justify-center gap-2 pb-6 lg:hidden">
-          <ThemeToggle />
-          <form action="/auth/signout" method="post">
-            <button className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-ink-2 hover:bg-surface-2">
-              <LogOut className="h-4 w-4" /> Sair
-            </button>
-          </form>
-        </div>
+        <main className="mx-auto max-w-7xl px-4 pb-10 pt-5 sm:px-8 sm:py-8">{children}</main>
       </div>
     </div>
   );

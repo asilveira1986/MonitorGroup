@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from 'sonner';
 import './globals.css';
@@ -8,6 +8,16 @@ const inter = Inter({ variable: '--font-inter', subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'MonitorGroup',
   description: 'Monitoramento de grupos de WhatsApp: garanta que todo cliente seja respondido.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f6f7f5' },
+    { media: '(prefers-color-scheme: dark)', color: '#0d0d0d' },
+  ],
 };
 
 // aplica o tema salvo antes da primeira pintura (evita "piscar")

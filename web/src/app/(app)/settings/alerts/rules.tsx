@@ -32,6 +32,63 @@ function describe(rule: AlertRule) {
   }
 }
 
+/** Seleção de grupos com caixas de seleção e busca (funciona bem no celular). */
+function GroupPicker({ groups, initial }: { groups: { id: string; name: string }[]; initial: string[] }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(initial));
+  const [query, setQuery] = useState('');
+  const visible = groups.filter((g) => g.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-ink-2">Grupos</span>
+        <span className="text-xs text-muted">
+          {selected.size === 0 ? 'Todos os grupos monitorados' : `${selected.size} selecionado(s)`}
+          {selected.size > 0 && (
+            <button type="button" className="ml-2 text-brand hover:underline" onClick={() => setSelected(new Set())}>
+              limpar
+            </button>
+          )}
+        </span>
+      </div>
+      {[...selected].map((id) => (
+        <input key={id} type="hidden" name="group_ids" value={id} />
+      ))}
+      <div className="rounded-xl border border-line">
+        {groups.length > 6 && (
+          <div className="border-b border-line p-2">
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar grupo…" className="h-10" />
+          </div>
+        )}
+        <ul className="max-h-56 overflow-y-auto p-1">
+          {visible.map((g) => (
+            <li key={g.id}>
+              <label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2 sm:py-1.5">
+                <input
+                  type="checkbox"
+                  checked={selected.has(g.id)}
+                  onChange={() => toggle(g.id)}
+                  className="h-5 w-5 shrink-0 accent-[var(--brand)] sm:h-4 sm:w-4"
+                />
+                <span className="truncate">{g.name}</span>
+              </label>
+            </li>
+          ))}
+          {visible.length === 0 && <li className="px-2 py-3 text-sm text-muted">Nenhum grupo encontrado.</li>}
+        </ul>
+      </div>
+      <p className="text-xs text-muted">Nenhum marcado = a regra vale para todos os grupos monitorados.</p>
+    </div>
+  );
+}
+
 function RuleEditor({
   rule,
   groups,
@@ -98,15 +155,7 @@ function RuleEditor({
             )}
 
             {type !== 'disconnected' && (
-              <Field label="Grupos" hint="Nenhum selecionado = todos os grupos monitorados. Use Ctrl/⌘ para selecionar vários.">
-                <Select name="group_ids" multiple defaultValue={rule?.group_ids ?? []} className="h-28 py-2">
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              <GroupPicker groups={groups} initial={rule?.group_ids ?? []} />
             )}
 
             <div className="rounded-xl bg-surface-2 p-4">
