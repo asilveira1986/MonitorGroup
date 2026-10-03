@@ -38,6 +38,10 @@ export class WhatsAppManager {
   private reconnectAttempts = new Map<string, number>();
   private version: [number, number, number] | undefined;
 
+  whatsappVersion() {
+    return this.version?.join('.') ?? 'padrão da biblioteca';
+  }
+
   async init() {
     try {
       const { version } = await fetchLatestBaileysVersion();
@@ -45,6 +49,7 @@ export class WhatsAppManager {
     } catch {
       logger.warn('não foi possível obter a versão mais recente do WhatsApp Web; usando padrão');
     }
+    logger.info({ version: this.version }, 'versão do WhatsApp Web');
 
     // Reconecta automaticamente as instâncias que já tinham sessão salva
     const instances = (check(await db.from('whatsapp_instances').select('*'), 'load instances') ?? []) as InstanceRow[];
@@ -125,7 +130,7 @@ export class WhatsAppManager {
       version: this.version,
       auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, baileysLogger) },
       logger: baileysLogger,
-      browser: Browsers.ubuntu('MonitorGroup'),
+      browser: Browsers.ubuntu('Chrome'),
       markOnlineOnConnect: false, // mantém as notificações no celular
       syncFullHistory: false,
       generateHighQualityLinkPreview: false,
@@ -207,8 +212,23 @@ export class WhatsAppManager {
           // reconexão com backoff exponencial (restartRequired após o QR é imediato)
           const attempt = (this.reconnectAttempts.get(instanceId) ?? 0) + 1;
           this.reconnectAttempts.set(instanceId, attempt);
+
+          // ainda não pareado (nunca leu o QR) e o WhatsApp recusa repetidamente: para e explica
+          if (!state.creds.registered && attempt >= 5 && code !== DisconnectReason.restartRequired) {
+            this.reconnectAttempts.delete(instanceId);
+            await clearAuthState(instanceId);
+            await this.updateInstance(instanceId, {
+              status: 'disconnected',
+              qr_code: null,
+              last_error: `O WhatsApp recusou a conexão ${attempt} vezes (código ${code ?? '?'}: ${reason}). Verifique se o worker tem acesso à internet e tente "Conectar" novamente em alguns minutos.`,
+            });
+            return;
+          }
           const delay = code === DisconnectReason.restartRequired ? 0 : Math.min(60_000, 2_000 * 2 ** (attempt - 1));
-          await this.updateInstance(instanceId, { status: 'connecting', last_error: `Reconectando (${reason})` });
+          await this.updateInstance(instanceId, {
+            status: 'connecting',
+            last_error: `Reconectando, tentativa ${attempt} (código ${code ?? '?'}: ${reason})`,
+          });
           setTimeout(() => void this.start(instanceId).catch((err) => log.error({ err }, 'falha ao reconectar')), delay);
         }
       } catch (err) {

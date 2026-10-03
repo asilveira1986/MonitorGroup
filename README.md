@@ -39,6 +39,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    2. `supabase/migrations/0002_metrics.sql`
    3. `supabase/migrations/0003_ingest.sql`
    4. `supabase/migrations/0004_profile_fallback.sql`
+   5. `supabase/migrations/0005_worker_status.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -117,6 +118,15 @@ A tela de login mostra o motivo do erro. Os casos mais comuns:
 | Volta para o login após entrar com Google | Configure **Site URL** e **Redirect URLs** em **Authentication › URL Configuration**. |
 
 Criou o usuário antes de rodar os scripts? Basta executar o `0004`: ele cria os perfis que faltam e torna administrador o usuário mais antigo.
+
+## QR code não aparece
+
+A tela **Configurações › WhatsApp** mostra no topo se o worker está no ar:
+
+- **"O worker do WhatsApp está fora do ar" / "ainda não se conectou"**: o serviço no Railway não está rodando ou não alcança o banco. Confira se o deploy terminou e o log mostra `worker do MonitorGroup no ar`, se o **Root Directory** é `worker` e as variáveis `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` (chave *service_role*, não a anon). Após mudar variáveis, faça novo deploy.
+- **Log do Railway com "não foi possível ler o banco"**: URL/chave erradas ou scripts SQL não executados.
+- **Worker no ar, mas a conexão mostra "Reconectando… código 405/403"**: o WhatsApp recusou a conexão. Aguarde alguns minutos e clique em **Tentar novamente**; se persistir, faça um novo deploy do worker (ele busca a versão mais recente do WhatsApp Web ao iniciar).
+- **"Não foi possível verificar o worker"**: execute o script `0005_worker_status.sql`.
 
 ## Custos estimados
 

@@ -2,13 +2,15 @@
 
 import { CheckCircle2, Loader2, LogOut, Plus, QrCode, RefreshCw, Smartphone, Trash2, WifiOff } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useState, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Badge, Button, Card, EmptyState, Input } from '@/components/ui';
 import { formatPhone, timeAgo } from '@/lib/format';
+import { createClient } from '@/lib/supabase/client';
 import type { Instance } from '@/lib/types';
 import { useRealtime } from '@/lib/use-realtime';
 import { createInstance, deleteInstance, requestInstanceAction } from '../actions';
+import { WorkerStatus } from './worker-status';
 
 const STATUS = {
   connected: { label: 'Conectado', tone: 'good' as const, icon: CheckCircle2 },
@@ -21,6 +23,20 @@ export function InstancesPanel({ initial, isAdmin }: { initial: Instance[]; isAd
   const [instances, setInstances] = useState(initial);
   const [pending, start] = useTransition();
   const [name, setName] = useState('');
+  const [workerOnline, setWorkerOnline] = useState<boolean | null>(null);
+  const onWorkerChange = useCallback((online: boolean | null) => setWorkerOnline(online), []);
+  const waiting = instances.some((i) => i.status === 'connecting' || i.status === 'qr' || i.requested_action);
+
+  // Reserva caso o tempo real não esteja disponível: consulta enquanto aguarda o QR code
+  useEffect(() => {
+    if (!waiting) return;
+    const supabase = createClient();
+    const id = setInterval(async () => {
+      const { data } = await supabase.from('whatsapp_instances').select('*').order('created_at');
+      if (data) setInstances(data as Instance[]);
+    }, 3_000);
+    return () => clearInterval(id);
+  }, [waiting]);
 
   // Atualiza status e QR code em tempo real
   useRealtime('instances', (channel) =>
@@ -43,6 +59,7 @@ export function InstancesPanel({ initial, isAdmin }: { initial: Instance[]; isAd
 
   return (
     <div className="space-y-4">
+      <WorkerStatus onChange={onWorkerChange} />
       {isAdmin && (
         <Card className="p-5">
           <form
@@ -107,6 +124,11 @@ export function InstancesPanel({ initial, isAdmin }: { initial: Instance[]; isAd
                     Conectado {timeAgo(inst.connected_at)} · último sinal {timeAgo(inst.last_seen_at)}
                   </p>
                 )}
+                {inst.status === 'connecting' && workerOnline === false && (
+                  <p className="rounded-lg bg-critical/10 px-3 py-2 text-xs text-critical-ink">
+                    O QR code não vai aparecer enquanto o worker estiver fora do ar (veja o aviso acima).
+                  </p>
+                )}
                 {inst.last_error && inst.status !== 'connected' && (
                   <p className="rounded-lg bg-critical/10 px-3 py-2 text-xs text-critical-ink">{inst.last_error}</p>
                 )}
@@ -127,10 +149,15 @@ export function InstancesPanel({ initial, isAdmin }: { initial: Instance[]; isAd
                     {inst.status !== 'connected' && (
                       <Button
                         size="sm"
-                        disabled={pending || inst.status === 'connecting'}
+                        disabled={pending}
                         onClick={() => run(() => requestInstanceAction(inst.id, 'connect'))}
                       >
-                        <RefreshCw className="h-3.5 w-3.5" /> {inst.status === 'qr' ? 'Gerar novo QR code' : 'Conectar'}
+                        <RefreshCw className="h-3.5 w-3.5" />{' '}
+                        {inst.status === 'qr'
+                          ? 'Gerar novo QR code'
+                          : inst.status === 'connecting'
+                            ? 'Tentar novamente'
+                            : 'Conectar'}
                       </Button>
                     )}
                     {inst.status === 'connected' && (
