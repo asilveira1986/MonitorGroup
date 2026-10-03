@@ -9,7 +9,7 @@ export default async function AlertRulesPage() {
   const supabase = await createClient();
   const [{ data: rules }, { data: groups }] = await Promise.all([
     supabase.from('alert_rules').select('*').order('created_at'),
-    supabase.from('groups').select('id, name').eq('monitored', true).order('name'),
+    supabase.from('groups').select('id, name').eq('monitored', true).is('removed_at', null).order('name'),
   ]);
   return (
     <>

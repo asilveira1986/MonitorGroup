@@ -49,7 +49,7 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
   const supabase = await createClient();
   const [{ data: settings }, { data: groups }] = await Promise.all([
     supabase.from('app_settings').select('timezone').eq('id', 1).single(),
-    supabase.from('groups').select('id, name').eq('monitored', true).order('name'),
+    supabase.from('groups').select('id, name').eq('monitored', true).is('removed_at', null).order('name'),
   ]);
   const tz = settings?.timezone ?? 'America/Sao_Paulo';
   const from = startOfDayInTz(tz, DAYS[period]);

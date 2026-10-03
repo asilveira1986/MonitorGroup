@@ -40,6 +40,8 @@ export type Group = {
   last_client_message_at: string | null;
   last_team_message_at: string | null;
   last_message_preview: string | null;
+  removed_at: string | null;
+  removed_reason: string | null;
   created_at: string;
 };
 

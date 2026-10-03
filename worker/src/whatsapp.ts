@@ -266,11 +266,26 @@ export class WhatsAppManager {
       }
     });
 
-    sock.ev.on('group-participants.update', ({ id }) => {
+    sock.ev.on('group-participants.update', ({ id, participants, action, author }) => {
+      const includesMe = participants.some((p) => this.isMe(session, p));
+      if (action === 'remove' && includesMe) {
+        // o número conectado saiu ou foi removido do grupo
+        const reason = this.isMe(session, author) ? 'left' : 'removed';
+        void this.markRemoved(session, id, reason).catch((err) => log.error({ err }, 'group removed'));
+        return;
+      }
       void sock
         .groupMetadata(id)
         .then((meta) => this.upsertGroup(session, meta))
         .catch(() => {});
+    });
+
+    // conversa do grupo apagada no celular
+    sock.ev.on('chats.delete', (ids) => {
+      for (const jid of ids) {
+        if (!isJidGroup(jid)) continue;
+        void this.markRemoved(session, jid, 'chat_deleted').catch((err) => log.error({ err }, 'chat deleted'));
+      }
     });
   }
 
@@ -306,11 +321,43 @@ export class WhatsAppManager {
     });
   }
 
+  /** O participante/autor é o próprio número conectado? */
+  private isMe(session: Session, who: string | { id?: string; lid?: string; phoneNumber?: string } | null | undefined) {
+    const me = session.sock.user;
+    if (!me || !who) return false;
+    const mine = new Set([me.id, me.lid].filter(Boolean).map((j) => jidNormalizedUser(j!)));
+    const ids = typeof who === 'string' ? [who] : [who.id, who.lid, who.phoneNumber];
+    return ids.some((j) => j && mine.has(jidNormalizedUser(j)));
+  }
+
+  /** Move o grupo para "Excluídos" (o histórico é mantido). */
+  private async markRemoved(session: Session, jid: string, reason: string) {
+    const { data: group } = await db
+      .from('groups')
+      .select('id, name, removed_at')
+      .eq('instance_id', session.instanceId)
+      .eq('jid', jid)
+      .maybeSingle();
+    session.groupCache.delete(jid);
+    if (!group || group.removed_at) return;
+    check(await db.rpc('mark_group_removed', { p_group_id: group.id, p_reason: reason }), 'mark_group_removed');
+    logger.info({ instanceId: session.instanceId, group: group.name, reason }, 'grupo excluído do WhatsApp');
+  }
+
   private async syncGroups(session: Session) {
     try {
       const groups = await session.sock.groupFetchAllParticipating();
       for (const meta of Object.values(groups)) {
         await this.upsertGroup(session, meta);
+      }
+
+      // grupos dos quais o número saiu enquanto o worker estava desligado
+      const active = (check(
+        await db.from('groups').select('jid').eq('instance_id', session.instanceId).is('removed_at', null),
+        'active groups',
+      ) ?? []) as { jid: string }[];
+      for (const { jid } of active) {
+        if (!groups[jid]) await this.markRemoved(session, jid, 'not_participant');
       }
       logger.info({ instanceId: session.instanceId, total: Object.keys(groups).length }, 'grupos sincronizados');
     } catch (err) {
@@ -328,6 +375,9 @@ export class WhatsAppManager {
       name: meta.subject || existing?.name || 'Grupo sem nome',
       description: meta.desc ?? null,
       participants_count: meta.participants?.length ?? meta.size ?? 0,
+      // o número está no grupo de novo: sai da aba "Excluídos"
+      removed_at: null,
+      removed_reason: null,
     };
 
     let row: GroupRow;
@@ -380,7 +430,15 @@ export class WhatsAppManager {
     const content = extractContent(msg.message);
     if (!content) return;
 
-    const group = await this.getGroup(session, jid);
+    let group = await this.getGroup(session, jid);
+    if (group.removed_at) {
+      // chegou mensagem: o número voltou a participar do grupo
+      group = check(
+        await db.from('groups').update({ removed_at: null, removed_reason: null }).eq('id', group.id).select('*').single(),
+        'restore group',
+      ) as GroupRow;
+      session.groupCache.set(jid, group);
+    }
     if (!group.monitored) {
       // o painel pode ter mudado a configuração; confere no banco antes de ignorar
       session.groupCache.delete(jid);

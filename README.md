@@ -6,6 +6,7 @@ Sistema web que acompanha as mensagens recebidas e enviadas nos grupos de WhatsA
 - **Fila "Aguardando resposta"**: mostra em tempo real os grupos em que um cliente escreveu e a equipe ainda não respondeu, ordenados pelo tempo de espera.
 - **Dashboard**: tempo médio de primeira resposta, mediana e P90, % dentro do SLA, volume diário (clientes x equipe), distribuição dos tempos de resposta, movimento por hora, ranking dos grupos e desempenho de cada atendente.
 - **Alertas configuráveis**: cliente sem resposta há X minutos, palavras-chave ("urgente", "cancelar"…), volume alto de mensagens, grupo parado e WhatsApp desconectado. Os avisos chegam no painel (em tempo real), por **e-mail**, por **WhatsApp** ou por **webhook** (Slack, Teams, n8n, Zapier…).
+- **Grupos excluídos**: quando o número conectado sai ou é removido de um grupo, ou o grupo é apagado no celular, ele vai para a aba **Grupos › Excluídos**, sai da fila e dos alertas, mas o histórico continua disponível. O administrador pode excluí-lo definitivamente de lá. Se o número voltar ao grupo, ele é reativado sozinho.
 - **Login** com e-mail e senha pré-cadastrados ou com **Google**. Só entra quem um administrador autorizou.
 - Tudo roda na nuvem: o navegador é o único programa necessário.
 
@@ -40,6 +41,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    3. `supabase/migrations/0003_ingest.sql`
    4. `supabase/migrations/0004_profile_fallback.sql`
    5. `supabase/migrations/0005_worker_status.sql`
+   6. `supabase/migrations/0006_removed_groups.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

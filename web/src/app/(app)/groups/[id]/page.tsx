@@ -1,13 +1,15 @@
-import { ArrowLeft, CheckCheck, Clock, Hourglass, Users } from 'lucide-react';
+import { ArrowLeft, CheckCheck, Clock, Hourglass, Trash2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ActionButton } from '@/components/action-button';
 import { Badge, Card, CardHeader, EmptyState } from '@/components/ui';
-import { cn, formatDuration, formatNumber, formatPhone, formatTime, timeAgo } from '@/lib/format';
+import { cn, formatDateTime, formatDuration, formatNumber, formatPhone, formatTime, REMOVED_REASON_LABEL, timeAgo } from '@/lib/format';
+import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { Group, Message } from '@/lib/types';
 import { markGroupAnswered } from '../../actions';
 import { LiveMessages, MarkTeamButton, MonitorToggle, SlaForm } from '../group-controls';
+import { DeleteRemovedGroupButton } from '../removed-groups';
 
 const TYPE_LABEL: Record<string, string> = {
   image: '📷 Imagem',
@@ -24,6 +26,7 @@ const daysAgoIso = (days: number) => new Date(Date.now() - days * 86400_000).toI
 
 export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
   const { id } = await params;
+  const profile = await requireProfile();
   const supabase = await createClient();
 
   const since = daysAgoIso(30);
@@ -61,7 +64,10 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
   return (
     <>
       <LiveMessages groupId={g.id} />
-      <Link href="/groups" className="mb-4 inline-flex items-center gap-1 text-sm text-ink-2 hover:text-ink">
+      <Link
+        href={g.removed_at ? '/groups?filter=removed' : '/groups'}
+        className="mb-4 inline-flex items-center gap-1 text-sm text-ink-2 hover:text-ink"
+      >
         <ArrowLeft className="h-4 w-4" /> Grupos
       </Link>
 
@@ -77,14 +83,29 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
             </p>
           </div>
         </div>
-        <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
-          <MonitorToggle groupId={g.id} monitored={g.monitored} label="Monitorar este grupo" />
-          <div>
-            <p className="mb-1 text-xs font-medium text-ink-2">SLA de resposta do grupo</p>
-            <SlaForm groupId={g.id} sla={g.sla_minutes} defaultSla={settings?.default_sla_minutes ?? 30} />
+        {!g.removed_at && (
+          <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
+            <MonitorToggle groupId={g.id} monitored={g.monitored} label="Monitorar este grupo" />
+            <div>
+              <p className="mb-1 text-xs font-medium text-ink-2">SLA de resposta do grupo</p>
+              <SlaForm groupId={g.id} sla={g.sla_minutes} defaultSla={settings?.default_sla_minutes ?? 30} />
+            </div>
           </div>
-        </div>
+        )}
       </div>
+
+      {g.removed_at && (
+        <Card className="mb-4 flex flex-col gap-3 border-critical/40 bg-critical/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex items-start gap-2 text-sm">
+            <Trash2 className="mt-0.5 h-4 w-4 shrink-0 text-critical-ink" />
+            <span>
+              <strong>Grupo excluído do WhatsApp</strong> em {formatDateTime(g.removed_at, tz)}.{' '}
+              {REMOVED_REASON_LABEL[g.removed_reason ?? ''] ?? ''}. O histórico abaixo fica disponível para consulta.
+            </span>
+          </p>
+          {profile.role === 'admin' && <DeleteRemovedGroupButton groupId={g.id} name={g.name} />}
+        </Card>
+      )}
 
       {g.pending_since && (
         <Card className="mb-4 flex flex-col gap-3 border-warning/50 bg-warning/5 p-4 sm:flex-row sm:items-center sm:justify-between">

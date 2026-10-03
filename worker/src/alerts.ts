@@ -100,6 +100,7 @@ async function checkNoResponse(rules: AlertRule[], businessHours: boolean) {
         .from('groups')
         .select('id, name, pending_since, pending_count, pending_message_id')
         .eq('monitored', true)
+        .is('removed_at', null)
         .not('pending_since', 'is', null)
         .lte('pending_since', minutesAgo(rule.threshold_minutes)),
       'pending groups',
@@ -140,6 +141,7 @@ async function checkInactivity(rules: AlertRule[], businessHours: boolean) {
         .from('groups')
         .select('id, name, last_message_at, created_at')
         .eq('monitored', true)
+        .is('removed_at', null)
         .or(`last_message_at.lte.${limit},and(last_message_at.is.null,created_at.lte.${limit})`),
       'inactive groups',
     ) ?? []) as GroupRow[];

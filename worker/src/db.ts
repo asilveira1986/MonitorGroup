@@ -23,6 +23,7 @@ export type GroupRow = {
   sla_minutes: number | null;
   pending_since: string | null;
   last_message_at: string | null;
+  removed_at: string | null;
   created_at: string;
 };
 

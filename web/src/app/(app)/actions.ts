@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireProfile } from '@/lib/auth';
+import { requireAdmin, requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -70,6 +70,16 @@ export async function resolveAllAlerts(): Promise<Result> {
     .from('alerts')
     .update({ status: 'resolved', resolved_at: now, acknowledged_by: profile.id, acknowledged_at: now })
     .neq('status', 'resolved');
+  revalidatePath('/', 'layout');
+  return fail(error);
+}
+
+/** Exclusão definitiva de grupos que já saíram do WhatsApp (somente admin). */
+export async function deleteRemovedGroups(groupIds: string[]): Promise<Result> {
+  await requireAdmin();
+  if (!groupIds.length) return { ok: false, error: 'Nenhum grupo selecionado.' };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('delete_removed_groups', { p_group_ids: groupIds });
   revalidatePath('/', 'layout');
   return fail(error);
 }

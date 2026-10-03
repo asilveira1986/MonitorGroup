@@ -1,31 +1,60 @@
-import { Hourglass, MessagesSquare, Search } from 'lucide-react';
+import { MessagesSquare, Search, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { Badge, Card, EmptyState, Input, PageHeader } from '@/components/ui';
-import { cn, formatNumber, timeAgo } from '@/lib/format';
+import { Card, EmptyState, Input, PageHeader } from '@/components/ui';
+import { requireProfile } from '@/lib/auth';
+import { cn } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Group } from '@/lib/types';
-import { MonitorToggle } from './group-controls';
+import { GroupsTable } from './groups-table';
+import { RemovedGroups, type RemovedGroup } from './removed-groups';
 
 const FILTERS = [
   { value: 'all', label: 'Todos' },
   { value: 'pending', label: 'Aguardando' },
   { value: 'monitored', label: 'Monitorados' },
   { value: 'ignored', label: 'Ignorados' },
+  { value: 'removed', label: 'Excluídos' },
 ];
 
 export default async function GroupsPage({ searchParams }: PageProps<'/groups'>) {
+  const profile = await requireProfile();
   const sp = await searchParams;
   const q = typeof sp.q === 'string' ? sp.q : '';
   const filter = typeof sp.filter === 'string' ? sp.filter : 'all';
 
   const supabase = await createClient();
-  let query = supabase.from('groups').select('*').order('last_message_at', { ascending: false, nullsFirst: false });
-  if (q) query = query.ilike('name', `%${q}%`);
-  if (filter === 'pending') query = query.eq('monitored', true).not('pending_since', 'is', null);
-  if (filter === 'monitored') query = query.eq('monitored', true);
-  if (filter === 'ignored') query = query.eq('monitored', false);
-  const { data } = await query.limit(500);
-  const groups = (data ?? []) as Group[];
+  const { count: removedCount } = await supabase
+    .from('groups')
+    .select('id', { count: 'exact', head: true })
+    .not('removed_at', 'is', null);
+
+  let groups: Group[] = [];
+  let removed: RemovedGroup[] = [];
+
+  if (filter === 'removed') {
+    let query = supabase
+      .from('groups')
+      .select('*, messages(count)')
+      .not('removed_at', 'is', null)
+      .order('removed_at', { ascending: false });
+    if (q) query = query.ilike('name', `%${q}%`);
+    const { data } = await query.limit(500);
+    removed = ((data ?? []) as (Group & { messages: { count: number }[] })[]).map(({ messages, ...g }) => ({
+      ...g,
+      message_count: messages?.[0]?.count ?? 0,
+    }));
+  } else {
+    let query = supabase
+      .from('groups')
+      .select('*')
+      .is('removed_at', null)
+      .order('last_message_at', { ascending: false, nullsFirst: false });
+    if (q) query = query.ilike('name', `%${q}%`);
+    if (filter === 'pending') query = query.eq('monitored', true).not('pending_since', 'is', null);
+    if (filter === 'monitored') query = query.eq('monitored', true);
+    if (filter === 'ignored') query = query.eq('monitored', false);
+    groups = ((await query.limit(500)).data ?? []) as Group[];
+  }
 
   return (
     <>
@@ -37,76 +66,46 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
           <Input name="q" defaultValue={q} placeholder="Buscar grupo…" className="pl-9" />
           {filter !== 'all' && <input type="hidden" name="filter" value={filter} />}
         </form>
-        <div className="inline-flex rounded-xl border border-line bg-surface p-1">
+        <div className="inline-flex overflow-x-auto rounded-xl border border-line bg-surface p-1">
           {FILTERS.map((f) => (
             <Link
               key={f.value}
               href={`/groups?filter=${f.value}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
               className={cn(
-                'rounded-lg px-3 py-1.5 text-xs font-medium',
+                'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium',
                 filter === f.value ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink',
               )}
             >
               {f.label}
+              {f.value === 'removed' && (removedCount ?? 0) > 0 && (
+                <span className="tabular rounded-full bg-critical px-1.5 text-[10px] font-semibold text-white">
+                  {removedCount}
+                </span>
+              )}
             </Link>
           ))}
         </div>
       </div>
 
       <Card>
-        {groups.length === 0 ? (
+        {filter === 'removed' ? (
+          removed.length === 0 ? (
+            <EmptyState
+              icon={<Trash2 />}
+              title="Nenhum grupo excluído"
+              description="Quando o número conectado sair de um grupo, for removido ou o grupo for apagado no celular, ele aparece aqui."
+            />
+          ) : (
+            <RemovedGroups groups={removed} isAdmin={profile.role === 'admin'} />
+          )
+        ) : groups.length === 0 ? (
           <EmptyState
             icon={<MessagesSquare />}
             title="Nenhum grupo encontrado"
             description="Os grupos aparecem automaticamente depois que o WhatsApp é conectado em Configurações > WhatsApp."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-muted">
-                  <th className="px-5 py-3 font-medium">Grupo</th>
-                  <th className="px-3 py-3 font-medium">Última mensagem</th>
-                  <th className="px-3 py-3 text-right font-medium">Participantes</th>
-                  <th className="px-3 py-3 font-medium">Situação</th>
-                  <th className="px-5 py-3 font-medium">Monitorar</th>
-                </tr>
-              </thead>
-              <tbody>
-                {groups.map((g) => (
-                  <tr key={g.id} className={cn('border-t border-line', !g.monitored && 'opacity-60')}>
-                    <td className="px-5 py-3">
-                      <Link href={`/groups/${g.id}`} className="flex items-center gap-3 hover:text-brand">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand">
-                          {g.name.slice(0, 2).toUpperCase()}
-                        </span>
-                        <span className="max-w-[240px] truncate font-medium">{g.name}</span>
-                      </Link>
-                    </td>
-                    <td className="max-w-[320px] px-3 py-3">
-                      <p className="truncate text-ink-2">{g.last_message_preview ?? '—'}</p>
-                      <p className="text-xs text-muted">{timeAgo(g.last_message_at)}</p>
-                    </td>
-                    <td className="tabular px-3 py-3 text-right">{formatNumber(g.participants_count)}</td>
-                    <td className="px-3 py-3">
-                      {!g.monitored ? (
-                        <Badge>Ignorado</Badge>
-                      ) : g.pending_since ? (
-                        <Badge tone="warning">
-                          <Hourglass className="h-3 w-3" /> {g.pending_count} aguardando
-                        </Badge>
-                      ) : (
-                        <Badge tone="good">Em dia</Badge>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      <MonitorToggle groupId={g.id} monitored={g.monitored} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <GroupsTable groups={groups} />
         )}
       </Card>
     </>
