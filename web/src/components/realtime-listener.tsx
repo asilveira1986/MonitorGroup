@@ -38,7 +38,10 @@ export function RealtimeListener() {
         });
         refresh();
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'groups' }, refresh),
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'groups' }, refresh)
+      // configuração de indicadores alterada por um admin: vale na hora para todos
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'indicators' }, refresh)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'indicator_blocks' }, refresh),
   );
 
   return null;

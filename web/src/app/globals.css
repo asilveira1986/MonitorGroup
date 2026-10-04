@@ -24,6 +24,7 @@
   --series-1: #2a78d6; /* recebidas (clientes) */
   --series-2: #eb6834; /* enviadas (equipe) */
   --series-3: #1baf7a;
+  --series-4: #eda100;
 
   /* status (sempre acompanhados de ícone + texto) */
   --good: #0ca30c;
@@ -53,6 +54,7 @@
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
+    --series-4: #c98500;
     --good-ink: #2fc42f;
     --warning-ink: #fab219;
     --critical-ink: #ef6b6b;
@@ -76,6 +78,7 @@
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
+  --series-4: #c98500;
   --good-ink: #2fc42f;
   --warning-ink: #fab219;
   --critical-ink: #ef6b6b;

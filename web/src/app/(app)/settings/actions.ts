@@ -31,7 +31,6 @@ export async function saveGeneralSettings(form: FormData): Promise<Result> {
       business_days: form.getAll('business_days').map(Number),
       business_start: String(form.get('business_start') || '08:00'),
       business_end: String(form.get('business_end') || '18:00'),
-      default_sla_minutes: intOrNull(form.get('default_sla_minutes')) ?? 30,
       auto_monitor_new_groups: form.get('auto_monitor_new_groups') === 'on',
       ignore_acknowledgements: form.get('ignore_acknowledgements') === 'on',
       history_import_days: [0, 7, 30, 60, 90].includes(Number(form.get('history_import_days')))
@@ -207,5 +206,58 @@ export async function updateUser(id: string, values: { role?: 'admin' | 'agent';
     if (data) await supabase.from('allowed_emails').upsert({ email: data.email, role: values.role });
   }
   revalidatePath('/settings/users');
+  return result(error);
+}
+
+// --------------------------------------------------------------- Indicadores (somente admin)
+export async function updateIndicator(
+  key: string,
+  changes: { enabled?: boolean; alert_enabled?: boolean; params?: Record<string, unknown> },
+): Promise<Result> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('update_indicator', {
+    p_key: key,
+    p_enabled: changes.enabled ?? null,
+    p_alert_enabled: changes.alert_enabled ?? null,
+    p_params: changes.params ?? null,
+  });
+  revalidatePath('/', 'layout');
+  return result(error);
+}
+
+export async function setIndicatorBlockEnabled(block: string, enabled: boolean): Promise<Result> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('set_indicator_block_enabled', { p_block: block, p_enabled: enabled });
+  revalidatePath('/', 'layout');
+  return result(error);
+}
+
+export async function resetIndicators(key: string | null): Promise<Result> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('reset_indicators', { p_key: key });
+  revalidatePath('/', 'layout');
+  return result(error);
+}
+
+// --------------------------------------------------------------- Feriados (somente admin)
+export async function addHoliday(form: FormData): Promise<Result> {
+  const admin = await requireAdmin();
+  const day = String(form.get('day') ?? '');
+  const name = String(form.get('name') ?? '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !name) return { ok: false, error: 'Informe a data e o nome do feriado.' };
+  const supabase = await createClient();
+  const { error } = await supabase.from('holidays').upsert({ day, name, created_by: admin.id });
+  revalidatePath('/settings');
+  return result(error);
+}
+
+export async function removeHoliday(day: string): Promise<Result> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from('holidays').delete().eq('day', day);
+  revalidatePath('/settings');
   return result(error);
 }

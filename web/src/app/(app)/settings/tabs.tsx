@@ -7,16 +7,17 @@ import { cn } from '@/lib/format';
 const TABS = [
   { href: '/settings', label: 'Geral' },
   { href: '/settings/whatsapp', label: 'WhatsApp' },
+  { href: '/settings/indicators', label: 'Indicadores', adminOnly: true },
   { href: '/settings/alerts', label: 'Regras de alerta' },
   { href: '/settings/team', label: 'Equipe' },
   { href: '/settings/users', label: 'Usuários' },
 ];
 
-export function SettingsTabs() {
+export function SettingsTabs({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
   return (
     <div className="flex flex-wrap gap-2 sm:flex-nowrap sm:gap-1 sm:overflow-x-auto sm:border-b sm:border-line">
-      {TABS.map((t) => {
+      {TABS.filter((t) => isAdmin || !('adminOnly' in t)).map((t) => {
         const active = pathname === t.href;
         return (
           <Link

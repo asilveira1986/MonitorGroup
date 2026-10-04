@@ -7,10 +7,32 @@ import { findKeyword } from './text.js';
 
 const minutesAgo = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
 
-async function loadRules(type?: AlertRule['type']): Promise<AlertRule[]> {
+/**
+ * Indicadores cujo alerta está liberado (indicador ligado, bloco ligado e alerta ligado).
+ * Lido do catálogo a cada verificação: mudanças no painel valem sem reiniciar o worker.
+ */
+async function alertableIndicators(): Promise<Set<string> | null> {
+  const { data, error } = await db
+    .from('indicators')
+    .select('key, enabled, alert_enabled, indicator_blocks!inner(enabled)');
+  if (error) return null; // catálogo ainda não criado (script 0008 não executado): mantém o comportamento antigo
+  const rows = (data ?? []) as unknown as {
+    key: string;
+    enabled: boolean;
+    alert_enabled: boolean;
+    indicator_blocks: { enabled: boolean };
+  }[];
+  return new Set(rows.filter((r) => r.enabled && r.alert_enabled && r.indicator_blocks.enabled).map((r) => r.key));
+}
+
+export async function loadRules(type?: AlertRule['type']): Promise<AlertRule[]> {
   let query = db.from('alert_rules').select('*').eq('active', true);
   if (type) query = query.eq('type', type);
-  return (check(await query, 'load rules') ?? []) as AlertRule[];
+  const rules = (check(await query, 'load rules') ?? []) as AlertRule[];
+  const allowed = await alertableIndicators();
+  if (!allowed) return rules;
+  // regra ligada a um indicador desativado (ou com alerta desligado) não dispara
+  return rules.filter((r) => !r.indicator_key || allowed.has(r.indicator_key));
 }
 
 const appliesToGroup = (rule: AlertRule, groupId: string) => !rule.group_ids?.length || rule.group_ids.includes(groupId);

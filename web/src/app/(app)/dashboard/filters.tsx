@@ -12,12 +12,19 @@ export const PERIODS = [
   { value: '90d', label: '90 dias' },
 ];
 
-export function DashboardFilters({ groups }: { groups: { id: string; name: string }[] }) {
+export function DashboardFilters({
+  groups,
+  members,
+}: {
+  groups: { id: string; name: string }[];
+  members: { id: string; name: string }[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const period = params.get('period') ?? '7d';
   const group = params.get('group') ?? '';
+  const member = params.get('member') ?? '';
 
   const hrefWith = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -57,6 +64,23 @@ export function DashboardFilters({ groups }: { groups: { id: string; name: strin
           ))}
         </Select>
       </div>
+      {members.length > 0 && (
+        <div className="w-full sm:w-48">
+          <Select
+            className="sm:h-9 sm:text-xs"
+            value={member}
+            onChange={(e) => router.push(hrefWith('member', e.target.value))}
+            aria-label="Filtrar por atendente"
+          >
+            <option value="">Todos os atendentes</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
     </div>
   );
 }

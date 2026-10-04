@@ -63,6 +63,7 @@ export type AlertRule = {
   notify_emails: string[];
   notify_whatsapp: string[];
   notify_webhook_url: string | null;
+  indicator_key?: string | null;
 };
 
 /** Lança erro se a resposta do Supabase tiver falhado. */

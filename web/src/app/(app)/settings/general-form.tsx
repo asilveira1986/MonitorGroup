@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { ActionForm } from '@/components/form-action';
 import { Button, Field, Input, Select, Toggle } from '@/components/ui';
 import type { AppSettings } from '@/lib/types';
@@ -65,8 +66,15 @@ export function GeneralForm({ settings, disabled }: { settings: AppSettings; dis
             <Field label="Fim do expediente">
               <Input type="time" name="business_end" defaultValue={settings.business_end.slice(0, 5)} />
             </Field>
-            <Field label="SLA padrão de resposta (min)" hint="Pode ser ajustado por grupo.">
-              <Input type="number" min={1} name="default_sla_minutes" defaultValue={settings.default_sla_minutes} />
+            <Field label="SLA padrão de resposta" hint="Definido no indicador “Respondidas dentro do SLA”.">
+              <div className="flex h-11 items-center justify-between gap-2 rounded-xl border border-line bg-surface-2 px-3 text-sm sm:h-10">
+                <span>{settings.default_sla_minutes} min</span>
+                {!disabled && (
+                  <Link href="/settings/indicators" className="text-xs text-brand hover:underline">
+                    alterar
+                  </Link>
+                )}
+              </div>
             </Field>
           </div>
 

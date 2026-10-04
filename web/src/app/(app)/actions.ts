@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { requireAdmin, requireProfile } from '@/lib/auth';
+import type { DetailsData } from '@/lib/indicators';
 import { createClient } from '@/lib/supabase/server';
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -82,4 +83,22 @@ export async function deleteRemovedGroups(groupIds: string[]): Promise<Result> {
   const { error } = await supabase.rpc('delete_removed_groups', { p_group_ids: groupIds });
   revalidatePath('/', 'layout');
   return fail(error);
+}
+
+/** Lista do que compõe o número de um indicador (respeita os mesmos filtros do dashboard). */
+export async function getIndicatorDetails(
+  key: string,
+  filters: { from: string; to: string; groupId: string | null; memberId: string | null },
+): Promise<{ ok: true; data: DetailsData } | { ok: false; error: string }> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('indicator_details', {
+    p_key: key,
+    p_from: filters.from,
+    p_to: filters.to,
+    p_group_id: filters.groupId,
+    p_member_id: filters.memberId,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: data as DetailsData };
 }
