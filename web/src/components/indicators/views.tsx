@@ -52,6 +52,40 @@ function KpiView({ data, name }: { data: KpiData; name: string }) {
   );
 }
 
+/** Mini gráfico de barras da evolução (um valor por dia ou semana). */
+function Spark({ values }: { values: number[] }) {
+  const max = Math.max(1, ...values);
+  const w = 6;
+  const gap = 2;
+  const h = 22;
+  return (
+    <svg
+      width={values.length * (w + gap)}
+      height={h}
+      className="block"
+      role="img"
+      aria-label={`Evolução: ${values.join(', ')}`}
+    >
+      {values.map((v, i) => {
+        const bh = v === 0 ? 1 : Math.max(2, (v / max) * h);
+        return (
+          <rect
+            key={i}
+            x={i * (w + gap)}
+            y={h - bh}
+            width={w}
+            height={bh}
+            rx={1.5}
+            className={v === 0 ? 'fill-line' : v === max ? 'fill-series-1' : 'fill-series-1/45'}
+          >
+            <title>{v}</title>
+          </rect>
+        );
+      })}
+    </svg>
+  );
+}
+
 export function DataTable({
   columns,
   rows,
@@ -88,12 +122,15 @@ export function DataTable({
                 const text = formatValue(raw, c.format, timeZone);
                 const highlighted =
                   c.highlight_abs_gte != null && raw != null && Math.abs(Number(raw)) >= c.highlight_abs_gte;
+                const below = c.warn_below != null && raw != null && Number(raw) < c.warn_below;
                 return (
                   <td
                     key={c.key}
                     className={cn('px-2 py-2', c.align === 'right' && 'text-right', !c.format && 'max-w-[280px]')}
                   >
-                    {c.link_demand && row.demand_id ? (
+                    {c.format === 'spark' ? (
+                      Array.isArray(raw) ? <Spark values={raw.map(Number)} /> : '—'
+                    ) : c.link_demand && row.demand_id ? (
                       <Link
                         href={`/demands?status=all&id=${row.demand_id}`}
                         className="font-medium text-brand hover:underline"
@@ -114,6 +151,13 @@ export function DataTable({
                         title={Number(raw) > 0 ? 'Pico em relação ao período anterior' : 'Queda em relação ao período anterior'}
                       >
                         {Number(raw) > 0 ? '▲ ' : '▼ '}
+                        {text}
+                      </span>
+                    ) : below ? (
+                      <span
+                        className="rounded-full bg-warning/15 px-1.5 py-0.5 text-xs font-semibold text-warning-ink"
+                        title={`Abaixo de ${c.warn_below}`}
+                      >
                         {text}
                       </span>
                     ) : (

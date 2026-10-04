@@ -1,7 +1,7 @@
 import { formatDateTime, formatDuration, formatNumber, formatPercent } from '@/lib/format';
 
 /** Formatos de valor devolvidos pelas funções de cálculo (ind_<chave>). */
-export type ValueFormat = 'number' | 'duration' | 'percent' | 'percent_delta' | 'datetime' | 'text';
+export type ValueFormat = 'number' | 'duration' | 'percent' | 'percent_delta' | 'datetime' | 'text' | 'spark';
 export type Tone = 'good' | 'warning' | 'critical' | null;
 
 export type Column = {
@@ -17,6 +17,8 @@ export type Column = {
   bar?: boolean;
   /** destaca valores cujo módulo seja >= este número (ex.: variação %) */
   highlight_abs_gte?: number;
+  /** destaca valores abaixo deste número (ex.: equipe pouco presente) */
+  warn_below?: number;
 };
 
 export type KpiData = {
@@ -106,6 +108,8 @@ export function formatValue(value: unknown, format: ValueFormat = 'text', timeZo
     }
     case 'datetime':
       return formatDateTime(String(value), timeZone);
+    case 'spark':
+      return Array.isArray(value) ? value.join(' ') : String(value);
     default:
       return String(value);
   }

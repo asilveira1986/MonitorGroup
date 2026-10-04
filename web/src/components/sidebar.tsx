@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, ClipboardList, Clock, LayoutDashboard, LogOut, Menu, MessagesSquare, Settings, X } from 'lucide-react';
+import { Bell, ClipboardList, Clock, FileBarChart, LayoutDashboard, LogOut, Menu, MessagesSquare, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -14,6 +14,7 @@ const NAV = [
   { href: '/demands', label: 'Demandas', icon: ClipboardList, badgeKey: 'demands' as const },
   { href: '/groups', label: 'Grupos', icon: MessagesSquare },
   { href: '/alerts', label: 'Alertas', icon: Bell, badgeKey: 'alerts' as const },
+  { href: '/reports', label: 'Relatórios', icon: FileBarChart },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
@@ -74,7 +75,7 @@ export function Sidebar({
       </aside>
 
       {/* Mobile */}
-      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-surface/90 px-4 py-3 backdrop-blur lg:hidden">
+      <div data-print-hide className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-surface/90 px-4 py-3 backdrop-blur lg:hidden">
         <Logo />
         <button
           onClick={() => setOpen(true)}

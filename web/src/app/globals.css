@@ -129,3 +129,15 @@ body {
   background: var(--border);
   border-radius: 999px;
 }
+
+/* Impressão (Relatórios › Imprimir / PDF): só o conteúdo da página */
+@media print {
+  aside,
+  header,
+  [data-print-hide] {
+    display: none !important;
+  }
+  .lg\:pl-64 {
+    padding-left: 0 !important;
+  }
+}

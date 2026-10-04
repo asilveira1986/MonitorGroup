@@ -48,6 +48,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    8. `supabase/migrations/0008_indicators.sql`
    9. `supabase/migrations/0009_response_block.sql`
    10. `supabase/migrations/0010_demands.sql`
+   11. `supabase/migrations/0011_relationship_context.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -134,9 +135,20 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
 
 O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "em 2 dias"), cobranças do cliente, reabertura e confirmação após a entrega. As palavras usadas ficam nos parâmetros dos indicadores *Retrabalho* e *Confirmação do cliente*.
 
+## Relatórios
+
+A página **Relatórios** mostra os indicadores ativos em forma de tabela, com os mesmos filtros do dashboard (período, grupo e atendente). Dá para:
+
+- **Exportar relatório (CSV)**: um arquivo com uma seção por indicador, pronto para abrir no Excel;
+- **Lista detalhada (CSV)**: as mensagens ou demandas que compõem cada indicador;
+- **Imprimir / PDF**: imprime só o conteúdo da página.
+
+Indicadores desligados não aparecem no relatório nem podem ser exportados.
+
 ## Como criar um indicador novo
 
 1. Crie a função de cálculo `public.ind_<chave>(f jsonb, p jsonb) returns jsonb`, devolvendo um dos formatos padrão (`kpi`, `table`, `series`, `bars`, `heatmap` — veja o cabeçalho de `0008_indicators.sql`). `f` traz os filtros (`from`, `to`, `group_id`, `member_id`, `tz`, horário comercial e feriados) e `p` os parâmetros do indicador.
+   Nas tabelas, cada coluna aceita `format` (`number`, `duration`, `percent`, `percent_delta`, `datetime`, `text` ou `spark`, uma lista de números desenhada como mini gráfico), `bar`, `highlight_abs_gte` e `warn_below`.
 2. (Opcional) Crie `public.ind_<chave>_details(f, p)` devolvendo `{columns, rows}` para a lista exibida ao clicar no indicador.
 3. Insira o registro em `public.indicators` (bloco, nome, visual, tamanho, `default_params` e `param_schema`).
 
