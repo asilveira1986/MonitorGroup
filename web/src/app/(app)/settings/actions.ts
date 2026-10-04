@@ -261,3 +261,24 @@ export async function removeHoliday(day: string): Promise<Result> {
   revalidatePath('/settings');
   return result(error);
 }
+
+/** Horário comercial editado a partir do indicador (mesmo cadastro de Configurações › Geral). */
+export async function saveBusinessHours(values: { days: number[]; start: string; end: string }): Promise<Result> {
+  await requireAdmin();
+  if (!/^\d{2}:\d{2}/.test(values.start) || !/^\d{2}:\d{2}/.test(values.end)) {
+    return { ok: false, error: 'Informe o início e o fim do expediente.' };
+  }
+  if (values.start >= values.end) return { ok: false, error: 'O fim do expediente deve ser depois do início.' };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('app_settings')
+    .update({
+      business_days: values.days.filter((d) => d >= 0 && d <= 6),
+      business_start: values.start,
+      business_end: values.end,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', 1);
+  revalidatePath('/', 'layout');
+  return result(error);
+}

@@ -41,7 +41,9 @@ export function RealtimeListener() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'groups' }, refresh)
       // configuração de indicadores alterada por um admin: vale na hora para todos
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'indicators' }, refresh)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'indicator_blocks' }, refresh),
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'indicator_blocks' }, refresh)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'holidays' }, refresh),
   );
 
   return null;

@@ -51,7 +51,7 @@ export type IndicatorValue = {
 export type ParamField = {
   key: string;
   label: string;
-  type: 'int' | 'tags' | 'categories';
+  type: 'int' | 'bool' | 'tags' | 'categories' | 'business_hours';
   unit?: string;
   min?: number;
   max?: number;

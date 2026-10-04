@@ -6,7 +6,69 @@ import { toast } from 'sonner';
 import { Badge, Button, Card, Input, Textarea, Toggle } from '@/components/ui';
 import { cn, timeAgo } from '@/lib/format';
 import type { BlockConfig, IndicatorConfig, ParamField } from '@/lib/indicators';
-import { resetIndicators, setIndicatorBlockEnabled, updateIndicator } from '../actions';
+import { resetIndicators, saveBusinessHours, setIndicatorBlockEnabled, updateIndicator } from '../actions';
+
+export type BusinessHours = { days: number[]; start: string; end: string; holidays: number };
+
+const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+/** Editor do horário comercial (grava em Configurações › Geral, fonte única). */
+function BusinessHoursEditor({ initial }: { initial: BusinessHours }) {
+  const [days, setDays] = useState(initial.days);
+  const [start, setStart] = useState(initial.start.slice(0, 5));
+  const [end, setEnd] = useState(initial.end.slice(0, 5));
+  const [pending, run] = useTransition();
+  const dirty =
+    JSON.stringify([...days].sort()) !== JSON.stringify([...initial.days].sort()) ||
+    start !== initial.start.slice(0, 5) ||
+    end !== initial.end.slice(0, 5);
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1.5">
+        {DAYS.map((d, i) => {
+          const on = days.includes(i);
+          return (
+            <button
+              key={d}
+              type="button"
+              aria-pressed={on}
+              onClick={() => setDays((prev) => (on ? prev.filter((x) => x !== i) : [...prev, i]))}
+              className={cn(
+                'h-9 w-11 rounded-xl border text-sm transition',
+                on ? 'border-brand bg-brand-soft text-brand' : 'border-line text-ink-2',
+              )}
+            >
+              {d}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <Input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="w-32" aria-label="Início do expediente" />
+        às
+        <Input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="w-32" aria-label="Fim do expediente" />
+        <a href="/settings" className="text-xs text-brand hover:underline">
+          {initial.holidays} feriado(s) cadastrado(s)
+        </a>
+      </div>
+      {dirty && (
+        <Button
+          size="sm"
+          disabled={pending}
+          onClick={() =>
+            run(async () => {
+              const res = await saveBusinessHours({ days, start, end });
+              if (res.ok) toast.success('Horário comercial salvo');
+              else toast.error(res.error);
+            })
+          }
+        >
+          <Save className="h-3.5 w-3.5" /> Salvar horário comercial
+        </Button>
+      )}
+    </div>
+  );
+}
 
 type Category = { name: string; keywords: string[] };
 
@@ -51,12 +113,18 @@ function ParamInput({
   value,
   onChange,
   disabled,
+  businessHours,
 }: {
   field: ParamField;
   value: unknown;
   onChange: (v: unknown) => void;
   disabled?: boolean;
+  businessHours: BusinessHours;
 }) {
+  if (field.type === 'business_hours') return <BusinessHoursEditor initial={businessHours} />;
+  if (field.type === 'bool') {
+    return <Toggle checked={Boolean(value)} disabled={disabled} onChange={onChange} label={value ? 'Sim' : 'Não'} />;
+  }
   if (field.type === 'int') {
     return (
       <div className="flex items-center gap-2">
@@ -133,10 +201,12 @@ function IndicatorRow({
   indicator,
   blockEnabled,
   people,
+  businessHours,
 }: {
   indicator: IndicatorConfig;
   blockEnabled: boolean;
   people: Record<string, string>;
+  businessHours: BusinessHours;
 }) {
   const [pending, start] = useTransition();
   // o componente é recriado (key) quando o servidor devolve uma versão nova do indicador
@@ -197,9 +267,10 @@ function IndicatorRow({
         <div className="mt-3 rounded-xl bg-surface-2 p-3 sm:p-4">
           <div className="grid gap-4 sm:grid-cols-2">
             {indicator.param_schema.map((field) => (
-              <div key={field.key} className={cn('space-y-1.5', field.type !== 'int' && 'sm:col-span-2')}>
+              <div key={field.key} className={cn('space-y-1.5', !['int', 'bool'].includes(field.type) && 'sm:col-span-2')}>
                 <span className="text-xs font-medium text-ink-2">{field.label}</span>
                 <ParamInput
+                  businessHours={businessHours}
                   field={field}
                   value={params[field.key]}
                   disabled={pending}
@@ -243,10 +314,12 @@ export function IndicatorsPanel({
   blocks,
   indicators,
   people,
+  businessHours,
 }: {
   blocks: BlockConfig[];
   indicators: IndicatorConfig[];
   people: Record<string, string>;
+  businessHours: BusinessHours;
 }) {
   const [pending, start] = useTransition();
   const visibleBlocks = blocks.filter((b) => indicators.some((i) => i.block_key === b.key));
@@ -309,7 +382,13 @@ export function IndicatorsPanel({
             </div>
             <ul className="divide-y divide-line px-4 sm:px-5">
               {items.map((i) => (
-                <IndicatorRow key={`${i.key}-${i.updated_at}`} indicator={i} blockEnabled={block.enabled} people={people} />
+                <IndicatorRow
+                  key={`${i.key}-${i.updated_at}`}
+                  indicator={i}
+                  blockEnabled={block.enabled}
+                  people={people}
+                  businessHours={businessHours}
+                />
               ))}
             </ul>
           </Card>

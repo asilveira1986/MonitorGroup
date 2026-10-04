@@ -46,6 +46,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    6. `supabase/migrations/0006_removed_groups.sql`
    7. `supabase/migrations/0007_history_import.sql`
    8. `supabase/migrations/0008_indicators.sql`
+   9. `supabase/migrations/0009_response_block.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

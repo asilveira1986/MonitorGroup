@@ -51,7 +51,7 @@ function describeChange(a: AuditRow, names: Map<string, string>) {
 export default async function IndicatorsSettingsPage() {
   await requireAdmin();
   const supabase = await createClient();
-  const [{ data: blocks }, { data: indicators }, { data: profiles }, { data: audit }] = await Promise.all([
+  const [{ data: blocks }, { data: indicators }, { data: profiles }, { data: audit }, { data: settings }, { count: holidays }] = await Promise.all([
     supabase.from('indicator_blocks').select('*').order('position'),
     supabase.from('indicators').select('*').order('position'),
     supabase.from('profiles').select('id, full_name, email'),
@@ -61,6 +61,8 @@ export default async function IndicatorsSettingsPage() {
       .in('table_name', ['indicators', 'indicator_blocks', 'app_settings', 'holidays'])
       .order('changed_at', { ascending: false })
       .limit(30),
+    supabase.from('app_settings').select('business_days, business_start, business_end').eq('id', 1).single(),
+    supabase.from('holidays').select('day', { count: 'exact', head: true }),
   ]);
 
   const people = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.full_name || p.email]));
@@ -76,6 +78,12 @@ export default async function IndicatorsSettingsPage() {
         blocks={(blocks ?? []) as BlockConfig[]}
         indicators={(indicators ?? []) as IndicatorConfig[]}
         people={people}
+        businessHours={{
+          days: settings?.business_days ?? [1, 2, 3, 4, 5],
+          start: settings?.business_start ?? '08:00',
+          end: settings?.business_end ?? '18:00',
+          holidays: holidays ?? 0,
+        }}
       />
 
       <Card>
