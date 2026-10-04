@@ -45,12 +45,17 @@ export type AppSettings = {
   auto_monitor_new_groups: boolean;
   ignore_acknowledgements: boolean;
   history_import_days: number;
+  demand_manual_enabled: boolean;
+  demand_command_enabled: boolean;
+  demand_keyword_enabled: boolean;
+  demand_keywords: string[];
+  demand_ai_enabled: boolean;
 };
 
 export type AlertRule = {
   id: string;
   name: string;
-  type: 'no_response' | 'keyword' | 'high_volume' | 'disconnected' | 'inactivity';
+  type: 'no_response' | 'keyword' | 'high_volume' | 'disconnected' | 'inactivity' | 'deadline_missed' | 'rework';
   severity: 'info' | 'warning' | 'critical';
   active: boolean;
   threshold_minutes: number | null;

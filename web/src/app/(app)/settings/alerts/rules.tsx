@@ -1,6 +1,6 @@
 'use client';
 
-import { BellRing, Clock, KeyRound, Mail, MessageCircle, Pencil, Plus, Trash2, TrendingUp, Webhook, WifiOff, Moon } from 'lucide-react';
+import { BellRing, CalendarX, Repeat, Clock, KeyRound, Mail, MessageCircle, Pencil, Plus, Trash2, TrendingUp, Webhook, WifiOff, Moon } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { ActionForm } from '@/components/form-action';
@@ -15,6 +15,8 @@ const TYPE_INFO: Record<AlertType, { icon: typeof Clock; help: string }> = {
   high_volume: { icon: TrendingUp, help: 'Dispara quando um grupo recebe muitas mensagens de clientes em pouco tempo.' },
   inactivity: { icon: Moon, help: 'Dispara quando um grupo fica sem nenhuma mensagem por muito tempo.' },
   disconnected: { icon: WifiOff, help: 'Dispara quando o WhatsApp conectado cai e o monitoramento para.' },
+  deadline_missed: { icon: CalendarX, help: 'Dispara quando uma demanda passa do prazo prometido sem ser entregue.' },
+  rework: { icon: Repeat, help: 'Dispara quando uma demanda é reaberta ou cobrada várias vezes pelo cliente.' },
 };
 
 function describe(rule: AlertRule) {
@@ -29,6 +31,10 @@ function describe(rule: AlertRule) {
       return `Sem mensagens por ${rule.threshold_minutes} min`;
     case 'disconnected':
       return 'Conexão do WhatsApp caiu';
+    case 'deadline_missed':
+      return 'Demanda passou do prazo prometido';
+    case 'rework':
+      return 'Demanda reaberta ou muito cobrada';
   }
 }
 
@@ -141,7 +147,7 @@ function RuleEditor({
                   <Input type="number" min={1} name="threshold_count" required defaultValue={rule?.threshold_count ?? 20} />
                 </Field>
               )}
-              {(type === 'keyword' || type === 'high_volume' || type === 'disconnected') && (
+              {(type === 'keyword' || type === 'high_volume' || type === 'disconnected' || type === 'deadline_missed' || type === 'rework') && (
                 <Field label="Intervalo mínimo entre alertas (min)" hint="Evita alertas repetidos.">
                   <Input type="number" min={1} name="cooldown_minutes" defaultValue={rule?.cooldown_minutes ?? 60} />
                 </Field>

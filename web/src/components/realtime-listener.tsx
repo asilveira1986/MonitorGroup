@@ -43,7 +43,8 @@ export function RealtimeListener() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'indicators' }, refresh)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'indicator_blocks' }, refresh)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, refresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'holidays' }, refresh),
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'holidays' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'demands' }, refresh),
   );
 
   return null;

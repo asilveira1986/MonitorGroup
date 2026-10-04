@@ -72,6 +72,7 @@ async function createAlert(
     groupName?: string;
     instanceId?: string;
     messageId?: string;
+    demandId?: string;
   },
 ) {
   const inserted = check(
@@ -84,6 +85,7 @@ async function createAlert(
         group_id: data.groupId ?? null,
         instance_id: data.instanceId ?? null,
         message_id: data.messageId ?? null,
+        demand_id: data.demandId ?? null,
         title: data.title,
         description: data.description,
       })
@@ -224,6 +226,7 @@ export async function runPeriodicChecks() {
     await checkNoResponse(rules.filter((r) => r.type === 'no_response'), businessHours);
     await checkInactivity(rules.filter((r) => r.type === 'inactivity'), businessHours);
     await checkDisconnected(rules.filter((r) => r.type === 'disconnected'));
+    await checkDeadlines(rules.filter((r) => r.type === 'deadline_missed'));
   } catch (err) {
     logger.error({ err }, 'erro na verificação de alertas');
   } finally {
@@ -290,4 +293,69 @@ export async function resolveDisconnectAlerts(instanceId: string) {
     .eq('instance_id', instanceId)
     .eq('type', 'disconnected')
     .neq('status', 'resolved');
+}
+
+// ---------------------------------------------------------------------
+// Demandas: prazo prometido vencido e retrabalho
+// ---------------------------------------------------------------------
+
+/** Já existe alerta desta regra para a demanda? (um alerta por demanda) */
+async function demandAlerted(ruleId: string, demandId: string) {
+  const rows = check(
+    await db.from('alerts').select('id').eq('rule_id', ruleId).eq('demand_id', demandId).limit(1),
+    'demand alert',
+  );
+  return (rows ?? []).length > 0;
+}
+
+async function checkDeadlines(rules: AlertRule[]) {
+  if (!rules.length) return;
+  const { data } = await db
+    .from('demands')
+    .select('id, number, description, promised_at, group_id, groups!inner(name, monitored, removed_at)')
+    .in('status', ['aberta', 'em_andamento'])
+    .lt('promised_at', new Date().toISOString());
+  const overdue = (data ?? []) as unknown as {
+    id: string;
+    number: number;
+    description: string;
+    promised_at: string;
+    group_id: string;
+    groups: { name: string; monitored: boolean; removed_at: string | null };
+  }[];
+  for (const rule of rules) {
+    for (const d of overdue) {
+      if (!d.groups.monitored || d.groups.removed_at || !appliesToGroup(rule, d.group_id)) continue;
+      if (await demandAlerted(rule.id, d.id)) continue;
+      const late = (Date.now() - new Date(d.promised_at).getTime()) / 1000;
+      await createAlert(rule, {
+        title: `Prazo vencido há ${formatDuration(late)} - demanda #${d.number}`,
+        description: `"${d.description.slice(0, 200)}" no grupo "${d.groups.name}" não foi entregue no prazo prometido.`,
+        groupId: d.group_id,
+        groupName: d.groups.name,
+        demandId: d.id,
+      });
+    }
+  }
+}
+
+/** Chamado pelo módulo de demandas quando uma demanda é reaberta ou muito cobrada. */
+export async function onRework(demandId: string, groupId: string, groupName: string, reason: string) {
+  try {
+    const rules = (await loadRules('rework')).filter((r) => appliesToGroup(r, groupId));
+    if (!rules.length) return;
+    const { data: d } = await db.from('demands').select('number, description').eq('id', demandId).single();
+    for (const rule of rules) {
+      if (await demandAlerted(rule.id, demandId)) continue;
+      await createAlert(rule, {
+        title: `Retrabalho na demanda #${d?.number ?? ''} - ${groupName}`,
+        description: `"${(d?.description ?? '').slice(0, 200)}" foi ${reason}.`,
+        groupId,
+        groupName,
+        demandId,
+      });
+    }
+  } catch (err) {
+    logger.error({ err }, 'erro ao avaliar alerta de retrabalho');
+  }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Clock, LayoutDashboard, LogOut, Menu, MessagesSquare, Settings, X } from 'lucide-react';
+import { Bell, ClipboardList, Clock, LayoutDashboard, LogOut, Menu, MessagesSquare, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/format';
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/pending', label: 'Aguardando resposta', icon: Clock, badgeKey: 'pending' as const },
+  { href: '/demands', label: 'Demandas', icon: ClipboardList, badgeKey: 'demands' as const },
   { href: '/groups', label: 'Grupos', icon: MessagesSquare },
   { href: '/alerts', label: 'Alertas', icon: Bell, badgeKey: 'alerts' as const },
   { href: '/settings', label: 'Configurações', icon: Settings },
@@ -20,7 +21,7 @@ export function Sidebar({
   counts,
   user,
 }: {
-  counts: { pending: number; alerts: number };
+  counts: { pending: number; alerts: number; demands: number };
   user: { name: string; role: string };
 }) {
   const pathname = usePathname();
@@ -47,7 +48,11 @@ export function Sidebar({
               <span
                 className={cn(
                   'tabular rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                  badgeKey === 'alerts' ? 'bg-critical text-white' : 'bg-warning text-black',
+                  badgeKey === 'alerts'
+                    ? 'bg-critical text-white'
+                    : badgeKey === 'demands'
+                      ? 'bg-surface-2 text-ink-2 ring-1 ring-line'
+                      : 'bg-warning text-black',
                 )}
               >
                 {count > 99 ? '99+' : count}

@@ -93,7 +93,15 @@ export function DataTable({
                     key={c.key}
                     className={cn('px-2 py-2', c.align === 'right' && 'text-right', !c.format && 'max-w-[280px]')}
                   >
-                    {c.link && row[c.link] ? (
+                    {c.link_demand && row.demand_id ? (
+                      <Link
+                        href={`/demands?status=all&id=${row.demand_id}`}
+                        className="font-medium text-brand hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        #{text}
+                      </Link>
+                    ) : c.link && row[c.link] ? (
                       <Link href={`/groups/${row[c.link]}`} className="font-medium hover:text-brand" onClick={(e) => e.stopPropagation()}>
                         {text}
                       </Link>

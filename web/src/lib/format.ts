@@ -59,7 +59,25 @@ export const ALERT_TYPE_LABEL: Record<string, string> = {
   high_volume: 'Volume alto',
   disconnected: 'WhatsApp desconectado',
   inactivity: 'Grupo sem movimentação',
+  deadline_missed: 'Prazo prometido vencido',
+  rework: 'Retrabalho',
 };
+
+export const DEMAND_STATUS_LABEL: Record<string, string> = {
+  aberta: 'Aberta',
+  em_andamento: 'Em andamento',
+  entregue: 'Entregue',
+  cancelada: 'Cancelada',
+};
+
+export const DEMAND_SOURCE_LABEL: Record<string, string> = {
+  manual: 'Manual',
+  keyword: 'Comando/palavra-chave',
+  ai: 'IA',
+};
+
+/** Categorias padrão de demanda (substituídas pelas do indicador "Tipo de demanda", se configurado). */
+export const DEFAULT_DEMAND_TYPES = ['Financeiro', 'Erro', 'Dúvida', 'Pedido novo'];
 
 export const SEVERITY_LABEL: Record<string, string> = {
   info: 'Informativo',

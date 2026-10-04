@@ -47,6 +47,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    7. `supabase/migrations/0007_history_import.sql`
    8. `supabase/migrations/0008_indicators.sql`
    9. `supabase/migrations/0009_response_block.sql`
+   10. `supabase/migrations/0010_demands.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -74,6 +75,8 @@ O worker precisa ficar ligado 24 horas por dia, porque mantém a conexão com o 
    | `APP_URL` | endereço do painel (ex.: `https://seu-painel.vercel.app`), usado nos links dos alertas |
    | `RESEND_API_KEY` | *(opcional)* chave do [Resend](https://resend.com) para os alertas por e-mail |
    | `ALERT_EMAIL_FROM` | *(opcional)* remetente, ex.: `Monitor <alertas@suaempresa.com>` |
+   | `ANTHROPIC_API_KEY` | *(opcional)* chave da API do Claude, usada só se a origem "IA" de demandas for ligada |
+   | `CLAUDE_MODEL` | *(opcional)* modelo usado na classificação; padrão `claude-opus-5-5` |
 
 4. Faça o deploy e mantenha **1 réplica**. Quando o log mostrar `worker do MonitorGroup no ar`, ele está funcionando.
 
@@ -109,6 +112,27 @@ O worker precisa ficar ligado 24 horas por dia, porque mantém a conexão com o 
 6. Em **Configurações › Usuários**, cadastre as outras pessoas:
    - **com senha**: elas entram com e-mail e senha;
    - **sem senha**: elas entram com a conta Google desse e-mail.
+
+## Demandas
+
+Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer de três origens, cada uma ligada ou desligada em **Configurações › Geral › Demandas** (somente admin):
+
+- **Manual**: botão *Nova demanda* em **Demandas** ou *criar demanda* sobre uma mensagem na conversa do grupo.
+- **Comandos e palavras-chave**: a equipe escreve no grupo (de preferência respondendo à mensagem do cliente):
+
+  | Comando | Efeito |
+  |---|---|
+  | `#demanda descrição até sexta` | abre a demanda (o prazo é opcional) |
+  | `#andamento` | marca como em andamento |
+  | `#entregue` | marca como entregue |
+  | `#cancelada` | cancela |
+  | `#prazo 15/10 14h` | define ou altera o prazo prometido |
+  | `#confirmada` | registra a confirmação do cliente |
+
+  Sem resposta a uma mensagem, o comando vale para a demanda aberta mais recente do grupo. Palavras-chave do cliente (lista editável) também podem abrir demandas.
+- **IA** (desligada por padrão): o Claude classifica mensagens pendentes dos clientes. Requer `ANTHROPIC_API_KEY` no worker. Mensagens que o modelo recusar são tratadas como não-demanda.
+
+O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "em 2 dias"), cobranças do cliente, reabertura e confirmação após a entrega. As palavras usadas ficam nos parâmetros dos indicadores *Retrabalho* e *Confirmação do cliente*.
 
 ## Como criar um indicador novo
 

@@ -15,7 +15,8 @@ import { clearAuthState, hasAuthState, usePostgresAuthState } from './auth-state
 import { findTeamMember, getSettings } from './cache.js';
 import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
-import { extractContent, isAcknowledgement, phoneFromJid } from './text.js';
+import { extractContent, isAcknowledgement, phoneFromJid, quotedMessageId } from './text.js';
+import { processDemandSignals } from './demands.js';
 
 const MAX_QR_ATTEMPTS = 6; // ~2 minutos esperando a leitura do QR code
 const POLL_MS = 3_000;
@@ -522,6 +523,22 @@ export class WhatsAppManager {
         { id: group.id, name: group.name },
         { id: result.message_id, body: content.body, senderName },
       );
+    }
+
+    // demandas: comandos, cobranças, confirmações, prazos e classificação
+    if (result.inserted && !result.stale && result.message_id) {
+      await processDemandSignals({
+        groupId: group.id,
+        groupName: group.name,
+        messageId: result.message_id,
+        quotedWaId: quotedMessageId(msg.message),
+        body: content.body,
+        messageType: content.type,
+        fromTeam,
+        senderName,
+        teamMemberId: member?.id ?? null,
+        opensPending,
+      });
     }
   }
 

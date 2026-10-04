@@ -64,6 +64,7 @@ export type Message = {
   sent_at: string;
   response_time_seconds: number | null;
   answered_message_id: string | null;
+  demand_id?: string | null;
 };
 
 export type TeamMember = {
@@ -75,7 +76,7 @@ export type TeamMember = {
   created_at: string;
 };
 
-export type AlertType = 'no_response' | 'keyword' | 'high_volume' | 'disconnected' | 'inactivity';
+export type AlertType = 'no_response' | 'keyword' | 'high_volume' | 'disconnected' | 'inactivity' | 'deadline_missed' | 'rework';
 export type Severity = 'info' | 'warning' | 'critical';
 
 export type AlertRule = {
@@ -124,6 +125,11 @@ export type AppSettings = {
   auto_monitor_new_groups: boolean;
   ignore_acknowledgements: boolean;
   history_import_days: number;
+  demand_manual_enabled: boolean;
+  demand_command_enabled: boolean;
+  demand_keyword_enabled: boolean;
+  demand_keywords: string[];
+  demand_ai_enabled: boolean;
 };
 
 export type PendingItem = {
@@ -181,4 +187,38 @@ export type DashboardData = {
   buckets: { label: string; total: number }[];
   timezone: string;
   default_sla_minutes: number;
+};
+
+export type DemandStatus = 'aberta' | 'em_andamento' | 'entregue' | 'cancelada';
+
+export type Demand = {
+  id: string;
+  number: number;
+  group_id: string;
+  origin_message_id: string | null;
+  description: string;
+  type: string | null;
+  assignee_id: string | null;
+  status: DemandStatus;
+  opened_at: string;
+  promised_at: string | null;
+  delivered_at: string | null;
+  confirmed_at: string | null;
+  followups_count: number;
+  reopened_count: number;
+  source: 'manual' | 'keyword' | 'ai';
+  created_at: string;
+  updated_at: string;
+};
+
+export type DemandEvent = {
+  id: number;
+  demand_id: string;
+  kind: string;
+  from_value: string | null;
+  to_value: string | null;
+  message_id: string | null;
+  actor_id: string | null;
+  actor_label: string | null;
+  created_at: string;
 };

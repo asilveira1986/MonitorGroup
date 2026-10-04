@@ -11,6 +11,8 @@ export type Column = {
   align?: 'left' | 'right';
   /** coluna que leva à tela do grupo (valor = nome da coluna com o id) */
   link?: string;
+  /** coluna que abre a demanda (a linha traz demand_id) */
+  link_demand?: boolean;
   /** desenha uma barra proporcional ao maior valor da coluna */
   bar?: boolean;
   /** destaca valores cujo módulo seja >= este número (ex.: variação %) */

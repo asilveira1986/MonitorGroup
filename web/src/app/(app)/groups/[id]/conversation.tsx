@@ -6,6 +6,9 @@ import { Badge, EmptyState } from '@/components/ui';
 import { cn, formatDuration, formatPhone, formatTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import type { Message } from '@/lib/types';
+import Link from 'next/link';
+import { ClipboardList } from 'lucide-react';
+import { DemandForm } from '@/components/demands/demand-form';
 import { MarkTeamButton } from '../group-controls';
 import { PAGE_SIZE } from './constants';
 
@@ -35,7 +38,9 @@ export function Conversation({
   timeZone,
   slaSeconds,
   pendingSince,
+  demands,
 }: {
+  demands: { manualEnabled: boolean; groupName: string; members: { id: string; name: string }[]; types: string[] };
   groupId: string;
   /** mensagens mais recentes, da mais nova para a mais antiga */
   initial: Message[];
@@ -44,6 +49,7 @@ export function Conversation({
   pendingSince: string | null;
 }) {
   const [older, setOlder] = useState<Message[]>([]);
+  const [demandFrom, setDemandFrom] = useState<Message | null>(null);
   const [hasMore, setHasMore] = useState(initial.length >= PAGE_SIZE);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -144,6 +150,24 @@ export function Conversation({
                     {!m.from_team && m.sender_jid && (
                       <MarkTeamButton jid={m.sender_jid} name={m.sender_name ?? ''} phone={m.sender_phone} />
                     )}
+                    {m.demand_id ? (
+                      <Link
+                        href={`/demands?status=all&id=${m.demand_id}`}
+                        className="inline-flex items-center gap-1 rounded-full bg-series-1/12 px-2 py-0.5 text-[10px] font-medium text-series-1 hover:underline"
+                      >
+                        <ClipboardList className="h-3 w-3" /> demanda
+                      </Link>
+                    ) : (
+                      !m.from_team &&
+                      demands.manualEnabled && (
+                        <button
+                          onClick={() => setDemandFrom(m)}
+                          className="text-[11px] text-muted underline-offset-2 hover:text-brand hover:underline"
+                        >
+                          criar demanda
+                        </button>
+                      )
+                    )}
                   </div>
                   <p className="whitespace-pre-wrap break-words text-ink">
                     {m.message_type !== 'text' && (
@@ -165,6 +189,20 @@ export function Conversation({
           );
         })}
       </div>
+      {demandFrom && (
+        <DemandForm
+          groups={[]}
+          members={demands.members}
+          types={demands.types}
+          initial={{
+            groupId,
+            messageId: demandFrom.id,
+            description: demandFrom.body ?? '',
+            groupName: demands.groupName,
+          }}
+          onClose={() => setDemandFrom(null)}
+        />
+      )}
     </div>
   );
 }

@@ -105,3 +105,12 @@ export function isAcknowledgement(type: string, body: string | null): boolean {
   if (/^[\p{Extended_Pictographic}\p{Emoji_Modifier}‍️\s]+$/u.test(cleaned)) return true;
   return ACKNOWLEDGEMENTS.has(cleaned);
 }
+
+/** Id da mensagem citada (quando a mensagem é uma resposta a outra). */
+export function quotedMessageId(message: proto.IMessage | null | undefined): string | null {
+  const content = normalizeMessageContent(message);
+  const type = getContentType(content);
+  if (!content || !type) return null;
+  const inner = (content as Record<string, unknown>)[type] as { contextInfo?: proto.IContextInfo } | undefined;
+  return inner?.contextInfo?.stanzaId ?? null;
+}

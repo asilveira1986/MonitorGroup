@@ -9,9 +9,10 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const [{ count: pending }, { count: alerts }] = await Promise.all([
+  const [{ count: pending }, { count: alerts }, { count: demands }] = await Promise.all([
     supabase.from('pending_queue').select('id', { count: 'exact', head: true }),
     supabase.from('alerts').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+    supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', ['aberta', 'em_andamento']),
   ]);
 
   const initials = (profile.full_name || profile.email)
@@ -24,7 +25,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   return (
     <div className="min-h-screen">
       <Sidebar
-        counts={{ pending: pending ?? 0, alerts: alerts ?? 0 }}
+        counts={{ pending: pending ?? 0, alerts: alerts ?? 0, demands: demands ?? 0 }}
         user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role }}
       />
       <RealtimeListener />

@@ -4,6 +4,7 @@ import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { AppSettings } from '@/lib/types';
 import { GeneralForm } from './general-form';
+import { DemandSettings } from './demand-settings';
 import { Holidays } from './holidays';
 
 export default async function GeneralSettingsPage() {
@@ -26,6 +27,7 @@ export default async function GeneralSettingsPage() {
           <GeneralForm settings={data as AppSettings} disabled={profile.role !== 'admin'} />
         </div>
       </Card>
+      <DemandSettings settings={data as AppSettings} disabled={profile.role !== 'admin'} />
       <Holidays holidays={holidays ?? []} isAdmin={profile.role === 'admin'} />
     </div>
   );

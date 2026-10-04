@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ActionButton } from '@/components/action-button';
 import { Card, CardHeader } from '@/components/ui';
-import { formatDateTime, formatDuration, formatNumber, REMOVED_REASON_LABEL, timeAgo } from '@/lib/format';
+import { DEFAULT_DEMAND_TYPES, formatDateTime, formatDuration, formatNumber, REMOVED_REASON_LABEL, timeAgo } from '@/lib/format';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { Group, Message } from '@/lib/types';
@@ -28,10 +28,15 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
       .order('sent_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(PAGE_SIZE),
-    supabase.from('app_settings').select('timezone, default_sla_minutes').eq('id', 1).single(),
+    supabase.from('app_settings').select('timezone, default_sla_minutes, demand_manual_enabled').eq('id', 1).single(),
     // indicadores calculados no banco
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
+  const [{ data: members }, { data: typeInd }] = await Promise.all([
+    supabase.from('team_members').select('id, name').eq('active', true).order('name'),
+    supabase.from('indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
+  ]);
+  const categories = (typeInd?.params as { categories?: { name: string }[] } | undefined)?.categories;
   if (!group) notFound();
   const g = group as Group;
   const tz = settings?.timezone;
@@ -131,6 +136,12 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
             timeZone={tz}
             slaSeconds={sla}
             pendingSince={g.pending_since}
+            demands={{
+              manualEnabled: settings?.demand_manual_enabled ?? true,
+              groupName: g.name,
+              members: members ?? [],
+              types: categories?.length ? categories.map((c) => c.name).filter(Boolean) : DEFAULT_DEMAND_TYPES,
+            }}
           />
         </Card>
       </div>
