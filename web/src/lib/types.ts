@@ -130,6 +130,25 @@ export type AppSettings = {
   demand_keyword_enabled: boolean;
   demand_keywords: string[];
   demand_ai_enabled: boolean;
+  reply_enabled: boolean;
+  reply_sign_name: boolean;
+  reply_allowed: 'all' | 'admin';
+};
+
+/** Resposta escrita no painel, na fila de envio do worker. */
+export type OutgoingMessage = {
+  id: string;
+  group_id: string;
+  body: string;
+  text_to_send: string;
+  quoted_message_id: string | null;
+  status: 'pending' | 'sending' | 'sent' | 'failed';
+  error: string | null;
+  wa_message_id: string | null;
+  sender_name: string;
+  created_by: string | null;
+  created_at: string;
+  sent_at: string | null;
 };
 
 export type PendingItem = {

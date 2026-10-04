@@ -49,6 +49,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    9. `supabase/migrations/0009_response_block.sql`
    10. `supabase/migrations/0010_demands.sql`
    11. `supabase/migrations/0011_relationship_context.sql`
+   12. `supabase/migrations/0012_replies.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -134,6 +135,15 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
 - **IA** (desligada por padrão): o Claude classifica mensagens pendentes dos clientes. Requer `ANTHROPIC_API_KEY` no worker. Mensagens que o modelo recusar são tratadas como não-demanda.
 
 O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "em 2 dias"), cobranças do cliente, reabertura e confirmação após a entrega. As palavras usadas ficam nos parâmetros dos indicadores *Retrabalho* e *Confirmação do cliente*.
+
+## Responder pelo sistema
+
+Ative em **Configurações › Geral › Responder pelo sistema** (somente admin). A conversa de cada grupo monitorado ganha uma caixa de resposta, e cada mensagem tem a opção **responder**, que cita a mensagem original como no WhatsApp.
+
+- A mensagem vai para uma fila e o worker a envia pelo **número conectado**. Como o painel é um aparelho conectado ao número (igual ao WhatsApp Web), a mensagem **aparece também no celular**. O caminho contrário já existia: o que é enviado pelo celular aparece no painel.
+- **Assinar com o nome** (ligado por padrão): a mensagem começa com `*Nome:*`, para o cliente saber quem respondeu. No painel e nos indicadores, a resposta conta para quem a escreveu.
+- **Quem pode responder**: todos os usuários ou só administradores. A regra é conferida no banco.
+- A tela mostra o andamento de cada envio: na fila, enviando, enviada ou não enviada. Se o envio falhar, há as opções **Tentar de novo** e **Descartar**. Mensagens que não saírem em 10 minutos (WhatsApp desconectado) são marcadas como não enviadas, para não chegarem atrasadas ao cliente.
 
 ## Relatórios
 

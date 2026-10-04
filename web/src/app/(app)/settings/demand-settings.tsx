@@ -7,7 +7,7 @@ import { Button, Card, CardHeader, Textarea, Toggle } from '@/components/ui';
 import type { AppSettings } from '@/lib/types';
 import { saveDemandSettings } from '../demands/actions';
 
-function Row({
+export function Row({
   icon: Icon,
   title,
   text,

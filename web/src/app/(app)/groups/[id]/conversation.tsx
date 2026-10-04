@@ -1,11 +1,12 @@
 'use client';
 
-import { Clock, Loader2 } from 'lucide-react';
+import { Clock, Loader2, Reply } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge, EmptyState } from '@/components/ui';
 import { cn, formatDuration, formatPhone, formatTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
-import type { Message } from '@/lib/types';
+import type { Message, OutgoingMessage } from '@/lib/types';
+import { Composer, OutgoingBubble, type ReplyConfig } from './composer';
 import Link from 'next/link';
 import { ClipboardList } from 'lucide-react';
 import { DemandForm } from '@/components/demands/demand-form';
@@ -24,6 +25,13 @@ const TYPE_LABEL: Record<string, string> = {
   poll: '📊 Enquete',
 };
 
+/** Remove a assinatura "*Nome:*" das respostas do painel: o nome já aparece no balão. */
+function withoutSignature(body: string | null, senderName: string | null) {
+  if (!body || !senderName) return body;
+  const prefix = `*${senderName}:*\n`;
+  return body.startsWith(prefix) ? body.slice(prefix.length) : body;
+}
+
 /** Mais recente primeiro; empate no horário resolvido pelo id (cursor estável). */
 const newerFirst = (a: Message, b: Message) =>
   a.sent_at === b.sent_at ? (a.id < b.id ? 1 : -1) : a.sent_at < b.sent_at ? 1 : -1;
@@ -39,7 +47,12 @@ export function Conversation({
   slaSeconds,
   pendingSince,
   demands,
+  reply,
+  outgoing,
 }: {
+  reply: ReplyConfig;
+  /** respostas do painel ainda na fila, enviando, com falha ou recém-enviadas */
+  outgoing: OutgoingMessage[];
   demands: { manualEnabled: boolean; groupName: string; members: { id: string; name: string }[]; types: string[] };
   groupId: string;
   /** mensagens mais recentes, da mais nova para a mais antiga */
@@ -50,6 +63,7 @@ export function Conversation({
 }) {
   const [older, setOlder] = useState<Message[]>([]);
   const [demandFrom, setDemandFrom] = useState<Message | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [hasMore, setHasMore] = useState(initial.length >= PAGE_SIZE);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -96,10 +110,17 @@ export function Conversation({
 
   const dayFormat = useMemo(() => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone }), [timeZone]);
   const chronological = useMemo(() => [...messages].reverse(), [messages]);
+  // a resposta enviada some da fila quando a mensagem dela chega pelo WhatsApp
+  const queued = useMemo(() => {
+    const arrived = new Set(messages.map((m) => m.wa_message_id));
+    return outgoing.filter((o) => !o.wa_message_id || !arrived.has(o.wa_message_id));
+  }, [messages, outgoing]);
+  const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
 
   return (
-    // flex-col-reverse mantém a rolagem ancorada nas mensagens mais recentes
-    <div ref={scrollRef} className="flex max-h-[70vh] flex-col-reverse overflow-y-auto p-3 sm:max-h-[640px] sm:p-5">
+    <div>
+    {/* flex-col-reverse mantém a rolagem ancorada nas mensagens mais recentes */}
+    <div ref={scrollRef} className="flex max-h-[65vh] flex-col-reverse overflow-y-auto p-3 sm:max-h-[640px] sm:p-5">
       <div className="space-y-2">
         <div ref={sentinelRef} className="flex justify-center py-1">
           {hasMore ? (
@@ -143,7 +164,7 @@ export function Conversation({
                     pendingSince && !m.from_team && m.sent_at >= pendingSince && 'ring-2 ring-warning/60',
                   )}
                 >
-                  <div className="mb-0.5 flex items-center gap-2">
+                  <div className="mb-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 [&>*]:whitespace-nowrap">
                     <span className={cn('text-xs font-semibold', m.from_team ? 'text-brand' : 'text-series-1')}>
                       {sender}
                     </span>
@@ -168,12 +189,21 @@ export function Conversation({
                         </button>
                       )
                     )}
+                    {reply.enabled && (
+                      <button
+                        onClick={() => setReplyTo(m)}
+                        className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] text-muted hover:bg-surface-2 hover:text-brand"
+                        aria-label={`Responder a ${sender}`}
+                      >
+                        <Reply className="h-3 w-3" /> responder
+                      </button>
+                    )}
                   </div>
                   <p className="whitespace-pre-wrap break-words text-ink">
                     {m.message_type !== 'text' && (
                       <span className="text-ink-2">{TYPE_LABEL[m.message_type] ?? m.message_type} </span>
                     )}
-                    {m.body}
+                    {withoutSignature(m.body, m.from_me ? m.sender_name : null)}
                   </p>
                   <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-muted">
                     {m.response_time_seconds != null && (
@@ -188,7 +218,13 @@ export function Conversation({
             </div>
           );
         })}
+
+        {queued.map((o) => (
+          <OutgoingBubble key={o.id} item={o} quoted={o.quoted_message_id ? byId.get(o.quoted_message_id) : undefined} />
+        ))}
       </div>
+    </div>
+      <Composer groupId={groupId} config={reply} replyTo={replyTo} onClearReply={() => setReplyTo(null)} />
       {demandFrom && (
         <DemandForm
           groups={[]}

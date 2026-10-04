@@ -85,11 +85,18 @@ export function MarkTeamButton({ jid, name, phone }: { jid: string; name: string
 export function LiveMessages({ groupId }: { groupId: string }) {
   const router = useRouter();
   useRealtime(`group-${groupId}`, (channel) =>
-    channel.on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId}` },
-      () => router.refresh(),
-    ),
+    channel
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId}` },
+        () => router.refresh(),
+      )
+      // respostas do painel: na fila, enviando, enviada ou com falha
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'outgoing_messages', filter: `group_id=eq.${groupId}` },
+        () => router.refresh(),
+      ),
   );
   return null;
 }

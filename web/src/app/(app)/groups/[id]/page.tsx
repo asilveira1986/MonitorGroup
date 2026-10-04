@@ -6,12 +6,14 @@ import { Card, CardHeader } from '@/components/ui';
 import { DEFAULT_DEMAND_TYPES, formatDateTime, formatDuration, formatNumber, REMOVED_REASON_LABEL, timeAgo } from '@/lib/format';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import type { Group, Message } from '@/lib/types';
+import type { Group, Message, OutgoingMessage } from '@/lib/types';
 import { markGroupAnswered } from '../../actions';
 import { LiveMessages, MonitorToggle, SlaForm } from '../group-controls';
 import { PAGE_SIZE } from './constants';
 import { Conversation } from './conversation';
 import { DeleteRemovedGroupButton } from '../removed-groups';
+
+const minutesAgo = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
 
 export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
   const { id } = await params;
@@ -28,13 +30,25 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
       .order('sent_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(PAGE_SIZE),
-    supabase.from('app_settings').select('timezone, default_sla_minutes, demand_manual_enabled').eq('id', 1).single(),
+    supabase
+      .from('app_settings')
+      .select('timezone, default_sla_minutes, demand_manual_enabled, reply_enabled, reply_sign_name, reply_allowed')
+      .eq('id', 1)
+      .single(),
     // indicadores calculados no banco
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
-  const [{ data: members }, { data: typeInd }] = await Promise.all([
+  const recentlySent = minutesAgo(5);
+  const [{ data: members }, { data: typeInd }, { data: outgoing }] = await Promise.all([
     supabase.from('team_members').select('id, name').eq('active', true).order('name'),
     supabase.from('indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
+    // respostas do painel que ainda não voltaram pelo WhatsApp
+    supabase
+      .from('outgoing_messages')
+      .select('*')
+      .eq('group_id', id)
+      .or(`status.neq.sent,sent_at.gt.${recentlySent}`)
+      .order('created_at'),
   ]);
   const categories = (typeInd?.params as { categories?: { name: string }[] } | undefined)?.categories;
   if (!group) notFound();
@@ -48,6 +62,18 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
     in_sla?: number;
   };
   const sla = (g.sla_minutes ?? settings?.default_sla_minutes ?? 30) * 60;
+  const canReplyRole = settings?.reply_allowed !== 'admin' || profile.role === 'admin';
+  const replyBlocked = !settings?.reply_enabled
+    ? profile.role === 'admin'
+      ? 'Responder pelo sistema está desligado. Ative em Configurações › Geral.'
+      : null
+    : !canReplyRole
+      ? 'Só administradores podem responder pelo sistema.'
+      : g.removed_at
+        ? 'O número conectado não participa mais deste grupo.'
+        : !g.monitored
+          ? 'Ative o monitoramento do grupo para responder por aqui.'
+          : null;
   const inSla = st.responses ? ((st.in_sla ?? 0) / st.responses) * 100 : null;
 
   return (
@@ -136,6 +162,13 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
             timeZone={tz}
             slaSeconds={sla}
             pendingSince={g.pending_since}
+            outgoing={(outgoing ?? []) as OutgoingMessage[]}
+            reply={{
+              enabled: Boolean(settings?.reply_enabled) && !replyBlocked,
+              disabledReason: replyBlocked,
+              signName: settings?.reply_sign_name ?? true,
+              userName: profile.full_name || profile.email.split('@')[0],
+            }}
             demands={{
               manualEnabled: settings?.demand_manual_enabled ?? true,
               groupName: g.name,

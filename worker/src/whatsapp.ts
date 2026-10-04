@@ -3,6 +3,7 @@ import makeWASocket, {
   Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  generateMessageIDV2,
   isJidGroup,
   jidNormalizedUser,
   makeCacheableSignalKeyStore,
@@ -19,6 +20,8 @@ import { extractContent, isAcknowledgement, phoneFromJid, quotedMessageId } from
 import { processDemandSignals } from './demands.js';
 
 const MAX_QR_ATTEMPTS = 6; // ~2 minutos esperando a leitura do QR code
+/** respostas do painel que não saíram neste prazo (WhatsApp desconectado) falham em vez de sair atrasadas */
+const OUTBOX_EXPIRE_MS = 10 * 60_000;
 const POLL_MS = 3_000;
 const HEARTBEAT_MS = 60_000;
 
@@ -33,6 +36,8 @@ type Session = {
   groupsReady: Promise<void>;
   markGroupsReady: () => void;
   history: HistoryImport | null;
+  /** respostas enviadas pelo painel: id da mensagem no WhatsApp -> nome de quem respondeu */
+  outbox: Map<string, string>;
 };
 
 type HistoryImport = {
@@ -53,6 +58,14 @@ const toSeconds = (ts: unknown): number => {
 
 const HISTORY_BATCH = 500;
 const HISTORY_IDLE_MS = 30_000; // sem novos lotes por 30s = importação concluída
+
+type OutgoingRow = {
+  id: string;
+  group_id: string;
+  text_to_send: string;
+  quoted_message_id: string | null;
+  sender_name: string;
+};
 
 const baileysLogger = logger.child({ module: 'baileys' });
 baileysLogger.level = process.env.BAILEYS_LOG_LEVEL ?? 'warn';
@@ -85,6 +98,12 @@ export class WhatsAppManager {
         await this.updateInstance(inst.id, { status: 'disconnected', qr_code: null });
       }
     }
+
+    // envio interrompido por um reinício: não reenvia (poderia duplicar), avisa no painel
+    await db
+      .from('outgoing_messages')
+      .update({ status: 'failed', error: 'Envio interrompido por um reinício do serviço. Confira no WhatsApp e tente de novo se preciso.' })
+      .eq('status', 'sending');
 
     setInterval(() => void this.poll(), POLL_MS);
     setInterval(() => void this.heartbeat(), HEARTBEAT_MS);
@@ -136,8 +155,84 @@ export class WhatsAppManager {
       for (const id of this.sessions.keys()) {
         if (!ids.has(id)) await this.stop(id);
       }
+
+      await this.processOutbox();
     } catch (err) {
       logger.error({ err }, 'erro ao verificar comandos do painel');
+    }
+  }
+
+  /**
+   * Envia as respostas escritas no painel. A mensagem sai pela própria conexão
+   * do número (aparelho conectado), por isso aparece também no celular.
+   */
+  private async processOutbox() {
+    await db
+      .from('outgoing_messages')
+      .update({ status: 'failed', error: 'Não enviada: o WhatsApp ficou desconectado por mais de 10 minutos.' })
+      .eq('status', 'pending')
+      .lt('created_at', new Date(Date.now() - OUTBOX_EXPIRE_MS).toISOString());
+
+    for (const session of this.sessions.values()) {
+      const me = session.sock.user?.id;
+      if (!me || session.stopped) continue;
+      const { data } = await db
+        .from('outgoing_messages')
+        .select('id')
+        .eq('instance_id', session.instanceId)
+        .eq('status', 'pending')
+        .order('created_at')
+        .limit(10);
+      for (const { id } of (data ?? []) as { id: string }[]) {
+        // reserva a mensagem (evita envio duplicado se houver mais de um worker)
+        const { data: claimed } = await db
+          .from('outgoing_messages')
+          .update({ status: 'sending' })
+          .eq('id', id)
+          .eq('status', 'pending')
+          .select('id, group_id, text_to_send, quoted_message_id, sender_name')
+          .maybeSingle();
+        if (claimed) await this.sendOutgoing(session, me, claimed as OutgoingRow);
+      }
+    }
+  }
+
+  private async sendOutgoing(session: Session, me: string, row: OutgoingRow) {
+    const waId = generateMessageIDV2(me);
+    try {
+      const { data: group } = await db.from('groups').select('jid').eq('id', row.group_id).single();
+      if (!group) throw new Error('grupo não encontrado');
+
+      let quoted: WAMessage | undefined;
+      if (row.quoted_message_id) {
+        const { data: q } = await db
+          .from('messages')
+          .select('wa_message_id, sender_jid, from_me, body')
+          .eq('id', row.quoted_message_id)
+          .maybeSingle();
+        if (q) {
+          quoted = {
+            key: { remoteJid: group.jid, id: q.wa_message_id, fromMe: q.from_me, participant: q.sender_jid ?? undefined },
+            message: { conversation: q.body ?? '' },
+          };
+        }
+      }
+
+      // registrado antes do envio: a mensagem volta pelo messages.upsert com o nome de quem respondeu
+      session.outbox.set(waId, row.sender_name);
+      await session.sock.sendMessage(group.jid, { text: row.text_to_send }, { messageId: waId, quoted });
+      await db
+        .from('outgoing_messages')
+        .update({ status: 'sent', wa_message_id: waId, sent_at: new Date().toISOString(), error: null })
+        .eq('id', row.id);
+      setTimeout(() => session.outbox.delete(waId), 10 * 60_000);
+    } catch (err) {
+      session.outbox.delete(waId);
+      logger.warn({ err, id: row.id }, 'falha ao enviar resposta do painel');
+      await db
+        .from('outgoing_messages')
+        .update({ status: 'failed', error: err instanceof Error ? err.message : String(err) })
+        .eq('id', row.id);
     }
   }
 
@@ -186,6 +281,7 @@ export class WhatsAppManager {
       groupsReady: Promise.resolve(),
       markGroupsReady: () => {},
       history: null,
+      outbox: new Map(),
     };
     session.groupsReady = new Promise((resolve) => (session.markGroupsReady = resolve));
     this.sessions.set(instanceId, session);
@@ -555,7 +651,9 @@ export class WhatsAppManager {
       member,
       fromTeam: fromMe || Boolean(member),
       senderPhone: phoneFromJid(participant) ?? phoneFromJid(participantAlt),
-      senderName: fromMe ? (session.sock.user?.name ?? 'Número conectado') : (member?.name ?? msg.pushName ?? null),
+      senderName: fromMe
+        ? (session.outbox.get(msg.key.id ?? '') ?? session.sock.user?.name ?? 'Número conectado')
+        : (member?.name ?? msg.pushName ?? null),
       sentAtSeconds: toSeconds(msg.messageTimestamp),
       opensPending: !(settings.ignore_acknowledgements && isAcknowledgement(content.type, content.body)),
     };

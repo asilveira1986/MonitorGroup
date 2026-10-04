@@ -282,3 +282,23 @@ export async function saveBusinessHours(values: { days: number[]; start: string;
   revalidatePath('/', 'layout');
   return result(error);
 }
+
+export async function saveReplySettings(values: {
+  enabled: boolean;
+  signName: boolean;
+  allowed: 'all' | 'admin';
+}): Promise<Result> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('app_settings')
+    .update({
+      reply_enabled: values.enabled,
+      reply_sign_name: values.signName,
+      reply_allowed: values.allowed === 'admin' ? 'admin' : 'all',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', 1);
+  revalidatePath('/', 'layout');
+  return error ? { ok: false, error: error.message } : { ok: true };
+}

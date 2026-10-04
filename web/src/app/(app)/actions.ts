@@ -102,3 +102,35 @@ export async function getIndicatorDetails(
   if (error) return { ok: false, error: error.message };
   return { ok: true, data: data as DetailsData };
 }
+
+// ---------------------------------------------------------------------
+// Responder pelo painel (a fila é enviada pelo worker)
+// ---------------------------------------------------------------------
+export async function sendGroupMessage(
+  groupId: string,
+  body: string,
+  quotedMessageId: string | null,
+): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('send_group_message', {
+    p_group_id: groupId,
+    p_body: body,
+    p_quoted_message_id: quotedMessageId,
+  });
+  return fail(error);
+}
+
+export async function retryGroupMessage(id: string): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('retry_group_message', { p_id: id });
+  return fail(error);
+}
+
+export async function discardGroupMessage(id: string): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('discard_group_message', { p_id: id });
+  return fail(error);
+}
