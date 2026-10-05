@@ -17,6 +17,7 @@ from (values
   (10, 'Pendentes por grupo e arquivos recebidos (0017)', to_regprocedure('public.ind_arquivos_recebidos(jsonb,jsonb)') is not null),
   (11, 'Tempo de resposta desde a última mensagem do cliente (0018)',
       coalesce(obj_description('public.ingest_message(uuid,text,text,text,text,boolean,boolean,uuid,text,text,timestamptz,boolean)'::regprocedure, 'pg_proc') like '%0018%', false)),
-  (12, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 18)
+  (12, 'Análise "Precisa de resposta?" (0019)', to_regprocedure('public.ind_analise_sem_resposta(jsonb,jsonb)') is not null),
+  (13, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 19)
 ) as t(ord, item, ok)
 order by ord;

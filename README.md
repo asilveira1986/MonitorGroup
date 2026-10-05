@@ -56,6 +56,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    16. `supabase/migrations/0016_peak_hours.sql`
    17. `supabase/migrations/0017_dashboard_cards.sql`
    18. `supabase/migrations/0018_response_from_last_message.sql`
+   19. `supabase/migrations/0019_reply_analysis.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -141,6 +142,18 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
 - **IA** (desligada por padrão): o Claude classifica mensagens pendentes dos clientes. Requer `ANTHROPIC_API_KEY` no worker. Mensagens que o modelo recusar são tratadas como não-demanda.
 
 O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "em 2 dias"), cobranças do cliente, reabertura e confirmação após a entrega. As palavras usadas ficam nos parâmetros dos indicadores *Retrabalho* e *Confirmação do cliente*.
+
+## Precisa de resposta? (análise das últimas mensagens)
+
+O indicador **Precisa de resposta?**, no bloco Capacidade de resposta, olha as últimas mensagens dos clientes em cada grupo depois da última mensagem da equipe e classifica a conversa por regras (sem IA e sem custo):
+
+| Resultado | Quando |
+|---|---|
+| **Precisa** | pergunta (com "?" ou começando com "qual", "quando", "vocês conseguem"…), pedido ("preciso", "por favor", "boleto"…), problema ou urgência ("não funciona", "urgente", "cadê"…), ou o cliente respondeu a uma pergunta da equipe. Prioridade **alta** com urgência, fora do SLA ou quando o cliente insistiu 3 vezes ou mais. |
+| **Verificar** | áudio, arquivo sem texto, só cumprimento ("bom dia pessoal"), ou o cliente encerrou com "ok"/"obrigado" depois de ter pedido algo. |
+| **Não precisa** | agradecimento ou encerramento ("obrigado", "deu certo", 👍), risadas e emojis, ou mensagens sem pergunta, pedido ou problema. |
+
+O cartão mostra cada grupo numa linha com o motivo e a mensagem analisada. A tela cheia lista todos os grupos com os sinais encontrados. Em **Configurações › Indicadores** dá para ajustar quantos dias e quantas mensagens analisar e editar as listas de palavras de urgência, pedido e encerramento.
 
 ## Responder pelo sistema
 
