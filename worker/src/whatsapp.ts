@@ -19,6 +19,7 @@ import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
 import { extractContent, isAcknowledgement, phoneFromJid, quotedMessageId } from './text.js';
 import { processDemandSignals } from './demands.js';
+import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
 
 const MAX_QR_ATTEMPTS = 6; // ~2 minutos esperando a leitura do QR code
 /** respostas do painel que não saíram neste prazo (WhatsApp desconectado) falham em vez de sair atrasadas */
@@ -288,27 +289,26 @@ export class WhatsAppManager {
 
     await this.updateInstance(instanceId, { status: 'connecting', last_error: null });
     const { state, saveCreds } = await usePostgresAuthState(instanceId);
+    const creds = state.creds as MonitorCreds;
+    const paired = isPaired(creds);
+    const failedAttempts = this.reconnectAttempts.get(instanceId) ?? 0;
     // pareamento novo: garante a versão atual do WhatsApp Web (versão velha = conexão recusada)
-    await this.refreshVersion(!state.creds.registered && (this.reconnectAttempts.get(instanceId) ?? 0) > 0);
+    await this.refreshVersion(!paired && failedAttempts > 0);
     if (this.sessions.has(instanceId)) return;
     const wantsHistory = (await getSettings()).history_import_days > 0;
-    // pareamento que já falhou: alterna para o perfil mais simples (Chrome, sem histórico completo),
-    // que o WhatsApp aceita em mais ambientes; o histórico completo só vem no perfil "Desktop"
-    const pairingAttempt = state.creds.registered ? 0 : (this.reconnectAttempts.get(instanceId) ?? 0);
-    const simpleProfile = pairingAttempt % 2 === 1;
-    const importHistory = wantsHistory && !simpleProfile;
+    const profile = chooseProfile({ paired, savedProfile: creds.monitorProfile, wantsHistory, failedAttempts });
+    // guardado na sessão: depois do QR, as reconexões usam o mesmo perfil
+    if (!paired) creds.monitorProfile = profile;
+    const importHistory = wantsHistory && profile === 'desktop';
     const startedAt = Date.now();
-    log.info(
-      { version: this.version, profile: importHistory ? 'desktop' : 'chrome', pairingAttempt },
-      'abrindo conexão',
-    );
+    log.info({ version: this.version, profile, paired, failedAttempts }, 'abrindo conexão');
 
     const sock = makeWASocket({
       version: this.version,
       auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, baileysLogger) },
       logger: baileysLogger,
       // o histórico completo só é enviado para clientes "Desktop"
-      browser: importHistory ? Browsers.macOS('Desktop') : Browsers.ubuntu('Chrome'),
+      browser: profile === 'desktop' ? Browsers.macOS('Desktop') : Browsers.ubuntu('Chrome'),
       markOnlineOnConnect: false, // mantém as notificações no celular
       syncFullHistory: importHistory,
       // com a importação ligada, aceita também o lote "FULL" (o padrão da biblioteca o ignora)
@@ -396,14 +396,23 @@ export class WhatsAppManager {
           }
 
           const openSeconds = Math.round((Date.now() - startedAt) / 1000);
-          const diagnostic = `versão ${this.whatsappVersion()}, perfil ${importHistory ? 'Desktop' : 'Chrome'}, fechou após ${openSeconds}s${session.qrAttempts ? `, ${session.qrAttempts} QR gerado(s)` : ', sem QR'}`;
+          const diagnostic = `versão ${this.whatsappVersion()}, perfil ${profile === 'desktop' ? 'Desktop' : 'Chrome'}, fechou após ${openSeconds}s${session.qrAttempts ? `, ${session.qrAttempts} QR gerado(s)` : ', sem QR'}`;
           log.warn({ code, reason, diagnostic }, 'detalhes da conexão encerrada');
 
-          // reconexão com backoff exponencial (restartRequired após o QR é imediato)
+          // QR lido: o WhatsApp pede para reiniciar a conexão com a sessão nova. Não é falha.
+          if (code === DisconnectReason.restartRequired) {
+            this.reconnectAttempts.delete(instanceId);
+            log.info('pareamento concluído; reiniciando a conexão');
+            setTimeout(() => void this.start(instanceId).catch((err) => log.error({ err }, 'falha ao reconectar')), 0);
+            return;
+          }
+
+          // reconexão com backoff exponencial
           const attempt = (this.reconnectAttempts.get(instanceId) ?? 0) + 1;
           this.reconnectAttempts.set(instanceId, attempt);
 
-          if (!state.creds.registered && code !== DisconnectReason.restartRequired) {
+          // só descarta a sessão se ela ainda não foi pareada (nunca apaga uma sessão já lida no QR)
+          if (!isPaired(state.creds)) {
             // ainda não pareado: recomeça com credenciais novas (um pareamento pela metade é recusado de novo)
             await clearAuthState(instanceId);
             // o WhatsApp recusa repetidamente: para e explica
@@ -422,7 +431,7 @@ export class WhatsAppManager {
               return;
             }
           }
-          const delay = code === DisconnectReason.restartRequired ? 0 : Math.min(60_000, 2_000 * 2 ** (attempt - 1));
+          const delay = Math.min(60_000, 2_000 * 2 ** (attempt - 1));
           await this.updateInstance(instanceId, {
             status: 'connecting',
             last_error: `Reconectando, tentativa ${attempt} (código ${code ?? '?'}: ${reason})`,
