@@ -2,7 +2,7 @@
 
 import { AlertOctagon, AlertTriangle, Bell, CheckCircle2, Maximize, Minimize, Smartphone, WifiOff } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { Logo } from '@/components/logo';
 import { IndicatorView } from '@/components/indicators/views';
 import { cn } from '@/lib/format';
@@ -41,14 +41,79 @@ function KpiTile({ ind }: { ind: IndicatorValue }) {
 }
 
 /** Painel (gráfico, tabela ou cartão com lista): ocupa a célula toda e corta o que não couber. */
-function Panel({ ind, timeZone }: { ind: IndicatorValue; timeZone: string }) {
+/**
+ * Rolagem automática para a TV (ninguém usa o mouse): desce devagar quando o conteúdo não
+ * cabe, espera no fim e volta ao topo. Para enquanto o mouse está em cima e respeita
+ * "reduzir movimento" do sistema.
+ */
+function useAutoScroll(ref: RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let hover = false;
+    let wait = 60; // ~3s parado no topo antes de começar
+    let pos = 0;
+    const enter = () => (hover = true);
+    const leave = () => (hover = false);
+    el.addEventListener('mouseenter', enter);
+    el.addEventListener('mouseleave', leave);
+    const id = setInterval(() => {
+      if (hover || el.scrollHeight - el.clientHeight < 4) return;
+      if (wait > 0) {
+        wait -= 1;
+        return;
+      }
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 1) {
+        wait = 60;
+        pos = 0;
+        el.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      pos = Math.max(pos, el.scrollTop) + 0.6;
+      el.scrollTop = pos;
+    }, 50);
+    return () => {
+      clearInterval(id);
+      el.removeEventListener('mouseenter', enter);
+      el.removeEventListener('mouseleave', leave);
+    };
+  }, [ref]);
+}
+
+/**
+ * Painel (gráfico, tabela ou cartão com lista). Com capRows, mostra só essa quantidade de linhas
+ * de dados e o resto fica na rolagem; sem capRows, ocupa a altura disponível e rola se precisar.
+ */
+function Panel({ ind, timeZone, capRows }: { ind: IndicatorValue; timeZone: string; capRows?: number }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const [maxHeight, setMaxHeight] = useState<number | undefined>(undefined);
+  useAutoScroll(scroller);
+
+  // altura exata de N linhas de dados (tabela ou lista), medida depois de desenhar
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el || !capRows) return;
+    const measure = () => {
+      const rows = el.querySelectorAll<HTMLElement>('tbody tr, ul > li');
+      if (rows.length <= capRows) return setMaxHeight(undefined);
+      const top = el.getBoundingClientRect().top - el.scrollTop;
+      setMaxHeight(Math.ceil(rows[capRows].getBoundingClientRect().top - top));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [capRows, ind.data]);
+
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-line bg-surface p-4">
       <h2 className="mb-2 shrink-0 truncate text-sm font-semibold text-ink">{ind.name}</h2>
-      <div className="relative min-h-0 flex-1 overflow-hidden">
+      <div
+        ref={scroller}
+        className={cn('tv-scroll min-h-0 overflow-y-auto overscroll-contain', !capRows && 'flex-1')}
+        style={capRows ? { maxHeight } : undefined}
+      >
         <IndicatorView data={ind.data} name={ind.name} timeZone={timeZone} expanded compact />
-        {/* o que não couber some suavemente, sem barra de rolagem */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-surface to-transparent" />
       </div>
     </section>
   );
@@ -88,6 +153,9 @@ function balancedRows<T>(items: T[], weight: (item: T) => number, rowCount: numb
 
 /** Quantas linhas de painéis: 1 até 3 "lugares", 2 até 8, depois 3. */
 const panelRowCount = (total: number) => (total <= 3 ? 1 : total <= 8 ? 2 : 3);
+
+/** Linhas de dados visíveis nos painéis da primeira linha (o resto fica na rolagem). */
+const FIRST_ROW_LINES = 5;
 
 /** Painéis por página na TV: até 4 "lugares" (2 × 2), para cada um ser lido de longe. */
 const PAGE_CAPACITY = 4;
@@ -346,15 +414,19 @@ export function TvBoard({
           {/* painéis enchendo o resto da tela */}
           {shown.length > 0 && (
             <div key={current} className="flex min-h-0 flex-1 flex-col gap-3 animate-[tvfade_.6s_ease]">
-              {panelRows.map((row, r) => (
-                <div key={r} className="flex min-h-0 flex-1 basis-0 gap-3">
-                  {row.map((ind) => (
-                    <div key={ind.key} className="flex min-h-0 min-w-0 basis-0" style={{ flexGrow: weightOf(ind) }}>
-                      <Panel ind={ind} timeZone={timeZone} />
-                    </div>
-                  ))}
-                </div>
-              ))}
+              {panelRows.map((row, r) => {
+                // primeira linha compacta (5 linhas de dados, o resto rola); as demais dividem o restante
+                const compactRow = r === 0 && panelRows.length > 1;
+                return (
+                  <div key={r} className={cn('flex min-h-0 gap-3', compactRow ? 'shrink-0' : 'flex-1 basis-0')}>
+                    {row.map((ind) => (
+                      <div key={ind.key} className="flex min-h-0 min-w-0 basis-0" style={{ flexGrow: weightOf(ind) }}>
+                        <Panel ind={ind} timeZone={timeZone} capRows={compactRow ? FIRST_ROW_LINES : undefined} />
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           )}
         </>

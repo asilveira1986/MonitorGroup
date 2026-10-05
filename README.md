@@ -157,13 +157,13 @@ No **Dashboard**, clique em **Modo TV**, ou abra `https://SEU-PAINEL.vercel.app/
 - Ocupa a tela inteira, sem menu e sem rolagem, e se ajusta ao tamanho da tela (de notebook a TV 4K).
 - **Topo:** situação do WhatsApp, alertas abertos, período, relógio e horário da última atualização.
 - **Faixa de números:** todos os indicadores numéricos lado a lado.
-- **Painéis:** gráficos, tabelas e listas em páginas de até 4, que se revezam sozinhas a cada 20 segundos. As bolinhas no topo mostram a página atual; clicar nelas troca de página.
+- **Painéis:** todos numa tela só. A primeira linha é compacta: cada tabela ou lista mostra 5 linhas de dados e o restante fica numa rolagem que anda sozinha devagar e para quando o mouse está em cima. Os demais painéis preenchem o resto da tela, também com rolagem automática quando o conteúdo não cabe.
 - Atualiza sozinho a cada mensagem, alerta ou demanda nova (tempo real) e a cada minuto. O cursor some quando o mouse fica parado.
 - O botão no canto superior direito põe o navegador em tela cheia. Na TV, também dá para usar a tecla F11.
 - Opções no endereço:
   - `?period=today` (ou `7d`, `30d`, `90d`): período;
   - `&group=…` e `&member=…`: os mesmos filtros do dashboard;
-  - `&rotacao=30`: segundos entre as páginas (`0` mostra tudo numa página só);
+  - `&rotacao=20`: em vez de tudo numa tela, divide os painéis em páginas que se revezam a cada 20 segundos;
   - `&tema=claro`: tema claro.
 
 ## Relatórios

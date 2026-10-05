@@ -24,10 +24,11 @@ as $$
     select group_id, group_name, count(*)::int as n, max(waiting_seconds) as longest, bool_or(overdue) as late
     from pm group by group_id, group_name
   ),
+  -- lista completa (até 50 grupos); o cartão mostra list_size e a TV/tela cheia mostram todos
   top as (
     select * from by_group
     order by late desc, longest desc, n desc
-    limit greatest(coalesce((p->>'list_size')::int, 5), 1)
+    limit 50
   )
   select jsonb_build_object(
     'visual', 'kpi',
@@ -46,6 +47,7 @@ as $$
       ) order by late desc, longest desc, n desc)
       from top
     ), '[]'::jsonb),
+    'list_size', greatest(coalesce((p->>'list_size')::int, 5), 1),
     'list_more', greatest(groups - (select count(*) from top), 0)
   )
   from agg
@@ -91,8 +93,9 @@ as $$
            count(distinct group_id)::int as groups
     from r
   ),
+  -- os 30 mais recentes; o cartão mostra list_size e a TV/tela cheia mostram todos
   latest as (
-    select * from r order by sent_at desc limit greatest(coalesce((p->>'list_size')::int, 6), 1)
+    select * from r order by sent_at desc limit 30
   )
   select jsonb_build_object(
     'visual', 'kpi',
@@ -119,6 +122,7 @@ as $$
       ) order by sent_at desc)
       from latest
     ), '[]'::jsonb),
+    'list_size', greatest(coalesce((p->>'list_size')::int, 6), 1),
     'list_more', greatest(n - (select count(*) from latest), 0)
   )
   from agg

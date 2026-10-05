@@ -7,10 +7,11 @@ import { TvBoard } from './board';
 export const metadata: Metadata = { title: 'MonitorGroup · Modo TV' };
 
 const nowIso = () => new Date().toISOString();
-// ?rotacao=N (segundos entre as páginas de painéis, padrão 20; 0 = sem revezamento)
+// ?rotacao=N: segundos entre páginas de painéis. Padrão 0 = tudo numa tela só
+// (primeira linha compacta com rolagem e o resto da tela com os demais painéis)
 const rotation = (v: unknown) => {
   const n = Number(Array.isArray(v) ? v[0] : v);
-  return Number.isFinite(n) && v !== undefined ? Math.max(0, Math.min(600, Math.round(n))) : 20;
+  return Number.isFinite(n) && v !== undefined ? Math.max(0, Math.min(600, Math.round(n))) : 0;
 };
 
 /**

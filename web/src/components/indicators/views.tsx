@@ -82,7 +82,20 @@ function KpiList({ items, more, timeZone }: { items: KpiListItem[]; more?: numbe
   );
 }
 
-function KpiView({ data, name, timeZone }: { data: KpiData; name: string; timeZone?: string }) {
+function KpiView({
+  data,
+  name,
+  timeZone,
+  expanded,
+}: {
+  data: KpiData;
+  name: string;
+  timeZone?: string;
+  expanded?: boolean;
+}) {
+  const allItems = data.list ?? [];
+  const items = expanded || !data.list_size ? allItems : allItems.slice(0, data.list_size);
+  const more = allItems.length - items.length + (data.list_more ?? 0);
   const tone = data.tone ? TONE[data.tone] : null;
   return (
     <div>
@@ -108,7 +121,7 @@ function KpiView({ data, name, timeZone }: { data: KpiData; name: string; timeZo
           ))}
         </dl>
       )}
-      {!!data.list?.length && <KpiList items={data.list} more={data.list_more} timeZone={timeZone} />}
+      {!!items.length && <KpiList items={items} more={more} timeZone={timeZone} />}
       {data.trend && (
         <div className="-mx-1 mt-2">
           <TrendSparkline data={data.trend.data} format={data.trend.format} label={data.trend.label ?? name} />
@@ -336,7 +349,7 @@ export function IndicatorView({
 }) {
   switch (data.visual) {
     case 'kpi':
-      return <KpiView data={data} name={name} timeZone={timeZone} />;
+      return <KpiView data={data} name={name} timeZone={timeZone} expanded={expanded} />;
     case 'table':
       return (
         <DataTable

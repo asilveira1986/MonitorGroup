@@ -34,7 +34,9 @@ export type KpiData = {
   trend?: { format: ValueFormat; label?: string; data: { x: string; value: number | null }[] };
   /** lista curta, um item por linha (ex.: grupo · 3 pendentes · há 2h) */
   list?: KpiListItem[];
-  /** quantos itens ficaram de fora da lista */
+  /** quantos itens o cartão mostra (a TV e a tela cheia mostram a lista inteira) */
+  list_size?: number;
+  /** quantos itens nem vieram na lista (além dos enviados) */
   list_more?: number;
 };
 

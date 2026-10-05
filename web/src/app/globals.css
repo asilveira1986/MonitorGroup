@@ -158,3 +158,9 @@ body {
     animation: none;
   }
 }
+
+/* Modo TV: barra de rolagem fina e discreta nos painéis */
+.tv-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
