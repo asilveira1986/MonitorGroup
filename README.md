@@ -26,7 +26,7 @@ Sistema web que acompanha as mensagens recebidas e enviadas nos grupos de WhatsA
 | `worker` | Conecta ao WhatsApp, grava as mensagens dos grupos e dispara os alertas | Railway (ou qualquer serviço que rode Docker 24h) |
 | `web` | Painel: login, dashboard, fila, grupos, alertas e configurações | Vercel |
 
-**Como uma conversa é avaliada:** cada mensagem de um grupo é classificada como *cliente* ou *equipe*. Mensagens enviadas pelo número conectado e pelos atendentes cadastrados em **Configurações › Equipe** contam como equipe. Quando um cliente escreve, o grupo entra na fila de pendências. Quando a equipe responde, a pendência fecha e o sistema registra o tempo de resposta, contado a partir da **primeira** mensagem do cliente que ficou sem resposta. Mensagens curtas de agradecimento ("ok", "obrigado", 👍) não abrem uma nova pendência (essa opção pode ser desligada).
+**Como uma conversa é avaliada:** cada mensagem de um grupo é classificada como *cliente* ou *equipe*. Mensagens enviadas pelo número conectado e pelos atendentes cadastrados em **Configurações › Equipe** contam como equipe. Quando um cliente escreve, o grupo entra na fila de pendências. Quando a equipe responde, a pendência fecha e o sistema registra o tempo de resposta, contado a partir da **última** mensagem do cliente antes da resposta. A fila de pendências e os alertas de "sem resposta" continuam contando a espera desde a primeira mensagem não respondida. Mensagens curtas de agradecimento ("ok", "obrigado", 👍) não abrem uma nova pendência (essa opção pode ser desligada).
 
 ---
 
@@ -55,6 +55,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    15. `supabase/migrations/0015_recurrence_alert.sql`
    16. `supabase/migrations/0016_peak_hours.sql`
    17. `supabase/migrations/0017_dashboard_cards.sql`
+   18. `supabase/migrations/0018_response_from_last_message.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
