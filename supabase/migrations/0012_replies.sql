@@ -162,3 +162,6 @@ do $$
 begin
   begin alter publication supabase_realtime add table public.outgoing_messages; exception when others then null; end;
 end $$;
+
+-- atualiza o cache da API do Supabase (evita "Could not find the ... column in the schema cache")
+notify pgrst, 'reload schema';

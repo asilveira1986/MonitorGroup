@@ -2,11 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { requireAdmin, requireProfile } from '@/lib/auth';
+import { friendlyDbError } from '@/lib/db-errors';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 
 type Result = { ok: true } | { ok: false; error: string };
 const result = (error: { message: string } | null | undefined): Result =>
-  error ? { ok: false, error: error.message } : { ok: true };
+  error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };
 
 const list = (value: FormDataEntryValue | null) =>
   String(value ?? '')
@@ -300,5 +301,5 @@ export async function saveReplySettings(values: {
     })
     .eq('id', 1);
   revalidatePath('/', 'layout');
-  return error ? { ok: false, error: error.message } : { ok: true };
+  return result(error);
 }

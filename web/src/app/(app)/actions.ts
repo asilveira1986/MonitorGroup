@@ -3,10 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { requireAdmin, requireProfile } from '@/lib/auth';
 import type { DetailsData } from '@/lib/indicators';
+import { friendlyDbError } from '@/lib/db-errors';
 import { createClient } from '@/lib/supabase/server';
 
 type Result = { ok: true } | { ok: false; error: string };
-const fail = (error: { message: string } | null): Result => (error ? { ok: false, error: error.message } : { ok: true });
+const fail = (error: { message: string } | null): Result =>
+  error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };
 
 export async function markGroupAnswered(groupId: string): Promise<Result> {
   await requireProfile();

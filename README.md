@@ -181,6 +181,10 @@ A tela de login mostra o motivo do erro. Os casos mais comuns:
 
 Criou o usuário antes de rodar os scripts? Basta executar o `0004`: ele cria os perfis que faltam e torna administrador o usuário mais antigo.
 
+## "Could not find the '...' column … in the schema cache"
+
+Uma função nova do painel está usando campos que o banco ainda não tem: falta executar um script SQL. No SQL Editor do Supabase, execute os scripts da pasta `supabase/migrations` que ainda não rodou, **na ordem** (veja a lista no passo 1). Os scripts podem ser executados de novo sem problema. Se o erro continuar logo depois, rode `notify pgrst, 'reload schema';` no SQL Editor e aguarde alguns segundos.
+
 ## QR code não aparece
 
 A tela **Configurações › WhatsApp** mostra no topo se o worker está no ar:

@@ -59,3 +59,6 @@ revoke all on function public.acquire_worker_lock(text, text, int) from public, 
 revoke all on function public.release_worker_lock(text) from public, anon, authenticated;
 grant execute on function public.acquire_worker_lock(text, text, int) to service_role;
 grant execute on function public.release_worker_lock(text) to service_role;
+
+-- atualiza o cache da API do Supabase (evita "Could not find the ... column in the schema cache")
+notify pgrst, 'reload schema';
