@@ -25,7 +25,10 @@ function KpiView({ data, name }: { data: KpiData; name: string }) {
   return (
     <div>
       <div className="flex items-end justify-between gap-3">
-        <p className="text-3xl font-semibold tracking-tight">{formatValue(data.value, data.format)}</p>
+        <p className="flex flex-wrap items-baseline gap-x-2">
+          <span className="text-3xl font-semibold tracking-tight">{formatValue(data.value, data.format)}</span>
+          {data.unit && <span className="text-sm font-medium text-ink-2">{data.unit}</span>}
+        </p>
         {tone && (
           <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium', tone.cls)}>
             <tone.icon className="h-3.5 w-3.5" aria-hidden /> {tone.label}

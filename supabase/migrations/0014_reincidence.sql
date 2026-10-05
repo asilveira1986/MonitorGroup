@@ -94,18 +94,20 @@ as $$
   )
   select jsonb_build_object(
     'visual', 'kpi',
-    'format', 'percent',
-    'value', v.pct,
+    -- destaque: quantos grupos reincidiram; o percentual fica nos detalhes
+    'format', 'number',
+    'value', v.recurrent,
+    'unit', case when v.recurrent = 1 then 'grupo reincidente' else 'grupos reincidentes' end,
     'tone', case when v.recurrent = 0 then 'good'
                  when v.pct <= coalesce((p->>'target_percent')::numeric, 20) then 'warning'
                  else 'critical' end,
     'hint', case when v.groups = 0 then 'Nenhuma falha de resposta no período'
                  when v.recurrent = 0 then 'Nenhum grupo reincidente · ' || v.groups || ' grupo(s) com falha isolada'
-                 else v.recurrent || ' de ' || v.groups || ' grupo(s) com falha são reincidentes'
+                 else 'de ' || v.groups || ' grupo(s) com falha de resposta'
                       || coalesce(' · mais reincidente: ' || (select group_name || ' (' || failures || ' falhas)' from top), '')
             end,
     'secondary', jsonb_build_array(
-      jsonb_build_object('label', 'Grupos reincidentes', 'value', v.recurrent, 'format', 'number'),
+      jsonb_build_object('label', 'Índice de reincidência', 'value', v.pct, 'format', 'percent'),
       jsonb_build_object('label', 'Falhas de resposta', 'value', v.failures, 'format', 'number'),
       jsonb_build_object('label', 'Falharam também no período anterior', 'value', v.repeat_prev, 'format', 'number')
     ),
@@ -153,6 +155,11 @@ values
    '{"min_failures": 2, "count_previous_period": true, "target_percent": 20}',
    '[{"key":"min_failures","label":"Falhas no período para ser reincidente","type":"int","min":2,"max":50,"help":"Uma falha é uma mensagem respondida fora do SLA ou ainda sem resposta depois dele."},{"key":"count_previous_period","label":"Contar quem já falhou no período anterior","type":"bool","help":"Ligado: um grupo que falhou de novo após ter falhado no período anterior também é reincidente."},{"key":"target_percent","label":"Aceitável até","type":"int","unit":"%","min":0,"max":100,"help":"Acima disso o indicador fica vermelho."}]')
 on conflict (key) do nothing;
+
+-- descrição: o destaque é a quantidade de grupos reincidentes
+update public.indicators
+set description = 'Grupos que voltaram a ter falha de resposta (fora do SLA ou ainda sem resposta) e o percentual que representam entre os grupos com falha.'
+where key = 'reincidencia_sem_resposta';
 
 update public.indicators set params = default_params, enabled = default_enabled, alert_enabled = default_alert_enabled
 where key = 'reincidencia_sem_resposta' and updated_by is null and params = '{}'::jsonb;

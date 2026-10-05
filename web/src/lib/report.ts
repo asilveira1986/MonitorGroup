@@ -13,7 +13,10 @@ export function indicatorTable(data: IndicatorData): { columns: Column[]; rows: 
           { key: 'value', label: 'Valor', format: 'text', align: 'right' },
         ],
         rows: [
-          { metric: 'Valor principal', value: formatValue(data.value, data.format) },
+          {
+            metric: data.unit ? data.unit[0].toUpperCase() + data.unit.slice(1) : 'Valor principal',
+            value: formatValue(data.value, data.format),
+          },
           ...(data.secondary ?? []).map((s) => ({ metric: s.label, value: formatValue(s.value, s.format) })),
           ...(data.hint ? [{ metric: 'Observação', value: data.hint }] : []),
         ],

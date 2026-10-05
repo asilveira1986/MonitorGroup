@@ -25,6 +25,8 @@ export type KpiData = {
   visual: 'kpi';
   value: number | null;
   format: ValueFormat;
+  /** texto pequeno ao lado do número (ex.: "grupos reincidentes") */
+  unit?: string;
   tone?: Tone;
   hint?: string;
   secondary?: { label: string; value: number | null; format: ValueFormat }[];
