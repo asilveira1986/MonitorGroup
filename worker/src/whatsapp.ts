@@ -3,6 +3,7 @@ import makeWASocket, {
   Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  fetchLatestWaWebVersion,
   generateMessageIDV2,
   isJidGroup,
   jidNormalizedUser,
@@ -75,29 +76,40 @@ export class WhatsAppManager {
   private reconnectAttempts = new Map<string, number>();
   private version: [number, number, number] | undefined;
 
+  /** de onde veio a versão anunciada (exibido no painel) */
+  private versionSource = 'padrão da biblioteca';
+
   whatsappVersion() {
-    return this.version?.join('.') ?? 'padrão da biblioteca';
+    return this.version ? `${this.version.join('.')} (${this.versionSource})` : 'padrão da biblioteca';
   }
 
   private versionFetchedAt = 0;
 
-  /** Versão do WhatsApp Web anunciada na conexão; uma versão antiga faz o WhatsApp recusar o pareamento. */
+  /**
+   * Versão do WhatsApp Web anunciada na conexão. Uma versão antiga faz o WhatsApp
+   * fechar a conexão antes do QR code (428). Ordem: versão atual publicada em
+   * web.whatsapp.com -> versão do repositório da biblioteca -> versão embutida.
+   */
   private async refreshVersion(force = false) {
     if (!force && this.version && Date.now() - this.versionFetchedAt < 6 * 3600_000) return;
-    try {
-      const result = await fetchLatestBaileysVersion();
-      // em caso de falha a biblioteca devolve a versão embutida (isLatest = false): mantém a última obtida
-      if (result.error) {
-        if (!this.version) this.version = result.version;
-        logger.warn({ version: this.version }, 'não foi possível obter a versão mais recente do WhatsApp Web');
+    const sources = [
+      { name: 'web.whatsapp.com', fetch: () => fetchLatestWaWebVersion() },
+      { name: 'repositório da biblioteca', fetch: () => fetchLatestBaileysVersion() },
+    ];
+    for (const source of sources) {
+      try {
+        const result = await source.fetch();
+        if (result.error || !result.isLatest) continue;
+        this.version = result.version;
+        this.versionSource = source.name;
+        this.versionFetchedAt = Date.now();
+        logger.info({ version: this.version, source: source.name }, 'versão do WhatsApp Web');
         return;
+      } catch {
+        /* tenta a próxima fonte */
       }
-      this.version = result.version;
-      this.versionFetchedAt = Date.now();
-      logger.info({ version: this.version }, 'versão do WhatsApp Web');
-    } catch {
-      logger.warn({ version: this.version }, 'não foi possível obter a versão mais recente do WhatsApp Web');
     }
+    logger.warn({ version: this.version }, 'não foi possível obter a versão mais recente do WhatsApp Web');
   }
 
   /** Fecha as conexões sem deslogar (a sessão continua salva no banco). */
@@ -279,7 +291,17 @@ export class WhatsAppManager {
     // pareamento novo: garante a versão atual do WhatsApp Web (versão velha = conexão recusada)
     await this.refreshVersion(!state.creds.registered && (this.reconnectAttempts.get(instanceId) ?? 0) > 0);
     if (this.sessions.has(instanceId)) return;
-    const importHistory = (await getSettings()).history_import_days > 0;
+    const wantsHistory = (await getSettings()).history_import_days > 0;
+    // pareamento que já falhou: alterna para o perfil mais simples (Chrome, sem histórico completo),
+    // que o WhatsApp aceita em mais ambientes; o histórico completo só vem no perfil "Desktop"
+    const pairingAttempt = state.creds.registered ? 0 : (this.reconnectAttempts.get(instanceId) ?? 0);
+    const simpleProfile = pairingAttempt % 2 === 1;
+    const importHistory = wantsHistory && !simpleProfile;
+    const startedAt = Date.now();
+    log.info(
+      { version: this.version, profile: importHistory ? 'desktop' : 'chrome', pairingAttempt },
+      'abrindo conexão',
+    );
 
     const sock = makeWASocket({
       version: this.version,
@@ -373,6 +395,10 @@ export class WhatsAppManager {
             return;
           }
 
+          const openSeconds = Math.round((Date.now() - startedAt) / 1000);
+          const diagnostic = `versão ${this.whatsappVersion()}, perfil ${importHistory ? 'Desktop' : 'Chrome'}, fechou após ${openSeconds}s${session.qrAttempts ? `, ${session.qrAttempts} QR gerado(s)` : ', sem QR'}`;
+          log.warn({ code, reason, diagnostic }, 'detalhes da conexão encerrada');
+
           // reconexão com backoff exponencial (restartRequired após o QR é imediato)
           const attempt = (this.reconnectAttempts.get(instanceId) ?? 0) + 1;
           this.reconnectAttempts.set(instanceId, attempt);
@@ -390,7 +416,8 @@ export class WhatsAppManager {
                   `O WhatsApp encerrou a conexão ${attempt} vezes antes do QR code (código ${code ?? '?'}: ${reason}). ` +
                   'Causas comuns: outra cópia do worker usando a mesma conexão (mais de 1 réplica no Railway ou o worker ' +
                   'rodando também no seu computador) ou bloqueio temporário após muitas tentativas. Deixe só um worker ' +
-                  'ligado, aguarde 10 a 15 minutos e clique em "Conectar".',
+                  'ligado, aguarde 10 a 15 minutos e clique em "Conectar". ' +
+                  `Diagnóstico da última tentativa: ${diagnostic}.`,
               });
               return;
             }

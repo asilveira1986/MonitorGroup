@@ -205,6 +205,7 @@ A tela **Configurações › WhatsApp** mostra no topo se o worker está no ar:
   2. Pare qualquer `npm run dev`/`npm start` do worker no seu computador.
   3. Execute o script `0013_worker_lock.sql` e faça um novo deploy. A partir dele só uma cópia se conecta por vez; uma cópia extra fica aguardando e aparece como aviso nesta tela.
   4. Aguarde 10 a 15 minutos e clique em **Conectar**. Leia o QR code assim que aparecer.
+  5. O worker anuncia a versão atual do WhatsApp Web (buscada em web.whatsapp.com; aparece no topo de **Configurações › WhatsApp**) e, se o pareamento falhar, alterna para um perfil de conexão mais simples. Se ainda assim falhar, a mensagem de erro traz um "Diagnóstico da última tentativa" (versão, perfil e em quantos segundos a conexão caiu): envie esse texto ao suporte.
 - **"Não foi possível verificar o worker"**: execute o script `0005_worker_status.sql`.
 
 ## Custos estimados
