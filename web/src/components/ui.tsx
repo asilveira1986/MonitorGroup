@@ -49,7 +49,9 @@ export function PageHeader({
         <h1 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">{title}</h1>
         {description && <p className="mt-1 text-sm text-ink-2">{description}</p>}
       </div>
-      {action && <div className="flex flex-wrap items-center gap-2">{action}</div>}
+      {action && (
+        <div className={cn('flex flex-wrap items-center gap-2', stackAction && 'w-full min-[1600px]:w-auto')}>{action}</div>
+      )}
     </div>
   );
 }

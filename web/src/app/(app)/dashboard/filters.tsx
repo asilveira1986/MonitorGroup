@@ -38,7 +38,13 @@ export function DashboardFilters({
   };
 
   return (
-    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto lg:flex-nowrap">
+    <div
+      className={cn(
+        'flex w-full flex-wrap items-center gap-2 lg:flex-nowrap',
+        // com ação extra, a barra ocupa a linha toda para a ação encostar à direita
+        extra ? 'min-[1600px]:w-auto' : 'sm:w-auto',
+      )}
+    >
       <div className="flex w-full rounded-xl border border-line bg-surface p-1 sm:inline-flex sm:w-auto">
         {PERIODS.map((p) => (
           <Link
@@ -53,7 +59,6 @@ export function DashboardFilters({
           </Link>
         ))}
       </div>
-      {/* grupo e a ação extra (Modo TV) sempre lado a lado */}
       <div className="flex w-full items-center gap-2 sm:w-auto">
         <div className="min-w-0 flex-1 sm:w-52 sm:flex-none xl:w-56">
           <Select
@@ -70,7 +75,6 @@ export function DashboardFilters({
             ))}
           </Select>
         </div>
-        {extra}
       </div>
       {members.length > 0 && (
         <div className="w-full sm:w-44 xl:w-48">
@@ -89,6 +93,8 @@ export function DashboardFilters({
           </Select>
         </div>
       )}
+      {/* ação extra (Modo TV): último item da linha, alinhado à direita */}
+      {extra && <div className="flex w-full justify-end sm:ml-auto sm:w-auto">{extra}</div>}
     </div>
   );
 }
