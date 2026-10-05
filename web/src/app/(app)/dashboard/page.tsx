@@ -41,10 +41,11 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
               <Link
                 href="/tv"
                 target="_blank"
-                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-xs font-medium text-ink-2 hover:bg-surface-2 hover:text-ink sm:h-9"
-                title="Abrir o dashboard em tela cheia para deixar num monitor ou TV"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-surface text-ink-2 hover:bg-surface-2 hover:text-ink sm:h-9 sm:w-9"
+                title="Modo TV: abrir o dashboard em tela cheia para deixar num monitor ou TV"
+                aria-label="Modo TV"
               >
-                <Tv className="h-4 w-4" /> Modo TV
+                <Tv className="h-4 w-4" />
               </Link>
             }
           />
