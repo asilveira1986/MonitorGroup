@@ -61,6 +61,7 @@ export const ALERT_TYPE_LABEL: Record<string, string> = {
   inactivity: 'Grupo sem movimentação',
   deadline_missed: 'Prazo prometido vencido',
   rework: 'Retrabalho',
+  recurrence: 'Reincidência sem resposta',
 };
 
 export const DEMAND_STATUS_LABEL: Record<string, string> = {

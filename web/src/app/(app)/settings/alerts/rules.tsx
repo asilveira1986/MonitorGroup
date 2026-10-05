@@ -1,6 +1,6 @@
 'use client';
 
-import { BellRing, CalendarX, Repeat, Clock, KeyRound, Mail, MessageCircle, Pencil, Plus, Trash2, TrendingUp, Webhook, WifiOff, Moon } from 'lucide-react';
+import { BellRing, CalendarX, History, Repeat, Clock, KeyRound, Mail, MessageCircle, Pencil, Plus, Trash2, TrendingUp, Webhook, WifiOff, Moon } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { ActionForm } from '@/components/form-action';
@@ -17,6 +17,10 @@ const TYPE_INFO: Record<AlertType, { icon: typeof Clock; help: string }> = {
   disconnected: { icon: WifiOff, help: 'Dispara quando o WhatsApp conectado cai e o monitoramento para.' },
   deadline_missed: { icon: CalendarX, help: 'Dispara quando uma demanda passa do prazo prometido sem ser entregue.' },
   rework: { icon: Repeat, help: 'Dispara quando uma demanda é reaberta ou cobrada várias vezes pelo cliente.' },
+  recurrence: {
+    icon: History,
+    help: 'Dispara quando um grupo acumula várias falhas de resposta (respondida fora do SLA ou ainda sem resposta) em poucos dias. Avisa de novo só se houver falha nova.',
+  },
 };
 
 function describe(rule: AlertRule) {
@@ -35,6 +39,8 @@ function describe(rule: AlertRule) {
       return 'Demanda passou do prazo prometido';
     case 'rework':
       return 'Demanda reaberta ou muito cobrada';
+    case 'recurrence':
+      return `${rule.threshold_count} falhas de resposta em ${Math.max(1, Math.round((rule.threshold_minutes ?? 1440) / 1440))} dia(s)`;
   }
 }
 
@@ -147,9 +153,36 @@ function RuleEditor({
                   <Input type="number" min={1} name="threshold_count" required defaultValue={rule?.threshold_count ?? 20} />
                 </Field>
               )}
-              {(type === 'keyword' || type === 'high_volume' || type === 'disconnected' || type === 'deadline_missed' || type === 'rework') && (
+              {type === 'recurrence' && (
+                <>
+                  <Field label="Falhas de resposta" hint="Fora do SLA ou ainda sem resposta.">
+                    <Input type="number" min={1} name="threshold_count" required defaultValue={rule?.threshold_count ?? 3} />
+                  </Field>
+                  <Field label="Em quantos dias">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={90}
+                      name="threshold_days"
+                      required
+                      defaultValue={rule?.threshold_minutes ? Math.max(1, Math.round(rule.threshold_minutes / 1440)) : 7}
+                    />
+                  </Field>
+                </>
+              )}
+              {(type === 'keyword' ||
+                type === 'high_volume' ||
+                type === 'disconnected' ||
+                type === 'deadline_missed' ||
+                type === 'rework' ||
+                type === 'recurrence') && (
                 <Field label="Intervalo mínimo entre alertas (min)" hint="Evita alertas repetidos.">
-                  <Input type="number" min={1} name="cooldown_minutes" defaultValue={rule?.cooldown_minutes ?? 60} />
+                  <Input
+                    type="number"
+                    min={1}
+                    name="cooldown_minutes"
+                    defaultValue={rule?.cooldown_minutes ?? (type === 'recurrence' ? 1440 : 60)}
+                  />
                 </Field>
               )}
             </div>

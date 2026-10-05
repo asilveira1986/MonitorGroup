@@ -215,6 +215,58 @@ async function checkDisconnected(rules: AlertRule[]) {
   }
 }
 
+/**
+ * Reincidência de falta de resposta: grupo com N falhas (fora do SLA ou ainda sem
+ * resposta) na janela da regra. Avisa de novo só quando houver falha nova depois do
+ * último aviso e passado o intervalo mínimo da regra.
+ */
+async function checkRecurrence(rules: AlertRule[], businessHours: boolean) {
+  for (const rule of rules) {
+    if (!rule.threshold_count || !rule.threshold_minutes) continue;
+    if (rule.business_hours_only && !businessHours) continue;
+    const { data, error } = await db.rpc('recurrence_alert_candidates', {
+      p_window_minutes: rule.threshold_minutes,
+      p_min_failures: rule.threshold_count,
+    });
+    if (error) {
+      logger.warn({ error: error.message }, 'reincidência: execute o script 0015 no Supabase');
+      return;
+    }
+    const days = Math.max(1, Math.round(rule.threshold_minutes / 1440));
+    for (const g of (data ?? []) as {
+      group_id: string;
+      group_name: string;
+      failures: number;
+      last_failure: string;
+      worst_seconds: number | null;
+    }[]) {
+      if (!appliesToGroup(rule, g.group_id)) continue;
+      const { data: last } = await db
+        .from('alerts')
+        .select('created_at')
+        .eq('rule_id', rule.id)
+        .eq('group_id', g.group_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (last) {
+        const lastAt = new Date(last.created_at).getTime();
+        if (new Date(g.last_failure).getTime() <= lastAt) continue; // nenhuma falha nova desde o último aviso
+        if (Date.now() - lastAt < rule.cooldown_minutes * 60_000) continue;
+      }
+      await createAlert(rule, {
+        title: `Falta de resposta reincidente - ${g.group_name}`,
+        description:
+          `O grupo "${g.group_name}" teve ${g.failures} falhas de resposta (fora do SLA ou ainda sem resposta) ` +
+          `nos últimos ${days} dia(s).` +
+          (g.worst_seconds ? ` Maior atraso: ${formatDuration(g.worst_seconds)}.` : ''),
+        groupId: g.group_id,
+        groupName: g.group_name,
+      });
+    }
+  }
+}
+
 let running = false;
 
 export async function runPeriodicChecks() {
@@ -227,6 +279,7 @@ export async function runPeriodicChecks() {
     await checkInactivity(rules.filter((r) => r.type === 'inactivity'), businessHours);
     await checkDisconnected(rules.filter((r) => r.type === 'disconnected'));
     await checkDeadlines(rules.filter((r) => r.type === 'deadline_missed'));
+    await checkRecurrence(rules.filter((r) => r.type === 'recurrence'), businessHours);
   } catch (err) {
     logger.error({ err }, 'erro na verificação de alertas');
   } finally {

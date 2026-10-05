@@ -78,6 +78,18 @@ export async function deleteInstance(id: string): Promise<Result> {
 }
 
 // --------------------------------------------------------------- Regras de alerta
+/** Indicador que cada tipo de regra segue: com ele (ou o alerta dele) desligado, a regra não dispara. */
+const RULE_INDICATOR: Record<string, string | null> = {
+  no_response: 'mensagens_pendentes',
+  high_volume: 'volume_por_grupo',
+  inactivity: 'grupos_silenciosos',
+  keyword: 'cobrancas_reclamacoes',
+  deadline_missed: 'prazo_prometido_cumprido',
+  rework: 'retrabalho',
+  recurrence: 'reincidencia_sem_resposta',
+  disconnected: null,
+};
+
 export async function saveAlertRule(form: FormData): Promise<Result> {
   await requireAdmin();
   const supabase = await createClient();
@@ -90,19 +102,27 @@ export async function saveAlertRule(form: FormData): Promise<Result> {
     type,
     severity: String(form.get('severity') || 'warning'),
     active: form.get('active') === 'on',
-    threshold_minutes: intOrNull(form.get('threshold_minutes')),
+    // reincidência: a tela pede a janela em dias
+    threshold_minutes:
+      type === 'recurrence'
+        ? (intOrNull(form.get('threshold_days')) ?? 0) * 1440 || null
+        : intOrNull(form.get('threshold_minutes')),
     threshold_count: intOrNull(form.get('threshold_count')),
     keywords: type === 'keyword' ? list(form.get('keywords')) : null,
     group_ids: groupIds.length ? groupIds : null,
     business_hours_only: form.get('business_hours_only') === 'on',
-    cooldown_minutes: intOrNull(form.get('cooldown_minutes')) ?? 60,
+    cooldown_minutes: intOrNull(form.get('cooldown_minutes')) ?? (type === 'recurrence' ? 1440 : 60),
     notify_in_app: true,
     notify_emails: list(form.get('notify_emails')).map((e) => e.toLowerCase()),
     notify_whatsapp: list(form.get('notify_whatsapp')).map((p) => p.replace(/\D/g, '')).filter(Boolean),
     notify_webhook_url: String(form.get('notify_webhook_url') || '').trim() || null,
+    indicator_key: RULE_INDICATOR[type] ?? null,
     updated_at: new Date().toISOString(),
   };
 
+  if (type === 'recurrence' && (!values.threshold_count || !values.threshold_minutes)) {
+    return { ok: false, error: 'Informe a quantidade de falhas e em quantos dias.' };
+  }
   if ((type === 'no_response' || type === 'inactivity' || type === 'high_volume') && !values.threshold_minutes) {
     return { ok: false, error: 'Informe o tempo (minutos) da regra.' };
   }

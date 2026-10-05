@@ -521,8 +521,10 @@ where block_key = 'entregas_demandas' and updated_by is null and params = '{}'::
 -- Alertas ligados aos novos indicadores
 -- ---------------------------------------------------------------------
 alter table public.alert_rules drop constraint if exists alert_rules_type_check;
+-- "not valid": ao executar este script de novo, não recusa regras de tipos criados por scripts
+-- posteriores (ex.: 'recurrence', do 0015, que redefine esta lista logo depois)
 alter table public.alert_rules add constraint alert_rules_type_check
-  check (type in ('no_response', 'keyword', 'high_volume', 'disconnected', 'inactivity', 'deadline_missed', 'rework'));
+  check (type in ('no_response', 'keyword', 'high_volume', 'disconnected', 'inactivity', 'deadline_missed', 'rework')) not valid;
 
 insert into public.alert_rules (name, type, severity, cooldown_minutes, indicator_key)
 select 'Prazo prometido vencido', 'deadline_missed', 'critical', 60, 'prazo_prometido_cumprido'

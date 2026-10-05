@@ -76,7 +76,15 @@ export type TeamMember = {
   created_at: string;
 };
 
-export type AlertType = 'no_response' | 'keyword' | 'high_volume' | 'disconnected' | 'inactivity' | 'deadline_missed' | 'rework';
+export type AlertType =
+  | 'no_response'
+  | 'keyword'
+  | 'high_volume'
+  | 'disconnected'
+  | 'inactivity'
+  | 'deadline_missed'
+  | 'rework'
+  | 'recurrence';
 export type Severity = 'info' | 'warning' | 'critical';
 
 export type AlertRule = {

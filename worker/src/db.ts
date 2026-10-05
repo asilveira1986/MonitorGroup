@@ -55,7 +55,15 @@ export type AppSettings = {
 export type AlertRule = {
   id: string;
   name: string;
-  type: 'no_response' | 'keyword' | 'high_volume' | 'disconnected' | 'inactivity' | 'deadline_missed' | 'rework';
+  type:
+    | 'no_response'
+    | 'keyword'
+    | 'high_volume'
+    | 'disconnected'
+    | 'inactivity'
+    | 'deadline_missed'
+    | 'rework'
+    | 'recurrence';
   severity: 'info' | 'warning' | 'critical';
   active: boolean;
   threshold_minutes: number | null;
