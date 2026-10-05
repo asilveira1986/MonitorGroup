@@ -32,6 +32,26 @@ export type KpiData = {
   secondary?: { label: string; value: number | null; format: ValueFormat }[];
   /** label: nome da série na dica do gráfico (padrão: nome do indicador) */
   trend?: { format: ValueFormat; label?: string; data: { x: string; value: number | null }[] };
+  /** lista curta, um item por linha (ex.: grupo · 3 pendentes · há 2h) */
+  list?: KpiListItem[];
+  /** quantos itens ficaram de fora da lista */
+  list_more?: number;
+};
+
+export type KpiListItem = {
+  label: string;
+  /** texto secundário na mesma linha (ex.: grupo · remetente) */
+  sublabel?: string;
+  /** ícone do tipo de arquivo */
+  icon?: 'image' | 'video' | 'audio' | 'document' | 'sticker';
+  value?: number;
+  /** texto após o número, no singular e no plural */
+  unit?: [string, string];
+  detail?: number | string | null;
+  detail_format?: ValueFormat;
+  /** destaque do item (ex.: fora do SLA) */
+  tone?: Tone;
+  group_id?: string;
 };
 export type TableData = { visual: 'table'; columns: Column[]; rows: Record<string, unknown>[] };
 export type SeriesData = {
@@ -139,27 +159,48 @@ const BASE = { sm: { 1: 3, 2: 6, 3: 6 }, xl: { 1: 2, 2: 3, 3: 6 } } as const;
 
 /**
  * Distribui os cartões em linhas de 6 colunas: quando uma linha não fecha,
- * o último cartão dela se estica para ocupar o espaço — sem buracos, mesmo
+ * o cartão maior dela (gráfico ou tabela) se estica para ocupar o espaço; cartões de número
+ * ficam sempre compactos — sem buracos, mesmo
  * quando indicadores são ligados/desligados.
  */
 export function layoutSpans(sizes: number[]): string[] {
+  return layout(sizes).classes;
+}
+
+/**
+ * Como layoutSpans, e também em que linha (tela larga) cada cartão ficou —
+ * usado para não esticar a altura de um cartão de número ao lado de um gráfico.
+ */
+export function layout(sizes: number[]): { classes: string[]; rowXl: number[] } {
+  const rowXl: number[] = [];
+  let rowIndex = 0;
   const fill = (bp: 'sm' | 'xl') => {
     const spans = sizes.map((s) => BASE[bp][(s as 1 | 2 | 3) ?? 1] ?? BASE[bp][1]);
+    let row: number[] = [];
     let used = 0;
-    let lastInRow = -1;
-    spans.forEach((span, i) => {
-      if (used + span > 6) {
-        if (lastInRow >= 0) spans[lastInRow] += 6 - used;
-        used = 0;
+    // a sobra da linha vai para o cartão maior dela (gráfico/tabela), não para um cartão de número
+    const close = () => {
+      if (row.length && used < 6) {
+        const grow = row.reduce((best, i) => (sizes[i] >= sizes[best] ? i : best), row[0]);
+        spans[grow] += 6 - used;
       }
+      if (row.length && bp === 'xl') {
+        for (const i of row) rowXl[i] = rowIndex;
+        rowIndex += 1;
+      }
+      row = [];
+      used = 0;
+    };
+    spans.forEach((span, i) => {
+      if (used + span > 6) close();
+      row.push(i);
       used += span;
-      lastInRow = i;
-      if (used === 6) used = 0;
+      if (used === 6) close();
     });
-    if (used > 0 && lastInRow >= 0) spans[lastInRow] += 6 - used;
+    close();
     return spans;
   };
   const sm = fill('sm');
   const xl = fill('xl');
-  return sizes.map((_, i) => `${SM_SPAN[sm[i]]} ${XL_SPAN[xl[i]]}`);
+  return { classes: sizes.map((_, i) => `${SM_SPAN[sm[i]]} ${XL_SPAN[xl[i]]}`), rowXl };
 }

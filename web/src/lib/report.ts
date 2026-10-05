@@ -19,6 +19,16 @@ export function indicatorTable(data: IndicatorData): { columns: Column[]; rows: 
           },
           ...(data.secondary ?? []).map((s) => ({ metric: s.label, value: formatValue(s.value, s.format) })),
           ...(data.hint ? [{ metric: 'Observação', value: data.hint }] : []),
+          // lista do cartão (ex.: grupos com pendências, arquivos recebidos)
+          ...(data.list ?? []).map((it) => ({
+            metric: it.sublabel ? `${it.label} (${it.sublabel})` : it.label,
+            value: [
+              it.value != null ? `${formatValue(it.value, 'number')}${it.unit ? ` ${it.value === 1 ? it.unit[0] : it.unit[1]}` : ''}` : '',
+              it.detail != null && it.detail !== '' ? formatValue(it.detail, it.detail_format ?? 'text') : '',
+            ]
+              .filter(Boolean)
+              .join(' · '),
+          })),
         ],
       };
     case 'table':

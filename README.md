@@ -54,6 +54,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    14. `supabase/migrations/0014_reincidence.sql`
    15. `supabase/migrations/0015_recurrence_alert.sql`
    16. `supabase/migrations/0016_peak_hours.sql`
+   17. `supabase/migrations/0017_dashboard_cards.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

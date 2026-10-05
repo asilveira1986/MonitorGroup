@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertOctagon, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, CheckCircle2, FileText, Image as ImageIcon, Mic, Smile, Video } from 'lucide-react';
 import Link from 'next/link';
 import { BarsChart, Legend, SERIES_COLORS, SeriesChart, TrendSparkline } from '@/components/charts';
 import { cn } from '@/lib/format';
@@ -11,6 +11,7 @@ import {
   type HeatmapData,
   type IndicatorData,
   type KpiData,
+  type KpiListItem,
   type SeriesData,
   type TableData,
 } from '@/lib/indicators';
@@ -21,7 +22,67 @@ const TONE = {
   critical: { cls: 'bg-critical/12 text-critical-ink', icon: AlertOctagon, label: 'Crítico' },
 };
 
-function KpiView({ data, name }: { data: KpiData; name: string }) {
+const FILE_ICON = { image: ImageIcon, video: Video, audio: Mic, document: FileText, sticker: Smile };
+
+/** Lista compacta do KPI: cada item numa linha, nome à esquerda, número e detalhe à direita. */
+function KpiList({ items, more, timeZone }: { items: KpiListItem[]; more?: number; timeZone?: string }) {
+  return (
+    <ul className="mt-3 divide-y divide-line border-y border-line text-sm">
+      {items.map((it, i) => {
+        const Icon = it.icon ? FILE_ICON[it.icon] : null;
+        const text = (
+          <>
+            <span className="truncate font-medium text-ink">{it.label}</span>
+            {it.sublabel && <span className="truncate text-xs text-muted">{it.sublabel}</span>}
+          </>
+        );
+        const label = it.group_id ? (
+          <Link
+            href={`/groups/${it.group_id}`}
+            className="flex min-w-0 flex-col hover:[&>span:first-child]:text-brand sm:flex-row sm:items-baseline sm:gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {text}
+          </Link>
+        ) : (
+          <span className="flex min-w-0 flex-col sm:flex-row sm:items-baseline sm:gap-2">{text}</span>
+        );
+        return (
+          <li key={`${it.label}-${i}`} className="flex items-center gap-2 py-1.5">
+            {it.tone && (
+              <span
+                className={cn(
+                  'h-2 w-2 shrink-0 rounded-full',
+                  it.tone === 'critical' ? 'bg-critical' : it.tone === 'warning' ? 'bg-warning' : 'bg-good',
+                )}
+                aria-hidden
+              />
+            )}
+            {Icon && (
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-ink-2">
+                <Icon className="h-4 w-4" aria-label={it.icon} />
+              </span>
+            )}
+            <span className="flex min-w-0 flex-1">{label}</span>
+            <span className="shrink-0 whitespace-nowrap tabular text-xs text-ink-2">
+              {it.value != null && <span className="font-semibold text-ink">{formatValue(it.value, 'number')}</span>}
+              {it.value != null && it.unit && ` ${it.value === 1 ? it.unit[0] : it.unit[1]}`}
+              {it.detail != null && it.detail !== '' && (
+                <span className="text-muted">
+                  {it.value != null && ' · '}
+                  {formatValue(it.detail, it.detail_format ?? 'text', timeZone)}
+                </span>
+              )}
+            </span>
+          </li>
+        );
+      })}
+      {!!more && <li className="py-1.5 text-xs text-muted">+ {more} — clique para ver todos</li>}
+    </ul>
+  );
+}
+
+function KpiView({ data, name, timeZone }: { data: KpiData; name: string; timeZone?: string }) {
   const tone = data.tone ? TONE[data.tone] : null;
   return (
     <div>
@@ -47,6 +108,7 @@ function KpiView({ data, name }: { data: KpiData; name: string }) {
           ))}
         </dl>
       )}
+      {!!data.list?.length && <KpiList items={data.list} more={data.list_more} timeZone={timeZone} />}
       {data.trend && (
         <div className="-mx-1 mt-2">
           <TrendSparkline data={data.trend.data} format={data.trend.format} label={data.trend.label ?? name} />
@@ -257,12 +319,30 @@ function SeriesView({ data }: { data: SeriesData }) {
 }
 
 /** Desenha qualquer indicador a partir do formato padrão devolvido pelo banco. */
-export function IndicatorView({ data, name, timeZone }: { data: IndicatorData; name: string; timeZone?: string }) {
+export function IndicatorView({
+  data,
+  name,
+  timeZone,
+  expanded,
+}: {
+  data: IndicatorData;
+  name: string;
+  timeZone?: string;
+  /** tela cheia: tabelas com todas as linhas */
+  expanded?: boolean;
+}) {
   switch (data.visual) {
     case 'kpi':
-      return <KpiView data={data} name={name} />;
+      return <KpiView data={data} name={name} timeZone={timeZone} />;
     case 'table':
-      return <DataTable columns={(data as TableData).columns} rows={(data as TableData).rows} timeZone={timeZone} maxRows={8} />;
+      return (
+        <DataTable
+          columns={(data as TableData).columns}
+          rows={(data as TableData).rows}
+          timeZone={timeZone}
+          maxRows={expanded ? undefined : 8}
+        />
+      );
     case 'heatmap':
       return <HeatmapView data={data} />;
     case 'series':
