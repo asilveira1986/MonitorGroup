@@ -28,11 +28,29 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
     if (severity) q = q.eq('severity', severity);
     return q;
   };
-  const [{ data: active }, { data: resolved }, { data: settings }] = await Promise.all([
+  const [{ data: active }, { data: resolved }, { data: settings }, { data: rules }, { data: indicators }] = await Promise.all([
     base().neq('status', 'resolved').limit(200),
     base().eq('status', 'resolved').limit(100),
     supabase.from('app_settings').select('timezone').eq('id', 1).single(),
+    supabase.from('alert_rules').select('type, indicator_key').eq('active', true),
+    supabase.from('indicators').select('key, enabled, alert_enabled, indicator_blocks!inner(enabled)'),
   ]);
+
+  // tipos do filtro = os das regras ativas nas configurações (regra presa a um indicador desligado,
+  // ou com o alerta dele desligado, não dispara — o mesmo critério do worker)
+  const alertable = new Set(
+    ((indicators ?? []) as unknown as {
+      key: string;
+      enabled: boolean;
+      alert_enabled: boolean;
+      indicator_blocks: { enabled: boolean };
+    }[])
+      .filter((i) => i.enabled && i.alert_enabled && i.indicator_blocks.enabled)
+      .map((i) => i.key),
+  );
+  const enabledTypes = Object.keys(ALERT_TYPE_LABEL).filter((t) =>
+    (rules ?? []).some((r) => r.type === t && (!r.indicator_key || alertable.has(r.indicator_key))),
+  );
   const alerts = [...(active ?? []), ...(resolved ?? [])] as (Alert & {
     groups: { name: string } | null;
     profiles: { full_name: string | null; email: string } | null;
@@ -53,7 +71,7 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
         }
       />
 
-      <AlertFilters types={Object.keys(ALERT_TYPE_LABEL)} />
+      <AlertFilters types={type && !enabledTypes.includes(type) ? [...enabledTypes, type] : enabledTypes} />
 
       {alerts.length === 0 ? (
         <Card>
