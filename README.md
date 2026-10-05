@@ -53,6 +53,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    13. `supabase/migrations/0013_worker_lock.sql`
    14. `supabase/migrations/0014_reincidence.sql`
    15. `supabase/migrations/0015_recurrence_alert.sql`
+   16. `supabase/migrations/0016_peak_hours.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -161,7 +162,7 @@ Indicadores desligados não aparecem no relatório nem podem ser exportados.
 ## Como criar um indicador novo
 
 1. Crie a função de cálculo `public.ind_<chave>(f jsonb, p jsonb) returns jsonb`, devolvendo um dos formatos padrão (`kpi`, `table`, `series`, `bars`, `heatmap` — veja o cabeçalho de `0008_indicators.sql`). `f` traz os filtros (`from`, `to`, `group_id`, `member_id`, `tz`, horário comercial e feriados) e `p` os parâmetros do indicador.
-   Nas tabelas, cada coluna aceita `format` (`number`, `duration`, `percent`, `percent_delta`, `datetime`, `text` ou `spark`, uma lista de números desenhada como mini gráfico), `bar`, `highlight_abs_gte` e `warn_below`.
+   Um `heatmap` pode trazer também `highlights` (frases-resumo), `by_hour`/`by_day` (totais) e `business` (expediente): o painel então mostra resumo e gráficos simples, com o mapa recolhido. Nas tabelas, cada coluna aceita `format` (`number`, `duration`, `percent`, `percent_delta`, `datetime`, `text` ou `spark`, uma lista de números desenhada como mini gráfico), `bar`, `highlight_abs_gte` e `warn_below`.
 2. (Opcional) Crie `public.ind_<chave>_details(f, p)` devolvendo `{columns, rows}` para a lista exibida ao clicar no indicador.
 3. Insira o registro em `public.indicators` (bloco, nome, visual, tamanho, `default_params` e `param_schema`).
 

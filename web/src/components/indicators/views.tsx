@@ -4,6 +4,7 @@ import { AlertOctagon, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { BarsChart, Legend, SERIES_COLORS, SeriesChart, TrendSparkline } from '@/components/charts';
 import { cn } from '@/lib/format';
+import { PeakHoursView } from './peak-hours';
 import {
   formatValue,
   type Column,
@@ -189,10 +190,16 @@ export function DataTable({
 }
 
 function HeatmapView({ data }: { data: HeatmapData }) {
+  // com totais por hora/dia (horários de pico): resumo + gráficos simples, mapa como detalhe
+  if (data.by_hour) return <PeakHoursView data={data} heatmap={<HeatmapGrid data={data} />} />;
+  return <HeatmapGrid data={data} withHint />;
+}
+
+function HeatmapGrid({ data, withHint }: { data: HeatmapData; withHint?: boolean }) {
   const max = Math.max(1, ...data.values.flat());
   return (
     <div>
-      {data.hint && <p className="mb-3 text-sm text-ink-2">{data.hint}</p>}
+      {withHint && data.hint && <p className="mb-3 text-sm text-ink-2">{data.hint}</p>}
       <div className="overflow-x-auto">
         <div className="inline-grid min-w-full gap-[2px]" style={{ gridTemplateColumns: `36px repeat(${data.cols.length}, minmax(14px, 1fr))` }}>
           <span />

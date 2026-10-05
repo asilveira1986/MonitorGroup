@@ -40,7 +40,19 @@ export type SeriesData = {
   series: { key: string; label: string }[];
   data: Record<string, unknown>[];
 };
-export type HeatmapData = { visual: 'heatmap'; rows: string[]; cols: string[]; values: number[][]; hint?: string };
+export type HeatmapData = {
+  visual: 'heatmap';
+  rows: string[];
+  cols: string[];
+  values: number[][];
+  hint?: string;
+  /** opcionais (horários de pico): resumo e totais por coluna/linha para uma leitura rápida */
+  total?: number;
+  highlights?: { label: string; value: string; detail?: string; tone?: Tone }[];
+  by_hour?: { label: string; value: number }[];
+  by_day?: { label: string; value: number }[];
+  business?: { start_hour: number; end_hour: number; days: number[] };
+};
 export type ErrorData = { visual: 'error'; message: string };
 export type IndicatorData = KpiData | TableData | SeriesData | HeatmapData | ErrorData;
 
