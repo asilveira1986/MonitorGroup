@@ -251,9 +251,9 @@ export function DataTable({
   );
 }
 
-function HeatmapView({ data }: { data: HeatmapData }) {
+function HeatmapView({ data, compact }: { data: HeatmapData; compact?: boolean }) {
   // com totais por hora/dia (horários de pico): resumo + gráficos simples, mapa como detalhe
-  if (data.by_hour) return <PeakHoursView data={data} heatmap={<HeatmapGrid data={data} />} />;
+  if (data.by_hour) return <PeakHoursView data={data} heatmap={<HeatmapGrid data={data} />} compact={compact} />;
   return <HeatmapGrid data={data} withHint />;
 }
 
@@ -324,12 +324,15 @@ export function IndicatorView({
   name,
   timeZone,
   expanded,
+  compact,
 }: {
   data: IndicatorData;
   name: string;
   timeZone?: string;
   /** tela cheia: tabelas com todas as linhas */
   expanded?: boolean;
+  /** modo TV: sem controles de interação */
+  compact?: boolean;
 }) {
   switch (data.visual) {
     case 'kpi':
@@ -344,7 +347,7 @@ export function IndicatorView({
         />
       );
     case 'heatmap':
-      return <HeatmapView data={data} />;
+      return <HeatmapView data={data} compact={compact} />;
     case 'series':
     case 'bars':
       return <SeriesView data={data} />;

@@ -141,3 +141,20 @@ body {
     padding-left: 0 !important;
   }
 }
+
+/* Modo TV: troca suave das páginas de painéis */
+@keyframes tvfade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[tvfade_\.6s_ease\] {
+    animation: none;
+  }
+}

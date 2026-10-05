@@ -150,6 +150,22 @@ Ative em **Configurações › Geral › Responder pelo sistema** (somente admin
 - **Quem pode responder**: todos os usuários ou só administradores. A regra é conferida no banco.
 - A tela mostra o andamento de cada envio: na fila, enviando, enviada ou não enviada. Se o envio falhar, há as opções **Tentar de novo** e **Descartar**. Mensagens que não saírem em 10 minutos (WhatsApp desconectado) são marcadas como não enviadas, para não chegarem atrasadas ao cliente.
 
+## Modo TV (monitor na parede)
+
+No **Dashboard**, clique em **Modo TV**, ou abra `https://SEU-PAINEL.vercel.app/tv` no navegador do monitor ou da TV, logado com um usuário do sistema.
+
+- Ocupa a tela inteira, sem menu e sem rolagem, e se ajusta ao tamanho da tela (de notebook a TV 4K).
+- **Topo:** situação do WhatsApp, alertas abertos, período, relógio e horário da última atualização.
+- **Faixa de números:** todos os indicadores numéricos lado a lado.
+- **Painéis:** gráficos, tabelas e listas em páginas de até 4, que se revezam sozinhas a cada 20 segundos. As bolinhas no topo mostram a página atual; clicar nelas troca de página.
+- Atualiza sozinho a cada mensagem, alerta ou demanda nova (tempo real) e a cada minuto. O cursor some quando o mouse fica parado.
+- O botão no canto superior direito põe o navegador em tela cheia. Na TV, também dá para usar a tecla F11.
+- Opções no endereço:
+  - `?period=today` (ou `7d`, `30d`, `90d`): período;
+  - `&group=…` e `&member=…`: os mesmos filtros do dashboard;
+  - `&rotacao=30`: segundos entre as páginas (`0` mostra tudo numa página só);
+  - `&tema=claro`: tema claro.
+
 ## Relatórios
 
 A página **Relatórios** mostra os indicadores ativos em forma de tabela, com os mesmos filtros do dashboard (período, grupo e atendente). Dá para:

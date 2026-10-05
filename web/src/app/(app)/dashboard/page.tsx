@@ -1,4 +1,4 @@
-import { AlertTriangle, LayoutDashboard } from 'lucide-react';
+import { AlertTriangle, LayoutDashboard, Tv } from 'lucide-react';
 import Link from 'next/link';
 import { DashboardGrid } from '@/components/indicators/dashboard-grid';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
@@ -25,7 +25,19 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
       <PageHeader
         title="Dashboard"
         description="Acompanhe o atendimento nos grupos de WhatsApp em tempo real. Clique num indicador para ver os detalhes."
-        action={<DashboardFilters groups={groups} members={members} />}
+        action={
+          <>
+            <DashboardFilters groups={groups} members={members} />
+            <Link
+              href="/tv"
+              target="_blank"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-xs font-medium text-ink-2 hover:bg-surface-2 hover:text-ink"
+              title="Abrir o dashboard em tela cheia para deixar num monitor ou TV"
+            >
+              <Tv className="h-4 w-4" /> Modo TV
+            </Link>
+          </>
+        }
       />
 
       {error ? (

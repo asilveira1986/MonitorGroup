@@ -194,7 +194,16 @@ function DayBars({ data, total, business }: { data: Point[]; total: number; busi
 }
 
 /** Horários de pico: resumo, por hora, por dia e (recolhido) o mapa completo dia × hora. */
-export function PeakHoursView({ data, heatmap }: { data: HeatmapData; heatmap: ReactNode }) {
+export function PeakHoursView({
+  data,
+  heatmap,
+  compact,
+}: {
+  data: HeatmapData;
+  heatmap: ReactNode;
+  /** modo TV: sem o botão do mapa detalhado */
+  compact?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const total = data.total ?? data.by_hour?.reduce((s, d) => s + d.value, 0) ?? 0;
   if (!total) return <p className="py-6 text-center text-sm text-muted">Sem mensagens de clientes no período.</p>;
@@ -208,6 +217,7 @@ export function PeakHoursView({ data, heatmap }: { data: HeatmapData; heatmap: R
         </div>
         {data.by_day && <DayBars data={data.by_day} total={total} business={data.business} />}
       </div>
+      {!compact && (
       <div className="border-t border-line pt-3">
         <button
           type="button"
@@ -223,6 +233,7 @@ export function PeakHoursView({ data, heatmap }: { data: HeatmapData; heatmap: R
         </button>
         {open && <div className="mt-3">{heatmap}</div>}
       </div>
+      )}
     </div>
   );
 }
