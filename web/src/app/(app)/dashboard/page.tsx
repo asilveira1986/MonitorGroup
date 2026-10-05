@@ -25,7 +25,14 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
     <div data-wide>
       <PageHeader
         title="Dashboard"
-        description="Acompanhe o atendimento nos grupos de WhatsApp em tempo real. Clique num indicador para ver os detalhes."
+        stackAction
+        description={
+          <>
+            Acompanhe o atendimento nos grupos de WhatsApp em tempo real.
+            <br />
+            Clique num indicador para ver os detalhes.
+          </>
+        }
         action={
           <DashboardFilters
             groups={groups}

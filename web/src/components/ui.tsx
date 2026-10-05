@@ -26,10 +26,26 @@ export function CardHeader({
   );
 }
 
-export function PageHeader({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
+export function PageHeader({
+  title,
+  description,
+  action,
+  stackAction,
+}: {
+  title: string;
+  description?: ReactNode;
+  action?: ReactNode;
+  /** ação larga (ex.: barra de filtros): fica abaixo do título e só vai para o lado em telas bem largas */
+  stackAction?: boolean;
+}) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
+    <div
+      className={cn(
+        'mb-6 flex flex-col gap-3',
+        stackAction ? 'min-[1600px]:flex-row min-[1600px]:items-end min-[1600px]:justify-between' : 'sm:flex-row sm:items-end sm:justify-between',
+      )}
+    >
+      <div className="min-w-0">
         <h1 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">{title}</h1>
         {description && <p className="mt-1 text-sm text-ink-2">{description}</p>}
       </div>

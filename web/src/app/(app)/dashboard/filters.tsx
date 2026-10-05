@@ -38,7 +38,7 @@ export function DashboardFilters({
   };
 
   return (
-    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto lg:flex-nowrap">
       <div className="flex w-full rounded-xl border border-line bg-surface p-1 sm:inline-flex sm:w-auto">
         {PERIODS.map((p) => (
           <Link
@@ -55,7 +55,7 @@ export function DashboardFilters({
       </div>
       {/* grupo e a ação extra (Modo TV) sempre lado a lado */}
       <div className="flex w-full items-center gap-2 sm:w-auto">
-        <div className="min-w-0 flex-1 sm:w-56 sm:flex-none">
+        <div className="min-w-0 flex-1 sm:w-52 sm:flex-none xl:w-56">
           <Select
             className="sm:h-9 sm:text-xs"
             value={group}
@@ -73,7 +73,7 @@ export function DashboardFilters({
         {extra}
       </div>
       {members.length > 0 && (
-        <div className="w-full sm:w-48">
+        <div className="w-full sm:w-44 xl:w-48">
           <Select
             className="sm:h-9 sm:text-xs"
             value={member}
