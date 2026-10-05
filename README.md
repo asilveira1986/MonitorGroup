@@ -185,7 +185,9 @@ Criou o usuário antes de rodar os scripts? Basta executar o `0004`: ele cria os
 
 Em vez de rodar os scripts um a um, execute no SQL Editor do Supabase o arquivo **`supabase/atualizar_banco.sql`**. Ele junta todos os scripts a partir do 0002, na ordem certa, e pode ser executado quantas vezes quiser: o que já existe é mantido e o que falta é criado. Erros como `function public.business_seconds(...) does not exist` acontecem quando um script é rodado antes de outro anterior; o arquivo único evita isso.
 
-Quem altera os scripts gera o arquivo de novo com `sh supabase/build-updates.sh`.
+Ao terminar, o SQL Editor mostra uma tabela de conferência: todas as linhas com **OK** significam banco atualizado. A mensagem "Success. No rows returned" em scripts isolados também indica sucesso (scripts que criam tabelas não devolvem linhas). Para só conferir, sem executar tudo de novo, rode `supabase/conferir_banco.sql`.
+
+Quem altera os scripts gera os arquivos de novo com `sh supabase/build-updates.sh`.
 
 ## "Could not find the '...' column … in the schema cache"
 
