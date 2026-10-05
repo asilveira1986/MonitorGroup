@@ -49,10 +49,13 @@ function toggleSidebar() {
 }
 
 export function Sidebar({
+  hidden = [],
   counts,
   user,
 }: {
   counts: { pending: number; alerts: number; demands: number };
+  /** itens do menu escondidos (ex.: funções desligadas nas configurações) */
+  hidden?: string[];
   user: { name: string; role: string };
 }) {
   const pathname = usePathname();
@@ -60,7 +63,7 @@ export function Sidebar({
 
   const nav = (
     <nav className="space-y-1">
-      {NAV.map(({ href, label, icon: Icon, badgeKey }) => {
+      {NAV.filter((item) => !hidden.includes(item.href)).map(({ href, label, icon: Icon, badgeKey }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         const count = badgeKey ? counts[badgeKey] : 0;
         return (

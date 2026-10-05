@@ -3,16 +3,22 @@ import { RealtimeListener } from '@/components/realtime-listener';
 import { Sidebar } from '@/components/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { requireProfile } from '@/lib/auth';
+import { demandsEnabled } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 
 export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const [{ count: pending }, { count: alerts }, { count: demands }] = await Promise.all([
+  const [{ count: pending }, { count: alerts }, { count: demands }, { data: settings }] = await Promise.all([
     supabase.from('pending_queue').select('id', { count: 'exact', head: true }),
     supabase.from('alerts').select('id', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', ['aberta', 'em_andamento']),
+    supabase
+      .from('app_settings')
+      .select('demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled')
+      .eq('id', 1)
+      .maybeSingle(),
   ]);
 
   const initials = (profile.full_name || profile.email)
@@ -26,6 +32,8 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     <div className="min-h-screen">
       <Sidebar
         counts={{ pending: pending ?? 0, alerts: alerts ?? 0, demands: demands ?? 0 }}
+        // demandas desligadas nas configurações: o item some do menu
+        hidden={demandsEnabled(settings) ? [] : ['/demands']}
         user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role }}
       />
       <RealtimeListener />

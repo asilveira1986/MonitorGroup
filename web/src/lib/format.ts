@@ -108,3 +108,19 @@ export const REMOVED_REASON_LABEL: Record<string, string> = {
   chat_deleted: 'A conversa do grupo foi apagada no celular',
   not_participant: 'O número não participa mais do grupo',
 };
+
+/** Demandas ligadas = pelo menos uma forma de criar demanda está ativa (Configurações › Geral › Demandas). */
+export function demandsEnabled(
+  s:
+    | {
+        demand_manual_enabled?: boolean | null;
+        demand_command_enabled?: boolean | null;
+        demand_keyword_enabled?: boolean | null;
+        demand_ai_enabled?: boolean | null;
+      }
+    | null
+    | undefined,
+): boolean {
+  if (!s) return true;
+  return Boolean(s.demand_manual_enabled || s.demand_command_enabled || s.demand_keyword_enabled || s.demand_ai_enabled);
+}

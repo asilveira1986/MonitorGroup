@@ -1,7 +1,8 @@
 import { ClipboardList } from 'lucide-react';
+import Link from 'next/link';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { requireProfile } from '@/lib/auth';
-import { DEFAULT_DEMAND_TYPES } from '@/lib/format';
+import { DEFAULT_DEMAND_TYPES, demandsEnabled } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Demand } from '@/lib/types';
 import { DemandsBoard, type DemandRow } from './board';
@@ -38,7 +39,11 @@ export default async function DemandsPage({ searchParams }: PageProps<'/demands'
       query,
       supabase.from('groups').select('id, name').eq('monitored', true).is('removed_at', null).order('name'),
       supabase.from('team_members').select('id, name').eq('active', true).order('name'),
-      supabase.from('app_settings').select('timezone, demand_manual_enabled').eq('id', 1).single(),
+      supabase
+        .from('app_settings')
+        .select('timezone, demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled')
+        .eq('id', 1)
+        .single(),
       supabase.from('indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
       supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', STATUS_FILTER.open),
     ]);
@@ -46,6 +51,36 @@ export default async function DemandsPage({ searchParams }: PageProps<'/demands'
   const categories = (typeInd?.params as { categories?: { name: string }[] } | undefined)?.categories;
   const types = categories?.length ? categories.map((c) => c.name).filter(Boolean) : DEFAULT_DEMAND_TYPES;
   const rows = (data ?? []) as (Demand & { groups: { name: string } | null; team_members: { name: string } | null })[];
+
+  // demandas desligadas: a página explica em vez de mostrar a lista (o item também some do menu)
+  if (!demandsEnabled(settings)) {
+    return (
+      <>
+        <PageHeader title="Demandas" />
+        <Card>
+          <EmptyState
+            icon={<ClipboardList />}
+            title="Demandas desligadas"
+            description={
+              profile.role === 'admin'
+                ? 'Todas as formas de criar demanda estão desligadas. Para voltar a usar, ligue ao menos uma em Configurações › Geral › Demandas. O histórico continua guardado.'
+                : 'Esta função foi desligada por um administrador. O histórico continua guardado.'
+            }
+            action={
+              profile.role === 'admin' && (
+                <Link
+                  href="/settings"
+                  className="inline-flex h-10 items-center rounded-xl bg-brand px-4 text-sm font-medium text-brand-ink hover:opacity-90"
+                >
+                  Abrir configurações
+                </Link>
+              )
+            }
+          />
+        </Card>
+      </>
+    );
+  }
 
   return (
     <>
