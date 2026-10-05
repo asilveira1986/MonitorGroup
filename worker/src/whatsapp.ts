@@ -79,14 +79,34 @@ export class WhatsAppManager {
     return this.version?.join('.') ?? 'padrão da biblioteca';
   }
 
-  async init() {
+  private versionFetchedAt = 0;
+
+  /** Versão do WhatsApp Web anunciada na conexão; uma versão antiga faz o WhatsApp recusar o pareamento. */
+  private async refreshVersion(force = false) {
+    if (!force && this.version && Date.now() - this.versionFetchedAt < 6 * 3600_000) return;
     try {
-      const { version } = await fetchLatestBaileysVersion();
-      this.version = version;
+      const result = await fetchLatestBaileysVersion();
+      // em caso de falha a biblioteca devolve a versão embutida (isLatest = false): mantém a última obtida
+      if (result.error) {
+        if (!this.version) this.version = result.version;
+        logger.warn({ version: this.version }, 'não foi possível obter a versão mais recente do WhatsApp Web');
+        return;
+      }
+      this.version = result.version;
+      this.versionFetchedAt = Date.now();
+      logger.info({ version: this.version }, 'versão do WhatsApp Web');
     } catch {
-      logger.warn('não foi possível obter a versão mais recente do WhatsApp Web; usando padrão');
+      logger.warn({ version: this.version }, 'não foi possível obter a versão mais recente do WhatsApp Web');
     }
-    logger.info({ version: this.version }, 'versão do WhatsApp Web');
+  }
+
+  /** Fecha as conexões sem deslogar (a sessão continua salva no banco). */
+  async shutdown() {
+    for (const id of [...this.sessions.keys()]) await this.stop(id);
+  }
+
+  async init() {
+    await this.refreshVersion(true);
 
     // Reconecta automaticamente as instâncias que já tinham sessão salva
     const instances = (check(await db.from('whatsapp_instances').select('*'), 'load instances') ?? []) as InstanceRow[];
@@ -256,6 +276,9 @@ export class WhatsAppManager {
 
     await this.updateInstance(instanceId, { status: 'connecting', last_error: null });
     const { state, saveCreds } = await usePostgresAuthState(instanceId);
+    // pareamento novo: garante a versão atual do WhatsApp Web (versão velha = conexão recusada)
+    await this.refreshVersion(!state.creds.registered && (this.reconnectAttempts.get(instanceId) ?? 0) > 0);
+    if (this.sessions.has(instanceId)) return;
     const importHistory = (await getSettings()).history_import_days > 0;
 
     const sock = makeWASocket({
@@ -354,16 +377,23 @@ export class WhatsAppManager {
           const attempt = (this.reconnectAttempts.get(instanceId) ?? 0) + 1;
           this.reconnectAttempts.set(instanceId, attempt);
 
-          // ainda não pareado (nunca leu o QR) e o WhatsApp recusa repetidamente: para e explica
-          if (!state.creds.registered && attempt >= 5 && code !== DisconnectReason.restartRequired) {
-            this.reconnectAttempts.delete(instanceId);
+          if (!state.creds.registered && code !== DisconnectReason.restartRequired) {
+            // ainda não pareado: recomeça com credenciais novas (um pareamento pela metade é recusado de novo)
             await clearAuthState(instanceId);
-            await this.updateInstance(instanceId, {
-              status: 'disconnected',
-              qr_code: null,
-              last_error: `O WhatsApp recusou a conexão ${attempt} vezes (código ${code ?? '?'}: ${reason}). Verifique se o worker tem acesso à internet e tente "Conectar" novamente em alguns minutos.`,
-            });
-            return;
+            // o WhatsApp recusa repetidamente: para e explica
+            if (attempt >= 5) {
+              this.reconnectAttempts.delete(instanceId);
+              await this.updateInstance(instanceId, {
+                status: 'disconnected',
+                qr_code: null,
+                last_error:
+                  `O WhatsApp encerrou a conexão ${attempt} vezes antes do QR code (código ${code ?? '?'}: ${reason}). ` +
+                  'Causas comuns: outra cópia do worker usando a mesma conexão (mais de 1 réplica no Railway ou o worker ' +
+                  'rodando também no seu computador) ou bloqueio temporário após muitas tentativas. Deixe só um worker ' +
+                  'ligado, aguarde 10 a 15 minutos e clique em "Conectar".',
+              });
+              return;
+            }
           }
           const delay = code === DisconnectReason.restartRequired ? 0 : Math.min(60_000, 2_000 * 2 ** (attempt - 1));
           await this.updateInstance(instanceId, {

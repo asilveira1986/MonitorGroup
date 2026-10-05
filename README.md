@@ -50,6 +50,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    10. `supabase/migrations/0010_demands.sql`
    11. `supabase/migrations/0011_relationship_context.sql`
    12. `supabase/migrations/0012_replies.sql`
+   13. `supabase/migrations/0013_worker_lock.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -187,6 +188,11 @@ A tela **Configurações › WhatsApp** mostra no topo se o worker está no ar:
 - **"O worker do WhatsApp está fora do ar" / "ainda não se conectou"**: o serviço no Railway não está rodando ou não alcança o banco. Confira se o deploy terminou e o log mostra `worker do MonitorGroup no ar`, se o **Root Directory** é `worker` e as variáveis `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` (chave *service_role*, não a anon). Após mudar variáveis, faça novo deploy.
 - **Log do Railway com "não foi possível ler o banco"**: URL/chave erradas ou scripts SQL não executados.
 - **Worker no ar, mas a conexão mostra "Reconectando… código 405/403"**: o WhatsApp recusou a conexão. Aguarde alguns minutos e clique em **Tentar novamente**; se persistir, faça um novo deploy do worker (ele busca a versão mais recente do WhatsApp Web ao iniciar).
+- **"O WhatsApp encerrou a conexão… (código 428: Connection Terminated)"**: quase sempre há **duas cópias do worker** usando a mesma conexão. Isso acontece com mais de 1 réplica no Railway ou com o worker rodando também no seu computador com as mesmas variáveis. Também pode ser um bloqueio temporário após muitas tentativas seguidas. Para resolver:
+  1. No Railway, abra o serviço do worker › **Settings › Deploy** e confira **Replicas = 1**. Se houver um segundo serviço do worker (projeto duplicado), remova-o.
+  2. Pare qualquer `npm run dev`/`npm start` do worker no seu computador.
+  3. Execute o script `0013_worker_lock.sql` e faça um novo deploy. A partir dele só uma cópia se conecta por vez; uma cópia extra fica aguardando e aparece como aviso nesta tela.
+  4. Aguarde 10 a 15 minutos e clique em **Conectar**. Leia o QR code assim que aparecer.
 - **"Não foi possível verificar o worker"**: execute o script `0005_worker_status.sql`.
 
 ## Custos estimados
