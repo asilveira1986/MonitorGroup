@@ -28,7 +28,8 @@ export type KpiData = {
   tone?: Tone;
   hint?: string;
   secondary?: { label: string; value: number | null; format: ValueFormat }[];
-  trend?: { format: ValueFormat; data: { x: string; value: number | null }[] };
+  /** label: nome da série na dica do gráfico (padrão: nome do indicador) */
+  trend?: { format: ValueFormat; label?: string; data: { x: string; value: number | null }[] };
 };
 export type TableData = { visual: 'table'; columns: Column[]; rows: Record<string, unknown>[] };
 export type SeriesData = {

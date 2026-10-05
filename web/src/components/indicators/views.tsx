@@ -45,7 +45,7 @@ function KpiView({ data, name }: { data: KpiData; name: string }) {
       )}
       {data.trend && (
         <div className="-mx-1 mt-2">
-          <TrendSparkline data={data.trend.data} format={data.trend.format} label={name} />
+          <TrendSparkline data={data.trend.data} format={data.trend.format} label={data.trend.label ?? name} />
         </div>
       )}
     </div>

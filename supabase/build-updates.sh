@@ -32,7 +32,8 @@ from (values
   (5, 'Responder pelo sistema (0012)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'reply_allowed')),
   (6, 'Um worker por vez (0013)', to_regclass('public.worker_lock') is not null),
-  (7, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 16)
+  (7, 'Reincidência de falta de resposta (0014)', to_regprocedure('public.ind_reincidencia_sem_resposta(jsonb,jsonb)') is not null),
+  (8, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 17)
 ) as t(ord, item, ok)
 order by ord;
 SQL

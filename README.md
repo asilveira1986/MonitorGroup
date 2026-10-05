@@ -51,6 +51,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    11. `supabase/migrations/0011_relationship_context.sql`
    12. `supabase/migrations/0012_replies.sql`
    13. `supabase/migrations/0013_worker_lock.sql`
+   14. `supabase/migrations/0014_reincidence.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
