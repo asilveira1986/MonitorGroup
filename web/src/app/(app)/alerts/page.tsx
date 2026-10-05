@@ -6,44 +6,46 @@ import { ALERT_TYPE_LABEL, cn, formatDateTime, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Alert } from '@/lib/types';
 import { resolveAllAlerts, updateAlertStatus } from '../actions';
+import { AlertFilters } from './filters';
 
-const TABS = [
-  { value: 'open', label: 'Em aberto' },
-  { value: 'acknowledged', label: 'Em análise' },
-  { value: 'resolved', label: 'Resolvidos' },
-  { value: 'all', label: 'Todos' },
-];
+const SEVERITIES = ['critical', 'warning', 'info'];
 
 const CHANNEL_ICON: Record<string, typeof Mail> = { email: Mail, whatsapp: MessageCircle, webhook: Webhook };
 
 export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>) {
   const sp = await searchParams;
-  const status = typeof sp.status === 'string' ? sp.status : 'open';
+  const type = typeof sp.type === 'string' && sp.type in ALERT_TYPE_LABEL ? sp.type : null;
+  const severity = typeof sp.severity === 'string' && SEVERITIES.includes(sp.severity) ? sp.severity : null;
 
   const supabase = await createClient();
-  let query = supabase
-    .from('alerts')
-    .select('*, groups(name), profiles:acknowledged_by(full_name, email)')
-    .order('created_at', { ascending: false })
-    .limit(200);
-  if (status !== 'all') query = query.eq('status', status);
-  const [{ data }, { data: settings }] = await Promise.all([
-    query,
+  // pendentes (em aberto e em análise) primeiro; depois os resolvidos mais recentes
+  const base = () => {
+    let q = supabase
+      .from('alerts')
+      .select('*, groups(name), profiles:acknowledged_by(full_name, email)')
+      .order('created_at', { ascending: false });
+    if (type) q = q.eq('type', type);
+    if (severity) q = q.eq('severity', severity);
+    return q;
+  };
+  const [{ data: active }, { data: resolved }, { data: settings }] = await Promise.all([
+    base().neq('status', 'resolved').limit(200),
+    base().eq('status', 'resolved').limit(100),
     supabase.from('app_settings').select('timezone').eq('id', 1).single(),
   ]);
-  const alerts = (data ?? []) as (Alert & {
+  const alerts = [...(active ?? []), ...(resolved ?? [])] as (Alert & {
     groups: { name: string } | null;
     profiles: { full_name: string | null; email: string } | null;
   })[];
+  const openCount = alerts.filter((a) => a.status === 'open').length;
 
   return (
     <>
       <PageHeader
         title="Alertas"
-        description="Situações que precisam de atenção. Configure as regras em Configurações > Alertas."
+        description="Situações que precisam de atenção. Configure as regras em Configurações › Regras de alerta."
         action={
-          status === 'open' &&
-          alerts.length > 0 && (
+          openCount > 0 && (
             <ActionButton action={resolveAllAlerts} confirm="Resolver todos os alertas em aberto?" success="Alertas resolvidos">
               <CheckCheck className="h-3.5 w-3.5" /> Resolver todos
             </ActionButton>
@@ -51,24 +53,19 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
         }
       />
 
-      <div className="mb-4 flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-1 sm:inline-flex sm:flex-nowrap sm:gap-0">
-        {TABS.map((t) => (
-          <Link
-            key={t.value}
-            href={`/alerts?status=${t.value}`}
-            className={cn(
-              'whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium sm:py-1.5',
-              status === t.value ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink',
-            )}
-          >
-            {t.label}
-          </Link>
-        ))}
-      </div>
+      <AlertFilters types={Object.keys(ALERT_TYPE_LABEL)} />
 
       {alerts.length === 0 ? (
         <Card>
-          <EmptyState icon={<BellOff />} title="Nenhum alerta por aqui" description="Quando uma regra for disparada, o alerta aparece nesta lista." />
+          <EmptyState
+            icon={<BellOff />}
+            title="Nenhum alerta por aqui"
+            description={
+              type || severity
+                ? 'Nenhum alerta com esses filtros. Troque o tipo ou a gravidade.'
+                : 'Quando uma regra for disparada, o alerta aparece nesta lista.'
+            }
+          />
         </Card>
       ) : (
         <div className="space-y-3">
@@ -78,6 +75,7 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
               className={cn(
                 'flex flex-col gap-3 p-4 sm:flex-row sm:items-start',
                 a.status === 'open' && a.severity === 'critical' && 'border-critical/40',
+                a.status === 'resolved' && 'opacity-70',
               )}
             >
               <div className="min-w-0 flex-1">
