@@ -1,8 +1,10 @@
 'use client';
 
-import { AlertOctagon, AlertTriangle, CheckCircle2, ChevronRight, FileText, Image as ImageIcon, Mic, Smile, Video } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, CheckCheck, CheckCircle2, ChevronRight, FileText, Image as ImageIcon, Mic, Smile, Video } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { useMemo, useState, useTransition, type ReactNode } from 'react';
+import { markMediaSeen } from '@/app/(app)/actions';
 import { BarsChart, Legend, SERIES_COLORS, SeriesChart, TrendSparkline } from '@/components/charts';
 import { cn } from '@/lib/format';
 import { PeakHoursView } from './peak-hours';
@@ -27,10 +29,33 @@ const TONE = {
 const FILE_ICON = { image: ImageIcon, video: Video, audio: Mic, document: FileText, sticker: Smile };
 
 /** Lista compacta do KPI: cada item numa linha, nome à esquerda, número e detalhe à direita. */
-function KpiList({ items, more, timeZone }: { items: KpiListItem[]; more?: number; timeZone?: string }) {
+function KpiList({
+  items,
+  more,
+  timeZone,
+  actions = true,
+}: {
+  items: KpiListItem[];
+  more?: number;
+  timeZone?: string;
+  /** mostra os botões de ação dos itens (o modo TV não mostra) */
+  actions?: boolean;
+}) {
+  const router = useRouter();
+  const [done, setDone] = useState<Set<string>>(() => new Set());
+  const [busy, startTransition] = useTransition();
+  const ack = (id: string) =>
+    startTransition(async () => {
+      const r = await markMediaSeen({ messageId: id });
+      if (r.ok) {
+        setDone((prev) => new Set(prev).add(id));
+        router.refresh();
+      }
+    });
+  const shown = items.filter((it) => !it.ack_id || !done.has(it.ack_id));
   return (
     <ul className="mt-3 divide-y divide-line border-y border-line text-sm">
-      {items.map((it, i) => {
+      {shown.map((it, i) => {
         const Icon = it.icon ? FILE_ICON[it.icon] : null;
         const text = (
           <>
@@ -76,6 +101,20 @@ function KpiList({ items, more, timeZone }: { items: KpiListItem[]; more?: numbe
                 </span>
               )}
             </span>
+            {actions && it.ack_id && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ack(it.ack_id!);
+                }}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[11px] font-medium text-ink-2 hover:border-brand hover:text-brand disabled:opacity-50"
+                title="Marcar como visto"
+              >
+                <CheckCheck className="h-3.5 w-3.5" aria-hidden /> dar baixa
+              </button>
+            )}
           </li>
         );
       })}
@@ -89,11 +128,13 @@ function KpiView({
   name,
   timeZone,
   expanded,
+  compact,
 }: {
   data: KpiData;
   name: string;
   timeZone?: string;
   expanded?: boolean;
+  compact?: boolean;
 }) {
   const allItems = data.list ?? [];
   const items = expanded || !data.list_size ? allItems : allItems.slice(0, data.list_size);
@@ -123,7 +164,7 @@ function KpiView({
           ))}
         </dl>
       )}
-      {!!items.length && <KpiList items={items} more={more} timeZone={timeZone} />}
+      {!!items.length && <KpiList items={items} more={more} timeZone={timeZone} actions={!compact} />}
       {data.trend && (
         <div className="-mx-1 mt-2">
           <TrendSparkline data={data.trend.data} format={data.trend.format} label={data.trend.label ?? name} />
@@ -493,7 +534,7 @@ export function IndicatorView({
 }) {
   switch (data.visual) {
     case 'kpi':
-      return <KpiView data={data} name={name} timeZone={timeZone} expanded={expanded} />;
+      return <KpiView data={data} name={name} timeZone={timeZone} expanded={expanded} compact={compact} />;
     case 'table':
       return (
         <DataTable

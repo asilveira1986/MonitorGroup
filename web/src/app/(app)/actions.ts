@@ -87,6 +87,18 @@ export async function deleteRemovedGroups(groupIds: string[]): Promise<Result> {
   return fail(error);
 }
 
+/** Dá baixa num arquivo recebido (ou em todos os arquivos sem visualização do grupo). */
+export async function markMediaSeen(target: { messageId?: string; groupId?: string }): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('mark_media_seen', {
+    p_message_id: target.messageId ?? null,
+    p_group_id: target.groupId ?? null,
+  });
+  revalidatePath('/', 'layout');
+  return fail(error);
+}
+
 /** Lista do que compõe o número de um indicador (respeita os mesmos filtros do dashboard). */
 export async function getIndicatorDetails(
   key: string,

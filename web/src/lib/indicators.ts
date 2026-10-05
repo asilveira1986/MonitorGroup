@@ -67,6 +67,8 @@ export type KpiListItem = {
   /** destaque do item (ex.: fora do SLA) */
   tone?: Tone;
   group_id?: string;
+  /** mensagem em que se pode dar baixa pelo cartão (arquivos sem visualização) */
+  ack_id?: string;
 };
 export type TableData = { visual: 'table'; columns: Column[]; rows: Record<string, unknown>[] };
 export type SeriesData = {

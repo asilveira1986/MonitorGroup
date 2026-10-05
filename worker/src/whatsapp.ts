@@ -8,6 +8,7 @@ import makeWASocket, {
   isJidGroup,
   jidNormalizedUser,
   makeCacheableSignalKeyStore,
+  type BinaryNode,
   type GroupMetadata,
   type WAMessage,
   type WASocket,
@@ -19,6 +20,7 @@ import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
 import { extractContent, isAcknowledgement, phoneFromJid, quotedMessageId } from './text.js';
 import { processDemandSignals } from './demands.js';
+import { selfReadIds } from './receipts.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
 
 const MAX_QR_ATTEMPTS = 6; // ~2 minutos esperando a leitura do QR code
@@ -490,6 +492,17 @@ export class WhatsAppManager {
         .groupMetadata(id)
         .then((meta) => this.upsertGroup(session, meta))
         .catch(() => {});
+    });
+
+    // o celular conectado leu a conversa do grupo ("read-self"): o que chegou até ali foi visto,
+    // inclusive imagens e arquivos (painel: "Imagens e arquivos sem visualização")
+    sock.ws.on('CB:receipt', (node: BinaryNode) => {
+      const ids = selfReadIds(node);
+      if (!ids) return;
+      const at = Number(node.attrs.t) > 0 ? new Date(Number(node.attrs.t) * 1000).toISOString() : new Date().toISOString();
+      void db
+        .rpc('mark_group_seen', { p_instance_id: instanceId, p_group_jid: node.attrs.from, p_wa_ids: ids, p_at: at })
+        .then(({ error }) => error && log.warn({ err: error.message }, 'falha ao marcar leitura'));
     });
 
     // conversa do grupo apagada no celular

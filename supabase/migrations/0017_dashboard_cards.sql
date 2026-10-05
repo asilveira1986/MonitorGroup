@@ -64,7 +64,9 @@ where key = 'mensagens_pendentes';
 -- ---------------------------------------------------------------------
 -- Imagens e arquivos recebidos
 -- ---------------------------------------------------------------------
-create or replace function public.ind_received_files(f jsonb, p jsonb)
+-- (o script 0020 muda as colunas devolvidas: apaga antes para poder executar este script de novo)
+drop function if exists public.ind_received_files(jsonb, jsonb);
+create function public.ind_received_files(f jsonb, p jsonb)
 returns table (
   id uuid, group_id uuid, group_name text, who text, message_type text, body text, sent_at timestamptz, from_team boolean
 )

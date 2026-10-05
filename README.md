@@ -57,6 +57,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    17. `supabase/migrations/0017_dashboard_cards.sql`
    18. `supabase/migrations/0018_response_from_last_message.sql`
    19. `supabase/migrations/0019_reply_analysis.sql`
+   20. `supabase/migrations/0020_media_seen.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -142,6 +143,15 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
 - **IA** (desligada por padrão): o Claude classifica mensagens pendentes dos clientes. Requer `ANTHROPIC_API_KEY` no worker. Mensagens que o modelo recusar são tratadas como não-demanda.
 
 O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "em 2 dias"), cobranças do cliente, reabertura e confirmação após a entrega. As palavras usadas ficam nos parâmetros dos indicadores *Retrabalho* e *Confirmação do cliente*.
+
+## Imagens e arquivos sem visualização
+
+O cartão **Imagens e arquivos sem visualização** lista as imagens, documentos, vídeos e áudios enviados pelos clientes nos últimos 7 dias que ninguém viu. Um arquivo sai da lista quando:
+
+- **a conversa do grupo é lida no celular conectado**: o WhatsApp avisa o worker (confirmação de leitura do próprio aparelho) e tudo o que chegou até ali conta como visto; ou
+- **alguém dá baixa no painel**: botão **dar baixa** no cartão ou ao lado do arquivo na conversa do grupo (fica registrado quem deu baixa e quando).
+
+Arquivos parados há mais de 4 horas aparecem em vermelho. Em **Configurações › Indicadores** dá para mudar os dias considerados e o tempo do destaque. A tela cheia mostra também os já vistos, com quando, como e por quem. Leituras feitas em outros celulares da equipe (com outro número) não chegam ao sistema; nesses casos, dê baixa pelo painel.
 
 ## Precisa de resposta? (análise das últimas mensagens)
 

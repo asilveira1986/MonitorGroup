@@ -18,6 +18,7 @@ from (values
   (11, 'Tempo de resposta desde a última mensagem do cliente (0018)',
       coalesce(obj_description('public.ingest_message(uuid,text,text,text,text,boolean,boolean,uuid,text,text,timestamptz,boolean)'::regprocedure, 'pg_proc') like '%0018%', false)),
   (12, 'Análise "Precisa de resposta?" (0019)', to_regprocedure('public.ind_analise_sem_resposta(jsonb,jsonb)') is not null),
-  (13, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 19)
+  (13, 'Arquivos sem visualização (0020)', to_regprocedure('public.mark_media_seen(uuid,uuid)') is not null),
+  (14, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 19)
 ) as t(ord, item, ok)
 order by ord;

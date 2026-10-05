@@ -65,6 +65,10 @@ export type Message = {
   response_time_seconds: number | null;
   answered_message_id: string | null;
   demand_id?: string | null;
+  /** quando a mensagem do cliente foi vista: lida no celular conectado ou baixa no painel */
+  seen_at?: string | null;
+  seen_via?: string | null;
+  seen_by?: string | null;
 };
 
 export type TeamMember = {

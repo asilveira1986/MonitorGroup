@@ -1,9 +1,10 @@
 'use client';
 
-import { Clock, Loader2, Reply } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCheck, Clock, Loader2, Reply } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { markMediaSeen } from '../../actions';
 import { Badge, EmptyState } from '@/components/ui';
-import { cn, formatDuration, formatPhone, formatTime } from '@/lib/format';
+import { cn, formatDateTime, formatDuration, formatPhone, formatTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import type { Message, OutgoingMessage } from '@/lib/types';
 import { Composer, OutgoingBubble, type ReplyConfig } from './composer';
@@ -24,6 +25,41 @@ const TYPE_LABEL: Record<string, string> = {
   location: '📍 Localização',
   poll: '📊 Enquete',
 };
+
+const MEDIA_TYPES = new Set(['image', 'video', 'audio', 'document']);
+const SEEN_VIA: Record<string, string> = { whatsapp: 'no WhatsApp', painel: 'baixa no painel', resposta: 'equipe respondeu' };
+
+/** Situação de um arquivo do cliente: visto (no celular ou com baixa no painel) ou botão para dar baixa. */
+function MediaSeen({ message, timeZone }: { message: Message; timeZone?: string }) {
+  const [seen, setSeen] = useState(message.seen_at ? { at: message.seen_at, via: message.seen_via, by: message.seen_by } : null);
+  const [busy, startTransition] = useTransition();
+  if (seen) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-good-ink"
+        title={`Visto ${SEEN_VIA[seen.via ?? ''] ?? ''}${seen.by ? ` · ${seen.by}` : ''} · ${formatDateTime(seen.at, timeZone)}`}
+      >
+        <CheckCheck className="h-3 w-3" aria-hidden /> visto
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() =>
+        startTransition(async () => {
+          const r = await markMediaSeen({ messageId: message.id });
+          if (r.ok) setSeen({ at: new Date().toISOString(), via: 'painel', by: null });
+        })
+      }
+      className="inline-flex items-center gap-1 rounded-full border border-warning/40 px-1.5 py-0.5 text-warning-ink hover:border-brand hover:text-brand disabled:opacity-50"
+      title="Ninguém viu este arquivo: a conversa não foi lida no celular conectado"
+    >
+      <CheckCheck className="h-3 w-3" aria-hidden /> dar baixa
+    </button>
+  );
+}
 
 /** Remove a assinatura "*Nome:*" das respostas do painel: o nome já aparece no balão. */
 function withoutSignature(body: string | null, senderName: string | null) {
@@ -206,6 +242,7 @@ export function Conversation({
                     {withoutSignature(m.body, m.from_me ? m.sender_name : null)}
                   </p>
                   <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-muted">
+                    {!m.from_team && MEDIA_TYPES.has(m.message_type) && <MediaSeen message={m} timeZone={timeZone} />}
                     {m.response_time_seconds != null && (
                       <Badge tone={m.response_time_seconds <= slaSeconds ? 'good' : 'critical'} className="py-0 text-[10px]">
                         respondeu em {formatDuration(m.response_time_seconds)}
