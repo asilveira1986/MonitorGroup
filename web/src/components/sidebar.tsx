@@ -2,6 +2,8 @@
 
 import {
   Bell,
+  ChevronsLeft,
+  ChevronsRight,
   ClipboardList,
   Clock,
   FileBarChart,
@@ -9,8 +11,6 @@ import {
   LogOut,
   Menu,
   MessagesSquare,
-  PanelLeftClose,
-  PanelLeftOpen,
   Settings,
   X,
 } from 'lucide-react';
@@ -111,6 +111,17 @@ export function Sidebar({
   return (
     <>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface px-4 py-5 transition-[width] duration-200 lg:flex [[data-sidebar=collapsed]_&]:w-[4.5rem] [[data-sidebar=collapsed]_&]:px-3">
+        {/* recolher/expandir: discreto, no canto superior direito (vira uma aba na borda quando recolhido) */}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="absolute right-3 top-6 flex h-7 w-7 items-center justify-center rounded-lg text-muted opacity-70 transition hover:bg-surface-2 hover:text-ink hover:opacity-100 [[data-sidebar=collapsed]_&]:-right-3.5 [[data-sidebar=collapsed]_&]:h-7 [[data-sidebar=collapsed]_&]:w-7 [[data-sidebar=collapsed]_&]:rounded-full [[data-sidebar=collapsed]_&]:border [[data-sidebar=collapsed]_&]:border-line [[data-sidebar=collapsed]_&]:bg-surface [[data-sidebar=collapsed]_&]:shadow-sm"
+          title="Recolher / expandir o menu"
+          aria-label="Recolher ou expandir o menu lateral"
+        >
+          <ChevronsLeft className="h-4 w-4 [[data-sidebar=collapsed]_&]:hidden" />
+          <ChevronsRight className="hidden h-4 w-4 [[data-sidebar=collapsed]_&]:block" />
+        </button>
         <div className="mb-8 px-2 [[data-sidebar=collapsed]_&]:px-0">
           <span className="[[data-sidebar=collapsed]_&]:hidden">
             <Logo />
@@ -120,17 +131,6 @@ export function Sidebar({
           </span>
         </div>
         <div className="flex-1 overflow-y-auto overflow-x-hidden">{nav}</div>
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          className="mt-4 flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-ink-2 transition hover:bg-surface-2 hover:text-ink [[data-sidebar=collapsed]_&]:justify-center [[data-sidebar=collapsed]_&]:px-0"
-          title="Recolher / expandir o menu"
-          aria-label="Recolher ou expandir o menu lateral"
-        >
-          <PanelLeftClose className="h-4 w-4 shrink-0 [[data-sidebar=collapsed]_&]:hidden" />
-          <PanelLeftOpen className="hidden h-5 w-5 shrink-0 [[data-sidebar=collapsed]_&]:block" />
-          <span className="whitespace-nowrap [[data-sidebar=collapsed]_&]:hidden">Recolher menu</span>
-        </button>
       </aside>
 
       {/* Mobile */}
