@@ -23,7 +23,7 @@ function KpiTile({ ind }: { ind: IndicatorValue }) {
   const tone = d.tone ? TONE[d.tone] : null;
   const main = d.secondary?.[0];
   return (
-    <div className="relative flex min-w-0 flex-col overflow-hidden rounded-2xl border border-line bg-surface px-4 py-3">
+    <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-line bg-surface px-4 py-3">
       {tone && <span className={cn('absolute inset-y-0 left-0 w-1.5', tone.bar)} aria-hidden />}
       <div className="flex items-start justify-between gap-2">
         <p className="line-clamp-2 text-xs font-medium leading-snug text-ink-2">{ind.name}</p>
@@ -58,36 +58,36 @@ function Panel({ ind, timeZone }: { ind: IndicatorValue; timeZone: string }) {
 const weightOf = (ind: IndicatorValue) => (ind.data.visual === 'heatmap' || ind.size >= 3 ? 2 : 1);
 
 /**
- * Monta a grade dos painéis para encher a área inteira: escolhe linhas e colunas pela
- * quantidade de painéis e, quando uma linha não fecha, estica o maior painel dela.
+ * Divide os itens em linhas equilibradas, mantendo a ordem: cada linha recebe um peso
+ * parecido e, dentro dela, a largura é repartida entre todos os itens (proporcional ao peso).
+ * Assim nenhum item sozinho (ex.: o último da linha) fica esticado para tapar a sobra.
  */
-function packPanels(weights: number[]) {
-  const total = weights.reduce((s, w) => s + w, 0);
-  const rows = total <= 2 ? 1 : total <= 8 ? 2 : 3;
-  const cols = Math.max(Math.max(1, ...weights), Math.ceil(total / rows));
-  const spans = weights.map((w) => Math.min(w, cols));
-  let row: number[] = [];
-  let used = 0;
-  let count = 0;
-  const close = () => {
-    if (!row.length) return;
-    if (used < cols) {
-      const grow = row.reduce((best, i) => (spans[i] >= spans[best] ? i : best), row[0]);
-      spans[grow] += cols - used;
+function balancedRows<T>(items: T[], weight: (item: T) => number, rowCount: number): T[][] {
+  const rows: T[][] = [];
+  let rest = items.reduce((s, i) => s + weight(i), 0);
+  let i = 0;
+  for (let r = rowCount; r > 0 && i < items.length; r--) {
+    const target = rest / r;
+    const row: T[] = [];
+    let sum = 0;
+    // deixa pelo menos um item para cada linha que ainda falta
+    while (i < items.length && items.length - i > r - 1) {
+      const w = weight(items[i]);
+      if (row.length && Math.abs(sum + w - target) > Math.abs(sum - target)) break;
+      row.push(items[i]);
+      sum += w;
+      i += 1;
+      if (sum >= target) break;
     }
-    count += 1;
-    row = [];
-    used = 0;
-  };
-  spans.forEach((span, i) => {
-    if (used + span > cols) close();
-    row.push(i);
-    used += span;
-    if (used === cols) close();
-  });
-  close();
-  return { cols, rows: count, spans };
+    rows.push(row);
+    rest -= sum;
+  }
+  if (i < items.length) rows[rows.length - 1].push(...items.slice(i));
+  return rows.filter((r) => r.length);
 }
+
+/** Quantas linhas de painéis: 1 até 3 "lugares", 2 até 8, depois 3. */
+const panelRowCount = (total: number) => (total <= 3 ? 1 : total <= 8 ? 2 : 3);
 
 /** Painéis por página na TV: até 4 "lugares" (2 × 2), para cada um ser lido de longe. */
 const PAGE_CAPACITY = 4;
@@ -235,7 +235,13 @@ export function TvBoard({
   const pages = rotateSeconds > 0 ? paginate(panels) : [panels];
   const current = Math.min(page, Math.max(pages.length - 1, 0));
   const shown = pages[current] ?? [];
-  const grid = packPanels(shown.map(weightOf));
+  const panelRows = balancedRows(
+    shown,
+    weightOf,
+    Math.min(shown.length, panelRowCount(shown.reduce((sum, i) => sum + weightOf(i), 0))),
+  );
+  // números: uma linha só até 10; acima disso, duas linhas com a mesma quantidade (±1)
+  const kpiRows = balancedRows(kpis, () => 1, kpis.length > 10 ? 2 : 1);
   useEffect(() => {
     pageCount.current = pages.length;
   });
@@ -324,26 +330,29 @@ export function TvBoard({
         <>
           {/* faixa de números */}
           {kpis.length > 0 && (
-            <div className="grid shrink-0 gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(11.5rem, 1fr))' }}>
-              {kpis.map((ind) => (
-                <KpiTile key={ind.key} ind={ind} />
+            <div className="flex shrink-0 flex-col gap-3">
+              {kpiRows.map((row, r) => (
+                <div key={r} className="flex gap-3">
+                  {row.map((ind) => (
+                    <div key={ind.key} className="flex min-w-0 flex-1 basis-0">
+                      <KpiTile ind={ind} />
+                    </div>
+                  ))}
+                </div>
               ))}
             </div>
           )}
 
           {/* painéis enchendo o resto da tela */}
           {shown.length > 0 && (
-            <div
-              key={current}
-              className="grid min-h-0 flex-1 gap-3 animate-[tvfade_.6s_ease]"
-              style={{
-                gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`,
-                gridTemplateRows: `repeat(${grid.rows}, minmax(0, 1fr))`,
-              }}
-            >
-              {shown.map((ind, i) => (
-                <div key={ind.key} className="flex min-h-0 min-w-0" style={{ gridColumn: `span ${grid.spans[i]}` }}>
-                  <Panel ind={ind} timeZone={timeZone} />
+            <div key={current} className="flex min-h-0 flex-1 flex-col gap-3 animate-[tvfade_.6s_ease]">
+              {panelRows.map((row, r) => (
+                <div key={r} className="flex min-h-0 flex-1 basis-0 gap-3">
+                  {row.map((ind) => (
+                    <div key={ind.key} className="flex min-h-0 min-w-0 basis-0" style={{ flexGrow: weightOf(ind) }}>
+                      <Panel ind={ind} timeZone={timeZone} />
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
