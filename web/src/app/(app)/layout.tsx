@@ -29,7 +29,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role }}
       />
       <RealtimeListener />
-      <div className="lg:pl-64">
+      <div className="transition-[padding] duration-200 lg:pl-64 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
         <header className="sticky top-0 z-20 hidden items-center justify-end gap-2 border-b border-line bg-bg/80 px-8 py-3 backdrop-blur lg:flex">
           <ThemeToggle />
           <div className="ml-2 flex items-center gap-3 rounded-xl px-2 py-1">
@@ -52,7 +52,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
             </button>
           </form>
         </header>
-        <main className="mx-auto max-w-7xl px-4 pb-10 pt-5 sm:px-8 sm:py-8">{children}</main>
+        <main className="mx-auto max-w-7xl px-4 pb-10 pt-5 sm:px-8 sm:py-8 has-[[data-wide]]:max-w-none">{children}</main>
       </div>
     </div>
   );

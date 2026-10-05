@@ -21,7 +21,8 @@ export const viewport: Viewport = {
 };
 
 // aplica o tema salvo antes da primeira pintura (evita "piscar")
-const themeScript = `try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch(e){}`;
+// e o menu lateral recolhido, se foi a última escolha
+const themeScript = `try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t;if(localStorage.getItem('sidebar')==='collapsed')document.documentElement.dataset.sidebar='collapsed'}catch(e){}`;
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (

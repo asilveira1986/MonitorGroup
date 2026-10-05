@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Select } from '@/components/ui';
 import { cn } from '@/lib/format';
@@ -15,9 +16,12 @@ export const PERIODS = [
 export function DashboardFilters({
   groups,
   members,
+  extra,
 }: {
   groups: { id: string; name: string }[];
   members: { id: string; name: string }[];
+  /** ação ao lado do filtro de grupo (ex.: Modo TV) */
+  extra?: ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -49,20 +53,24 @@ export function DashboardFilters({
           </Link>
         ))}
       </div>
-      <div className="w-full sm:w-56">
-        <Select
-          className="sm:h-9 sm:text-xs"
-          value={group}
-          onChange={(e) => router.push(hrefWith('group', e.target.value))}
-          aria-label="Filtrar por grupo"
-        >
-          <option value="">Todos os grupos</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </Select>
+      {/* grupo e a ação extra (Modo TV) sempre lado a lado */}
+      <div className="flex w-full items-center gap-2 sm:w-auto">
+        <div className="min-w-0 flex-1 sm:w-56 sm:flex-none">
+          <Select
+            className="sm:h-9 sm:text-xs"
+            value={group}
+            onChange={(e) => router.push(hrefWith('group', e.target.value))}
+            aria-label="Filtrar por grupo"
+          >
+            <option value="">Todos os grupos</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        {extra}
       </div>
       {members.length > 0 && (
         <div className="w-full sm:w-48">

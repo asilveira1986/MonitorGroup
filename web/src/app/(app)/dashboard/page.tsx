@@ -21,22 +21,26 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
   const indicators = (data ?? []) as IndicatorValue[];
 
   return (
-    <>
+    // data-wide: o dashboard usa a largura toda da tela
+    <div data-wide>
       <PageHeader
         title="Dashboard"
         description="Acompanhe o atendimento nos grupos de WhatsApp em tempo real. Clique num indicador para ver os detalhes."
         action={
-          <>
-            <DashboardFilters groups={groups} members={members} />
-            <Link
-              href="/tv"
-              target="_blank"
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-xs font-medium text-ink-2 hover:bg-surface-2 hover:text-ink"
-              title="Abrir o dashboard em tela cheia para deixar num monitor ou TV"
-            >
-              <Tv className="h-4 w-4" /> Modo TV
-            </Link>
-          </>
+          <DashboardFilters
+            groups={groups}
+            members={members}
+            extra={
+              <Link
+                href="/tv"
+                target="_blank"
+                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-xs font-medium text-ink-2 hover:bg-surface-2 hover:text-ink sm:h-9"
+                title="Abrir o dashboard em tela cheia para deixar num monitor ou TV"
+              >
+                <Tv className="h-4 w-4" /> Modo TV
+              </Link>
+            }
+          />
         }
       />
 
@@ -69,6 +73,6 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
       ) : (
         <DashboardGrid indicators={indicators} filters={filters} timeZone={tz} />
       )}
-    </>
+    </div>
   );
 }

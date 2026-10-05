@@ -5,7 +5,7 @@ import { useEffect, useState, useTransition } from 'react';
 import { getIndicatorDetails } from '@/app/(app)/actions';
 import { Card } from '@/components/ui';
 import { cn } from '@/lib/format';
-import { layout, type DetailsData, type IndicatorValue } from '@/lib/indicators';
+import { layoutSpans, type DetailsData, type IndicatorValue, type KpiData } from '@/lib/indicators';
 import { DataTable, IndicatorView } from './views';
 
 type Filters = { from: string; to: string; groupId: string | null; memberId: string | null };
@@ -98,6 +98,47 @@ function DetailsDrawer({
   );
 }
 
+/** Cartão de um indicador; clicar abre a análise em tela cheia. */
+function IndicatorCard({
+  ind,
+  timeZone,
+  onOpen,
+  className,
+}: {
+  ind: IndicatorValue;
+  timeZone: string;
+  onOpen: (ind: IndicatorValue) => void;
+  className?: string;
+}) {
+  const clickable = ind.has_details && ind.data.visual !== 'error';
+  return (
+    <Card className={cn('flex flex-col', className)}>
+      <div
+        role={clickable ? 'button' : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        onClick={clickable ? () => onOpen(ind) : undefined}
+        onKeyDown={clickable ? (e) => (e.key === 'Enter' || e.key === ' ') && onOpen(ind) : undefined}
+        className={cn(
+          'flex h-full flex-col rounded-2xl p-4 sm:p-5',
+          clickable && 'cursor-pointer transition hover:bg-surface-2/50 focus-visible:outline-2 focus-visible:outline-brand',
+        )}
+        title={clickable ? 'Clique para ver o que compõe este número' : undefined}
+      >
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold">{ind.name}</h3>
+            {ind.description && ind.size > 1 && <p className="mt-0.5 text-xs text-muted">{ind.description}</p>}
+          </div>
+          {clickable && <ChevronRight className="h-4 w-4 shrink-0 text-muted" aria-hidden />}
+        </div>
+        <div className="flex-1">
+          <IndicatorView data={ind.data} name={ind.name} timeZone={timeZone} />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 /** Blocos e indicadores ativos, na ordem do catálogo. */
 export function DashboardGrid({
   indicators,
@@ -123,45 +164,38 @@ export function DashboardGrid({
           <h2 id={`block-${block.key}`} className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
             {block.name}
           </h2>
-          {/* larguras calculadas para fechar cada linha: sem buracos quando indicadores são desligados */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
-            {block.items.map((ind, idx) => {
-              const { classes, rowXl } = layout(block.items.map((i) => i.size));
-              const clickable = ind.has_details && ind.data.visual !== 'error';
-              // cartão de número ao lado de um gráfico/tabela: só a altura do conteúdo (não estica)
-              const compact =
-                ind.data.visual === 'kpi' &&
-                block.items.some((o, j) => rowXl[j] === rowXl[idx] && o.data.visual !== 'kpi');
-              return (
-                <Card key={ind.key} className={cn('flex flex-col', classes[idx], compact && 'xl:self-start')}>
-                  <div
-                    role={clickable ? 'button' : undefined}
-                    tabIndex={clickable ? 0 : undefined}
-                    onClick={clickable ? () => setOpen(ind) : undefined}
-                    onKeyDown={clickable ? (e) => (e.key === 'Enter' || e.key === ' ') && setOpen(ind) : undefined}
-                    className={cn(
-                      'flex h-full flex-col rounded-2xl p-4 sm:p-5',
-                      clickable && 'cursor-pointer transition hover:bg-surface-2/50 focus-visible:outline-2 focus-visible:outline-brand',
-                    )}
-                    title={clickable ? 'Clique para ver o que compõe este número' : undefined}
-                  >
-                    <div className="mb-3 flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3 className="text-sm font-semibold">{ind.name}</h3>
-                        {ind.description && ind.size > 1 && (
-                          <p className="mt-0.5 text-xs text-muted">{ind.description}</p>
-                        )}
-                      </div>
-                      {clickable && <ChevronRight className="h-4 w-4 shrink-0 text-muted" aria-hidden />}
-                    </div>
-                    <div className="flex-1">
-                      <IndicatorView data={ind.data} name={ind.name} timeZone={timeZone} />
-                    </div>
+          {/* números numa faixa própria (dividem a largura igualmente) e, abaixo, gráficos e tabelas
+              com larguras calculadas para fechar cada linha: nenhum espaço vazio */}
+          {(() => {
+            const isNumber = (i: IndicatorValue) => i.data.visual === 'kpi' && !(i.data as KpiData).list?.length;
+            const numbers = block.items.filter(isNumber);
+            const panels = block.items.filter((i) => !isNumber(i));
+            const spans = layoutSpans(panels.map((i) => i.size));
+            return (
+              <div className="space-y-4">
+                {numbers.length > 0 && (
+                  <div className="flex flex-wrap gap-4">
+                    {numbers.map((ind) => (
+                      <IndicatorCard
+                        key={ind.key}
+                        ind={ind}
+                        timeZone={timeZone}
+                        onOpen={setOpen}
+                        className="min-w-0 flex-[1_1_15rem]"
+                      />
+                    ))}
                   </div>
-                </Card>
-              );
-            })}
-          </div>
+                )}
+                {panels.length > 0 && (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
+                    {panels.map((ind, idx) => (
+                      <IndicatorCard key={ind.key} ind={ind} timeZone={timeZone} onOpen={setOpen} className={spans[idx]} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </section>
       ))}
       {open && <DetailsDrawer indicator={open} filters={filters} timeZone={timeZone} onClose={() => setOpen(null)} />}

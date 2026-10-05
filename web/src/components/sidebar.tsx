@@ -1,6 +1,19 @@
 'use client';
 
-import { Bell, ClipboardList, Clock, FileBarChart, LayoutDashboard, LogOut, Menu, MessagesSquare, Settings, X } from 'lucide-react';
+import {
+  Bell,
+  ClipboardList,
+  Clock,
+  FileBarChart,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  MessagesSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Settings,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -17,6 +30,23 @@ const NAV = [
   { href: '/reports', label: 'Relatórios', icon: FileBarChart },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
+
+// variantes válidas só no menu fixo da tela grande quando ele está recolhido
+// (o menu do celular usa a mesma lista e não muda)
+const COLLAPSED_HIDE = '[[data-sidebar=collapsed]_aside_&]:hidden';
+
+/** Recolhe/expande o menu lateral e lembra a escolha neste navegador. */
+function toggleSidebar() {
+  const root = document.documentElement;
+  const collapsed = root.dataset.sidebar !== 'collapsed';
+  if (collapsed) root.dataset.sidebar = 'collapsed';
+  else delete root.dataset.sidebar;
+  try {
+    localStorage.setItem('sidebar', collapsed ? 'collapsed' : 'expanded');
+  } catch {
+    /* sem armazenamento local */
+  }
+}
 
 export function Sidebar({
   counts,
@@ -38,16 +68,29 @@ export function Sidebar({
             key={href}
             href={href}
             onClick={() => setOpen(false)}
+            title={label}
             className={cn(
-              'flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition lg:py-2',
+              'relative flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition lg:py-2',
+              '[[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:px-0',
               active ? 'bg-brand-soft text-brand' : 'text-ink-2 hover:bg-surface-2 hover:text-ink',
             )}
           >
-            <Icon className="h-4 w-4 shrink-0" />
-            <span className="flex-1 whitespace-nowrap">{label}</span>
+            <Icon className="h-4 w-4 shrink-0 [[data-sidebar=collapsed]_aside_&]:h-5 [[data-sidebar=collapsed]_aside_&]:w-5" />
+            <span className={cn('flex-1 whitespace-nowrap', COLLAPSED_HIDE)}>{label}</span>
+            {/* recolhido: só um ponto sobre o ícone indicando que há itens */}
             {count > 0 && (
               <span
                 className={cn(
+                  'absolute right-2.5 top-1.5 hidden h-2 w-2 rounded-full ring-2 ring-surface [[data-sidebar=collapsed]_aside_&]:block',
+                  badgeKey === 'alerts' ? 'bg-critical' : badgeKey === 'demands' ? 'bg-ink-2' : 'bg-warning',
+                )}
+                aria-hidden
+              />
+            )}
+            {count > 0 && (
+              <span
+                className={cn(
+                  COLLAPSED_HIDE,
                   'tabular rounded-full px-2 py-0.5 text-[11px] font-semibold',
                   badgeKey === 'alerts'
                     ? 'bg-critical text-white'
@@ -67,11 +110,27 @@ export function Sidebar({
 
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface px-4 py-5 lg:flex">
-        <div className="mb-8 px-2">
-          <Logo />
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface px-4 py-5 transition-[width] duration-200 lg:flex [[data-sidebar=collapsed]_&]:w-[4.5rem] [[data-sidebar=collapsed]_&]:px-3">
+        <div className="mb-8 px-2 [[data-sidebar=collapsed]_&]:px-0">
+          <span className="[[data-sidebar=collapsed]_&]:hidden">
+            <Logo />
+          </span>
+          <span className="hidden justify-center [[data-sidebar=collapsed]_&]:flex">
+            <Logo compact />
+          </span>
         </div>
-        {nav}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">{nav}</div>
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="mt-4 flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-ink-2 transition hover:bg-surface-2 hover:text-ink [[data-sidebar=collapsed]_&]:justify-center [[data-sidebar=collapsed]_&]:px-0"
+          title="Recolher / expandir o menu"
+          aria-label="Recolher ou expandir o menu lateral"
+        >
+          <PanelLeftClose className="h-4 w-4 shrink-0 [[data-sidebar=collapsed]_&]:hidden" />
+          <PanelLeftOpen className="hidden h-5 w-5 shrink-0 [[data-sidebar=collapsed]_&]:block" />
+          <span className="whitespace-nowrap [[data-sidebar=collapsed]_&]:hidden">Recolher menu</span>
+        </button>
       </aside>
 
       {/* Mobile */}
