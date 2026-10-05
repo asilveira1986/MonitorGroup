@@ -1,11 +1,12 @@
 'use client';
 
-import { ChevronRight, Loader2, X } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
 import { getIndicatorDetails } from '@/app/(app)/actions';
 import { Card } from '@/components/ui';
 import { cn } from '@/lib/format';
 import { layoutSpans, type DetailsData, type IndicatorValue, type KpiData } from '@/lib/indicators';
+import { InfoTip } from './info-tip';
 import { DataTable, IndicatorView } from './views';
 
 type Filters = { from: string; to: string; groupId: string | null; memberId: string | null };
@@ -125,14 +126,14 @@ function IndicatorCard({
           'flex h-full flex-col rounded-2xl p-4 sm:p-5',
           clickable && 'cursor-pointer transition hover:bg-surface-2/50 focus-visible:outline-2 focus-visible:outline-brand',
         )}
-        title={clickable ? 'Clique para ver o que compõe este número' : undefined}
       >
         <div className="mb-3 flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold">{ind.name}</h3>
-            {ind.description && ind.size > 1 && <p className="mt-0.5 text-xs text-muted">{ind.description}</p>}
-          </div>
-          {clickable && <ChevronRight className="h-4 w-4 shrink-0 text-muted" aria-hidden />}
+          <h3 className="min-w-0 text-sm font-semibold">{ind.name}</h3>
+          <InfoTip label={ind.name} className="-mr-1 -mt-0.5 shrink-0">
+            <span className="block font-semibold text-ink">{ind.name}</span>
+            {ind.description && <span className="mt-1 block">{ind.description}</span>}
+            {clickable && <span className="mt-2 block text-muted">Clique no cartão para ver o que compõe o número.</span>}
+          </InfoTip>
         </div>
         <div className="flex-1">
           <IndicatorView data={ind.data} name={ind.name} timeZone={timeZone} />
