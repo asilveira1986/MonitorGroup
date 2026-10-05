@@ -310,6 +310,8 @@ as $$
 $$;
 
 -- Respostas da equipe no escopo (com a pergunta respondida), respeitando o filtro de atendente
+-- (o script 0009 muda as colunas devolvidas: apaga antes para poder executar este script de novo)
+drop function if exists public.ind_responses(jsonb);
 create or replace function public.ind_responses(f jsonb)
 returns table (
   id uuid, group_id uuid, group_name text, responder text, team_member_id uuid, sent_at timestamptz,

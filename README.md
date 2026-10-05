@@ -181,6 +181,12 @@ A tela de login mostra o motivo do erro. Os casos mais comuns:
 
 Criou o usuário antes de rodar os scripts? Basta executar o `0004`: ele cria os perfis que faltam e torna administrador o usuário mais antigo.
 
+## Atualizar o banco depois de uma nova versão
+
+Em vez de rodar os scripts um a um, execute no SQL Editor do Supabase o arquivo **`supabase/atualizar_banco.sql`**. Ele junta todos os scripts a partir do 0002, na ordem certa, e pode ser executado quantas vezes quiser: o que já existe é mantido e o que falta é criado. Erros como `function public.business_seconds(...) does not exist` acontecem quando um script é rodado antes de outro anterior; o arquivo único evita isso.
+
+Quem altera os scripts gera o arquivo de novo com `sh supabase/build-updates.sh`.
+
 ## "Could not find the '...' column … in the schema cache"
 
 Uma função nova do painel está usando campos que o banco ainda não tem: falta executar um script SQL. No SQL Editor do Supabase, execute os scripts da pasta `supabase/migrations` que ainda não rodou, **na ordem** (veja a lista no passo 1). Os scripts podem ser executados de novo sem problema. Se o erro continuar logo depois, rode `notify pgrst, 'reload schema';` no SQL Editor e aguarde alguns segundos.
