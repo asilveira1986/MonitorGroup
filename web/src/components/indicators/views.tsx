@@ -1,9 +1,9 @@
 'use client';
 
-import { AlertOctagon, AlertTriangle, CheckCheck, CheckCircle2, ChevronRight, FileText, Image as ImageIcon, Mic, Smile, Video } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, ArrowUpRight, CheckCheck, CheckCircle2, FileText, Image as ImageIcon, Mic, Smile, Video } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState, useTransition, type ReactNode } from 'react';
+import { useState, useTransition } from 'react';
 import { markMediaSeen } from '@/app/(app)/actions';
 import { BarsChart, Legend, SERIES_COLORS, SeriesChart, TrendSparkline } from '@/components/charts';
 import { cn } from '@/lib/format';
@@ -11,7 +11,6 @@ import { PeakHoursView } from './peak-hours';
 import {
   formatValue,
   type Column,
-  type GroupBy,
   type HeatmapData,
   type IndicatorData,
   type KpiData,
@@ -213,11 +212,14 @@ function DataRow({
   cols,
   maxByCol,
   timeZone,
+  groupLink,
 }: {
   row: Record<string, unknown>;
   cols: Column[];
   maxByCol: Record<string, number>;
   timeZone?: string;
+  /** coluna com o id do grupo: a última célula vira o botão "Ver grupo" */
+  groupLink?: string;
 }) {
   return (
     <tr className="border-t border-line align-top">
@@ -230,7 +232,8 @@ function DataRow({
         return (
           <td
             key={c.key}
-            className={cn('px-2 py-2', c.align === 'right' && 'text-right', !c.format && 'max-w-[280px]')}
+            className={cn('whitespace-nowrap px-2 py-2', c.align === 'right' && 'text-right')}
+            title={!c.format && text.length > 40 ? text : undefined}
           >
             {c.format === 'spark' ? (
               Array.isArray(raw) ? <Spark values={raw.map(Number)} /> : '—'
@@ -242,10 +245,8 @@ function DataRow({
               >
                 #{text}
               </Link>
-            ) : c.link && row[c.link] ? (
-              <Link href={`/groups/${row[c.link]}`} className="font-medium hover:text-brand" onClick={(e) => e.stopPropagation()}>
-                {text}
-              </Link>
+            ) : c.link ? (
+              <span className="block max-w-[240px] truncate font-medium">{text}</span>
             ) : highlighted ? (
               <span
                 className={cn(
@@ -265,7 +266,7 @@ function DataRow({
                 {text}
               </span>
             ) : (
-              <span className={cn(!c.format && 'line-clamp-2')}>{text}</span>
+              <span className={cn(!c.format && 'block max-w-[320px] truncate')}>{text}</span>
             )}
             {c.bar && (
               <span className="mt-1 block h-1 rounded-full bg-surface-2">
@@ -278,124 +279,21 @@ function DataRow({
           </td>
         );
       })}
+      {groupLink && (
+        // fixa à direita: o botão fica visível mesmo quando a tabela rola para o lado
+        <td className="sticky right-0 whitespace-nowrap bg-surface px-2 py-1.5 text-right shadow-[-8px_0_8px_-8px_rgb(0_0_0/0.25)]">
+          {row[groupLink] ? (
+            <Link
+              href={`/groups/${row[groupLink]}`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-medium text-ink-2 hover:border-brand hover:text-brand"
+            >
+              Ver grupo <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          ) : null}
+        </td>
+      )}
     </tr>
-  );
-}
-
-/** Resumo de uma coluna no cabeçalho do grupo. */
-function summarize(c: Column, rows: Record<string, unknown>[], timeZone?: string): ReactNode {
-  if (c.summary === 'share') {
-    const hits = rows.filter((r) => r[c.key] === c.summary_match).length;
-    return `${hits} de ${rows.length}`;
-  }
-  const nums = rows.map((r) => r[c.key]).filter((v) => v != null && v !== '').map(Number);
-  if (!nums.length) return '—';
-  const v = c.summary === 'max' ? Math.max(...nums) : nums.reduce((a, b) => a + b, 0) / nums.length;
-  return (
-    <>
-      {c.summary === 'avg' && <span className="mr-1 text-[11px] font-normal text-muted">média</span>}
-      {formatValue(Math.round(v), c.format, timeZone)}
-    </>
-  );
-}
-
-/** Linhas agrupadas: um cabeçalho por grupo (nome, quantidade e resumos), clicável para abrir ou fechar. */
-function GroupedRows({
-  rows,
-  columns,
-  groupBy,
-  maxByCol,
-  timeZone,
-}: {
-  rows: Record<string, unknown>[];
-  columns: Column[];
-  groupBy: GroupBy;
-  maxByCol: Record<string, number>;
-  timeZone?: string;
-}) {
-  // a coluna com o nome do grupo vai para o cabeçalho
-  const cols = columns.filter((c) => c.key !== groupBy.label);
-  const groups = useMemo(() => {
-    const map = new Map<string, Record<string, unknown>[]>();
-    for (const r of rows) {
-      const k = String(r[groupBy.key] ?? r[groupBy.label] ?? '');
-      map.set(k, [...(map.get(k) ?? []), r]);
-    }
-    return [...map.entries()];
-  }, [rows, groupBy]);
-  const [open, setOpen] = useState<Set<string>>(() => new Set(groups.length === 1 ? [groups[0][0]] : []));
-  const allOpen = open.size === groups.length;
-  const firstSummary = Math.max(1, cols.findIndex((c) => c.summary));
-  const [one, many] = groupBy.noun ?? ['registro', 'registros'];
-
-  return (
-    <>
-      <thead>
-        <tr>
-          <td colSpan={cols.length} className="px-2 pb-1 text-right">
-            <button
-              type="button"
-              onClick={() => setOpen(allOpen ? new Set() : new Set(groups.map(([k]) => k)))}
-              className="text-xs font-medium text-ink-2 hover:text-ink"
-            >
-              {allOpen ? 'Recolher todos' : 'Expandir todos'}
-            </button>
-          </td>
-        </tr>
-        <tr className="text-left text-xs text-muted">
-          {cols.map((c) => (
-            <th key={c.key} className={cn('whitespace-nowrap px-2 py-2 font-medium', c.align === 'right' && 'text-right')}>
-              {c.label}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      {groups.map(([k, items]) => {
-        const isOpen = open.has(k);
-        const toggle = () =>
-          setOpen((prev) => {
-            const next = new Set(prev);
-            if (next.has(k)) next.delete(k);
-            else next.add(k);
-            return next;
-          });
-        return (
-          <tbody key={k} className="tabular">
-            <tr
-              className="cursor-pointer border-t border-line bg-surface-2/60 hover:bg-surface-2"
-              onClick={toggle}
-              aria-expanded={isOpen}
-            >
-              <td colSpan={firstSummary} className="px-2 py-2">
-                <span className="flex items-center gap-1.5">
-                  <ChevronRight className={cn('h-4 w-4 shrink-0 text-muted transition', isOpen && 'rotate-90')} />
-                  {items[0][groupBy.key] ? (
-                    <Link
-                      href={`/groups/${items[0][groupBy.key]}`}
-                      className="font-semibold hover:text-brand"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {String(items[0][groupBy.label] ?? '—')}
-                    </Link>
-                  ) : (
-                    <span className="font-semibold">{String(items[0][groupBy.label] ?? '—')}</span>
-                  )}
-                  <span className="text-xs text-muted">
-                    · {items.length} {items.length === 1 ? one : many}
-                  </span>
-                </span>
-              </td>
-              {cols.slice(firstSummary).map((c) => (
-                <td key={c.key} className={cn('whitespace-nowrap px-2 py-2 font-semibold', c.align === 'right' && 'text-right')}>
-                  {c.summary ? summarize(c, items, timeZone) : null}
-                </td>
-              ))}
-            </tr>
-            {isOpen && items.map((row, i) => <DataRow key={i} row={row} cols={cols} maxByCol={maxByCol} timeZone={timeZone} />)}
-          </tbody>
-        );
-      })}
-    </>
   );
 }
 
@@ -404,43 +302,37 @@ export function DataTable({
   rows,
   timeZone,
   maxRows,
-  groupBy,
 }: {
   columns: Column[];
   rows: Record<string, unknown>[];
   timeZone?: string;
   maxRows?: number;
-  /** agrupa as linhas (ex.: por grupo de WhatsApp) */
-  groupBy?: GroupBy;
 }) {
   const shown = maxRows ? rows.slice(0, maxRows) : rows;
   const maxByCol = Object.fromEntries(
     columns.filter((c) => c.bar).map((c) => [c.key, Math.max(1, ...rows.map((r) => Number(r[c.key]) || 0))]),
   );
+  // tabelas com grupo ganham, na última coluna, o botão para abrir o grupo
+  const groupLink = columns.find((c) => c.link)?.link;
   if (!rows.length) return <p className="py-6 text-center text-sm text-muted">Sem dados no período.</p>;
   return (
     <div className="-mx-1 overflow-x-auto">
       <table className="w-full text-sm">
-        {groupBy ? (
-          <GroupedRows rows={shown} columns={columns} groupBy={groupBy} maxByCol={maxByCol} timeZone={timeZone} />
-        ) : (
-          <>
-            <thead>
-              <tr className="text-left text-xs text-muted">
-                {columns.map((c) => (
-                  <th key={c.key} className={cn('whitespace-nowrap px-2 py-2 font-medium', c.align === 'right' && 'text-right')}>
-                    {c.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="tabular">
-              {shown.map((row, i) => (
-                <DataRow key={i} row={row} cols={columns} maxByCol={maxByCol} timeZone={timeZone} />
-              ))}
-            </tbody>
-          </>
-        )}
+        <thead>
+          <tr className="text-left text-xs text-muted">
+            {columns.map((c) => (
+              <th key={c.key} className={cn('whitespace-nowrap px-2 py-2 font-medium', c.align === 'right' && 'text-right')}>
+                {c.label}
+              </th>
+            ))}
+            {groupLink && <th className="sticky right-0 bg-surface px-2 py-2" aria-label="Ações" />}
+          </tr>
+        </thead>
+        <tbody className="tabular">
+          {shown.map((row, i) => (
+            <DataRow key={i} row={row} cols={columns} maxByCol={maxByCol} timeZone={timeZone} groupLink={groupLink} />
+          ))}
+        </tbody>
       </table>
       {maxRows && rows.length > maxRows && (
         <p className="px-2 pt-2 text-xs text-muted">+ {rows.length - maxRows} linha(s) — clique para ver tudo</p>

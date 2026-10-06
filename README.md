@@ -145,6 +145,10 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
 
 O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "em 2 dias"), cobranças do cliente, reabertura e confirmação após a entrega. As palavras usadas ficam nos parâmetros dos indicadores *Retrabalho* e *Confirmação do cliente*.
 
+## Detalhamento dos indicadores
+
+Clicar num cartão abre a análise em tela cheia com o que compõe o número: uma linha por registro, sem agrupamentos. Nas tabelas que têm grupo, a última coluna traz o botão **Ver grupo**, que abre a conversa do grupo (o botão fica fixo à direita mesmo quando a tabela rola para o lado).
+
 ## Ciclo das conversas (início e fechamento)
 
 O bloco **Ciclo das conversas** mostra quando as conversas começam nos grupos e como terminam.
@@ -154,7 +158,7 @@ O bloco **Ciclo das conversas** mostra quando as conversas começam nos grupos e
 - **Fechamento por compromisso de retorno**: a equipe se compromete a voltar ("vou verificar e te retorno", "te aviso assim que"). A análise mostra se a equipe voltou a falar no grupo depois (**retorno pendente** quando ainda não voltou). A mensagem do retorno não abre uma conversa nova.
 - **Sem fechamento**: a conversa ficou parada mais que o limite (padrão 24 horas) sem encerramento nem compromisso.
 
-O cartão **Início e fechamento das conversas** mostra quantas conversas começaram no período, o percentual fechado, o tempo médio até fechar e as conversas que ainda não fecharam. Na tela cheia, as conversas aparecem agrupadas por grupo, com a primeira mensagem, a mensagem de fechamento, quem fechou e a duração. O gráfico **Conversas por dia** compara, dia a dia, as iniciadas, encerradas, com compromisso e sem fechamento. As listas de palavras, o limite de horas e a meta ficam em **Configurações › Indicadores**.
+O cartão **Início e fechamento das conversas** mostra quantas conversas começaram no período, o percentual fechado, o tempo médio até fechar e as conversas que ainda não fecharam. Na tela cheia, cada conversa aparece numa linha com grupo, quem iniciou, início, situação, fechamento, duração, mensagens e retorno do compromisso. O gráfico **Conversas por dia** compara, dia a dia, as iniciadas, encerradas, com compromisso e sem fechamento. As listas de palavras, o limite de horas e a meta ficam em **Configurações › Indicadores**.
 
 ## Imagens e arquivos sem visualização
 

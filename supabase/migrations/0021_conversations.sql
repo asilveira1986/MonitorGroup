@@ -245,7 +245,7 @@ as $$
       'msgs', msgs,
       'returned', case when status <> 'compromisso' then null
                        when returned_at is null then 'Pendente'
-                       else 'Retornou em ' || to_char(returned_at at time zone (f->>'tz'), 'DD/MM HH24:MI') end
+                       else 'Retornou ' || to_char(returned_at at time zone (f->>'tz'), 'DD/MM HH24:MI') end
     ) order by started_at desc), '[]'::jsonb)
   )
   from (select * from public.ind_conversations(f, p) order by started_at desc limit 500) x

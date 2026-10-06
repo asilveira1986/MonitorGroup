@@ -3794,7 +3794,6 @@ notify pgrst, 'reload schema';
 -- A pendência (fila de "sem resposta" e alertas) continua contando desde a
 -- primeira mensagem, porque o cliente está esperando desde ela.
 -- Os tempos já gravados são recalculados no fim deste script.
--- O detalhamento dos indicadores de resposta passa a vir agrupado por grupo.
 -- =====================================================================
 
 -- Mesma função de antes (0007), mudando só o início da contagem
@@ -4034,7 +4033,6 @@ language sql stable set search_path = public
 as $$
   with o as (select public.sla_business_time_only() as useful)
   select jsonb_build_object(
-    'group_by', jsonb_build_object('key', 'group_id', 'label', 'group_name', 'noun', jsonb_build_array('resposta', 'respostas')),
     'columns', jsonb_build_array(
       jsonb_build_object('key', 'asked_at', 'label', 'Última msg. do cliente', 'format', 'datetime'),
       jsonb_build_object('key', 'group_name', 'label', 'Grupo', 'link', 'group_id'),
@@ -4042,9 +4040,9 @@ as $$
       jsonb_build_object('key', 'question', 'label', 'Mensagem do cliente'),
       jsonb_build_object('key', 'responder', 'label', 'Respondido por'),
       jsonb_build_object('key', 'shift', 'label', 'Chegou', 'format', 'text'),
-      jsonb_build_object('key', 'response_time_seconds', 'label', 'Tempo corrido', 'format', 'duration', 'align', 'right', 'summary', 'avg'),
-      jsonb_build_object('key', 'business_seconds', 'label', 'Tempo útil', 'format', 'duration', 'align', 'right', 'summary', 'avg'),
-      jsonb_build_object('key', 'in_sla', 'label', 'No SLA', 'format', 'text', 'summary', 'share', 'summary_match', 'Sim')
+      jsonb_build_object('key', 'response_time_seconds', 'label', 'Tempo corrido', 'format', 'duration', 'align', 'right'),
+      jsonb_build_object('key', 'business_seconds', 'label', 'Tempo útil', 'format', 'duration', 'align', 'right'),
+      jsonb_build_object('key', 'in_sla', 'label', 'No SLA', 'format', 'text')
     ),
     'rows', coalesce(jsonb_agg(jsonb_build_object(
       'asked_at', asked_at, 'group_id', group_id, 'group_name', group_name, 'client_name', client_name,
@@ -4830,7 +4828,7 @@ as $$
       'msgs', msgs,
       'returned', case when status <> 'compromisso' then null
                        when returned_at is null then 'Pendente'
-                       else 'Retornou em ' || to_char(returned_at at time zone (f->>'tz'), 'DD/MM HH24:MI') end
+                       else 'Retornou ' || to_char(returned_at at time zone (f->>'tz'), 'DD/MM HH24:MI') end
     ) order by started_at desc), '[]'::jsonb)
   )
   from (select * from public.ind_conversations(f, p) order by started_at desc limit 500) x

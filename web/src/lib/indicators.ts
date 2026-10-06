@@ -19,20 +19,8 @@ export type Column = {
   highlight_abs_gte?: number;
   /** destaca valores abaixo deste número (ex.: equipe pouco presente) */
   warn_below?: number;
-  /** resumo no cabeçalho de cada grupo (tabela agrupada): média, maior valor ou "x de y" iguais a summary_match */
-  summary?: 'avg' | 'max' | 'share';
-  summary_match?: string;
 };
 
-/** Agrupa as linhas do detalhamento (ex.: por grupo de WhatsApp), com um cabeçalho por grupo. */
-export type GroupBy = {
-  /** coluna com o id do grupo (também usada no link para a tela do grupo) */
-  key: string;
-  /** coluna com o nome exibido no cabeçalho */
-  label: string;
-  /** como chamar as linhas no singular e no plural (ex.: resposta, respostas) */
-  noun?: [string, string];
-};
 
 export type KpiData = {
   visual: 'kpi';
@@ -143,7 +131,7 @@ export type BlockConfig = {
   updated_at: string;
 };
 
-export type DetailsData = { columns: Column[]; rows: Record<string, unknown>[]; group_by?: GroupBy };
+export type DetailsData = { columns: Column[]; rows: Record<string, unknown>[] };
 
 export function formatValue(value: unknown, format: ValueFormat = 'text', timeZone?: string): string {
   if (value === null || value === undefined || value === '') return '—';

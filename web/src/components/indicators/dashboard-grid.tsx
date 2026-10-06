@@ -52,7 +52,7 @@ function DetailsDrawer({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg" role="dialog" aria-modal="true" aria-label={indicator.name}>
       <div className="border-b border-line bg-surface">
-        <div className="mx-auto flex max-w-7xl items-start justify-between gap-3 px-4 py-4 sm:px-8">
+        <div className="mx-auto flex max-w-[1800px] items-start justify-between gap-3 px-4 py-4 sm:px-8">
           <div className="min-w-0">
             <p className="text-xs text-muted">{indicator.block_name}</p>
             <h2 className="text-lg font-semibold sm:text-xl">{indicator.name}</h2>
@@ -68,7 +68,7 @@ function DetailsDrawer({
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-7xl space-y-6 px-4 py-5 sm:px-8 sm:py-6">
+        <div className="mx-auto max-w-[1800px] space-y-6 px-4 py-5 sm:px-8 sm:py-6">
           {/* o indicador em tamanho grande */}
           {indicator.data.visual !== 'error' && (
             <Card className="p-4 sm:p-6">
@@ -87,12 +87,9 @@ function DetailsDrawer({
             {details && !loading && (
               <>
                 <p className="mb-2 mt-0.5 text-xs text-muted">
-                  {details.rows.length} registro(s)
-                  {details.group_by &&
-                    ` em ${new Set(details.rows.map((r) => r[details.group_by!.key])).size} grupo(s) · clique no grupo para ver ${details.group_by.noun ? `as ${details.group_by.noun[1]}` : 'os registros'}`}
-                  {details.rows.length === 500 ? ' (mostrando os 500 mais recentes)' : ''}
+                  {details.rows.length} registro(s){details.rows.length === 500 ? ' (mostrando os 500 mais recentes)' : ''}
                 </p>
-                <DataTable columns={details.columns} rows={details.rows} timeZone={timeZone} groupBy={details.group_by} />
+                <DataTable columns={details.columns} rows={details.rows} timeZone={timeZone} />
               </>
             )}
           </Card>
