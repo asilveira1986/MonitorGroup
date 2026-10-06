@@ -4806,19 +4806,15 @@ returns jsonb
 language sql stable set search_path = public
 as $$
   select jsonb_build_object(
-    'group_by', jsonb_build_object('key', 'group_id', 'label', 'group_name', 'noun', jsonb_build_array('conversa', 'conversas')),
+    -- uma linha por conversa, sem agrupar
     'columns', jsonb_build_array(
-      jsonb_build_object('key', 'started_at', 'label', 'Início', 'format', 'datetime'),
       jsonb_build_object('key', 'group_name', 'label', 'Grupo', 'link', 'group_id'),
       jsonb_build_object('key', 'starter', 'label', 'Iniciada por'),
-      jsonb_build_object('key', 'start_body', 'label', 'Primeira mensagem'),
+      jsonb_build_object('key', 'started_at', 'label', 'Início', 'format', 'datetime'),
       jsonb_build_object('key', 'status_label', 'label', 'Situação'),
-      jsonb_build_object('key', 'closed', 'label', 'Fechada', 'summary', 'share', 'summary_match', 'Sim'),
       jsonb_build_object('key', 'closed_at', 'label', 'Fechamento', 'format', 'datetime'),
-      jsonb_build_object('key', 'closer', 'label', 'Fechada por'),
-      jsonb_build_object('key', 'close_body', 'label', 'Mensagem de fechamento'),
-      jsonb_build_object('key', 'duration', 'label', 'Duração', 'format', 'duration', 'align', 'right', 'summary', 'avg'),
-      jsonb_build_object('key', 'msgs', 'label', 'Msgs', 'format', 'number', 'align', 'right'),
+      jsonb_build_object('key', 'duration', 'label', 'Duração', 'format', 'duration', 'align', 'right'),
+      jsonb_build_object('key', 'msgs', 'label', 'Mensagens', 'format', 'number', 'align', 'right'),
       jsonb_build_object('key', 'returned', 'label', 'Retorno do compromisso')
     ),
     'rows', coalesce(jsonb_agg(jsonb_build_object(
