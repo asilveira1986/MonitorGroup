@@ -4,21 +4,28 @@ import { DashboardGrid } from '@/components/indicators/dashboard-grid';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { requireProfile } from '@/lib/auth';
 import { loadIndicatorFilters } from '@/lib/indicator-filters';
-import type { IndicatorValue } from '@/lib/indicators';
+import type { IndicatorValue, KpiData } from '@/lib/indicators';
 import { DashboardFilters } from './filters';
 
 export default async function DashboardPage({ searchParams }: PageProps<'/dashboard'>) {
   const profile = await requireProfile();
-  const { supabase, tz, filters, groups, members } = await loadIndicatorFilters(await searchParams);
+  const { supabase, tz, filters, comparison, today, groups, members } = await loadIndicatorFilters(await searchParams, {
+    defaultPeriod: 'today',
+  });
 
   // o dashboard só conhece o catálogo: calcula os indicadores ativos, na ordem configurada
-  const { data, error } = await supabase.rpc('indicator_values', {
-    p_from: filters.from,
-    p_to: filters.to,
-    p_group_id: filters.groupId,
-    p_member_id: filters.memberId,
-  });
+  // e, junto, o mesmo cálculo no intervalo de comparação (dia anterior no mesmo horário)
+  const args = { p_group_id: filters.groupId, p_member_id: filters.memberId };
+  const [{ data, error }, { data: before }] = await Promise.all([
+    supabase.rpc('indicator_values', { p_from: filters.from, p_to: filters.to, ...args }),
+    supabase.rpc('indicator_values', { p_from: comparison.from, p_to: comparison.to, ...args }),
+  ]);
   const indicators = (data ?? []) as IndicatorValue[];
+  const previous = Object.fromEntries(
+    ((before ?? []) as IndicatorValue[])
+      .filter((i) => i.data.visual === 'kpi')
+      .map((i) => [i.key, (i.data as KpiData).value]),
+  );
 
   return (
     // data-wide: o dashboard usa a largura toda da tela
@@ -37,6 +44,8 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
           <DashboardFilters
             groups={groups}
             members={members}
+            today={today}
+            defaultPeriod="today"
             extra={
               <Link
                 href="/tv"
@@ -79,7 +88,12 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
           />
         </Card>
       ) : (
-        <DashboardGrid indicators={indicators} filters={filters} timeZone={tz} />
+        <DashboardGrid
+          indicators={indicators}
+          filters={filters}
+          timeZone={tz}
+          comparison={{ label: comparison.label, values: previous }}
+        />
       )}
     </div>
   );

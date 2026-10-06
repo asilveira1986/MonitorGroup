@@ -7,7 +7,7 @@ import { Card } from '@/components/ui';
 import { cn } from '@/lib/format';
 import { layoutSpans, type DetailsData, type IndicatorValue, type KpiData } from '@/lib/indicators';
 import { InfoTip } from './info-tip';
-import { DataTable, IndicatorView } from './views';
+import { DataTable, IndicatorView, type Previous } from './views';
 
 type Filters = { from: string; to: string; groupId: string | null; memberId: string | null };
 
@@ -15,11 +15,13 @@ function DetailsDrawer({
   indicator,
   filters,
   timeZone,
+  previous,
   onClose,
 }: {
   indicator: IndicatorValue;
   filters: Filters;
   timeZone: string;
+  previous?: Previous;
   onClose: () => void;
 }) {
   const [details, setDetails] = useState<DetailsData | null>(null);
@@ -72,7 +74,7 @@ function DetailsDrawer({
           {/* o indicador em tamanho grande */}
           {indicator.data.visual !== 'error' && (
             <Card className="p-4 sm:p-6">
-              <IndicatorView data={indicator.data} name={indicator.name} timeZone={timeZone} expanded />
+              <IndicatorView data={indicator.data} name={indicator.name} timeZone={timeZone} previous={previous} expanded />
             </Card>
           )}
           {/* o que compõe o número */}
@@ -103,11 +105,13 @@ function DetailsDrawer({
 function IndicatorCard({
   ind,
   timeZone,
+  previous,
   onOpen,
   className,
 }: {
   ind: IndicatorValue;
   timeZone: string;
+  previous?: Previous;
   onOpen: (ind: IndicatorValue) => void;
   className?: string;
 }) {
@@ -133,7 +137,7 @@ function IndicatorCard({
           </InfoTip>
         </div>
         <div className="flex-1">
-          <IndicatorView data={ind.data} name={ind.name} timeZone={timeZone} />
+          <IndicatorView data={ind.data} name={ind.name} timeZone={timeZone} previous={previous} />
         </div>
       </div>
     </Card>
@@ -145,12 +149,17 @@ export function DashboardGrid({
   indicators,
   filters,
   timeZone,
+  comparison,
 }: {
   indicators: IndicatorValue[];
   filters: Filters;
   timeZone: string;
+  /** valores dos números no intervalo de comparação (ex.: ontem até esta hora) */
+  comparison?: { label: string; values: Record<string, number | null> };
 }) {
   const [open, setOpen] = useState<IndicatorValue | null>(null);
+  const prev = (key: string): Previous | undefined =>
+    comparison && key in comparison.values ? { value: comparison.values[key], label: comparison.label } : undefined;
   const blocks = indicators.reduce<{ key: string; name: string; items: IndicatorValue[] }[]>((acc, ind) => {
     const block = acc.find((b) => b.key === ind.block_key);
     if (block) block.items.push(ind);
@@ -181,6 +190,7 @@ export function DashboardGrid({
                         key={ind.key}
                         ind={ind}
                         timeZone={timeZone}
+                        previous={prev(ind.key)}
                         onOpen={setOpen}
                         className="min-w-0 flex-[1_1_15rem]"
                       />
@@ -190,7 +200,14 @@ export function DashboardGrid({
                 {panels.length > 0 && (
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
                     {panels.map((ind, idx) => (
-                      <IndicatorCard key={ind.key} ind={ind} timeZone={timeZone} onOpen={setOpen} className={spans[idx]} />
+                      <IndicatorCard
+                        key={ind.key}
+                        ind={ind}
+                        timeZone={timeZone}
+                        previous={prev(ind.key)}
+                        onOpen={setOpen}
+                        className={spans[idx]}
+                      />
                     ))}
                   </div>
                 )}
@@ -199,7 +216,15 @@ export function DashboardGrid({
           })()}
         </section>
       ))}
-      {open && <DetailsDrawer indicator={open} filters={filters} timeZone={timeZone} onClose={() => setOpen(null)} />}
+      {open && (
+        <DetailsDrawer
+          indicator={open}
+          filters={filters}
+          timeZone={timeZone}
+          previous={prev(open.key)}
+          onClose={() => setOpen(null)}
+        />
+      )}
     </div>
   );
 }

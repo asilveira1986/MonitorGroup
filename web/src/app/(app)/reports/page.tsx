@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { DataTable, IndicatorView } from '@/components/indicators/views';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { requireProfile } from '@/lib/auth';
-import { loadIndicatorFilters, PERIOD_LABEL } from '@/lib/indicator-filters';
+import { loadIndicatorFilters } from '@/lib/indicator-filters';
 import type { IndicatorValue } from '@/lib/indicators';
 import { indicatorTable } from '@/lib/report';
 import { DashboardFilters } from '../dashboard/filters';
@@ -12,7 +12,7 @@ import { PrintButton } from './print-button';
 export default async function ReportsPage({ searchParams }: PageProps<'/reports'>) {
   const profile = await requireProfile();
   const sp = await searchParams;
-  const { supabase, period, tz, filters, groups, members } = await loadIndicatorFilters(sp);
+  const { supabase, periodLabel, today, tz, filters, groups, members } = await loadIndicatorFilters(sp);
 
   const { data, error } = await supabase.rpc('indicator_values', {
     p_from: filters.from,
@@ -24,7 +24,7 @@ export default async function ReportsPage({ searchParams }: PageProps<'/reports'
 
   // mesmos filtros da tela na exportação
   const query = new URLSearchParams();
-  for (const k of ['period', 'group', 'member']) if (typeof sp[k] === 'string') query.set(k, sp[k] as string);
+  for (const k of ['period', 'date', 'group', 'member']) if (typeof sp[k] === 'string') query.set(k, sp[k] as string);
   const exportHref = (key?: string) => {
     const q = new URLSearchParams(query);
     if (key) q.set('key', key);
@@ -39,7 +39,7 @@ export default async function ReportsPage({ searchParams }: PageProps<'/reports'
   }, []);
 
   const scope = [
-    PERIOD_LABEL[period],
+    periodLabel,
     groups.find((g) => g.id === filters.groupId)?.name ?? 'todos os grupos',
     members.find((m) => m.id === filters.memberId)?.name ?? 'todos os atendentes',
   ].join(' · ');
@@ -49,7 +49,7 @@ export default async function ReportsPage({ searchParams }: PageProps<'/reports'
       <PageHeader
         title="Relatórios"
         description="Os indicadores ativos em formato de tabela, prontos para exportar. Use os mesmos filtros do dashboard."
-        action={<DashboardFilters groups={groups} members={members} />}
+        action={<DashboardFilters groups={groups} members={members} today={today} />}
       />
 
       {error ? (

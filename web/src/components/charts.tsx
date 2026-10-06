@@ -156,7 +156,8 @@ export function BarsChart({
     <ResponsiveContainer width="100%" height={240}>
       <BarChart data={data} margin={{ top: 10, right: 8, left: -8, bottom: 0 }} barGap={2}>
         <CartesianGrid vertical={false} stroke="var(--grid)" />
-        <XAxis dataKey="label" {...AXIS} interval={0} />
+        {/* muitas categorias (ex.: 24 horas): o eixo pula rótulos para não sobrepor */}
+        <XAxis dataKey="label" {...AXIS} interval={data.length > 12 ? 'preserveStartEnd' : 0} minTickGap={6} />
         <YAxis {...AXIS} width={52} tickFormatter={(v: number) => formatValue(v, format)} allowDecimals={false} />
         <Tooltip content={<ChartTooltip format={format} />} cursor={{ fill: 'var(--surface-2)' }} />
         {series.map((s, i) => (

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { markMediaSeen } from '@/app/(app)/actions';
 import { BarsChart, Legend, SERIES_COLORS, SeriesChart, TrendSparkline } from '@/components/charts';
-import { cn } from '@/lib/format';
+import { cn, formatDuration, formatNumber } from '@/lib/format';
 import { PeakHoursView } from './peak-hours';
 import {
   formatValue,
@@ -122,18 +122,45 @@ function KpiList({
   );
 }
 
+export type Previous = { value: number | null; label: string };
+
+/** Variação do número em relação ao intervalo de comparação: "▲ 12 (+30%) vs ontem até esta hora". */
+function Delta({ value, previous, format }: { value: number | null; previous: Previous; format: KpiData['format'] }) {
+  if (value == null || previous.value == null) return null;
+  const cur = Number(value);
+  const before = Number(previous.value);
+  const diff = cur - before;
+  // número igual: não mostra (os números de "agora", como pendentes, não mudam com o período)
+  if (diff === 0) return null;
+  const arrow = diff > 0 ? '▲' : '▼';
+  const amount =
+    format === 'percent'
+        ? `${formatNumber(Math.abs(Math.round(diff * 10) / 10))} p.p. vs`
+      : format === 'duration'
+        ? `${formatDuration(Math.abs(diff))} vs`
+        : `${formatNumber(Math.abs(diff))}${before > 0 ? ` (${diff > 0 ? '+' : '−'}${Math.round((Math.abs(diff) / before) * 100)}%)` : ''} vs`;
+  return (
+    <p className="mt-1 text-xs text-ink-2" title={`Em ${previous.label}: ${formatValue(before, format)}`}>
+      <span className="font-medium">{arrow}</span> {amount} {previous.label}
+      <span className="text-muted"> · era {formatValue(before, format)}</span>
+    </p>
+  );
+}
+
 function KpiView({
   data,
   name,
   timeZone,
   expanded,
   compact,
+  previous,
 }: {
   data: KpiData;
   name: string;
   timeZone?: string;
   expanded?: boolean;
   compact?: boolean;
+  previous?: Previous;
 }) {
   const allItems = data.list ?? [];
   const items = expanded || !data.list_size ? allItems : allItems.slice(0, data.list_size);
@@ -152,6 +179,7 @@ function KpiView({
           </span>
         )}
       </div>
+      {previous && <Delta value={data.value} previous={previous} format={data.format} />}
       {data.hint && <p className="mt-1 text-xs text-muted">{data.hint}</p>}
       {!!data.secondary?.length && (
         <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs">
@@ -415,10 +443,13 @@ export function IndicatorView({
   timeZone,
   expanded,
   compact,
+  previous,
 }: {
   data: IndicatorData;
   name: string;
   timeZone?: string;
+  /** valor do mesmo número no intervalo de comparação (ex.: ontem até esta hora) */
+  previous?: Previous;
   /** tela cheia: tabelas com todas as linhas */
   expanded?: boolean;
   /** modo TV: sem controles de interação */
@@ -426,7 +457,7 @@ export function IndicatorView({
 }) {
   switch (data.visual) {
     case 'kpi':
-      return <KpiView data={data} name={name} timeZone={timeZone} expanded={expanded} compact={compact} />;
+      return <KpiView data={data} name={name} timeZone={timeZone} expanded={expanded} compact={compact} previous={previous} />;
     case 'table':
       return (
         <DataTable

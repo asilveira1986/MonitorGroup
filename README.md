@@ -59,6 +59,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    19. `supabase/migrations/0019_reply_analysis.sql`
    20. `supabase/migrations/0020_media_seen.sql`
    21. `supabase/migrations/0021_conversations.sql`
+   22. `supabase/migrations/0022_daily.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -144,6 +145,19 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
 - **IA** (desligada por padrão): o Claude classifica mensagens pendentes dos clientes. Requer `ANTHROPIC_API_KEY` no worker. Mensagens que o modelo recusar são tratadas como não-demanda.
 
 O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "em 2 dias"), cobranças do cliente, reabertura e confirmação após a entrega. As palavras usadas ficam nos parâmetros dos indicadores *Retrabalho* e *Confirmação do cliente*.
+
+## Acompanhamento do dia a dia
+
+O dashboard abre em **Hoje** e foi pensado para acompanhar o dia de perto:
+
+- **Navegar entre os dias**: atalhos **Hoje** e **Ontem**, setas **‹ ›** para ir ao dia anterior ou ao próximo, e o calendário para escolher qualquer dia. Os períodos de 7, 30 e 90 dias continuam disponíveis.
+- **Comparação**: cada número mostra a variação em relação a **ontem até esta mesma hora** (num dia passado, ao dia anterior inteiro; nos períodos de vários dias, ao período anterior do mesmo tamanho). Ex.: "▲ 12 (+30%) vs ontem até esta hora · era 40". Números de "agora", como pendências, não mostram comparação.
+- **Bloco Acompanhamento do dia**, no topo:
+  - **O dia hora a hora**: mensagens recebidas, respostas da equipe e pendentes no fim de cada hora (em períodos de vários dias, um ponto por dia), com o horário de pico.
+  - **Tempo de resposta hora a hora**: tempo médio e pior tempo em cada hora, para ver quando o atendimento fica lento.
+  - **Grupos no dia**: cada grupo numa linha com recebidas, respostas, tempo médio, SLA, pendentes agora, há quanto tempo esperam e a primeira e a última mensagem; os grupos com pendência aparecem primeiro.
+
+O Modo TV também abre em Hoje. Os relatórios continuam abrindo em 7 dias, mas aceitam Hoje, Ontem e qualquer dia.
 
 ## Detalhamento dos indicadores
 

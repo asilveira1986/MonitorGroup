@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { requireProfile } from '@/lib/auth';
-import { loadIndicatorFilters, PERIOD_LABEL } from '@/lib/indicator-filters';
+import { loadIndicatorFilters } from '@/lib/indicator-filters';
 import type { IndicatorValue } from '@/lib/indicators';
 import { TvBoard } from './board';
 
@@ -16,13 +16,13 @@ const rotation = (v: unknown) => {
 
 /**
  * Modo TV: o dashboard numa tela só, sem menu, para deixar num monitor ou TV.
- * Aceita os mesmos filtros do dashboard (?period=today|7d|30d|90d&group=…&member=…)
+ * Aceita os mesmos filtros do dashboard (?period=today|yesterday|7d|30d|90d, ?period=day&date=AAAA-MM-DD, &group=…&member=…); padrão: hoje
  * ?tema=claro para o tema claro e ?rotacao=N para os segundos entre as páginas de painéis.
  */
 export default async function TvPage({ searchParams }: PageProps<'/tv'>) {
   await requireProfile();
   const sp = await searchParams;
-  const { supabase, period, tz, filters, groups, members } = await loadIndicatorFilters(sp);
+  const { supabase, periodLabel, tz, filters, groups, members } = await loadIndicatorFilters(sp, { defaultPeriod: 'today' });
 
   const [{ data, error }, { data: instances }, { count: openAlerts }] = await Promise.all([
     supabase.rpc('indicator_values', {
@@ -36,7 +36,7 @@ export default async function TvPage({ searchParams }: PageProps<'/tv'>) {
   ]);
 
   const scope = [
-    PERIOD_LABEL[period],
+    periodLabel,
     groups.find((g) => g.id === filters.groupId)?.name,
     members.find((m) => m.id === filters.memberId)?.name,
   ]
