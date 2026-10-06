@@ -89,7 +89,7 @@ function DetailsDrawer({
                 <p className="mb-2 mt-0.5 text-xs text-muted">
                   {details.rows.length} registro(s)
                   {details.group_by &&
-                    ` em ${new Set(details.rows.map((r) => r[details.group_by!.key])).size} grupo(s) · clique no grupo para ver as mensagens`}
+                    ` em ${new Set(details.rows.map((r) => r[details.group_by!.key])).size} grupo(s) · clique no grupo para ver ${details.group_by.noun ? `as ${details.group_by.noun[1]}` : 'os registros'}`}
                   {details.rows.length === 500 ? ' (mostrando os 500 mais recentes)' : ''}
                 </p>
                 <DataTable columns={details.columns} rows={details.rows} timeZone={timeZone} groupBy={details.group_by} />

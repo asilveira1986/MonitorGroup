@@ -58,6 +58,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    18. `supabase/migrations/0018_response_from_last_message.sql`
    19. `supabase/migrations/0019_reply_analysis.sql`
    20. `supabase/migrations/0020_media_seen.sql`
+   21. `supabase/migrations/0021_conversations.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -143,6 +144,17 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
 - **IA** (desligada por padrão): o Claude classifica mensagens pendentes dos clientes. Requer `ANTHROPIC_API_KEY` no worker. Mensagens que o modelo recusar são tratadas como não-demanda.
 
 O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "em 2 dias"), cobranças do cliente, reabertura e confirmação após a entrega. As palavras usadas ficam nos parâmetros dos indicadores *Retrabalho* e *Confirmação do cliente*.
+
+## Ciclo das conversas (início e fechamento)
+
+O bloco **Ciclo das conversas** mostra quando as conversas começam nos grupos e como terminam.
+
+- **Início**: a primeira mensagem que pede atenção quando não há conversa aberta no grupo. Pode ser do cliente (agradecimentos, risadas e emojis não abrem conversa) ou da equipe (dá para desligar nas configurações).
+- **Fechamento por encerramento**: o cliente agradece ou confirma ("obrigado", "deu certo", "recebi") depois que a equipe participou, ou a equipe encerra ("qualquer dúvida estamos à disposição", "resolvido").
+- **Fechamento por compromisso de retorno**: a equipe se compromete a voltar ("vou verificar e te retorno", "te aviso assim que"). A análise mostra se a equipe voltou a falar no grupo depois (**retorno pendente** quando ainda não voltou). A mensagem do retorno não abre uma conversa nova.
+- **Sem fechamento**: a conversa ficou parada mais que o limite (padrão 24 horas) sem encerramento nem compromisso.
+
+O cartão **Início e fechamento das conversas** mostra quantas conversas começaram no período, o percentual fechado, o tempo médio até fechar e as conversas que ainda não fecharam. Na tela cheia, as conversas aparecem agrupadas por grupo, com a primeira mensagem, a mensagem de fechamento, quem fechou e a duração. O gráfico **Conversas por dia** compara, dia a dia, as iniciadas, encerradas, com compromisso e sem fechamento. As listas de palavras, o limite de horas e a meta ficam em **Configurações › Indicadores**.
 
 ## Imagens e arquivos sem visualização
 
