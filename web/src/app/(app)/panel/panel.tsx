@@ -1,11 +1,11 @@
 'use client';
 
-import { AlertOctagon, ArrowUpRight, CheckCircle2, Hourglass, MinusCircle, Search } from 'lucide-react';
+import { AlertOctagon, CheckCircle2, Hourglass, MinusCircle, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '@/components/ui';
-import { cn, formatDuration, formatNumber } from '@/lib/format';
+import { cn, formatNumber } from '@/lib/format';
 
 export type PanelStatus = 'late' | 'waiting' | 'answered' | 'neutral';
 
@@ -66,105 +66,35 @@ const STATUS: Record<
 };
 const ORDER: PanelStatus[] = ['late', 'waiting', 'answered', 'neutral'];
 
-const TYPE_LABEL: Record<string, string> = {
-  image: '📷 Imagem',
-  video: '🎬 Vídeo',
-  audio: '🎤 Áudio',
-  document: '📄 Documento',
-  sticker: '🙂 Figurinha',
-};
-
-/** Hora (hoje) ou dia e hora (dias anteriores). */
-function when(date: string, timeZone: string, today: string) {
-  const d = new Date(date);
-  const ymd = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-  const time = new Intl.DateTimeFormat('pt-BR', { timeZone, hour: '2-digit', minute: '2-digit' }).format(d);
-  if (ymd === today) return time;
-  return `${new Intl.DateTimeFormat('pt-BR', { timeZone, day: '2-digit', month: '2-digit' }).format(d)} ${time}`;
-}
-
-/** Cartão de um grupo. */
-function GroupCard({ g, timeZone, today, now }: { g: PanelGroup; timeZone: string; today: string; now: number }) {
+/** Cartão compacto: nome do grupo, mensagens recebidas hoje e, se houver, quantas estão sem resposta. Clicar abre o grupo. */
+function GroupCard({ g }: { g: PanelGroup }) {
   const s = STATUS[g.status];
-  const pending = g.pending_since != null;
-  // espera ao vivo (o tempo contado para o SLA vem do servidor; o corrido avança aqui)
-  const waiting = pending ? Math.max(0, (now - new Date(g.pending_since!).getTime()) / 1000) : null;
-  const counted = g.waiting_counted_seconds ?? 0;
-  const progress = pending ? Math.min(100, Math.round((counted / Math.max(1, g.sla_seconds)) * 100)) : 0;
-
   return (
-    <article className={cn('flex flex-col rounded-2xl border p-4 shadow-sm transition', s.card)}>
-      <header className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-ink" title={g.name}>
-            {g.name}
-          </h3>
-          <p className="mt-0.5 text-xs text-muted">
-            Hoje: {formatNumber(g.received_today)} recebida(s) · {formatNumber(g.answers_today)} resposta(s)
-          </p>
-        </div>
-        <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold', s.badge)}>
-          <s.icon className="h-3.5 w-3.5" aria-hidden />
-          {g.status === 'late' ? 'Atrasado' : g.status === 'waiting' ? 'Aguardando' : g.status === 'answered' ? 'Respondido' : 'Sem mensagens'}
-        </span>
-      </header>
-
-      {/* espera em relação ao tempo de resposta */}
-      {pending && (
-        <div className="mt-3">
-          <div className="flex items-baseline justify-between gap-2 text-xs">
-            <span className={cn('font-semibold', g.status === 'late' ? 'text-critical-ink' : 'text-warning-ink')}>
-              {g.pending_count} sem resposta · esperando há {formatDuration(waiting)}
-            </span>
-            <span className="shrink-0 text-muted">
-              SLA {formatDuration(g.sla_seconds)}
-              {g.business_time ? ' úteis' : ''}
-            </span>
-          </div>
-          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
-            <div
-              className={cn('h-full rounded-full', g.status === 'late' ? 'bg-critical' : 'bg-warning')}
-              style={{ width: `${Math.max(progress, 4)}%` }}
-            />
-          </div>
-        </div>
+    <Link
+      href={`/groups/${g.id}`}
+      title={`${g.name} · ${s.label}`}
+      className={cn(
+        'flex min-h-[5.5rem] flex-col justify-between rounded-xl border p-3 shadow-sm transition hover:-translate-y-px hover:shadow-md',
+        s.card,
       )}
-
-      {/* últimas mensagens recebidas */}
-      <ul className="mt-3 flex-1 space-y-1.5 text-xs">
-        {g.messages.length === 0 && <li className="text-muted">Nenhuma mensagem de cliente ainda.</li>}
-        {g.messages.map((m, i) => (
-          <li key={i} className="flex gap-2">
-            <span className="shrink-0 whitespace-nowrap tabular text-muted">{when(m.at, timeZone, today)}</span>
-            <span className={cn('min-w-0 flex-1 truncate', m.pending ? 'text-ink' : 'text-ink-2')}>
-              {m.pending && (
-                <span
-                  className={cn('mr-1 inline-block h-1.5 w-1.5 -translate-y-px rounded-full align-middle', s.dot)}
-                  aria-label="sem resposta"
-                />
-              )}
-              <span className="font-medium">{m.who}:</span>{' '}
-              {m.type !== 'text' && <span className="text-muted">{TYPE_LABEL[m.type] ?? m.type} </span>}
-              {m.body}
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      <footer className="mt-3 flex items-center justify-between gap-2 border-t border-line/70 pt-2.5">
-        <span className="min-w-0 truncate text-[11px] text-muted">
-          {g.last_reply
-            ? `Última resposta: ${g.last_reply.who} · ${when(g.last_reply.at, timeZone, today)}`
-            : 'A equipe ainda não respondeu neste grupo'}
-        </span>
-        <Link
-          href={`/groups/${g.id}`}
-          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-line bg-surface px-2 py-1 text-[11px] font-medium text-ink-2 hover:border-brand hover:text-brand"
-        >
-          Ver grupo <ArrowUpRight className="h-3 w-3" aria-hidden />
-        </Link>
-      </footer>
-    </article>
+    >
+      <div className="flex items-start gap-1.5">
+        <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', s.dot)} aria-hidden />
+        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-ink">{g.name}</h3>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <p className="whitespace-nowrap text-xs text-ink-2">
+          <span className="text-base font-semibold tabular text-ink">{formatNumber(g.received_today)}</span>{' '}
+          {g.received_today === 1 ? 'mensagem hoje' : 'mensagens hoje'}
+        </p>
+        {g.pending_count > 0 && (
+          <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold', s.badge)}>
+            <s.icon className="h-3 w-3" aria-hidden />
+            {g.pending_count} sem resposta
+          </span>
+        )}
+      </div>
+    </Link>
   );
 }
 
@@ -173,22 +103,15 @@ function GroupCard({ g, timeZone, today, now }: { g: PanelGroup; timeZone: strin
  * Atualiza sozinha: a cada mensagem nova (tempo real do app) e a cada minuto,
  * para o cartão ficar vermelho quando o tempo de resposta é excedido.
  */
-export function GroupsPanel({ groups, timeZone }: { groups: PanelGroup[]; timeZone: string }) {
+export function GroupsPanel({ groups }: { groups: PanelGroup[] }) {
   const router = useRouter();
   const [filter, setFilter] = useState<PanelStatus | 'all'>('all');
   const [query, setQuery] = useState('');
-  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 30_000);
     const refresh = setInterval(() => router.refresh(), 60_000);
-    return () => {
-      clearInterval(tick);
-      clearInterval(refresh);
-    };
+    return () => clearInterval(refresh);
   }, [router]);
-
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
   const counts = useMemo(
     () => Object.fromEntries(ORDER.map((k) => [k, groups.filter((g) => g.status === k).length])) as Record<PanelStatus, number>,
     [groups],
@@ -244,9 +167,9 @@ export function GroupsPanel({ groups, timeZone }: { groups: PanelGroup[]; timeZo
           <EmptyState icon={<Search />} title="Nenhum grupo" description="Nenhum grupo com essa situação ou esse nome." />
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 min-[1900px]:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1900px]:grid-cols-8">
           {shown.map((g) => (
-            <GroupCard key={g.id} g={g} timeZone={timeZone} today={today} now={now} />
+            <GroupCard key={g.id} g={g} />
           ))}
         </div>
       )}

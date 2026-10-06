@@ -149,12 +149,12 @@ O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "
 
 ## Painel de grupos
 
-Menu **Painel de grupos**: cada grupo monitorado num cartão, com as últimas mensagens recebidas dos clientes, quantas chegaram e quantas foram respondidas hoje, a última resposta da equipe e o botão **Ver grupo**. A cor mostra a situação:
+Menu **Painel de grupos**: cada grupo monitorado num cartão compacto, só com o nome do grupo, quantas mensagens de clientes chegaram hoje e, se houver, quantas estão sem resposta. Clicar no cartão abre o grupo. A cor mostra a situação:
 
 | Cor | Situação |
 |---|---|
 | **Vermelho** | mensagem sem resposta e o tempo de resposta (SLA do grupo ou o padrão) já foi excedido |
-| **Amarelo** | mensagem sem resposta, ainda dentro do tempo de resposta (a barra mostra quanto do SLA já passou) |
+| **Amarelo** | mensagem sem resposta, ainda dentro do tempo de resposta |
 | **Verde** | teve mensagem de cliente hoje e tudo foi respondido |
 | **Neutro** | nenhuma mensagem de cliente hoje |
 

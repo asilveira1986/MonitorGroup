@@ -15,23 +15,20 @@ export const metadata: Metadata = { title: 'MonitorGroup · Painel de grupos' };
 export default async function PanelPage() {
   await requireProfile();
   const supabase = await createClient();
-  const [{ data, error }, { data: settings }] = await Promise.all([
-    supabase.rpc('groups_panel'),
-    supabase.from('app_settings').select('timezone').eq('id', 1).single(),
-  ]);
+  const { data, error } = await supabase.rpc('groups_panel');
 
   return (
     <div data-wide>
       <PageHeader
         title="Painel de grupos"
-        description="Cada grupo num cartão, com as últimas mensagens dos clientes. Vermelho: passou do tempo de resposta. Amarelo: aguardando resposta. Verde: tudo respondido hoje. Neutro: sem mensagens hoje."
+        description="Cada grupo num cartão. Vermelho: passou do tempo de resposta. Amarelo: aguardando resposta. Verde: tudo respondido hoje. Neutro: sem mensagens hoje. Clique no cartão para abrir o grupo."
       />
       {error ? (
         <Card>
           <EmptyState icon={<AlertTriangle />} title="Não foi possível carregar o painel" description={error.message} />
         </Card>
       ) : (
-        <GroupsPanel groups={(data ?? []) as PanelGroup[]} timeZone={settings?.timezone ?? 'America/Sao_Paulo'} />
+        <GroupsPanel groups={(data ?? []) as PanelGroup[]} />
       )}
     </div>
   );
