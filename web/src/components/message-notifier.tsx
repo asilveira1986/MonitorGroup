@@ -36,8 +36,6 @@ type AlertItem = {
   who: string;
   phone: string | null;
   text: string | null;
-  pending: number;
-  count: number;
   at: number;
 };
 
@@ -66,10 +64,10 @@ function beep() {
 }
 
 /**
- * Alerta grande no centro da tela a cada mensagem nova de cliente: nome do grupo, quem enviou
- * (nome e número), um trecho da mensagem e quantas mensagens do grupo aguardam resposta.
- * Toca um bipe e faz o título da aba piscar. Fica aberto até alguém fechar ou abrir o grupo;
- * mensagens seguidas do mesmo grupo atualizam o mesmo item, e grupos diferentes entram na lista.
+ * Alerta grande no centro da tela a cada mensagem nova de cliente, só com o grupo e a mensagem:
+ * nome do grupo, quem enviou (nome e número) e o texto. Toca um bipe e faz o título da aba piscar.
+ * Fica aberto até alguém fechar ou abrir o grupo; uma mensagem nova do mesmo grupo substitui a
+ * anterior, e outros grupos aparecem em seguida, um por vez.
  */
 export function MessageNotifier() {
   const router = useRouter();
@@ -84,7 +82,7 @@ export function MessageNotifier() {
 
       void createClient()
         .from('groups')
-        .select('name, monitored, pending_count')
+        .select('name, monitored')
         .eq('id', m.group_id)
         .maybeSingle()
         .then(({ data: g }) => {
@@ -92,15 +90,12 @@ export function MessageNotifier() {
           const text =
             m.message_type === 'text' ? m.body : `${TYPE_LABEL[m.message_type] ?? m.message_type}${m.body ? ` ${m.body}` : ''}`;
           setItems((prev) => {
-            const old = prev.find((i) => i.groupId === m.group_id);
             const item: AlertItem = {
               groupId: m.group_id,
               group: g.name,
               who: m.sender_name || formatPhone(m.sender_phone) || 'Cliente',
               phone: m.sender_name && m.sender_phone ? formatPhone(m.sender_phone) : null,
               text,
-              pending: g.pending_count ?? 0,
-              count: (old?.count ?? 0) + 1,
               at: Date.now(),
             };
             // o mais recente no topo
@@ -112,7 +107,6 @@ export function MessageNotifier() {
   );
 
   const open = items.length > 0;
-  const close = () => setItems([]);
 
   // título da aba piscando enquanto o alerta está aberto; Esc fecha
   useEffect(() => {
@@ -123,7 +117,7 @@ export function MessageNotifier() {
       on = !on;
       document.title = on ? `🔔 Nova mensagem (${items.length})` : original;
     }, 1000);
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setItems([]);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setItems((prev) => prev.slice(1));
     document.addEventListener('keydown', onKey);
     return () => {
       clearInterval(id);
@@ -133,88 +127,52 @@ export function MessageNotifier() {
   }, [open, items.length]);
 
   if (!open) return null;
-  const [first, ...rest] = items;
-  const openGroup = (groupId: string) => {
-    setItems((prev) => prev.filter((i) => i.groupId !== groupId));
-    router.push(`/groups/${groupId}`);
+  // um aviso por vez: o mais recente; ao fechar, aparece o próximo grupo com mensagem nova
+  const current = items[0];
+  const dismiss = () => setItems((prev) => prev.slice(1));
+  const openGroup = () => {
+    dismiss();
+    router.push(`/groups/${current.groupId}`);
   };
 
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
-      onClick={close}
+      onClick={dismiss}
       role="presentation"
     >
       <div
+        key={current.groupId + current.at}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="msgalert-title"
         onClick={(e) => e.stopPropagation()}
         className="msgalert-box w-full max-w-lg overflow-hidden rounded-3xl border-4 border-brand bg-surface"
       >
-        <div className="flex items-center gap-3 bg-brand px-5 py-4 text-brand-ink">
-          <span className="msgalert-bell flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20">
-            <Bell className="h-6 w-6" aria-hidden />
+        <div className="flex items-center gap-3 bg-brand px-5 py-3.5 text-brand-ink">
+          <span className="msgalert-bell flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20">
+            <Bell className="h-5 w-5" aria-hidden />
           </span>
-          <div className="min-w-0">
-            <p id="msgalert-title" className="text-xl font-extrabold uppercase tracking-wide">
-              Nova mensagem
-            </p>
-            <p className="text-sm opacity-90">
-              {items.length === 1 ? '1 grupo com mensagem nova' : `${items.length} grupos com mensagens novas`}
-            </p>
-          </div>
+          <p id="msgalert-title" className="text-xl font-extrabold uppercase tracking-wide">
+            Nova mensagem
+          </p>
         </div>
 
         <div className="px-5 py-4">
-          <p className="text-2xl font-bold leading-tight text-ink">{first.group}</p>
+          <p className="text-2xl font-bold leading-tight text-ink">{current.group}</p>
           <p className="mt-1 text-base font-semibold text-ink-2">
-            {first.who}
-            {first.phone && <span className="font-normal text-muted"> · {first.phone}</span>}
+            {current.who}
+            {current.phone && <span className="font-normal text-muted"> · {current.phone}</span>}
           </p>
-          {first.text && (
-            <p className="mt-3 line-clamp-4 rounded-xl bg-surface-2 px-4 py-3 text-base text-ink">{first.text}</p>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2 text-sm">
-            <span className="rounded-full bg-critical px-3 py-1 font-semibold text-white">
-              {first.pending === 0
-                ? 'Nenhuma aguardando resposta'
-                : `${first.pending} ${first.pending === 1 ? 'mensagem aguardando' : 'mensagens aguardando'} resposta`}
-            </span>
-            {first.count > 1 && (
-              <span className="rounded-full bg-surface-2 px-3 py-1 font-medium text-ink-2">
-                {first.count} mensagens novas neste grupo
-              </span>
-            )}
-          </div>
-
-          {rest.length > 0 && (
-            <ul className="mt-4 max-h-40 space-y-1.5 overflow-y-auto border-t border-line pt-3">
-              {rest.map((i) => (
-                <li key={i.groupId} className="flex items-center gap-2 text-sm">
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-brand" aria-hidden />
-                  <span className="min-w-0 flex-1 truncate">
-                    <span className="font-semibold text-ink">{i.group}</span>
-                    <span className="text-muted"> · {i.who}</span>
-                  </span>
-                  <span className="shrink-0 text-xs font-semibold text-critical-ink">{i.pending} sem resposta</span>
-                  <button
-                    type="button"
-                    onClick={() => openGroup(i.groupId)}
-                    className="shrink-0 rounded-lg border border-line px-2 py-0.5 text-xs font-medium text-ink-2 hover:border-brand hover:text-brand"
-                  >
-                    Abrir
-                  </button>
-                </li>
-              ))}
-            </ul>
+          {current.text && (
+            <p className="mt-3 line-clamp-5 rounded-xl bg-surface-2 px-4 py-3 text-base text-ink">{current.text}</p>
           )}
         </div>
 
         <div className="flex gap-2 border-t border-line bg-surface-2/60 px-5 py-3">
           <button
             type="button"
-            onClick={() => openGroup(first.groupId)}
+            onClick={openGroup}
             autoFocus
             className="flex-1 rounded-xl bg-brand px-4 py-3 text-base font-bold text-brand-ink hover:opacity-90"
           >
@@ -222,10 +180,10 @@ export function MessageNotifier() {
           </button>
           <button
             type="button"
-            onClick={close}
+            onClick={dismiss}
             className="rounded-xl border border-line bg-surface px-4 py-3 text-base font-medium text-ink-2 hover:text-ink"
           >
-            {items.length > 1 ? 'Fechar todos' : 'Fechar'}
+            Fechar
           </button>
         </div>
       </div>

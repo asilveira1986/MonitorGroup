@@ -162,7 +162,7 @@ O SLA segue a mesma regra dos indicadores (tempo útil, se essa opção estiver 
 
 ## Aviso de nova mensagem
 
-Com o painel aberto, cada mensagem nova de cliente abre um **alerta grande no centro da tela**, com fundo escurecido, borda pulsando, sino balançando, um bipe e o título da aba piscando. O alerta mostra o **nome do grupo**, **quem enviou** (nome e número), a mensagem e **quantas mensagens do grupo aguardam resposta**. Ele fica aberto até alguém clicar em **Abrir grupo** (vai para a conversa) ou **Fechar** (ou apertar Esc). Mensagens seguidas do mesmo grupo atualizam o mesmo alerta; outros grupos com mensagem nova aparecem numa lista abaixo, cada um com o botão **Abrir**. Mensagens da equipe e a importação do histórico não geram alerta. O sino no topo da tela liga e desliga os alertas (a escolha vale para o navegador em uso). O navegador só libera o som depois do primeiro clique na página.
+Com o painel aberto, cada mensagem nova de cliente abre um **alerta grande no centro da tela**, com fundo escurecido, borda pulsando, sino balançando, um bipe e o título da aba piscando. O alerta mostra só o grupo e a mensagem: **nome do grupo**, **quem enviou** (nome e número) e o **texto da mensagem**. Ele fica aberto até alguém clicar em **Abrir grupo** (vai para a conversa) ou **Fechar** (ou apertar Esc). Uma mensagem nova do mesmo grupo substitui a anterior; mensagens de outros grupos aparecem em seguida, uma por vez. Mensagens da equipe e a importação do histórico não geram alerta. O sino no topo da tela liga e desliga os alertas (a escolha vale para o navegador em uso). O navegador só libera o som depois do primeiro clique na página.
 
 ## Acompanhamento do dia a dia
 
