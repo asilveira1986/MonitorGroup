@@ -124,11 +124,12 @@ function IndicatorCard({
         onClick={clickable ? () => onOpen(ind) : undefined}
         onKeyDown={clickable ? (e) => (e.key === 'Enter' || e.key === ' ') && onOpen(ind) : undefined}
         className={cn(
-          'flex h-full flex-col rounded-2xl p-4 sm:p-5',
+          // dash-compact: fonte menor dentro do cartão (ver globals.css)
+          'dash-compact flex h-full flex-col rounded-2xl p-3.5 sm:p-4',
           clickable && 'cursor-pointer transition hover:bg-surface-2/50 focus-visible:outline-2 focus-visible:outline-brand',
         )}
       >
-        <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="mb-2 flex items-start justify-between gap-2">
           <h3 className="min-w-0 text-sm font-semibold">{ind.name}</h3>
           <InfoTip label={ind.name} className="-mr-1 -mt-0.5 shrink-0">
             <span className="block font-semibold text-ink">{ind.name}</span>

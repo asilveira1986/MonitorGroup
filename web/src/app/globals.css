@@ -220,3 +220,51 @@ body {
     animation: none;
   }
 }
+
+/* Dashboard: cartões com fonte menor, para caber mais informação.
+   (fora de @layer: vence os utilitários do Tailwind só dentro dos cartões;
+   a tela cheia do indicador e o Modo TV mantêm o tamanho normal) */
+.dash-compact .text-3xl {
+  font-size: 1.5rem;
+  line-height: 1.9rem;
+}
+.dash-compact .text-xl {
+  font-size: 1.05rem;
+  line-height: 1.4rem;
+}
+.dash-compact .text-lg {
+  font-size: 0.95rem;
+  line-height: 1.3rem;
+}
+.dash-compact .text-base {
+  font-size: 0.85rem;
+  line-height: 1.2rem;
+}
+.dash-compact .text-sm {
+  font-size: 0.78rem;
+  line-height: 1.1rem;
+}
+.dash-compact .text-xs {
+  font-size: 0.68rem;
+  line-height: 0.95rem;
+}
+.dash-compact .text-\[11px\] {
+  font-size: 10px;
+}
+.dash-compact .text-\[10px\] {
+  font-size: 9px;
+}
+.dash-compact .recharts-cartesian-axis-tick-value,
+.dash-compact .recharts-legend-item-text {
+  font-size: 10px;
+}
+/* linhas de tabelas e listas mais justas nos cartões */
+.dash-compact th,
+.dash-compact td {
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+}
+.dash-compact ul > li {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
