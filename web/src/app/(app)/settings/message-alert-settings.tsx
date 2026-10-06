@@ -1,6 +1,6 @@
 'use client';
 
-import { BellRing, PlayCircle, Save, Timer, Volume2 } from 'lucide-react';
+import { AlarmClock, BellRing, PlayCircle, Save, Timer, Volume2 } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { TEST_EVENT } from '@/components/message-notifier';
@@ -17,14 +17,15 @@ export function MessageAlertSettings({ settings, disabled }: { settings: AppSett
   const [enabled, setEnabled] = useState(settings.msg_alert_enabled ?? true);
   const [autoClose, setAutoClose] = useState(settings.msg_alert_auto_close ?? 0);
   const [sound, setSound] = useState(settings.msg_alert_sound ?? true);
+  const [alerts, setAlerts] = useState(settings.msg_alert_alerts ?? true);
   const [pending, start] = useTransition();
   const mode = autoClose > 0 ? 'auto' : 'stay';
 
   return (
     <Card>
       <CardHeader
-        title="Alerta de nova mensagem"
-        description="Aviso no centro da tela, com o grupo e a mensagem, sempre que um cliente escreve. Vale para todos os usuários; cada um ainda pode silenciar no próprio navegador pelo sino do topo."
+        title="Alertas em tela"
+        description="Avisos grandes no centro da tela: nova mensagem de cliente, SLA excedido e os alertas do sistema. Vale para todos os usuários; cada um ainda pode silenciar no próprio navegador pelo sino do topo."
       />
       <div className="divide-y divide-line px-4 pb-4 sm:px-5">
         <Row
@@ -35,7 +36,15 @@ export function MessageAlertSettings({ settings, disabled }: { settings: AppSett
           onChange={setEnabled}
           disabled={disabled || pending}
         />
-        {enabled && (
+        <Row
+          icon={AlarmClock}
+          title="Abrir também os alertas (SLA excedido e alertas do sistema)"
+          text="Quando a mensagem de um cliente passa do tempo de resposta (SLA do grupo ou o padrão) e quando o sistema cria um alerta (cliente sem resposta, palavra-chave, WhatsApp desconectado…), o aviso abre no centro da tela no mesmo formato. Desligado, os alertas aparecem só como um aviso pequeno no canto."
+          checked={alerts}
+          onChange={setAlerts}
+          disabled={disabled || pending}
+        />
+        {(enabled || alerts) && (
           <>
             <div className="flex flex-col gap-3 py-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex gap-3">
@@ -43,8 +52,8 @@ export function MessageAlertSettings({ settings, disabled }: { settings: AppSett
                 <div>
                   <p className="text-sm font-medium">Tempo na tela</p>
                   <p className="mt-0.5 text-xs text-ink-2">
-                    Deixar o alerta na tela até alguém fechar, ou fechar sozinho depois de um tempo (a contagem pausa com o
-                    mouse sobre o alerta).
+                    Vale para todos os avisos em tela: deixar até alguém fechar, ou fechar sozinho depois de um tempo (a
+                    contagem pausa com o mouse sobre o aviso).
                   </p>
                 </div>
               </div>
@@ -77,7 +86,7 @@ export function MessageAlertSettings({ settings, disabled }: { settings: AppSett
             <Row
               icon={Volume2}
               title="Tocar som"
-              text="Um bipe curto junto com o alerta. O navegador só libera o som depois do primeiro clique na página."
+              text="Um bipe curto junto com cada aviso. O navegador só libera o som depois do primeiro clique na página."
               checked={sound}
               onChange={setSound}
               disabled={disabled || pending}
@@ -91,7 +100,7 @@ export function MessageAlertSettings({ settings, disabled }: { settings: AppSett
               disabled={pending}
               onClick={() =>
                 start(async () => {
-                  const res = await saveMessageAlertSettings({ enabled, autoClose, sound });
+                  const res = await saveMessageAlertSettings({ enabled, alerts, autoClose, sound });
                   if (res.ok) toast.success('Configuração do alerta salva');
                   else toast.error(res.error);
                 })

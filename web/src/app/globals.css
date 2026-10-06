@@ -182,10 +182,10 @@ body {
 @keyframes msgalert-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 55%, transparent), 0 25px 60px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--alert-glow, var(--brand)) 55%, transparent), 0 25px 60px rgba(0, 0, 0, 0.35);
   }
   50% {
-    box-shadow: 0 0 0 14px color-mix(in srgb, var(--brand) 0%, transparent), 0 25px 60px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--alert-glow, var(--brand)) 0%, transparent), 0 25px 60px rgba(0, 0, 0, 0.35);
   }
 }
 @keyframes msgalert-ring {

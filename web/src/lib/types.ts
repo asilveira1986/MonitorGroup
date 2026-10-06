@@ -149,6 +149,8 @@ export type AppSettings = {
   /** 0 = fica até fechar; senão, segundos até fechar sozinho */
   msg_alert_auto_close: number;
   msg_alert_sound: boolean;
+  /** alertas do sistema e SLA excedido também abrem no centro da tela */
+  msg_alert_alerts: boolean;
   reply_allowed: 'all' | 'admin';
 };
 

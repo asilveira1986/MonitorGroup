@@ -62,6 +62,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    22. `supabase/migrations/0022_daily.sql`
    23. `supabase/migrations/0023_groups_panel.sql`
    24. `supabase/migrations/0024_message_alert.sql`
+   25. `supabase/migrations/0025_sla_screen_alerts.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -161,18 +162,27 @@ Menu **Painel de grupos**: cada grupo monitorado num cartão compacto, só com o
 
 O SLA segue a mesma regra dos indicadores (tempo útil, se essa opção estiver ligada). Os atrasados aparecem primeiro; dá para filtrar por situação e buscar pelo nome. O painel se atualiza sozinho a cada mensagem nova e a cada minuto, então um cartão amarelo vira vermelho assim que o tempo de resposta estoura. Mensagens curtas só de agradecimento ou confirmação ("Recebi, obrigado!", "show, valeu 👍") não deixam o grupo aguardando resposta.
 
-## Aviso de nova mensagem
+## Alertas em tela
 
-Com o painel aberto, cada mensagem nova de cliente abre um **alerta grande no centro da tela**, com fundo escurecido, borda pulsando, sino balançando e o título da aba piscando. O alerta mostra só o grupo e a mensagem: **nome do grupo**, **quem enviou** (nome e número) e o **texto da mensagem**, com os botões **Abrir grupo** e **Fechar** (ou Esc). Uma mensagem nova do mesmo grupo substitui a anterior; mensagens de outros grupos aparecem em seguida, uma por vez. Mensagens da equipe e a importação do histórico não geram alerta.
+Com o painel aberto, os avisos abrem **grandes, no centro da tela**, todos no mesmo formato (fundo escurecido, borda pulsando, ícone balançando, bipe e título da aba piscando), com o grupo e a mensagem e os botões **Abrir grupo** e **Fechar** (ou Esc):
 
-A configuração fica em **Configurações › Geral › Alerta de nova mensagem** (só administradores alteram; vale para todos):
+| Aviso | Cor | Quando |
+|---|---|---|
+| **Nova mensagem** | verde | um cliente escreveu num grupo monitorado |
+| **SLA excedido** | vermelho | a mensagem do cliente passou do tempo de resposta (SLA do grupo ou o padrão, em tempo útil se essa opção estiver ligada); mostra quem enviou, a mensagem e há quanto tempo espera |
+| **Alertas do sistema** | pela gravidade (vermelho, amarelo ou azul) | o sistema criou um alerta: cliente sem resposta, palavra-chave, WhatsApp desconectado, grupo sem movimentação, prazo vencido, retrabalho, reincidência… |
 
-- **Mostrar o alerta** (ligado/desligado);
-- **Tempo na tela**: *deixar na tela até fechar* ou *fechar sozinho* depois de 5 s, 10 s, 15 s, 30 s, 1, 2 ou 5 minutos (com barra de contagem, que pausa com o mouse sobre o alerta);
+Um aviso por vez; o mesmo grupo/assunto atualiza o aviso anterior ("cliente sem resposta" e "SLA excedido" do mesmo grupo viram um aviso só). O SLA é conferido a cada 30 segundos e avisa na virada; pendências que já estavam vencidas quando a tela foi aberta não abrem aviso (continuam no Painel de grupos e em Aguardando resposta). Mensagens da equipe e a importação do histórico não geram aviso.
+
+A configuração fica em **Configurações › Geral › Alertas em tela** (só administradores alteram; vale para todos):
+
+- **Mostrar o alerta de nova mensagem** (ligado/desligado);
+- **Abrir também os alertas (SLA excedido e alertas do sistema)**; desligado, os alertas do sistema aparecem só como um aviso pequeno no canto;
+- **Tempo na tela**: *deixar na tela até fechar* ou *fechar sozinho* depois de 5 s, 10 s, 15 s, 30 s, 1, 2 ou 5 minutos (com contagem, que pausa com o mouse sobre o aviso);
 - **Tocar som** (o navegador só libera o som depois do primeiro clique na página);
 - **Testar alerta** mostra um aviso de exemplo com a configuração salva.
 
-O sino no topo da tela continua servindo para silenciar o alerta só no navegador em uso.
+O sino no topo da tela silencia todos os avisos em tela só no navegador em uso.
 
 ## Acompanhamento do dia a dia
 

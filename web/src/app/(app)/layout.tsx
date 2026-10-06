@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     supabase
       .from('app_settings')
       .select(
-        'demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, msg_alert_enabled, msg_alert_auto_close, msg_alert_sound',
+        'demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, msg_alert_enabled, msg_alert_auto_close, msg_alert_sound, msg_alert_alerts',
       )
       .eq('id', 1)
       .maybeSingle(),
@@ -43,6 +43,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
       <MessageNotifier
         config={{
           enabled: settings?.msg_alert_enabled ?? true,
+          alerts: settings?.msg_alert_alerts ?? true,
           autoClose: settings?.msg_alert_auto_close ?? 0,
           sound: settings?.msg_alert_sound ?? true,
         }}
