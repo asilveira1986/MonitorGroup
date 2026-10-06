@@ -61,6 +61,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    21. `supabase/migrations/0021_conversations.sql`
    22. `supabase/migrations/0022_daily.sql`
    23. `supabase/migrations/0023_groups_panel.sql`
+   24. `supabase/migrations/0024_message_alert.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -162,7 +163,16 @@ O SLA segue a mesma regra dos indicadores (tempo útil, se essa opção estiver 
 
 ## Aviso de nova mensagem
 
-Com o painel aberto, cada mensagem nova de cliente abre um **alerta grande no centro da tela**, com fundo escurecido, borda pulsando, sino balançando, um bipe e o título da aba piscando. O alerta mostra só o grupo e a mensagem: **nome do grupo**, **quem enviou** (nome e número) e o **texto da mensagem**. Ele fica aberto até alguém clicar em **Abrir grupo** (vai para a conversa) ou **Fechar** (ou apertar Esc). Uma mensagem nova do mesmo grupo substitui a anterior; mensagens de outros grupos aparecem em seguida, uma por vez. Mensagens da equipe e a importação do histórico não geram alerta. O sino no topo da tela liga e desliga os alertas (a escolha vale para o navegador em uso). O navegador só libera o som depois do primeiro clique na página.
+Com o painel aberto, cada mensagem nova de cliente abre um **alerta grande no centro da tela**, com fundo escurecido, borda pulsando, sino balançando e o título da aba piscando. O alerta mostra só o grupo e a mensagem: **nome do grupo**, **quem enviou** (nome e número) e o **texto da mensagem**, com os botões **Abrir grupo** e **Fechar** (ou Esc). Uma mensagem nova do mesmo grupo substitui a anterior; mensagens de outros grupos aparecem em seguida, uma por vez. Mensagens da equipe e a importação do histórico não geram alerta.
+
+A configuração fica em **Configurações › Geral › Alerta de nova mensagem** (só administradores alteram; vale para todos):
+
+- **Mostrar o alerta** (ligado/desligado);
+- **Tempo na tela**: *deixar na tela até fechar* ou *fechar sozinho* depois de 5 s, 10 s, 15 s, 30 s, 1, 2 ou 5 minutos (com barra de contagem, que pausa com o mouse sobre o alerta);
+- **Tocar som** (o navegador só libera o som depois do primeiro clique na página);
+- **Testar alerta** mostra um aviso de exemplo com a configuração salva.
+
+O sino no topo da tela continua servindo para silenciar o alerta só no navegador em uso.
 
 ## Acompanhamento do dia a dia
 

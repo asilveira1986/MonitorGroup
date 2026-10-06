@@ -323,3 +323,23 @@ export async function saveReplySettings(values: {
   revalidatePath('/', 'layout');
   return result(error);
 }
+
+export async function saveMessageAlertSettings(values: {
+  enabled: boolean;
+  autoClose: number;
+  sound: boolean;
+}): Promise<Result> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('app_settings')
+    .update({
+      msg_alert_enabled: values.enabled,
+      msg_alert_auto_close: Math.max(0, Math.min(600, Math.round(values.autoClose))),
+      msg_alert_sound: values.sound,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', 1);
+  revalidatePath('/', 'layout');
+  return result(error);
+}

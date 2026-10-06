@@ -43,7 +43,9 @@ from (values
   (14, 'Início e fechamento das conversas (0021)', to_regprocedure('public.ind_conversas_ciclo(jsonb,jsonb)') is not null),
   (15, 'Acompanhamento do dia (0022)', to_regprocedure('public.ind_dia_hora_a_hora(jsonb,jsonb)') is not null),
   (16, 'Painel de grupos (0023)', to_regprocedure('public.groups_panel()') is not null),
-  (17, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (17, 'Configuração do alerta de nova mensagem (0024)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'msg_alert_auto_close')),
+  (18, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
 SQL

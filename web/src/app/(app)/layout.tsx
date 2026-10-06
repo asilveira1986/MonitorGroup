@@ -17,7 +17,9 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', ['aberta', 'em_andamento']),
     supabase
       .from('app_settings')
-      .select('demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled')
+      .select(
+        'demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, msg_alert_enabled, msg_alert_auto_close, msg_alert_sound',
+      )
       .eq('id', 1)
       .maybeSingle(),
   ]);
@@ -38,7 +40,13 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role }}
       />
       <RealtimeListener />
-      <MessageNotifier />
+      <MessageNotifier
+        config={{
+          enabled: settings?.msg_alert_enabled ?? true,
+          autoClose: settings?.msg_alert_auto_close ?? 0,
+          sound: settings?.msg_alert_sound ?? true,
+        }}
+      />
       <div className="transition-[padding] duration-200 lg:pl-64 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
         <header className="sticky top-0 z-20 hidden items-center justify-end gap-2 border-b border-line bg-bg/80 px-8 py-3 backdrop-blur lg:flex">
           <NotifyToggle />

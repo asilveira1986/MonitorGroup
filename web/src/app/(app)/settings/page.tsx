@@ -6,6 +6,7 @@ import type { AppSettings } from '@/lib/types';
 import { GeneralForm } from './general-form';
 import { DemandSettings } from './demand-settings';
 import { Holidays } from './holidays';
+import { MessageAlertSettings } from './message-alert-settings';
 import { ReplySettings } from './reply-settings';
 
 export default async function GeneralSettingsPage() {
@@ -28,6 +29,7 @@ export default async function GeneralSettingsPage() {
           <GeneralForm settings={data as AppSettings} disabled={profile.role !== 'admin'} />
         </div>
       </Card>
+      <MessageAlertSettings settings={data as AppSettings} disabled={profile.role !== 'admin'} />
       <ReplySettings settings={data as AppSettings} disabled={profile.role !== 'admin'} />
       <DemandSettings settings={data as AppSettings} disabled={profile.role !== 'admin'} />
       <Holidays holidays={holidays ?? []} isAdmin={profile.role === 'admin'} />

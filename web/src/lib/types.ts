@@ -144,6 +144,11 @@ export type AppSettings = {
   demand_ai_enabled: boolean;
   reply_enabled: boolean;
   reply_sign_name: boolean;
+  /** alerta de nova mensagem no centro da tela */
+  msg_alert_enabled: boolean;
+  /** 0 = fica até fechar; senão, segundos até fechar sozinho */
+  msg_alert_auto_close: number;
+  msg_alert_sound: boolean;
   reply_allowed: 'all' | 'admin';
 };
 
