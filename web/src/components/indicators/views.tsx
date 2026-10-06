@@ -73,17 +73,48 @@ function KpiList({
         ) : (
           <span className="flex min-w-0 flex-col sm:flex-row sm:items-baseline sm:gap-2">{text}</span>
         );
+        const dot = it.tone && (
+          <span
+            className={cn(
+              'h-2 w-2 shrink-0 rounded-full',
+              it.tone === 'critical' ? 'bg-critical' : it.tone === 'warning' ? 'bg-warning' : 'bg-good',
+            )}
+            aria-hidden
+          />
+        );
+        // listas por grupo: só o nome do grupo, o tempo e o botão "Ver grupo"
+        // (o motivo e a quantidade aparecem ao passar o mouse e na tela cheia)
+        if (it.group_id && !it.icon) {
+          const extra = [
+            it.sublabel,
+            it.value != null ? `${formatValue(it.value, 'number')}${it.unit ? ` ${it.value === 1 ? it.unit[0] : it.unit[1]}` : ''}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          return (
+            <li key={`${it.label}-${i}`} className="flex items-center gap-2 py-1.5" title={extra || undefined}>
+              {dot}
+              <span className="min-w-0 flex-1 truncate font-medium text-ink">{it.label}</span>
+              {it.detail != null && it.detail !== '' && (
+                <span className="shrink-0 whitespace-nowrap tabular text-xs text-ink-2">
+                  {formatValue(it.detail, it.detail_format ?? 'text', timeZone)}
+                </span>
+              )}
+              {actions && (
+                <Link
+                  href={`/groups/${it.group_id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-line px-2 py-0.5 text-[11px] font-medium text-ink-2 hover:border-brand hover:text-brand"
+                >
+                  Ver grupo <ArrowUpRight className="h-3 w-3" aria-hidden />
+                </Link>
+              )}
+            </li>
+          );
+        }
         return (
           <li key={`${it.label}-${i}`} className="flex items-center gap-2 py-1.5">
-            {it.tone && (
-              <span
-                className={cn(
-                  'h-2 w-2 shrink-0 rounded-full',
-                  it.tone === 'critical' ? 'bg-critical' : it.tone === 'warning' ? 'bg-warning' : 'bg-good',
-                )}
-                aria-hidden
-              />
-            )}
+            {dot}
             {Icon && (
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-ink-2">
                 <Icon className="h-4 w-4" aria-label={it.icon} />
