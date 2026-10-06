@@ -7,6 +7,7 @@ import { useState, useTransition } from 'react';
 import { markMediaSeen } from '@/app/(app)/actions';
 import { BarsChart, Legend, SERIES_COLORS, SeriesChart, TrendSparkline } from '@/components/charts';
 import { cn, formatDuration, formatNumber } from '@/lib/format';
+import type { ChartMode } from './chart-mode';
 import { PeakHoursView } from './peak-hours';
 import {
   formatValue,
@@ -450,7 +451,15 @@ function HeatmapGrid({ data, withHint }: { data: HeatmapData; withHint?: boolean
   );
 }
 
-function SeriesView({ data }: { data: SeriesData }) {
+/** Rótulo do eixo para as barras: dia (AAAA-MM-DD → DD/MM) ou o próprio valor (ex.: "14h"). */
+const axisLabel = (x: unknown) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(x ?? ''));
+  return m ? `${m[3]}/${m[2]}` : String(x ?? '');
+};
+
+function SeriesView({ data, mode }: { data: SeriesData; mode?: ChartMode | null }) {
+  // escolha do usuário (linhas/barras) ou o formato padrão do indicador
+  const asLine = mode ? mode === 'line' : data.visual === 'series';
   return (
     <div>
       {data.series.length > 1 && (
@@ -458,10 +467,14 @@ function SeriesView({ data }: { data: SeriesData }) {
           <Legend items={data.series.map((s, i) => ({ label: s.label, color: SERIES_COLORS[i % SERIES_COLORS.length] }))} />
         </div>
       )}
-      {data.visual === 'series' ? (
+      {asLine ? (
         <SeriesChart data={data.data} series={data.series} format={data.format} />
       ) : (
-        <BarsChart data={data.data} series={data.series} format={data.format} />
+        <BarsChart
+          data={data.data.map((d) => (d.label != null ? d : { ...d, label: axisLabel(d.x) }))}
+          series={data.series}
+          format={data.format}
+        />
       )}
     </div>
   );
@@ -475,8 +488,11 @@ export function IndicatorView({
   expanded,
   compact,
   previous,
+  chartMode,
 }: {
   data: IndicatorData;
+  /** gráficos de linha/barra: formato escolhido pelo usuário (null = padrão do indicador) */
+  chartMode?: ChartMode | null;
   name: string;
   timeZone?: string;
   /** valor do mesmo número no intervalo de comparação (ex.: ontem até esta hora) */
@@ -502,7 +518,7 @@ export function IndicatorView({
       return <HeatmapView data={data} compact={compact} />;
     case 'series':
     case 'bars':
-      return <SeriesView data={data} />;
+      return <SeriesView data={data} mode={chartMode} />;
     default:
       return (
         <p className="rounded-lg bg-critical/10 px-3 py-2 text-xs text-critical-ink">

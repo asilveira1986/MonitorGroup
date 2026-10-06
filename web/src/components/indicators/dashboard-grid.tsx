@@ -6,8 +6,15 @@ import { getIndicatorDetails } from '@/app/(app)/actions';
 import { Card } from '@/components/ui';
 import { cn } from '@/lib/format';
 import { layoutSpans, type DetailsData, type IndicatorValue, type KpiData } from '@/lib/indicators';
+import { ChartModeToggle, useChartMode, type ChartMode } from './chart-mode';
 import { InfoTip } from './info-tip';
 import { DataTable, IndicatorView, type Previous } from './views';
+
+/** Blocos em que o usuário escolhe entre linhas e barras nos gráficos. */
+const SWITCHABLE_BLOCKS = new Set(['acompanhamento_dia']);
+const canSwitch = (ind: IndicatorValue) =>
+  SWITCHABLE_BLOCKS.has(ind.block_key) && (ind.data.visual === 'series' || ind.data.visual === 'bars');
+const defaultMode = (ind: IndicatorValue): ChartMode => (ind.data.visual === 'series' ? 'line' : 'bar');
 
 type Filters = { from: string; to: string; groupId: string | null; memberId: string | null };
 
@@ -24,6 +31,7 @@ function DetailsDrawer({
   previous?: Previous;
   onClose: () => void;
 }) {
+  const [chosen, setMode] = useChartMode(indicator.key);
   const [details, setDetails] = useState<DetailsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, start] = useTransition();
@@ -74,7 +82,21 @@ function DetailsDrawer({
           {/* o indicador em tamanho grande */}
           {indicator.data.visual !== 'error' && (
             <Card className="p-4 sm:p-6">
-              <IndicatorView data={indicator.data} name={indicator.name} timeZone={timeZone} previous={previous} expanded />
+              <>
+                {canSwitch(indicator) && (
+                  <div className="mb-3 flex justify-end">
+                    <ChartModeToggle mode={chosen ?? defaultMode(indicator)} onChange={setMode} />
+                  </div>
+                )}
+                <IndicatorView
+                  data={indicator.data}
+                  name={indicator.name}
+                  timeZone={timeZone}
+                  previous={previous}
+                  chartMode={chosen}
+                  expanded
+                />
+              </>
             </Card>
           )}
           {/* o que compõe o número */}
@@ -116,6 +138,9 @@ function IndicatorCard({
   className?: string;
 }) {
   const clickable = ind.has_details && ind.data.visual !== 'error';
+  const switchable = canSwitch(ind);
+  const [chosen, setMode] = useChartMode(ind.key);
+  const mode = chosen ?? defaultMode(ind);
   return (
     <Card className={cn('flex flex-col', className)}>
       <div
@@ -130,7 +155,8 @@ function IndicatorCard({
         )}
       >
         <div className="mb-2 flex items-start justify-between gap-2">
-          <h3 className="min-w-0 text-sm font-semibold">{ind.name}</h3>
+          <h3 className="min-w-0 flex-1 text-sm font-semibold">{ind.name}</h3>
+          {switchable && <ChartModeToggle mode={mode} onChange={setMode} />}
           <InfoTip label={ind.name} className="-mr-1 -mt-0.5 shrink-0">
             <span className="block font-semibold text-ink">{ind.name}</span>
             {ind.description && <span className="mt-1 block">{ind.description}</span>}
@@ -138,7 +164,7 @@ function IndicatorCard({
           </InfoTip>
         </div>
         <div className="flex-1">
-          <IndicatorView data={ind.data} name={ind.name} timeZone={timeZone} previous={previous} />
+          <IndicatorView data={ind.data} name={ind.name} timeZone={timeZone} previous={previous} chartMode={chosen} />
         </div>
       </div>
     </Card>
