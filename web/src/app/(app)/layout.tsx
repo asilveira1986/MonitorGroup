@@ -1,4 +1,5 @@
 import { LogOut } from 'lucide-react';
+import { MessageNotifier, NotifyToggle } from '@/components/message-notifier';
 import { RealtimeListener } from '@/components/realtime-listener';
 import { Sidebar } from '@/components/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -37,8 +38,10 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role }}
       />
       <RealtimeListener />
+      <MessageNotifier />
       <div className="transition-[padding] duration-200 lg:pl-64 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
         <header className="sticky top-0 z-20 hidden items-center justify-end gap-2 border-b border-line bg-bg/80 px-8 py-3 backdrop-blur lg:flex">
+          <NotifyToggle />
           <ThemeToggle />
           <div className="ml-2 flex items-center gap-3 rounded-xl px-2 py-1">
             {profile.avatar_url ? (

@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { Logo } from '@/components/logo';
+import { NotifyToggle } from '@/components/message-notifier';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { cn } from '@/lib/format';
 
@@ -169,7 +170,10 @@ export function Sidebar({
                   <p className="truncate text-sm font-medium">{user.name}</p>
                   <p className="text-xs text-muted">{user.role === 'admin' ? 'Administrador' : 'Atendente'}</p>
                 </div>
-                <ThemeToggle />
+                <div className="flex items-center">
+                  <NotifyToggle />
+                  <ThemeToggle />
+                </div>
               </div>
               <form action="/auth/signout" method="post" className="mt-3">
                 <button className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-ink-2 hover:bg-surface-2">
