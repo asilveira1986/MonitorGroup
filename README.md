@@ -160,9 +160,9 @@ Menu **Painel de grupos**: cada grupo monitorado num cartão compacto, só com o
 
 O SLA segue a mesma regra dos indicadores (tempo útil, se essa opção estiver ligada). Os atrasados aparecem primeiro; dá para filtrar por situação e buscar pelo nome. O painel se atualiza sozinho a cada mensagem nova e a cada minuto, então um cartão amarelo vira vermelho assim que o tempo de resposta estoura. Mensagens curtas só de agradecimento ou confirmação ("Recebi, obrigado!", "show, valeu 👍") não deixam o grupo aguardando resposta.
 
-## Aviso de nova mensagem (popup)
+## Aviso de nova mensagem
 
-Com o painel aberto, cada mensagem nova de cliente mostra um aviso no canto da tela com o **nome do grupo**, **quem enviou** (nome e número), um trecho da mensagem e **quantas mensagens do grupo aguardam resposta**. O botão **Abrir** leva à conversa do grupo. Mensagens seguidas do mesmo grupo atualizam o mesmo aviso, sem empilhar vários. Mensagens da equipe e a importação do histórico não geram aviso. O sino no topo da tela liga e desliga os avisos (a escolha vale para o navegador em uso).
+Com o painel aberto, cada mensagem nova de cliente abre um **alerta grande no centro da tela**, com fundo escurecido, borda pulsando, sino balançando, um bipe e o título da aba piscando. O alerta mostra o **nome do grupo**, **quem enviou** (nome e número), a mensagem e **quantas mensagens do grupo aguardam resposta**. Ele fica aberto até alguém clicar em **Abrir grupo** (vai para a conversa) ou **Fechar** (ou apertar Esc). Mensagens seguidas do mesmo grupo atualizam o mesmo alerta; outros grupos com mensagem nova aparecem numa lista abaixo, cada um com o botão **Abrir**. Mensagens da equipe e a importação do histórico não geram alerta. O sino no topo da tela liga e desliga os alertas (a escolha vale para o navegador em uso). O navegador só libera o som depois do primeiro clique na página.
 
 ## Acompanhamento do dia a dia
 

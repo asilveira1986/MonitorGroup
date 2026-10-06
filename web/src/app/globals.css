@@ -164,3 +164,59 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
+
+/* Alerta de nova mensagem: entrada com "pulo", brilho pulsando e sino balançando */
+@keyframes msgalert-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes msgalert-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 55%, transparent), 0 25px 60px rgba(0, 0, 0, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--brand) 0%, transparent), 0 25px 60px rgba(0, 0, 0, 0.35);
+  }
+}
+@keyframes msgalert-ring {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  10%,
+  30% {
+    transform: rotate(-18deg);
+  }
+  20%,
+  40% {
+    transform: rotate(18deg);
+  }
+  50% {
+    transform: rotate(0);
+  }
+}
+.msgalert-box {
+  animation:
+    msgalert-in 0.35s ease-out,
+    msgalert-glow 1.6s ease-in-out 0.35s infinite;
+}
+.msgalert-bell {
+  animation: msgalert-ring 1.4s ease-in-out infinite;
+  transform-origin: 50% 10%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .msgalert-box,
+  .msgalert-bell {
+    animation: none;
+  }
+}
