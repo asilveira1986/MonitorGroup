@@ -6,6 +6,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -16,6 +17,53 @@ import {
 import { formatValue, type ValueFormat } from '@/lib/indicators';
 
 const AXIS = { stroke: 'var(--axis)', fontSize: 11, tickLine: false, axisLine: false, tick: { fill: 'var(--muted)' } };
+
+/** Até quantos pontos o gráfico mostra o valor de cada barra/ponto (mais que isso polui). */
+const MAX_LABELED_POINTS = 31;
+
+/** Valor curto para o rótulo (sem espaços, para não quebrar sobre barras finas): 45s, 28m, 1h05. */
+function shortLabel(v: number, format: ValueFormat) {
+  if (format !== 'duration') return formatValue(v, format);
+  const s = Math.round(v);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`;
+  return `${Math.floor(s / 86400)}d${Math.floor((s % 86400) / 3600)}h`;
+}
+
+/** Rótulo de dado acima da barra/ponto; zero e vazio ficam sem rótulo. */
+function DataLabels({
+  format,
+  color,
+  room,
+  lift = 0,
+}: {
+  format: ValueFormat;
+  color: string;
+  room?: (barWidth: number) => number;
+  /** sobe o rótulo (px): séries lado a lado ficam em alturas diferentes e não colidem */
+  lift?: number;
+}) {
+  return (
+    <LabelList
+      position="top"
+      content={(props) => {
+        const { x, y, width, value } = props as { x?: number | string; y?: number | string; width?: number | string; value?: unknown };
+        if (value == null || value === '' || Number(value) === 0) return null;
+        const text = shortLabel(Number(value), format);
+        const w = Number(width ?? 0);
+        // não cabe nem no espaço do grupo de barras: fica sem rótulo (o valor continua na dica)
+        if (room && text.length * 6 > room(w)) return null;
+        const cx = Number(x ?? 0) + w / 2;
+        return (
+          <text x={cx} y={Number(y ?? 0) - 6 - lift} textAnchor="middle" fill={color} fontSize={10} fontWeight={600}>
+            {text}
+          </text>
+        );
+      }}
+    />
+  );
+}
 
 /** Cores categóricas em ordem fixa (nunca reaproveitadas por posição). */
 export const SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'];
@@ -117,9 +165,10 @@ export function SeriesChart({
   series: { key: string; label: string }[];
   format: ValueFormat;
 }) {
+  const labeled = data.length <= MAX_LABELED_POINTS;
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <LineChart data={data} margin={{ top: 10, right: 8, left: -8, bottom: 0 }}>
+      <LineChart data={data} margin={{ top: labeled ? 20 : 10, right: 12, left: -8, bottom: 0 }}>
         <CartesianGrid vertical={false} stroke="var(--grid)" />
         <XAxis dataKey="x" tickFormatter={dayLabel} {...AXIS} minTickGap={16} />
         <YAxis {...AXIS} width={52} tickFormatter={(v: number) => formatValue(v, format)} />
@@ -132,10 +181,12 @@ export function SeriesChart({
             name={s.label}
             stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
             strokeWidth={2}
-            dot={false}
+            dot={labeled ? { r: 2.5, strokeWidth: 0, fill: SERIES_COLORS[i % SERIES_COLORS.length] } : false}
             connectNulls
             activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface)' }}
-          />
+          >
+            {labeled && <DataLabels format={format} color={SERIES_COLORS[i % SERIES_COLORS.length]} />}
+          </Line>
         ))}
       </LineChart>
     </ResponsiveContainer>
@@ -152,9 +203,14 @@ export function BarsChart({
   series: { key: string; label: string }[];
   format: ValueFormat;
 }) {
+  const labeled = data.length <= MAX_LABELED_POINTS;
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <BarChart data={data} margin={{ top: 10, right: 8, left: -8, bottom: 0 }} barGap={2}>
+      <BarChart
+        data={data}
+        margin={{ top: labeled ? 20 + (series.length - 1) * 11 : 10, right: 8, left: -8, bottom: 0 }}
+        barGap={2}
+      >
         <CartesianGrid vertical={false} stroke="var(--grid)" />
         {/* muitas categorias (ex.: 24 horas): o eixo pula rótulos para não sobrepor */}
         <XAxis dataKey="label" {...AXIS} interval={data.length > 12 ? 'preserveStartEnd' : 0} minTickGap={6} />
@@ -168,7 +224,17 @@ export function BarsChart({
             fill={SERIES_COLORS[i % SERIES_COLORS.length]}
             radius={[4, 4, 0, 0]}
             maxBarSize={44}
-          />
+          >
+            {labeled && (
+              <DataLabels
+                format={format}
+                color={series.length > 1 ? SERIES_COLORS[i % SERIES_COLORS.length] : 'var(--ink-2)'}
+                // séries lado a lado: cada uma numa altura, na cor da série; o rótulo usa o espaço do grupo de barras
+                lift={i * 11}
+                room={(w) => (series.length === 1 ? w * 3 + 24 : (w + 2) * series.length + 10)}
+              />
+            )}
+          </Bar>
         ))}
       </BarChart>
     </ResponsiveContainer>

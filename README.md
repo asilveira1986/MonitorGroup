@@ -194,6 +194,8 @@ O dashboard abre em **Hoje** e foi pensado para acompanhar o dia de perto:
   - **O dia hora a hora**: mensagens recebidas, respostas da equipe e pendentes no fim de cada hora (em períodos de vários dias, um ponto por dia), com o horário de pico.
   - **Tempo de resposta hora a hora**: tempo médio e pior tempo em cada hora, para ver quando o atendimento fica lento.
   - Nos dois gráficos, o seletor no canto do cartão alterna entre **linhas** e **barras**; a escolha fica salva no navegador e vale também na tela cheia.
+
+Os gráficos de linhas e barras mostram o **valor de cada ponto/barra** (rótulos de dados). Valores zerados ficam sem rótulo; com várias séries, cada série tem os rótulos na sua cor e numa altura própria; em períodos com mais de 31 pontos (90 dias, por exemplo) os rótulos ficam ocultos para não poluir, e o valor aparece ao passar o mouse.
   - **Grupos no dia**: cada grupo numa linha com recebidas, respostas, tempo médio, SLA, pendentes agora, há quanto tempo esperam e a primeira e a última mensagem; os grupos com pendência aparecem primeiro.
 
 O Modo TV também abre em Hoje. Os relatórios continuam abrindo em 7 dias, mas aceitam Hoje e Ontem.
