@@ -1,11 +1,11 @@
 'use client';
 
-import { AlertOctagon, CheckCircle2, Hourglass, MinusCircle, Search } from 'lucide-react';
+import { AlertOctagon, CheckCircle2, Clock, Hourglass, MinusCircle, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '@/components/ui';
-import { cn, formatNumber } from '@/lib/format';
+import { cn, formatDuration, formatNumber } from '@/lib/format';
 
 export type PanelStatus = 'late' | 'waiting' | 'answered' | 'neutral';
 
@@ -67,8 +67,27 @@ const STATUS: Record<
 const ORDER: PanelStatus[] = ['late', 'waiting', 'answered', 'neutral'];
 
 /** Cartão compacto: nome do grupo, mensagens recebidas hoje e, se houver, quantas estão sem resposta. Clicar abre o grupo. */
-function GroupCard({ g }: { g: PanelGroup }) {
+function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
   const s = STATUS[g.status];
+  const since = (iso: string) => Math.max(0, (now - new Date(iso).getTime()) / 1000);
+  // atrasado: tempo além do SLA (em tempo útil, se essa regra estiver ligada); aguardando: espera; senão: última mensagem
+  let time: { label: string; value: string; title: string } | null = null;
+  if (g.pending_since && g.status === 'late') {
+    const counted = g.business_time ? (g.waiting_counted_seconds ?? 0) : since(g.pending_since);
+    time = {
+      label: 'atraso',
+      value: formatDuration(Math.max(0, counted - g.sla_seconds)),
+      title: `Esperando há ${formatDuration(since(g.pending_since))} · SLA ${formatDuration(g.sla_seconds)}${g.business_time ? ' úteis' : ''}`,
+    };
+  } else if (g.pending_since) {
+    time = {
+      label: 'espera',
+      value: formatDuration(since(g.pending_since)),
+      title: `Cliente esperando resposta · SLA ${formatDuration(g.sla_seconds)}${g.business_time ? ' úteis' : ''}`,
+    };
+  } else if (g.last_message_at) {
+    time = { label: 'há', value: formatDuration(since(g.last_message_at)), title: 'Tempo desde a última mensagem do grupo' };
+  }
   return (
     <Link
       href={`/groups/${g.id}`}
@@ -78,9 +97,24 @@ function GroupCard({ g }: { g: PanelGroup }) {
         s.card,
       )}
     >
-      <div className="flex items-start gap-1.5">
-        <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', s.dot)} aria-hidden />
-        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-ink">{g.name}</h3>
+      <div>
+        <div className="flex items-start gap-1.5">
+          <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', s.dot)} aria-hidden />
+          <h3 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-ink">{g.name}</h3>
+        </div>
+        {time && (
+          <p
+            className={cn(
+              'mt-0.5 flex items-center gap-1 pl-3.5 text-[11px] tabular',
+              g.status === 'late' ? 'font-semibold text-critical-ink' : g.status === 'waiting' ? 'font-semibold text-warning-ink' : 'text-muted',
+            )}
+            title={time.title}
+            suppressHydrationWarning
+          >
+            <Clock className="h-3 w-3 shrink-0" aria-hidden />
+            {time.label} {time.value}
+          </p>
+        )}
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <p className="whitespace-nowrap text-xs text-ink-2">
@@ -107,6 +141,13 @@ export function GroupsPanel({ groups }: { groups: PanelGroup[] }) {
   const router = useRouter();
   const [filter, setFilter] = useState<PanelStatus | 'all'>('all');
   const [query, setQuery] = useState('');
+
+  // relógio dos tempos dos cartões (espera, última mensagem), atualizado a cada 30 s
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(tick);
+  }, []);
 
   useEffect(() => {
     const refresh = setInterval(() => router.refresh(), 60_000);
@@ -169,7 +210,7 @@ export function GroupsPanel({ groups }: { groups: PanelGroup[] }) {
       ) : (
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1900px]:grid-cols-8">
           {shown.map((g) => (
-            <GroupCard key={g.id} g={g} />
+            <GroupCard key={g.id} g={g} now={now} />
           ))}
         </div>
       )}

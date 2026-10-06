@@ -151,7 +151,7 @@ O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "
 
 ## Painel de grupos
 
-Menu **Painel de grupos**: cada grupo monitorado num cartão compacto, só com o nome do grupo, quantas mensagens de clientes chegaram hoje e, se houver, quantas estão sem resposta. Clicar no cartão abre o grupo. A cor mostra a situação:
+Menu **Painel de grupos**: cada grupo monitorado num cartão compacto, com o nome do grupo, o **tempo** (atrasado: *atraso* além do SLA; aguardando: *espera* desde a mensagem do cliente; demais: *há* quanto tempo foi a última mensagem do grupo), quantas mensagens de clientes chegaram hoje e, se houver, quantas estão sem resposta. Os tempos se atualizam sozinhos. Clicar no cartão abre o grupo. A cor mostra a situação:
 
 | Cor | Situação |
 |---|---|
