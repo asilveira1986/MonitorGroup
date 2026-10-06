@@ -1,6 +1,5 @@
 'use client';
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -28,7 +27,7 @@ export function DashboardFilters({
 }: {
   groups: { id: string; name: string }[];
   members: { id: string; name: string }[];
-  /** hoje (AAAA-MM-DD, no fuso da empresa): limite do seletor de dia */
+  /** hoje (AAAA-MM-DD, no fuso da empresa): marca Hoje/Ontem quando a URL traz um dia */
   today: string;
   defaultPeriod?: string;
   /** ação ao lado do filtro de grupo (ex.: Modo TV) */
@@ -38,7 +37,7 @@ export function DashboardFilters({
   const pathname = usePathname();
   const params = useSearchParams();
   const rawPeriod = params.get('period') ?? defaultPeriod;
-  // dia mostrado (um dia só): hoje, ontem ou o escolhido no calendário
+  // dia mostrado (um dia só): hoje, ontem ou um dia vindo da URL (?period=day&date=)
   const day =
     rawPeriod === 'today' ? today : rawPeriod === 'yesterday' ? addDays(today, -1) : rawPeriod === 'day' ? (params.get('date') ?? today) : null;
   const period = day === today ? 'today' : day === addDays(today, -1) ? 'yesterday' : rawPeriod;
@@ -58,28 +57,16 @@ export function DashboardFilters({
     return `${pathname}?${next.toString()}`;
   };
 
-  /** Link para um dia específico (hoje e ontem usam os atalhos). */
-  const hrefDay = (ymd: string) => {
-    const next = new URLSearchParams(params);
-    next.delete('date');
-    if (ymd === today) next.set('period', 'today');
-    else if (ymd === addDays(today, -1)) next.set('period', 'yesterday');
-    else {
-      next.set('period', 'day');
-      next.set('date', ymd);
-    }
-    return `${pathname}?${next.toString()}`;
-  };
-
   return (
     <div
       className={cn(
-        'flex w-full flex-wrap items-center gap-2 lg:flex-nowrap',
+        // quebra em duas linhas em telas médias; numa linha só a partir de 1280px
+        'flex w-full flex-wrap items-center gap-2 xl:flex-nowrap',
         // com ação extra, a barra ocupa a linha toda para a ação encostar à direita
         extra ? 'min-[1600px]:w-auto' : 'sm:w-auto',
       )}
     >
-      <div className="flex w-full rounded-xl border border-line bg-surface p-1 sm:inline-flex sm:w-auto">
+      <div className="flex w-full rounded-xl border border-line bg-surface p-1 sm:inline-flex sm:w-auto sm:shrink-0">
         {PERIODS.map((p) => (
           <Link
             key={p.value}
@@ -93,45 +80,8 @@ export function DashboardFilters({
           </Link>
         ))}
       </div>
-      {/* dia a dia: anterior, calendário, próximo */}
-      <div className="flex w-full items-center rounded-xl border border-line bg-surface sm:w-auto">
-        <Link
-          href={hrefDay(addDays(day ?? today, -1))}
-          className="flex h-11 w-10 items-center justify-center rounded-l-xl text-ink-2 hover:bg-surface-2 hover:text-ink sm:h-9 sm:w-8"
-          aria-label="Dia anterior"
-          title="Dia anterior"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Link>
-        <input
-          type="date"
-          max={today}
-          value={day ?? ''}
-          onChange={(e) => e.target.value && router.push(hrefDay(e.target.value))}
-          className={cn(
-            'h-11 min-w-0 flex-1 border-x border-line bg-transparent px-2 text-center text-xs tabular-nums text-ink outline-none sm:h-9 sm:w-[8.5rem] sm:flex-none',
-            !day && 'text-muted',
-          )}
-          aria-label="Escolher um dia"
-          title="Escolher um dia para analisar"
-        />
-        {day && day < today ? (
-          <Link
-            href={hrefDay(addDays(day, 1))}
-            className="flex h-11 w-10 items-center justify-center rounded-r-xl text-ink-2 hover:bg-surface-2 hover:text-ink sm:h-9 sm:w-8"
-            aria-label="Próximo dia"
-            title="Próximo dia"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Link>
-        ) : (
-          <span className="flex h-11 w-10 items-center justify-center text-muted/40 sm:h-9 sm:w-8" aria-hidden>
-            <ChevronRight className="h-4 w-4" />
-          </span>
-        )}
-      </div>
       <div className="flex w-full items-center gap-2 sm:w-auto">
-        <div className="min-w-0 flex-1 sm:w-52 sm:flex-none xl:w-56">
+        <div className="min-w-0 flex-1 sm:w-60 sm:flex-none xl:w-72">
           <Select
             className="sm:h-9 sm:text-xs"
             value={group}
@@ -148,7 +98,7 @@ export function DashboardFilters({
         </div>
       </div>
       {members.length > 0 && (
-        <div className="w-full sm:w-44 xl:w-48">
+        <div className="w-full sm:w-52 xl:w-60">
           <Select
             className="sm:h-9 sm:text-xs"
             value={member}

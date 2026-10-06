@@ -150,14 +150,14 @@ O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "
 
 O dashboard abre em **Hoje** e foi pensado para acompanhar o dia de perto:
 
-- **Navegar entre os dias**: atalhos **Hoje** e **Ontem**, setas **‹ ›** para ir ao dia anterior ou ao próximo, e o calendário para escolher qualquer dia. Os períodos de 7, 30 e 90 dias continuam disponíveis.
+- **Períodos**: **Hoje**, **Ontem**, 7, 30 e 90 dias. Um dia específico pode ser aberto pelo endereço (`?period=day&date=AAAA-MM-DD`).
 - **Comparação**: cada número mostra a variação em relação a **ontem até esta mesma hora** (num dia passado, ao dia anterior inteiro; nos períodos de vários dias, ao período anterior do mesmo tamanho). Ex.: "▲ 12 (+30%) vs ontem até esta hora · era 40". Números de "agora", como pendências, não mostram comparação.
 - **Bloco Acompanhamento do dia**, no topo:
   - **O dia hora a hora**: mensagens recebidas, respostas da equipe e pendentes no fim de cada hora (em períodos de vários dias, um ponto por dia), com o horário de pico.
   - **Tempo de resposta hora a hora**: tempo médio e pior tempo em cada hora, para ver quando o atendimento fica lento.
   - **Grupos no dia**: cada grupo numa linha com recebidas, respostas, tempo médio, SLA, pendentes agora, há quanto tempo esperam e a primeira e a última mensagem; os grupos com pendência aparecem primeiro.
 
-O Modo TV também abre em Hoje. Os relatórios continuam abrindo em 7 dias, mas aceitam Hoje, Ontem e qualquer dia.
+O Modo TV também abre em Hoje. Os relatórios continuam abrindo em 7 dias, mas aceitam Hoje e Ontem.
 
 ## Detalhamento dos indicadores
 
