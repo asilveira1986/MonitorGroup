@@ -8,6 +8,7 @@ import {
   Clock,
   FileBarChart,
   LayoutDashboard,
+  LayoutGrid,
   LogOut,
   Menu,
   MessagesSquare,
@@ -23,6 +24,7 @@ import { cn } from '@/lib/format';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/panel', label: 'Painel de grupos', icon: LayoutGrid },
   { href: '/pending', label: 'Aguardando resposta', icon: Clock, badgeKey: 'pending' as const },
   { href: '/demands', label: 'Demandas', icon: ClipboardList, badgeKey: 'demands' as const },
   { href: '/groups', label: 'Grupos', icon: MessagesSquare },

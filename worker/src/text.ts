@@ -103,8 +103,25 @@ export function isAcknowledgement(type: string, body: string | null): boolean {
   if (!cleaned) return false;
   // apenas emojis (👍, 🙏, 😊 ...)
   if (/^[\p{Extended_Pictographic}\p{Emoji_Modifier}‍️\s]+$/u.test(cleaned)) return true;
-  return ACKNOWLEDGEMENTS.has(cleaned);
+  if (ACKNOWLEDGEMENTS.has(cleaned)) return true;
+  // frase curta só com palavras de agradecimento/confirmação ("Recebi, obrigado!", "show, valeu 👍")
+  if (/\?/.test(cleaned)) return false;
+  const words = cleaned
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[^a-z]+/)
+    .filter(Boolean);
+  return words.length > 0 && words.length <= 6 && words.every((w) => ACK_WORDS.has(w));
 }
+
+/** Palavras que, sozinhas ou combinadas, só agradecem ou confirmam. */
+const ACK_WORDS = new Set([
+  'ok', 'okay', 'oks', 'okk', 'blz', 'beleza', 'obrigado', 'obrigada', 'obrigadao', 'obg', 'brigado', 'brigada', 'valeu',
+  'vlw', 'show', 'top', 'perfeito', 'perfeita', 'certo', 'ta', 'bom', 'tudo', 'bem', 'combinado', 'entendi', 'otimo',
+  'otima', 'recebi', 'recebido', 'recebida', 'chegou', 'deu', 'funcionou', 'resolvido', 'joia', 'muito', 'mto', 'pela',
+  'ajuda', 'demais', 'sim', 'de', 'nada', 'e', 'pessoal', 'gente', 'galera', 'tmj', 'abraco', 'abracos', 'fechado',
+  'maravilha', 'excelente', 'agradeco', 'grato', 'grata',
+]);
 
 /** Id da mensagem citada (quando a mensagem é uma resposta a outra). */
 export function quotedMessageId(message: proto.IMessage | null | undefined): string | null {

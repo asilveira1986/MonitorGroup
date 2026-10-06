@@ -60,6 +60,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    20. `supabase/migrations/0020_media_seen.sql`
    21. `supabase/migrations/0021_conversations.sql`
    22. `supabase/migrations/0022_daily.sql`
+   23. `supabase/migrations/0023_groups_panel.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -145,6 +146,19 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
 - **IA** (desligada por padrão): o Claude classifica mensagens pendentes dos clientes. Requer `ANTHROPIC_API_KEY` no worker. Mensagens que o modelo recusar são tratadas como não-demanda.
 
 O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "em 2 dias"), cobranças do cliente, reabertura e confirmação após a entrega. As palavras usadas ficam nos parâmetros dos indicadores *Retrabalho* e *Confirmação do cliente*.
+
+## Painel de grupos
+
+Menu **Painel de grupos**: cada grupo monitorado num cartão, com as últimas mensagens recebidas dos clientes, quantas chegaram e quantas foram respondidas hoje, a última resposta da equipe e o botão **Ver grupo**. A cor mostra a situação:
+
+| Cor | Situação |
+|---|---|
+| **Vermelho** | mensagem sem resposta e o tempo de resposta (SLA do grupo ou o padrão) já foi excedido |
+| **Amarelo** | mensagem sem resposta, ainda dentro do tempo de resposta (a barra mostra quanto do SLA já passou) |
+| **Verde** | teve mensagem de cliente hoje e tudo foi respondido |
+| **Neutro** | nenhuma mensagem de cliente hoje |
+
+O SLA segue a mesma regra dos indicadores (tempo útil, se essa opção estiver ligada). Os atrasados aparecem primeiro; dá para filtrar por situação e buscar pelo nome. O painel se atualiza sozinho a cada mensagem nova e a cada minuto, então um cartão amarelo vira vermelho assim que o tempo de resposta estoura. Mensagens curtas só de agradecimento ou confirmação ("Recebi, obrigado!", "show, valeu 👍") não deixam o grupo aguardando resposta.
 
 ## Acompanhamento do dia a dia
 

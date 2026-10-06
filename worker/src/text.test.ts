@@ -44,4 +44,12 @@ test('isAcknowledgement reconhece agradecimentos', () => {
   assert.ok(isAcknowledgement('sticker', null));
   assert.ok(!isAcknowledgement('text', 'ok, mas e o boleto?'));
   assert.ok(!isAcknowledgement('image', null));
+  // combinações curtas de agradecimento/confirmação
+  assert.ok(isAcknowledgement('text', 'Recebi, obrigado!'));
+  assert.ok(isAcknowledgement('text', 'show, valeu pessoal 👍'));
+  assert.ok(isAcknowledgement('text', 'Deu certo, muito obrigada pela ajuda'));
+  // pedidos e perguntas continuam abrindo pendência
+  assert.ok(!isAcknowledgement('text', 'obrigado, e o boleto?'));
+  assert.ok(!isAcknowledgement('text', 'recebi mas não abre'));
+  assert.ok(!isAcknowledgement('text', 'ok, pode mandar o orçamento'));
 });
