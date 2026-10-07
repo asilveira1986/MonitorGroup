@@ -50,6 +50,8 @@ export type AppSettings = {
   demand_keyword_enabled: boolean;
   demand_keywords: string[];
   demand_ai_enabled: boolean;
+  demand_commitment_enabled?: boolean;
+  demand_commitment_keywords?: string[];
 };
 
 export type AlertRule = {

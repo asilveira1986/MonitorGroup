@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     supabase
       .from('app_settings')
       .select(
-        'demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, msg_alert_enabled, msg_alert_auto_close, msg_alert_sound, msg_alert_alerts',
+        'demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, demand_commitment_enabled, msg_alert_enabled, msg_alert_auto_close, msg_alert_sound, msg_alert_alerts',
       )
       .eq('id', 1)
       .maybeSingle(),

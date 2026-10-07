@@ -63,6 +63,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    23. `supabase/migrations/0023_groups_panel.sql`
    24. `supabase/migrations/0024_message_alert.sql`
    25. `supabase/migrations/0025_sla_screen_alerts.sql`
+   26. `supabase/migrations/0026_commitment_demands.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -130,7 +131,7 @@ O worker precisa ficar ligado 24 horas por dia, porque mantém a conexão com o 
 
 ## Demandas
 
-Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer de três origens, cada uma ligada ou desligada em **Configurações › Geral › Demandas** (somente admin):
+Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer de quatro origens, cada uma ligada ou desligada em **Configurações › Geral › Demandas** (somente admin):
 
 - **Manual**: botão *Nova demanda* em **Demandas** ou *criar demanda* sobre uma mensagem na conversa do grupo.
 - **Comandos e palavras-chave**: a equipe escreve no grupo (de preferência respondendo à mensagem do cliente):
@@ -145,6 +146,10 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
   | `#confirmada` | registra a confirmação do cliente |
 
   Sem resposta a uma mensagem, o comando vale para a demanda aberta mais recente do grupo. Palavras-chave do cliente (lista editável) também podem abrir demandas.
+- **Compromisso da equipe** (ligado por padrão): quando alguém da equipe responde no grupo com uma frase de compromisso (*vou verificar*, *te retorno em seguida*, *vou providenciar*…, lista editável) ou informa um prazo (*até amanhã*, *até sexta*, *em 2 dias*, *prazo…*), a demanda abre sozinha:
+  - **descrição**: o pedido do cliente que foi respondido (a mensagem citada, se a equipe respondeu citando; senão, a mensagem do cliente que essa resposta atendeu);
+  - **responsável**: quem respondeu (atendente cadastrado em Equipe); **prazo**: o informado na frase, se houver; **tipo**: pelas categorias de *Tipo de demanda*;
+  - se o pedido já é uma demanda, ou se a equipe volta a falar sem pedido novo do cliente (ex.: "vou verificar" e, depois, "te envio até amanhã"), a demanda existente passa para *em andamento* e recebe o prazo, sem duplicar.
 - **IA** (desligada por padrão): o Claude classifica mensagens pendentes dos clientes. Requer `ANTHROPIC_API_KEY` no worker. Mensagens que o modelo recusar são tratadas como não-demanda.
 
 O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "em 2 dias"), cobranças do cliente, reabertura e confirmação após a entrega. As palavras usadas ficam nos parâmetros dos indicadores *Retrabalho* e *Confirmação do cliente*.

@@ -25,6 +25,8 @@ from (values
   (17, 'Configuração do alerta de nova mensagem (0024)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'msg_alert_auto_close')),
   (18, 'Alertas em tela e SLA excedido (0025)', to_regprocedure('public.sla_breaches()') is not null),
-  (19, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (19, 'Demandas pelo compromisso da equipe (0026)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'demand_commitment_enabled')),
+  (20, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

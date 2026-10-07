@@ -1,6 +1,6 @@
 'use client';
 
-import { Bot, Hash, MousePointerClick, Save, Tags } from 'lucide-react';
+import { Bot, Handshake, Hash, MousePointerClick, Save, Tags } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Card, CardHeader, Textarea, Toggle } from '@/components/ui';
@@ -42,6 +42,8 @@ export function DemandSettings({ settings, disabled }: { settings: AppSettings; 
   const [keyword, setKeyword] = useState(settings.demand_keyword_enabled);
   const [keywords, setKeywords] = useState((settings.demand_keywords ?? []).join(', '));
   const [ai, setAi] = useState(settings.demand_ai_enabled);
+  const [commitment, setCommitment] = useState(settings.demand_commitment_enabled ?? true);
+  const [commitmentKeywords, setCommitmentKeywords] = useState((settings.demand_commitment_keywords ?? []).join(', '));
   const [pending, start] = useTransition();
 
   return (
@@ -90,6 +92,34 @@ export function DemandSettings({ settings, disabled }: { settings: AppSettings; 
             />
           )}
         </div>
+        <div>
+          <Row
+            icon={Handshake}
+            title="Compromisso da equipe"
+            text={
+              <>
+                Abre a demanda quando alguém da equipe responde com uma frase de compromisso (ex.: <i>vou verificar</i>,{' '}
+                <i>te retorno em seguida</i>) ou informa um prazo (<i>até amanhã</i>, <i>até sexta</i>, <i>em 2 dias</i>). A
+                descrição é o pedido do cliente que foi respondido, o responsável é quem respondeu e o prazo, se houver, já
+                entra na demanda. Se o pedido já for uma demanda, ela só passa para &quot;em andamento&quot; e recebe o prazo.
+              </>
+            }
+            checked={commitment}
+            onChange={setCommitment}
+            disabled={disabled || pending}
+          />
+          {commitment && (
+            <Textarea
+              rows={3}
+              value={commitmentKeywords}
+              onChange={(e) => setCommitmentKeywords(e.target.value)}
+              disabled={disabled || pending}
+              className="mb-3"
+              placeholder="vou verificar, te retorno, prazo"
+              aria-label="Frases de compromisso da equipe"
+            />
+          )}
+        </div>
         <Row
           icon={Bot}
           title="Classificação automática por IA"
@@ -116,6 +146,8 @@ export function DemandSettings({ settings, disabled }: { settings: AppSettings; 
                     keyword,
                     keywords: keywords.split(/[,;\n]+/),
                     ai,
+                    commitment,
+                    commitmentKeywords: commitmentKeywords.split(/[,;\n]+/),
                   });
                   if (res.ok) toast.success('Configurações de demandas salvas');
                   else toast.error(res.error);

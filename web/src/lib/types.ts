@@ -142,6 +142,9 @@ export type AppSettings = {
   demand_keyword_enabled: boolean;
   demand_keywords: string[];
   demand_ai_enabled: boolean;
+  /** abre demanda quando a equipe se compromete ("vou verificar", "te retorno", prazo) */
+  demand_commitment_enabled: boolean;
+  demand_commitment_keywords: string[];
   reply_enabled: boolean;
   reply_sign_name: boolean;
   /** alerta de nova mensagem no centro da tela */
@@ -244,7 +247,7 @@ export type Demand = {
   confirmed_at: string | null;
   followups_count: number;
   reopened_count: number;
-  source: 'manual' | 'keyword' | 'ai';
+  source: 'manual' | 'keyword' | 'ai' | 'commitment';
   created_at: string;
   updated_at: string;
 };

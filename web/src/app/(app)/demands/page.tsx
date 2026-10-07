@@ -41,7 +41,9 @@ export default async function DemandsPage({ searchParams }: PageProps<'/demands'
       supabase.from('team_members').select('id, name').eq('active', true).order('name'),
       supabase
         .from('app_settings')
-        .select('timezone, demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled')
+        .select(
+          'timezone, demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, demand_commitment_enabled',
+        )
         .eq('id', 1)
         .single(),
       supabase.from('indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),

@@ -75,6 +75,7 @@ export const DEMAND_SOURCE_LABEL: Record<string, string> = {
   manual: 'Manual',
   keyword: 'Comando/palavra-chave',
   ai: 'IA',
+  commitment: 'Compromisso da equipe',
 };
 
 /** Categorias padrão de demanda (substituídas pelas do indicador "Tipo de demanda", se configurado). */
@@ -117,10 +118,12 @@ export function demandsEnabled(
         demand_command_enabled?: boolean | null;
         demand_keyword_enabled?: boolean | null;
         demand_ai_enabled?: boolean | null;
+        demand_commitment_enabled?: boolean | null;
       }
     | null
     | undefined,
 ): boolean {
   if (!s) return true;
-  return Boolean(s.demand_manual_enabled || s.demand_command_enabled || s.demand_keyword_enabled || s.demand_ai_enabled);
+  return Boolean(s.demand_manual_enabled || s.demand_command_enabled || s.demand_keyword_enabled || s.demand_ai_enabled || s.demand_commitment_enabled,
+  );
 }

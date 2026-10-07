@@ -11,6 +11,7 @@ import { findKeyword } from './text.js';
  *  - comandos (#demanda, #andamento, #entregue, #cancelada, #prazo, #confirmada)
  *  - palavra-chave do cliente que abre demanda
  *  - cobrança, reabertura e confirmação do cliente
+ *  - compromisso da equipe ("vou verificar", "te retorno em seguida", prazo) abre a demanda
  *  - prazo prometido pela equipe ("até sexta", "até 15/10")
  *  - classificação por IA (opcional)
  * Os eventos são gravados mesmo com os indicadores desligados: ao religar, o histórico está completo.
@@ -38,6 +39,7 @@ type Demand = {
   delivered_at: string | null;
   confirmed_at: string | null;
   followups_count: number;
+  opened_at: string;
 };
 
 // ordem importa: a primeira categoria que casar vence (a mais genérica fica por último)
@@ -93,7 +95,7 @@ const COMMAND = /#(demanda|andamento|entregue|cancelada?|prazo|confirmada?)\b\s*
 async function latestDemand(groupId: string, statuses: string[]): Promise<Demand | null> {
   const { data } = await db
     .from('demands')
-    .select('id, number, status, promised_at, delivered_at, confirmed_at, followups_count')
+    .select('id, number, status, promised_at, delivered_at, confirmed_at, followups_count, opened_at')
     .eq('group_id', groupId)
     .in('status', statuses)
     .order(statuses.includes('entregue') ? 'delivered_at' : 'opened_at', { ascending: false, nullsFirst: false })
@@ -117,6 +119,58 @@ async function rpc(name: string, args: Record<string, unknown>) {
   const { data, error } = await db.rpc(name, args);
   if (error) logger.warn({ name, error: error.message }, 'demanda: operação recusada');
   return error ? null : data;
+}
+
+/** Compromisso da equipe vale para a demanda aberta recente do grupo se não houver pedido novo do cliente. */
+const COMMITMENT_REUSE_MS = 12 * 3_600_000;
+
+/**
+ * A equipe se comprometeu ("vou verificar", "te retorno em seguida", "até amanhã te envio"):
+ * abre a demanda com o pedido do cliente que foi respondido (mensagem citada, ou a mensagem do
+ * cliente que esta resposta atendeu), o atendente como responsável e o prazo, se houver.
+ * Pedido que já é demanda, ou compromisso logo depois de outro sem pedido novo, só atualiza a demanda.
+ */
+async function demandFromCommitment(m: DemandMessage, when: Date | null, params: Params, actor: string) {
+  type Origin = { id: string; body: string | null; demand_id: string | null };
+  let origin: Origin | null = await quotedMessage(m.groupId, m.quotedWaId);
+  if (!origin) {
+    const { data } = await db.from('messages').select('answered_message_id').eq('id', m.messageId).maybeSingle();
+    if (data?.answered_message_id) {
+      origin = ((
+        await db.from('messages').select('id, body, demand_id').eq('id', data.answered_message_id).maybeSingle()
+      ).data ?? null) as Origin | null;
+    }
+  }
+
+  let targetId = origin?.demand_id ?? null;
+  if (!targetId && !origin) {
+    const open = await latestDemand(m.groupId, ['aberta', 'em_andamento']);
+    if (open && Date.now() - new Date(open.opened_at).getTime() < COMMITMENT_REUSE_MS) targetId = open.id;
+  }
+
+  if (targetId) {
+    const { data: d } = await db.from('demands').select('status, promised_at').eq('id', targetId).maybeSingle();
+    const changes: Record<string, unknown> = {};
+    if (d?.status === 'aberta') changes.status = 'em_andamento';
+    if (when && !d?.promised_at) changes.promised_at = when.toISOString();
+    if (Object.keys(changes).length) {
+      await rpc('update_demand', { p_id: targetId, p_changes: changes, p_message_id: m.messageId, p_actor: actor });
+    }
+    return;
+  }
+
+  // sem mensagem do cliente: a própria resposta da equipe descreve a demanda
+  const description = (origin?.body?.trim() || m.body?.trim() || 'Demanda sem descrição').slice(0, 300);
+  await rpc('create_demand', {
+    p_group_id: m.groupId,
+    p_description: description,
+    p_message_id: origin?.id ?? m.messageId,
+    p_type: classifyCategory(`${origin?.body ?? ''} ${m.body ?? ''}`, params.categories),
+    p_assignee_id: m.teamMemberId,
+    p_promised_at: when?.toISOString() ?? null,
+    p_source: 'commitment',
+    p_actor: actor,
+  });
 }
 
 export async function processDemandSignals(m: DemandMessage) {
@@ -176,9 +230,18 @@ export async function processDemandSignals(m: DemandMessage) {
       return;
     }
 
-    // 2) equipe informando prazo para a demanda em aberto mais recente
+    // 2) equipe: compromisso ("vou verificar", "te retorno", prazo) abre a demanda;
+    //    sem essa opção, um prazo informado vai para a demanda em aberto mais recente
     if (m.fromTeam) {
       const when = parsePromise(m.body, new Date(), promiseOpts);
+      const committed =
+        settings.demand_commitment_enabled !== false &&
+        m.messageType === 'text' &&
+        (findKeyword(m.body, settings.demand_commitment_keywords) !== null || when !== null);
+      if (committed) {
+        await demandFromCommitment(m, when, params, actor);
+        return;
+      }
       if (!when) return;
       const open = await latestDemand(m.groupId, ['aberta', 'em_andamento']);
       if (open && !open.promised_at) {

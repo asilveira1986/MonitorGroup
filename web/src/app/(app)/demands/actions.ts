@@ -83,6 +83,8 @@ export async function saveDemandSettings(values: {
   keyword: boolean;
   keywords: string[];
   ai: boolean;
+  commitment: boolean;
+  commitmentKeywords: string[];
 }): Promise<Result> {
   await requireAdmin();
   const supabase = await createClient();
@@ -94,6 +96,8 @@ export async function saveDemandSettings(values: {
       demand_keyword_enabled: values.keyword,
       demand_keywords: values.keywords.map((k) => k.trim()).filter(Boolean),
       demand_ai_enabled: values.ai,
+      demand_commitment_enabled: values.commitment,
+      demand_commitment_keywords: values.commitmentKeywords.map((k) => k.trim()).filter(Boolean),
       updated_at: new Date().toISOString(),
     })
     .eq('id', 1);
