@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertOctagon, CheckCircle2, Clock, Hourglass, MinusCircle, Search } from 'lucide-react';
+import { AlertOctagon, Building2, CheckCircle2, Clock, Hourglass, MinusCircle, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -12,6 +12,7 @@ export type PanelStatus = 'late' | 'waiting' | 'answered' | 'neutral';
 export type PanelGroup = {
   id: string;
   name: string;
+  sector_id?: string | null;
   status: PanelStatus;
   received_today: number;
   answers_today: number;
@@ -137,9 +138,26 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
  * Atualiza sozinha: a cada mensagem nova (tempo real do app) e a cada minuto,
  * para o cartão ficar vermelho quando o tempo de resposta é excedido.
  */
-export function GroupsPanel({ groups }: { groups: PanelGroup[] }) {
+export function GroupsPanel({
+  groups: allGroups,
+  sectors,
+  hasNoSector,
+  defaultSector,
+}: {
+  groups: PanelGroup[];
+  sectors: { id: string; name: string }[];
+  hasNoSector: boolean;
+  /** Setor que abre selecionado (o Geral); 'all' quando não existe. */
+  defaultSector: string;
+}) {
   const router = useRouter();
   const [filter, setFilter] = useState<PanelStatus | 'all'>('all');
+  // setor: 'all' (todos), 'none' (sem setor) ou o id do setor
+  const [sector, setSector] = useState(defaultSector);
+  const groups = useMemo(
+    () => (sector === 'all' ? allGroups : allGroups.filter((g) => (sector === 'none' ? !g.sector_id : g.sector_id === sector))),
+    [allGroups, sector],
+  );
   const [query, setQuery] = useState('');
 
   // relógio dos tempos dos cartões (espera, última mensagem), atualizado a cada 30 s
@@ -190,17 +208,38 @@ export function GroupsPanel({ groups }: { groups: PanelGroup[] }) {
             </button>
           ))}
         </div>
-        <label className="relative block sm:w-64">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar grupo"
-            aria-label="Buscar grupo"
-            className="h-9 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm outline-none focus:border-brand"
-          />
-        </label>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {(sectors.length > 1 || hasNoSector) && (
+            <label className="flex items-center gap-2 text-xs text-muted">
+              <Building2 className="h-4 w-4 shrink-0" aria-hidden />
+              <select
+                value={sector}
+                onChange={(e) => setSector(e.target.value)}
+                aria-label="Filtrar por setor"
+                className="h-9 w-full rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none focus:border-brand sm:w-48"
+              >
+                <option value="all">Todos os setores</option>
+                {sectors.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+                {hasNoSector && <option value="none">Sem setor</option>}
+              </select>
+            </label>
+          )}
+          <label className="relative block sm:w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar grupo"
+              aria-label="Buscar grupo"
+              className="h-9 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm outline-none focus:border-brand"
+            />
+          </label>
+        </div>
       </div>
 
       {shown.length === 0 ? (

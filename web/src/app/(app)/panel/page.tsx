@@ -15,7 +15,20 @@ export const metadata: Metadata = { title: 'MonitorGroup · Painel de grupos' };
 export default async function PanelPage() {
   await requireProfile();
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('groups_panel');
+  const [{ data, error }, { data: groupSectors }, { data: sectors }] = await Promise.all([
+    supabase.rpc('groups_panel'),
+    supabase.from('groups').select('id, sector_id'),
+    supabase.from('sectors').select('id, name').order('name'),
+  ]);
+  const sectorOf = new Map((groupSectors ?? []).map((g) => [g.id as string, (g.sector_id as string | null) ?? null]));
+  const groups = ((data ?? []) as PanelGroup[]).map((g) => ({
+    ...g,
+    sector_id: sectorOf.get(g.id) ?? null,
+  }));
+  // setores que têm grupo no painel (o usuário só recebe os grupos que pode ver)
+  const used = new Set(groups.map((g) => g.sector_id));
+  const sectorOptions = (sectors ?? []).filter((s) => used.has(s.id));
+  const geral = sectorOptions.find((s) => s.name.trim().toLowerCase() === 'geral');
 
   return (
     <div data-wide>
@@ -28,7 +41,7 @@ export default async function PanelPage() {
           <EmptyState icon={<AlertTriangle />} title="Não foi possível carregar o painel" description={error.message} />
         </Card>
       ) : (
-        <GroupsPanel groups={(data ?? []) as PanelGroup[]} />
+        <GroupsPanel groups={groups} sectors={sectorOptions} hasNoSector={used.has(null)} defaultSector={geral?.id ?? 'all'} />
       )}
     </div>
   );

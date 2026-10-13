@@ -166,7 +166,7 @@ Menu **Painel de grupos**: cada grupo monitorado num cartão compacto, com o nom
 | **Verde** | teve mensagem de cliente hoje e tudo foi respondido |
 | **Neutro** | nenhuma mensagem de cliente hoje |
 
-O SLA segue a mesma regra dos indicadores (tempo útil, se essa opção estiver ligada). Os atrasados aparecem primeiro; dá para filtrar por situação e buscar pelo nome. O painel se atualiza sozinho a cada mensagem nova e a cada minuto, então um cartão amarelo vira vermelho assim que o tempo de resposta estoura. Mensagens curtas só de agradecimento ou confirmação ("Recebi, obrigado!", "show, valeu 👍") não deixam o grupo aguardando resposta.
+O SLA segue a mesma regra dos indicadores (tempo útil, se essa opção estiver ligada). Os atrasados aparecem primeiro; dá para filtrar por situação e por **setor** e buscar pelo nome. O filtro de setor abre no setor **Geral** (quando ele existe entre os setores que o usuário vê) e mostra também "Todos os setores" e, para administradores, "Sem setor". O painel se atualiza sozinho a cada mensagem nova e a cada minuto, então um cartão amarelo vira vermelho assim que o tempo de resposta estoura. Mensagens curtas só de agradecimento ou confirmação ("Recebi, obrigado!", "show, valeu 👍") não deixam o grupo aguardando resposta.
 
 ## Alertas em tela
 
