@@ -149,6 +149,7 @@ export type AppSettings = {
   /** abre demanda quando a equipe se compromete ("vou verificar", "te retorno", prazo) */
   demand_commitment_enabled: boolean;
   demand_commitment_keywords: string[];
+  demand_commitment_verbs?: string[];
   reply_enabled: boolean;
   reply_sign_name: boolean;
   /** alerta de nova mensagem no centro da tela */

@@ -65,6 +65,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    25. `supabase/migrations/0025_sla_screen_alerts.sql`
    26. `supabase/migrations/0026_commitment_demands.sql`
    27. `supabase/migrations/0027_sectors.sql`
+   28. `supabase/migrations/0028_commitment_triggers.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -148,6 +149,7 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
 
   Sem resposta a uma mensagem, o comando vale para a demanda aberta mais recente do grupo. Palavras-chave do cliente (lista editável) também podem abrir demandas.
 - **Compromisso da equipe** (ligado por padrão): quando alguém da equipe responde no grupo com uma frase de compromisso (*vou verificar*, *te retorno em seguida*, *vou providenciar*…, lista editável) ou informa um prazo (*até amanhã*, *até sexta*, *em 2 dias*, *prazo…*), a demanda abre sozinha:
+  - **gatilhos**: *verbos de ação* (verificar, corrigir, realizar, ajustar, enviar…, lista editável) valem em qualquer forma de compromisso: *vou/vamos/irei/iremos corrigir*, *vou já te enviar*, *estou corrigindo*, *corrigirei*, *fico de corrigir*, *pode deixar que eu corrijo*. As *frases prontas* (*te retorno*, *dar uma olhada*, *deixa comigo*…) valem como estão. Negação logo antes (*não vou conseguir verificar*) não abre demanda. Em **Configurações › Geral › Demandas** há um campo para testar uma frase, e o histórico da demanda mostra o gatilho que a abriu;
   - **descrição**: o pedido do cliente que foi respondido (a mensagem citada, se a equipe respondeu citando; senão, a mensagem do cliente que essa resposta atendeu);
   - **responsável**: quem respondeu (atendente cadastrado em Equipe); **prazo**: o informado na frase, se houver; **tipo**: pelas categorias de *Tipo de demanda*;
   - se o pedido já é uma demanda, ou se a equipe volta a falar sem pedido novo do cliente (ex.: "vou verificar" e, depois, "te envio até amanhã"), a demanda existente passa para *em andamento* e recebe o prazo, sem duplicar.

@@ -1,6 +1,7 @@
 import { aiAvailable, classifyDemand } from './ai.js';
 import { onRework } from './alerts.js';
 import { getSettings } from './cache.js';
+import { DEFAULT_COMMITMENT_VERBS, findCommitment } from './commitment.js';
 import { parsePromise } from './dates.js';
 import { db } from './db.js';
 import { logger } from './logger.js';
@@ -11,7 +12,8 @@ import { findKeyword } from './text.js';
  *  - comandos (#demanda, #andamento, #entregue, #cancelada, #prazo, #confirmada)
  *  - palavra-chave do cliente que abre demanda
  *  - cobrança, reabertura e confirmação do cliente
- *  - compromisso da equipe ("vou verificar", "te retorno em seguida", prazo) abre a demanda
+ *  - compromisso da equipe ("irei verificar", "vou corrigir", "te retorno em seguida", prazo) abre a demanda
+ *    (gatilhos: verbos de ação em qualquer forma de compromisso + frases prontas, ver commitment.ts)
  *  - prazo prometido pela equipe ("até sexta", "até 15/10")
  *  - classificação por IA (opcional)
  * Os eventos são gravados mesmo com os indicadores desligados: ao religar, o histórico está completo.
@@ -234,12 +236,13 @@ export async function processDemandSignals(m: DemandMessage) {
     //    sem essa opção, um prazo informado vai para a demanda em aberto mais recente
     if (m.fromTeam) {
       const when = parsePromise(m.body, new Date(), promiseOpts);
-      const committed =
-        settings.demand_commitment_enabled !== false &&
-        m.messageType === 'text' &&
-        (findKeyword(m.body, settings.demand_commitment_keywords) !== null || when !== null);
-      if (committed) {
-        await demandFromCommitment(m, when, params, actor);
+      const enabled = settings.demand_commitment_enabled !== false && m.messageType === 'text';
+      const trigger = enabled
+        ? findCommitment(m.body, settings.demand_commitment_verbs ?? DEFAULT_COMMITMENT_VERBS, settings.demand_commitment_keywords)
+        : null;
+      if (enabled && (trigger || when)) {
+        // o histórico da demanda mostra o gatilho que a abriu ("irei verificar", "vou corrigir")
+        await demandFromCommitment(m, when, params, trigger ? `${actor} · "${trigger.trigger}"` : actor);
         return;
       }
       if (!when) return;

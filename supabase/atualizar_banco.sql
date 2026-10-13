@@ -5719,6 +5719,37 @@ end $$;
 
 notify pgrst, 'reload schema';
 
+-- >>>>>>>>>>>>>>>>>>>> 0028_commitment_triggers.sql <<<<<<<<<<<<<<<<<<<<
+-- =====================================================================
+-- Gatilhos de compromisso da equipe para registrar demandas
+--
+-- Além das frases prontas (demand_commitment_keywords), o worker reconhece
+-- verbos de ação em qualquer forma de compromisso:
+--   "irei verificar", "vou corrigir", "vamos já te enviar", "estou ajustando",
+--   "verificarei", "fico de enviar", "pode deixar que eu corrijo".
+-- Negação logo antes ("não vou conseguir verificar") não conta.
+--  * demand_commitment_verbs: verbos de ação no infinitivo (editáveis).
+-- =====================================================================
+
+alter table public.app_settings
+  add column if not exists demand_commitment_verbs text[] not null default array[
+    'verificar', 'checar', 'conferir', 'analisar', 'olhar', 'ver', 'avaliar', 'investigar', 'revisar', 'validar', 'testar',
+    'corrigir', 'ajustar', 'arrumar', 'consertar', 'resolver', 'solucionar', 'tratar', 'atualizar', 'alterar', 'configurar',
+    'realizar', 'fazer', 'executar', 'providenciar', 'preparar', 'organizar', 'programar', 'agendar', 'cadastrar', 'liberar',
+    'enviar', 'mandar', 'encaminhar', 'emitir', 'gerar', 'entregar', 'finalizar', 'concluir', 'retornar', 'responder',
+    'avisar', 'confirmar', 'levantar', 'solicitar', 'acompanhar', 'alinhar', 'buscar', 'separar', 'instalar', 'refazer'
+  ]::text[];
+
+-- frases prontas que não dependem de verbo
+update public.app_settings
+   set demand_commitment_keywords = demand_commitment_keywords
+       || array(select k from unnest(array['dar uma olhada', 'dou uma olhada', 'deixa comigo', 'pode deixar', 'fica comigo',
+                                           'em andamento', 'assim que possível']::text[]) k
+                where not k = any(demand_commitment_keywords))
+ where id = 1;
+
+notify pgrst, 'reload schema';
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -5752,6 +5783,8 @@ from (values
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'demand_commitment_enabled')),
   (20, 'Setores e permissões por setor (0027)', to_regclass('public.sectors') is not null
       and (select not prosecdef from pg_proc where oid = 'public.indicator_values(timestamptz,timestamptz,uuid,uuid)'::regprocedure)),
-  (21, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (21, 'Gatilhos de compromisso para demandas (0028)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'demand_commitment_verbs')),
+  (22, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
