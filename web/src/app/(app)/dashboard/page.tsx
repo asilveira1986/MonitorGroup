@@ -1,6 +1,8 @@
 import { AlertTriangle, LayoutDashboard, Tv } from 'lucide-react';
 import Link from 'next/link';
 import { DashboardGrid } from '@/components/indicators/dashboard-grid';
+import { DetailsSection } from '@/components/indicators/details-section';
+import { ManagementSummary, type ManagementSummaryData } from '@/components/indicators/management-summary';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { requireProfile } from '@/lib/auth';
 import { loadIndicatorFilters } from '@/lib/indicator-filters';
@@ -9,16 +11,19 @@ import { DashboardFilters } from './filters';
 
 export default async function DashboardPage({ searchParams }: PageProps<'/dashboard'>) {
   const profile = await requireProfile();
-  const { supabase, tz, filters, comparison, today, groups, members } = await loadIndicatorFilters(await searchParams, {
+  const { supabase, tz, filters, comparison, today, groups, members, periodLabel, period } = await loadIndicatorFilters(await searchParams, {
     defaultPeriod: 'today',
   });
 
   // o dashboard só conhece o catálogo: calcula os indicadores ativos, na ordem configurada
   // e, junto, o mesmo cálculo no intervalo de comparação (dia anterior no mesmo horário)
   const args = { p_group_id: filters.groupId, p_member_id: filters.memberId };
-  const [{ data, error }, { data: before }] = await Promise.all([
+  const [{ data, error }, { data: before }, { data: summary }, { data: summaryBefore }] = await Promise.all([
     supabase.rpc('indicator_values', { p_from: filters.from, p_to: filters.to, ...args }),
     supabase.rpc('indicator_values', { p_from: comparison.from, p_to: comparison.to, ...args }),
+    // visão da gestão: totalizadores do período e do intervalo de comparação
+    supabase.rpc('management_summary', { p_from: filters.from, p_to: filters.to, ...args }),
+    supabase.rpc('management_summary', { p_from: comparison.from, p_to: comparison.to, ...args }),
   ]);
   const indicators = (data ?? []) as IndicatorValue[];
   const previous = Object.fromEntries(
@@ -35,9 +40,9 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
         stackAction
         description={
           <>
-            Acompanhe o atendimento nos grupos de WhatsApp em tempo real.
+            Os números que a gestão precisa acompanhar, comparados com {comparison.label}.
             <br />
-            Clique num indicador para ver os detalhes.
+            Clique num número para abrir a tela correspondente.
           </>
         }
         action={
@@ -60,6 +65,15 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
           />
         }
       />
+
+      {summary && (
+        <ManagementSummary
+          data={summary as ManagementSummaryData}
+          previous={(summaryBefore as ManagementSummaryData | null) ?? null}
+          periodLabel={periodLabel.toLowerCase()}
+          comparisonLabel={period === 'today' ? 'ontem' : period === 'yesterday' ? 'anteontem' : 'período anterior'}
+        />
+      )}
 
       {error ? (
         <Card>
@@ -88,12 +102,14 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
           />
         </Card>
       ) : (
-        <DashboardGrid
-          indicators={indicators}
-          filters={filters}
-          timeZone={tz}
-          comparison={{ label: comparison.label, values: previous }}
-        />
+        <DetailsSection count={indicators.length}>
+          <DashboardGrid
+            indicators={indicators}
+            filters={filters}
+            timeZone={tz}
+            comparison={{ label: comparison.label, values: previous }}
+          />
+        </DetailsSection>
       )}
     </div>
   );

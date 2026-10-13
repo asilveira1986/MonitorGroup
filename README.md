@@ -66,6 +66,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    26. `supabase/migrations/0026_commitment_demands.sql`
    27. `supabase/migrations/0027_sectors.sql`
    28. `supabase/migrations/0028_commitment_triggers.sql`
+   29. `supabase/migrations/0029_management_summary.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -156,6 +157,19 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
 - **IA** (desligada por padrão): o Claude classifica mensagens pendentes dos clientes. Requer `ANTHROPIC_API_KEY` no worker. Mensagens que o modelo recusar são tratadas como não-demanda.
 
 O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "em 2 dias"), cobranças do cliente, reabertura e confirmação após a entrega. As palavras usadas ficam nos parâmetros dos indicadores *Retrabalho* e *Confirmação do cliente*.
+
+## Dashboard: visão da gestão
+
+O topo do **Dashboard** traz os totalizadores para a gestão acompanhar o andamento, em quatro cartões, respeitando os filtros de período, grupo e atendente (e o setor de quem acessa):
+
+| Cartão | Números |
+|---|---|
+| **Atendimento** (período) | mensagens recebidas, respostas da equipe, tempo médio de 1ª resposta, % dentro do SLA |
+| **Situação agora** (tempo real) | grupos aguardando resposta, grupos com SLA estourado, alertas abertos (e críticos), conexão do WhatsApp |
+| **Demandas** | em aberto agora (e vencidas), novas e entregues no período (com tempo médio), % de prazos cumpridos |
+| **Conversas e grupos** (período) | conversas iniciadas, % fechadas, grupos ativos de monitorados, grupos silenciosos |
+
+Cada número mostra a variação em relação a ontem (ou ao período anterior), em verde quando melhorou e em vermelho quando piorou. Clicar no número abre a tela correspondente (Aguardando resposta, Painel de grupos, Alertas, Demandas). Os indicadores completos continuam logo abaixo, em **Análises detalhadas** (clique em *Mostrar*; a escolha fica guardada no navegador).
 
 ## Painel de grupos
 
