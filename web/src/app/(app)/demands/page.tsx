@@ -4,7 +4,7 @@ import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { requireProfile } from '@/lib/auth';
 import { DEFAULT_DEMAND_TYPES, demandsEnabled } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
-import type { Demand } from '@/lib/types';
+import type { Demand, MyPermissions } from '@/lib/types';
 import { DemandsBoard, type DemandRow } from './board';
 
 const STATUS_FILTER: Record<string, string[]> = {
@@ -34,7 +34,7 @@ export default async function DemandsPage({ searchParams }: PageProps<'/demands'
   if (assigneeId) query = query.eq('assignee_id', assigneeId);
   if (q) query = query.ilike('description', `%${q}%`);
 
-  const [{ data }, { data: groups }, { data: members }, { data: settings }, { data: typeInd }, { count: openCount }] =
+  const [{ data }, { data: groups }, { data: members }, { data: settings }, { data: typeInd }, { count: openCount }, { data: perms }] =
     await Promise.all([
       query,
       supabase.from('groups').select('id, name').eq('monitored', true).is('removed_at', null).order('name'),
@@ -48,7 +48,11 @@ export default async function DemandsPage({ searchParams }: PageProps<'/demands'
         .single(),
       supabase.from('indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
       supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', STATUS_FILTER.open),
+      supabase.rpc('my_permissions'),
     ]);
+  // grupos em que o usuário pode gerenciar demandas (administrador: todos)
+  const myPerms = perms as MyPermissions | null;
+  const editableGroupIds = myPerms?.admin ? null : (myPerms?.demand_groups ?? []);
 
   const categories = (typeInd?.params as { categories?: { name: string }[] } | undefined)?.categories;
   const types = categories?.length ? categories.map((c) => c.name).filter(Boolean) : DEFAULT_DEMAND_TYPES;
@@ -99,6 +103,7 @@ export default async function DemandsPage({ searchParams }: PageProps<'/demands'
         types={types}
         timeZone={settings?.timezone ?? 'America/Sao_Paulo'}
         manualEnabled={settings?.demand_manual_enabled ?? true}
+        editableGroupIds={editableGroupIds}
         openCount={openCount ?? 0}
         filters={{ status, groupId, assigneeId, q }}
         isAdmin={profile.role === 'admin'}

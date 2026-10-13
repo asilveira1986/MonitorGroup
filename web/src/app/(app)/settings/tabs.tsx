@@ -11,6 +11,7 @@ const TABS = [
   { href: '/settings/alerts', label: 'Regras de alerta' },
   { href: '/settings/team', label: 'Equipe' },
   { href: '/settings/users', label: 'Usuários' },
+  { href: '/settings/sectors', label: 'Setores', adminOnly: true },
 ];
 
 export function SettingsTabs({ isAdmin }: { isAdmin: boolean }) {

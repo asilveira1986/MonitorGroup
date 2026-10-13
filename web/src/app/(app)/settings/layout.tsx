@@ -8,7 +8,7 @@ export default async function SettingsLayout({ children }: LayoutProps<'/setting
     <>
       <PageHeader
         title="Configurações"
-        description="Conexão com o WhatsApp, indicadores, regras de alerta, equipe e usuários."
+        description="Conexão com o WhatsApp, indicadores, regras de alerta, equipe, usuários e setores."
       />
       <SettingsTabs isAdmin={profile.role === 'admin'} />
       <div className="mt-6">{children}</div>

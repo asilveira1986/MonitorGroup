@@ -69,10 +69,17 @@ export async function resolveAllAlerts(): Promise<Result> {
   const profile = await requireProfile();
   const supabase = await createClient();
   const now = new Date().toISOString();
-  const { error } = await supabase
+  let query = supabase
     .from('alerts')
     .update({ status: 'resolved', resolved_at: now, acknowledged_by: profile.id, acknowledged_at: now })
     .neq('status', 'resolved');
+  // fora do administrador, só os alertas que o setor pode tratar (e os sem grupo)
+  if (profile.role !== 'admin') {
+    const { data } = await supabase.rpc('my_permissions');
+    const ids = ((data as { alert_groups?: string[] } | null)?.alert_groups ?? []).join(',');
+    query = ids ? query.or(`group_id.is.null,group_id.in.(${ids})`) : query.is('group_id', null);
+  }
+  const { error } = await query;
   revalidatePath('/', 'layout');
   return fail(error);
 }
@@ -83,6 +90,15 @@ export async function deleteRemovedGroups(groupIds: string[]): Promise<Result> {
   if (!groupIds.length) return { ok: false, error: 'Nenhum grupo selecionado.' };
   const supabase = await createClient();
   const { error } = await supabase.rpc('delete_removed_groups', { p_group_ids: groupIds });
+  revalidatePath('/', 'layout');
+  return fail(error);
+}
+
+/** Muda o setor do grupo (somente admin; o banco também confere). */
+export async function setGroupSector(groupId: string, sectorId: string | null): Promise<Result> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from('groups').update({ sector_id: sectorId }).eq('id', groupId);
   revalidatePath('/', 'layout');
   return fail(error);
 }

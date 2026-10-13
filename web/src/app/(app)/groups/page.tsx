@@ -46,7 +46,7 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
   } else {
     let query = supabase
       .from('groups')
-      .select('*')
+      .select('*, sectors(name)')
       .is('removed_at', null)
       .order('last_message_at', { ascending: false, nullsFirst: false });
     if (q) query = query.ilike('name', `%${q}%`);

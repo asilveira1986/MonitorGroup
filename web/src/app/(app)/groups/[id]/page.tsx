@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCheck, Hourglass, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, Building2, CheckCheck, Hourglass, Trash2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ActionButton } from '@/components/action-button';
@@ -8,7 +8,7 @@ import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { Group, Message, OutgoingMessage } from '@/lib/types';
 import { markGroupAnswered } from '../../actions';
-import { LiveMessages, MonitorToggle, SlaForm } from '../group-controls';
+import { LiveMessages, MonitorToggle, SectorSelect, SlaForm } from '../group-controls';
 import { PAGE_SIZE } from './constants';
 import { Conversation } from './conversation';
 import { DeleteRemovedGroupButton } from '../removed-groups';
@@ -39,7 +39,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
   const recentlySent = minutesAgo(5);
-  const [{ data: members }, { data: typeInd }, { data: outgoing }] = await Promise.all([
+  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }] = await Promise.all([
     supabase.from('team_members').select('id, name').eq('active', true).order('name'),
     supabase.from('indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
     // respostas do painel que ainda não voltaram pelo WhatsApp
@@ -49,6 +49,10 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
       .eq('group_id', id)
       .or(`status.neq.sent,sent_at.gt.${recentlySent}`)
       .order('created_at'),
+    // permissões do setor do grupo para este usuário (administrador: todas)
+    supabase.rpc('has_group_permission', { p_group_id: id, p_permission: 'reply' }),
+    supabase.rpc('has_group_permission', { p_group_id: id, p_permission: 'demands' }),
+    supabase.from('sectors').select('id, name').order('name'),
   ]);
   const categories = (typeInd?.params as { categories?: { name: string }[] } | undefined)?.categories;
   if (!group) notFound();
@@ -69,7 +73,9 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
       : null
     : !canReplyRole
       ? 'Só administradores podem responder pelo sistema.'
-      : g.removed_at
+      : canReplyHere === false
+        ? 'Seu setor não tem permissão para responder neste grupo.'
+        : g.removed_at
         ? 'O número conectado não participa mais deste grupo.'
         : !g.monitored
           ? 'Ative o monitoramento do grupo para responder por aqui.'
@@ -96,11 +102,24 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
             <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-ink-2">
               <Users className="h-4 w-4" /> {g.participants_count} participantes · última atividade {timeAgo(g.last_message_at)}
             </p>
+            {profile.role !== 'admin' && (
+              <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">
+                <Building2 className="h-3.5 w-3.5" /> Setor: {sectors?.find((s) => s.id === g.sector_id)?.name ?? '—'}
+              </p>
+            )}
           </div>
         </div>
         {!g.removed_at && (
           <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
             <MonitorToggle groupId={g.id} monitored={g.monitored} label="Monitorar este grupo" />
+            {profile.role === 'admin' && (
+              <div>
+                <p className="mb-1 flex items-center gap-1 text-xs font-medium text-ink-2">
+                  <Building2 className="h-3.5 w-3.5" /> Setor (quem vê e atende o grupo)
+                </p>
+                <SectorSelect groupId={g.id} sectorId={g.sector_id ?? null} sectors={sectors ?? []} />
+              </div>
+            )}
             <div>
               <p className="mb-1 text-xs font-medium text-ink-2">SLA de resposta do grupo</p>
               <SlaForm groupId={g.id} sla={g.sla_minutes} defaultSla={settings?.default_sla_minutes ?? 30} />
@@ -170,7 +189,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
               userName: profile.full_name || profile.email.split('@')[0],
             }}
             demands={{
-              manualEnabled: settings?.demand_manual_enabled ?? true,
+              manualEnabled: (settings?.demand_manual_enabled ?? true) && canDemandsHere !== false,
               groupName: g.name,
               members: members ?? [],
               types: categories?.length ? categories.map((c) => c.name).filter(Boolean) : DEFAULT_DEMAND_TYPES,

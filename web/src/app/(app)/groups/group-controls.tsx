@@ -3,9 +3,50 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Button, Input, Toggle } from '@/components/ui';
+import { Button, Input, Select, Toggle } from '@/components/ui';
 import { useRealtime } from '@/lib/use-realtime';
-import { markSenderAsTeam, setGroupMonitored, setGroupSla } from '../actions';
+import { markSenderAsTeam, setGroupMonitored, setGroupSector, setGroupSla } from '../actions';
+
+/** Setor do grupo (somente admin): define quem vê e age sobre o grupo. */
+export function SectorSelect({
+  groupId,
+  sectorId,
+  sectors,
+}: {
+  groupId: string;
+  sectorId: string | null;
+  sectors: { id: string; name: string }[];
+}) {
+  const [value, setValue] = useState(sectorId ?? '');
+  const [pending, start] = useTransition();
+  return (
+    <Select
+      value={value}
+      disabled={pending}
+      aria-label="Setor do grupo"
+      className="h-9 text-sm"
+      onChange={(e) => {
+        const next = e.target.value;
+        const prev = value;
+        setValue(next);
+        start(async () => {
+          const res = await setGroupSector(groupId, next || null);
+          if (!res.ok) {
+            setValue(prev);
+            toast.error(res.error);
+          } else toast.success(next ? 'Setor do grupo alterado' : 'Grupo sem setor: só administradores veem');
+        });
+      }}
+    >
+      <option value="">Sem setor (só administradores)</option>
+      {sectors.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.name}
+        </option>
+      ))}
+    </Select>
+  );
+}
 
 export function MonitorToggle({ groupId, monitored, label }: { groupId: string; monitored: boolean; label?: string }) {
   const [value, setValue] = useState(monitored);

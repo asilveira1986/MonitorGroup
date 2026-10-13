@@ -30,6 +30,10 @@ export type Instance = {
 };
 
 export type Group = {
+  /** setor do grupo (define quem vê e atende) */
+  sector_id?: string | null;
+  /** nome do setor (quando a consulta inclui sectors(name)) */
+  sectors?: { name: string } | null;
   id: string;
   instance_id: string;
   jid: string;
@@ -262,4 +266,13 @@ export type DemandEvent = {
   actor_id: string | null;
   actor_label: string | null;
   created_at: string;
+};
+
+/** Permissões do usuário atual pelos setores (my_permissions no banco). */
+export type MyPermissions = {
+  admin: boolean;
+  sectors: { id: string; name: string; can_reply: boolean; can_manage_demands: boolean; can_handle_alerts: boolean }[];
+  reply_groups: string[];
+  demand_groups: string[];
+  alert_groups: string[];
 };

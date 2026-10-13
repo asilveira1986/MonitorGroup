@@ -38,12 +38,15 @@ export function DemandDrawer({
   members,
   types,
   timeZone,
+  locked = false,
   onClose,
 }: {
   demand: DemandRow;
   members: Option[];
   types: string[];
   timeZone: string;
+  /** setor do grupo sem permissão de gerenciar demandas: só consulta */
+  locked?: boolean;
   onClose: () => void;
 }) {
   const [events, setEvents] = useState<DemandEvent[] | null>(null);
@@ -93,6 +96,11 @@ export function DemandDrawer({
               Demanda #{demand.number} · {demand.group_name} · {DEMAND_SOURCE_LABEL[demand.source]}
             </p>
             <h2 className="mt-0.5 break-words text-lg font-semibold">{demand.description}</h2>
+            {locked && (
+              <p className="mt-1 text-xs text-warning-ink">
+                Somente consulta: o setor deste grupo não tem permissão para gerenciar demandas.
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <DemandStatusBadge status={demand.status} />
               {overdue && <span className="text-xs font-medium text-critical-ink">Prazo vencido</span>}
@@ -123,7 +131,7 @@ export function DemandDrawer({
             <Field label="Status">
               <Select
                 value={demand.status}
-                disabled={pending}
+                disabled={pending || locked}
                 onChange={(e) => save({ status: e.target.value as DemandStatus }, 'Status atualizado')}
               >
                 {Object.entries(DEMAND_STATUS_LABEL).map(([k, v]) => (
@@ -136,7 +144,7 @@ export function DemandDrawer({
             <Field label="Responsável">
               <Select
                 value={demand.assignee_id ?? ''}
-                disabled={pending}
+                disabled={pending || locked}
                 onChange={(e) => save({ assignee_id: e.target.value || null }, 'Responsável atualizado')}
               >
                 <option value="">—</option>
@@ -150,7 +158,7 @@ export function DemandDrawer({
             <Field label="Tipo">
               <Select
                 value={demand.type ?? ''}
-                disabled={pending}
+                disabled={pending || locked}
                 onChange={(e) => save({ type: e.target.value || null }, 'Tipo atualizado')}
               >
                 <option value="">—</option>
@@ -164,7 +172,7 @@ export function DemandDrawer({
                 type="datetime-local"
                 suppressHydrationWarning
                 defaultValue={toLocalInput(demand.promised_at)}
-                disabled={pending}
+                disabled={pending || locked}
                 onBlur={(e) => {
                   const v = e.target.value ? new Date(e.target.value).toISOString() : null;
                   if (v !== (demand.promised_at ? new Date(demand.promised_at).toISOString() : null))
@@ -197,7 +205,7 @@ export function DemandDrawer({
             {demand.status === 'entregue' && (
               <Toggle
                 checked={Boolean(demand.confirmed_at)}
-                disabled={pending}
+                disabled={pending || locked}
                 onChange={(v) => save({ confirmed: v }, v ? 'Confirmação registrada' : 'Confirmação removida')}
                 label={
                   <span className="inline-flex items-center gap-1.5 text-sm">
@@ -210,7 +218,7 @@ export function DemandDrawer({
               <Button
                 size="sm"
                 variant="secondary"
-                disabled={pending}
+                disabled={pending || locked}
                 onClick={() =>
                   start(async () => {
                     const res = await registerFollowup(demand.id);

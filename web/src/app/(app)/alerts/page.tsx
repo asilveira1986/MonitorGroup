@@ -4,7 +4,7 @@ import { ActionButton } from '@/components/action-button';
 import { Badge, Card, EmptyState, PageHeader, SeverityBadge } from '@/components/ui';
 import { ALERT_TYPE_LABEL, cn, formatDateTime, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
-import type { Alert } from '@/lib/types';
+import type { Alert, MyPermissions } from '@/lib/types';
 import { resolveAllAlerts, updateAlertStatus } from '../actions';
 import { AlertFilters } from './filters';
 
@@ -28,12 +28,14 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
     if (severity) q = q.eq('severity', severity);
     return q;
   };
-  const [{ data: active }, { data: resolved }, { data: settings }, { data: rules }, { data: indicators }] = await Promise.all([
+  const [{ data: active }, { data: resolved }, { data: settings }, { data: rules }, { data: indicators }, { data: perms }] =
+    await Promise.all([
     base().neq('status', 'resolved').limit(200),
     base().eq('status', 'resolved').limit(100),
     supabase.from('app_settings').select('timezone').eq('id', 1).single(),
     supabase.from('alert_rules').select('type, indicator_key').eq('active', true),
     supabase.from('indicators').select('key, enabled, alert_enabled, indicator_blocks!inner(enabled)'),
+    supabase.rpc('my_permissions'),
   ]);
 
   // tipos do filtro = os das regras ativas nas configurações (regra presa a um indicador desligado,
@@ -55,7 +57,10 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
     groups: { name: string } | null;
     profiles: { full_name: string | null; email: string } | null;
   })[];
-  const openCount = alerts.filter((a) => a.status === 'open').length;
+  // tratar alertas: administrador, alerta sem grupo, ou setor do grupo com essa permissão
+  const myPerms = perms as MyPermissions | null;
+  const canHandle = (a: Alert) => Boolean(myPerms?.admin) || !a.group_id || Boolean(myPerms?.alert_groups.includes(a.group_id));
+  const handleableOpen = alerts.filter((a) => a.status !== 'resolved' && canHandle(a)).length;
 
   return (
     <>
@@ -63,7 +68,7 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
         title="Alertas"
         description="Situações que precisam de atenção. Configure as regras em Configurações › Regras de alerta."
         action={
-          openCount > 0 && (
+          handleableOpen > 0 && (
             <ActionButton action={resolveAllAlerts} confirm="Resolver todos os alertas em aberto?" success="Alertas resolvidos">
               <CheckCheck className="h-3.5 w-3.5" /> Resolver todos
             </ActionButton>
@@ -129,7 +134,7 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
                   )}
                 </div>
               </div>
-              {a.status !== 'resolved' && (
+              {a.status !== 'resolved' && canHandle(a) && (
                 <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex">
                   {a.status === 'open' && (
                     <ActionButton action={updateAlertStatus.bind(null, a.id, 'acknowledged')} variant="ghost">

@@ -1,4 +1,4 @@
-import { Hourglass } from 'lucide-react';
+import { Building2, Hourglass } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui';
 import { cn, formatNumber, timeAgo } from '@/lib/format';
@@ -14,6 +14,20 @@ function Status({ g }: { g: Group }) {
       </Badge>
     );
   return <Badge tone="good">Em dia</Badge>;
+}
+
+/** Setor do grupo (quem vê e atende); sem setor, só administradores veem. */
+function SectorTag({ g }: { g: Group }) {
+  if (g.sectors === undefined) return null;
+  return g.sectors?.name ? (
+    <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted">
+      <Building2 className="h-3 w-3" aria-hidden /> {g.sectors.name}
+    </span>
+  ) : (
+    <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-warning-ink" title="Só administradores veem este grupo">
+      <Building2 className="h-3 w-3" aria-hidden /> sem setor
+    </span>
+  );
 }
 
 export function GroupsTable({ groups }: { groups: Group[] }) {
@@ -33,6 +47,7 @@ export function GroupsTable({ groups }: { groups: Group[] }) {
                   <span className="shrink-0 text-[11px] text-muted">{timeAgo(g.last_message_at)}</span>
                 </span>
                 <span className="mt-0.5 block truncate text-sm text-ink-2">{g.last_message_preview ?? '—'}</span>
+                <SectorTag g={g} />
                 <span className="mt-1.5 block">
                   <Status g={g} />
                 </span>
@@ -65,7 +80,10 @@ export function GroupsTable({ groups }: { groups: Group[] }) {
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand">
                     {g.name.slice(0, 2).toUpperCase()}
                   </span>
-                  <span className="max-w-[240px] truncate font-medium">{g.name}</span>
+                  <span className="min-w-0">
+                    <span className="block max-w-[240px] truncate font-medium">{g.name}</span>
+                    <SectorTag g={g} />
+                  </span>
                 </Link>
               </td>
               <td className="max-w-[320px] px-3 py-3">

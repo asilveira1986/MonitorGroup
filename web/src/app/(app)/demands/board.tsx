@@ -55,6 +55,7 @@ export function DemandsBoard({
   types,
   timeZone,
   manualEnabled,
+  editableGroupIds,
   openCount,
   filters,
 }: {
@@ -64,6 +65,8 @@ export function DemandsBoard({
   types: string[];
   timeZone: string;
   manualEnabled: boolean;
+  /** grupos em que o usuário gerencia demandas (null = todos, administrador) */
+  editableGroupIds: string[] | null;
   openCount: number;
   filters: { status: string; groupId: string | null; assigneeId: string | null; q: string };
   isAdmin: boolean;
@@ -139,7 +142,7 @@ export function DemandsBoard({
               </option>
             ))}
           </Select>
-          {manualEnabled && (
+          {manualEnabled && (editableGroupIds === null || editableGroupIds.length > 0) && (
             <Button size="sm" onClick={() => setCreating(true)}>
               <Plus className="h-3.5 w-3.5" /> Nova demanda
             </Button>
@@ -210,9 +213,23 @@ export function DemandsBoard({
         </Card>
       )}
 
-      {creating && <DemandForm groups={groups} members={members} types={types} onClose={() => setCreating(false)} />}
+      {creating && (
+        <DemandForm
+          groups={editableGroupIds === null ? groups : groups.filter((g) => editableGroupIds.includes(g.id))}
+          members={members}
+          types={types}
+          onClose={() => setCreating(false)}
+        />
+      )}
       {open && (
-        <DemandDrawer demand={open} members={members} types={types} timeZone={timeZone} onClose={() => go('id', null)} />
+        <DemandDrawer
+          demand={open}
+          members={members}
+          types={types}
+          timeZone={timeZone}
+          locked={editableGroupIds !== null && !editableGroupIds.includes(open.group_id)}
+          onClose={() => go('id', null)}
+        />
       )}
     </>
   );

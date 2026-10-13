@@ -64,6 +64,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    24. `supabase/migrations/0024_message_alert.sql`
    25. `supabase/migrations/0025_sla_screen_alerts.sql`
    26. `supabase/migrations/0026_commitment_demands.sql`
+   27. `supabase/migrations/0027_sectors.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -240,6 +241,17 @@ O indicador **Precisa de resposta?**, no bloco Capacidade de resposta, olha as �
 | **Não precisa** | agradecimento ou encerramento ("obrigado", "deu certo", 👍), risadas e emojis, ou mensagens sem pergunta, pedido ou problema. |
 
 O cartão mostra cada grupo numa linha com o motivo e a mensagem analisada. A tela cheia lista todos os grupos com os sinais encontrados. Em **Configurações › Indicadores** dá para ajustar quantos dias e quantas mensagens analisar e editar as listas de palavras de urgência, pedido e encerramento.
+
+## Setores e permissões de acesso
+
+Em **Configurações › Setores** (somente admin) você cria setores, marca os usuários e os grupos de cada um e escolhe o que o setor pode fazer.
+
+- **Cada grupo pertence a um setor só.** Marcar um grupo num setor tira ele do setor anterior. O setor também pode ser trocado na página do grupo.
+- **Quem é do setor vê os grupos do setor**: lista de grupos, painel, conversas, dashboard, indicadores, alertas e demandas mostram só esses grupos. Um usuário pode estar em mais de um setor.
+- **Permissões por setor**: *Responder pelo sistema*, *Gerenciar demandas* e *Tratar alertas*. Ver os grupos e as conversas é a base de todo setor. As regras são conferidas no banco (RLS), não só na tela.
+- **Administradores veem e fazem tudo.** Grupos sem setor e usuários sem setor ficam visíveis só para administradores.
+- **Grupos novos** entram no setor escolhido em *Setor dos grupos novos*. Com "Nenhum", só administradores veem até alguém definir.
+- **Na primeira atualização** é criado o setor **Geral** com todos os grupos e usuários, para nada mudar até você organizar os setores.
 
 ## Responder pelo sistema
 
