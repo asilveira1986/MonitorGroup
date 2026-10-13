@@ -5778,6 +5778,7 @@ declare
   v_key  text;
   v_data jsonb;
   v_panel jsonb;
+  v_flow  jsonb;
 begin
   if not public.is_active_user() then
     raise exception 'not authorized' using errcode = '42501';
@@ -5791,11 +5792,19 @@ begin
       execute format('select public.%I($1, $2)', 'ind_' || v_key)
         into v_data using f, (select params from public.indicators where key = v_key);
       v_kpi := v_kpi || jsonb_build_object(v_key, jsonb_build_object(
-        'value', v_data->'value', 'tone', v_data->'tone', 'hint', v_data->'hint', 'secondary', v_data->'secondary'));
+        'value', v_data->'value', 'tone', v_data->'tone', 'hint', v_data->'hint', 'secondary', v_data->'secondary',
+        'trend', v_data->'trend'->'data'));
     exception when others then
       v_kpi := v_kpi || jsonb_build_object(v_key, jsonb_build_object('value', null));
     end;
   end loop;
+
+  -- fluxo de mensagens (por hora num dia, por dia em vários): recebidas x respostas
+  begin
+    v_flow := public.ind_dia_hora_a_hora(f, (select params from public.indicators where key = 'dia_hora_a_hora'));
+  exception when others then
+    v_flow := null;
+  end;
 
   -- situação dos grupos agora (mesma regra do painel de grupos)
   v_panel := coalesce((
@@ -5810,6 +5819,7 @@ begin
                       where m.from_team and (p_member_id is null or m.team_member_id = p_member_id)),
     'first_response', v_kpi->'tempo_primeira_resposta',
     'sla_rate', v_kpi->'taxa_resposta_sla',
+    'sla_target', (select (params->>'target_percent')::numeric from public.indicators where key = 'taxa_resposta_sla'),
     -- situação agora
     'groups_waiting', (select count(*) from jsonb_array_elements(v_panel) g where g->>'status' in ('waiting', 'late')),
     'groups_late', (select count(*) from jsonb_array_elements(v_panel) g where g->>'status' = 'late'),
@@ -5853,7 +5863,9 @@ begin
     'groups_active', (select count(distinct m.group_id) from public.ind_scope(f) m),
     'groups_monitored', (select count(*) from public.groups g
                           where g.monitored and g.removed_at is null and (p_group_id is null or g.id = p_group_id)),
-    'groups_silent', v_kpi->'grupos_silenciosos'
+    'groups_silent', v_kpi->'grupos_silenciosos',
+    'flow', coalesce(v_flow->'data', '[]'::jsonb),
+    'flow_hourly', coalesce(v_flow->>'visual' = 'bars', false)
   );
 end;
 $$;

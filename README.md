@@ -160,7 +160,7 @@ O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "
 
 ## Dashboard: visão da gestão
 
-O topo do **Dashboard** traz os totalizadores para a gestão acompanhar o andamento, em quatro cartões, respeitando os filtros de período, grupo e atendente (e o setor de quem acessa):
+O topo do **Dashboard** traz os totalizadores para a gestão acompanhar o andamento, de forma visual (anel do SLA com a meta, fluxo de mensagens recebidas x respostas, cartões coloridos da situação agora, barras de demandas e de fechamento das conversas), respeitando os filtros de período, grupo e atendente (e o setor de quem acessa):
 
 | Cartão | Números |
 |---|---|
