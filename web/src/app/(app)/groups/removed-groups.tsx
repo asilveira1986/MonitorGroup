@@ -75,7 +75,7 @@ export function RemovedGroups({ groups, isAdmin }: { groups: RemovedGroup[]; isA
               />
             )}
             <div className="min-w-0 flex-1">
-              <Link href={`/groups/${g.id}`} className="block truncate font-medium hover:text-brand">
+              <Link href={`/groups/${g.id}`} className="block truncate font-medium hover:text-brand-text">
                 {g.name}
               </Link>
               <p className="mt-0.5 text-sm text-ink-2">
@@ -139,7 +139,7 @@ export function RemovedGroups({ groups, isAdmin }: { groups: RemovedGroup[]; isA
                   </td>
                 )}
                 <td className="px-5 py-3">
-                  <Link href={`/groups/${g.id}`} className="flex items-center gap-3 hover:text-brand">
+                  <Link href={`/groups/${g.id}`} className="flex items-center gap-3 hover:text-brand-text">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold text-ink-2">
                       {g.name.slice(0, 2).toUpperCase()}
                     </span>

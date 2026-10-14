@@ -158,6 +158,10 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
 
 O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "em 2 dias"), cobranças do cliente, reabertura e confirmação após a entrega. As palavras usadas ficam nos parâmetros dos indicadores *Retrabalho* e *Confirmação do cliente*.
 
+## Identidade visual
+
+O painel segue a identidade **Monitor Group**: símbolo do balão com o pulso em "M" e o ponto de alerta, verde-limão *Sinal* (`#C6F432`) como cor da marca e do botão principal, menu lateral na superfície escura da marca (`#0E1726`), **Sora** nos títulos, **DM Sans** na interface e **JetBrains Mono** nos números e horários. As cores ficam em tokens em `web/src/app/globals.css` (tema claro e escuro); o logo, em `web/src/components/logo.tsx`; o ícone do app, em `web/src/app/icon.svg`.
+
 ## Dashboard: visão da gestão
 
 O topo do **Dashboard** traz os totalizadores para a gestão acompanhar o andamento, de forma visual (anel do SLA com a meta, fluxo de mensagens recebidas x respostas, cartões coloridos da situação agora, barras de demandas e de fechamento das conversas), respeitando os filtros de período, grupo e atendente (e o setor de quem acessa):

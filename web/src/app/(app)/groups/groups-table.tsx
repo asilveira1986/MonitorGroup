@@ -38,7 +38,7 @@ export function GroupsTable({ groups }: { groups: Group[] }) {
         {groups.map((g) => (
           <li key={g.id} className={cn('flex items-start gap-3 px-4 py-3', !g.monitored && 'opacity-60')}>
             <Link href={`/groups/${g.id}`} className="flex min-w-0 flex-1 items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
                 {g.name.slice(0, 2).toUpperCase()}
               </span>
               <span className="min-w-0 flex-1">
@@ -76,8 +76,8 @@ export function GroupsTable({ groups }: { groups: Group[] }) {
           {groups.map((g) => (
             <tr key={g.id} className={cn('border-t border-line', !g.monitored && 'opacity-60')}>
               <td className="px-5 py-3">
-                <Link href={`/groups/${g.id}`} className="flex items-center gap-3 hover:text-brand">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand">
+                <Link href={`/groups/${g.id}`} className="flex items-center gap-3 hover:text-brand-text">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
                     {g.name.slice(0, 2).toUpperCase()}
                   </span>
                   <span className="min-w-0">

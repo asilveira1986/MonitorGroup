@@ -38,7 +38,7 @@ export default async function TeamPage() {
             <ul>
               {members.map((m) => (
                 <li key={m.id} className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-surface-2">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
                     {m.name.slice(0, 2).toUpperCase()}
                   </span>
                   <div className="min-w-0 flex-1">

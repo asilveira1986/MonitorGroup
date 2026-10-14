@@ -278,7 +278,7 @@ function FlowChart({ data, hourly }: { data: NonNullable<ManagementSummaryData['
 function SectionTitle({ icon: Icon, title, context, help }: { icon: LucideIcon; title: string; context: string; help: string }) {
   return (
     <div className="mb-3 flex items-center gap-2">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand-text">
         <Icon className="h-4 w-4" aria-hidden />
       </span>
       <h3 className="min-w-0 flex-1 text-sm font-semibold">
@@ -328,7 +328,9 @@ function NowTile({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-xs font-medium text-ink-2">{label}</span>
-        <span className={cn('block truncate text-2xl font-semibold tabular leading-tight tracking-tight', t.text)}>{value}</span>
+        <span className={cn('block truncate font-semibold leading-tight tracking-tight', /^\d/.test(value) ? 'tabular text-2xl' : 'py-0.5 text-xl', t.text)}>
+          {value}
+        </span>
         <span className="line-clamp-2 block text-[11px] leading-snug text-muted">{note}</span>
       </span>
       <ArrowRight className="h-4 w-4 shrink-0 text-muted opacity-0 transition group-hover:opacity-100" aria-hidden />

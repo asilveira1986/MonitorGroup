@@ -64,7 +64,7 @@ function GroupPicker({ groups, initial }: { groups: { id: string; name: string }
         <span className="text-xs text-muted">
           {selected.size === 0 ? 'Todos os grupos monitorados' : `${selected.size} selecionado(s)`}
           {selected.size > 0 && (
-            <button type="button" className="ml-2 text-brand hover:underline" onClick={() => setSelected(new Set())}>
+            <button type="button" className="ml-2 text-brand-text hover:underline" onClick={() => setSelected(new Set())}>
               limpar
             </button>
           )}
@@ -114,7 +114,7 @@ function RuleEditor({
   const needsMinutes = type === 'no_response' || type === 'inactivity' || type === 'high_volume';
 
   return (
-    <Card className="border-brand/40 p-5">
+    <Card className="border-brand-line/40 p-5">
       <ActionForm action={saveAlertRule} success="Regra salva" onDone={onClose} className="space-y-5">
         {(pending) => (
           <>

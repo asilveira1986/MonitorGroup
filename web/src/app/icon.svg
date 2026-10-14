@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Monitor Group">
+  <rect width="512" height="512" rx="112" fill="#0E1726"></rect>
+  <g transform="translate(64 72) scale(6)">
+    <path fill="#C6F432" d="M20 6h24a14 14 0 0 1 14 14v18a14 14 0 0 1-14 14H25l-11 8v-9.2A14 14 0 0 1 6 38V20A14 14 0 0 1 20 6z"></path>
+    <polyline fill="none" stroke="#0E1726" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" points="13,30 19,30 24.5,19 32,39 39.5,19 45,30 51,30"></polyline>
+    <circle cx="53" cy="11" r="8" fill="#0E1726"></circle>
+    <circle cx="53" cy="11" r="5.5" fill="#FF7A72"></circle>
+  </g>
+</svg>

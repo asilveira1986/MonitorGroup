@@ -67,7 +67,7 @@ type ScreenItem = {
 };
 
 const TONE: Record<Tone, { header: string; border: string; button: string; glow: string }> = {
-  brand: { header: 'bg-brand text-brand-ink', border: 'border-brand', button: 'bg-brand text-brand-ink', glow: 'var(--brand)' },
+  brand: { header: 'bg-brand text-brand-ink', border: 'border-brand-line', button: 'bg-brand text-brand-ink', glow: 'var(--brand)' },
   critical: { header: 'bg-critical text-white', border: 'border-critical', button: 'bg-critical text-white', glow: 'var(--critical)' },
   warning: { header: 'bg-warning text-black', border: 'border-warning', button: 'bg-warning text-black', glow: 'var(--warning)' },
   info: { header: 'bg-series-1 text-white', border: 'border-series-1', button: 'bg-series-1 text-white', glow: 'var(--series-1)' },

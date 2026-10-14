@@ -53,7 +53,7 @@ function MediaSeen({ message, timeZone }: { message: Message; timeZone?: string 
           if (r.ok) setSeen({ at: new Date().toISOString(), via: 'painel', by: null });
         })
       }
-      className="inline-flex items-center gap-1 rounded-full border border-warning/40 px-1.5 py-0.5 text-warning-ink hover:border-brand hover:text-brand disabled:opacity-50"
+      className="inline-flex items-center gap-1 rounded-full border border-warning/40 px-1.5 py-0.5 text-warning-ink hover:border-brand-line hover:text-brand-text disabled:opacity-50"
       title="Ninguém viu este arquivo: a conversa não foi lida no celular conectado"
     >
       <CheckCheck className="h-3 w-3" aria-hidden /> dar baixa
@@ -201,7 +201,7 @@ export function Conversation({
                   )}
                 >
                   <div className="mb-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 [&>*]:whitespace-nowrap">
-                    <span className={cn('text-xs font-semibold', m.from_team ? 'text-brand' : 'text-series-1')}>
+                    <span className={cn('text-xs font-semibold', m.from_team ? 'text-brand-text' : 'text-series-1')}>
                       {sender}
                     </span>
                     {!m.from_team && m.sender_jid && (
@@ -219,7 +219,7 @@ export function Conversation({
                       demands.manualEnabled && (
                         <button
                           onClick={() => setDemandFrom(m)}
-                          className="text-[11px] text-muted underline-offset-2 hover:text-brand hover:underline"
+                          className="text-[11px] text-muted underline-offset-2 hover:text-brand-text hover:underline"
                         >
                           criar demanda
                         </button>
@@ -228,7 +228,7 @@ export function Conversation({
                     {reply.enabled && (
                       <button
                         onClick={() => setReplyTo(m)}
-                        className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] text-muted hover:bg-surface-2 hover:text-brand"
+                        className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] text-muted hover:bg-surface-2 hover:text-brand-text"
                         aria-label={`Responder a ${sender}`}
                       >
                         <Reply className="h-3 w-3" /> responder

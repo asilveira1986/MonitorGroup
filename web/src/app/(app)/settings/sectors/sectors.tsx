@@ -171,7 +171,7 @@ export function SectorEditor({
     <Card className="p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand-text">
             <Building2 className="h-4 w-4" />
           </span>
           <div className="min-w-0">

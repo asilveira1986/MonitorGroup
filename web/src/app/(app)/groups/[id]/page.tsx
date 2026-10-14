@@ -94,7 +94,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
 
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-base font-semibold text-brand sm:h-14 sm:w-14 sm:text-lg">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-base font-semibold text-brand-text sm:h-14 sm:w-14 sm:text-lg">
             {g.name.slice(0, 2).toUpperCase()}
           </span>
           <div>

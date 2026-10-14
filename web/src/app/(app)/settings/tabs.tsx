@@ -29,7 +29,7 @@ export function SettingsTabs({ isAdmin }: { isAdmin: boolean }) {
               'whitespace-nowrap rounded-full border px-3.5 py-2 text-sm font-medium transition',
               'sm:-mb-px sm:rounded-none sm:border-0 sm:border-b-2 sm:px-4 sm:py-2.5',
               active
-                ? 'border-brand bg-brand-soft text-brand sm:border-brand sm:bg-transparent sm:text-ink'
+                ? 'border-brand-line bg-brand-soft text-brand-text sm:border-brand-line sm:bg-transparent sm:text-ink'
                 : 'border-line text-ink-2 hover:text-ink sm:border-transparent',
             )}
           >

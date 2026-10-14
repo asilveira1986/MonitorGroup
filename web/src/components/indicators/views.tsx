@@ -66,7 +66,7 @@ function KpiList({
         const label = it.group_id ? (
           <Link
             href={`/groups/${it.group_id}`}
-            className="flex min-w-0 flex-col hover:[&>span:first-child]:text-brand sm:flex-row sm:items-baseline sm:gap-2"
+            className="flex min-w-0 flex-col hover:[&>span:first-child]:text-brand-text sm:flex-row sm:items-baseline sm:gap-2"
             onClick={(e) => e.stopPropagation()}
           >
             {text}
@@ -105,7 +105,7 @@ function KpiList({
                 <Link
                   href={`/groups/${it.group_id}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-line px-2 py-0.5 text-[11px] font-medium text-ink-2 hover:border-brand hover:text-brand"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-line px-2 py-0.5 text-[11px] font-medium text-ink-2 hover:border-brand-line hover:text-brand-text"
                 >
                   Ver grupo <ArrowUpRight className="h-3 w-3" aria-hidden />
                 </Link>
@@ -140,7 +140,7 @@ function KpiList({
                   e.stopPropagation();
                   ack(it.ack_id!);
                 }}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[11px] font-medium text-ink-2 hover:border-brand hover:text-brand disabled:opacity-50"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[11px] font-medium text-ink-2 hover:border-brand-line hover:text-brand-text disabled:opacity-50"
                 title="Marcar como visto"
               >
                 <CheckCheck className="h-3.5 w-3.5" aria-hidden /> dar baixa
@@ -300,7 +300,7 @@ function DataRow({
             ) : c.link_demand && row.demand_id ? (
               <Link
                 href={`/demands?status=all&id=${row.demand_id}`}
-                className="font-medium text-brand hover:underline"
+                className="font-medium text-brand-text hover:underline"
                 onClick={(e) => e.stopPropagation()}
               >
                 #{text}
@@ -346,7 +346,7 @@ function DataRow({
             <Link
               href={`/groups/${row[groupLink]}`}
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-medium text-ink-2 hover:border-brand hover:text-brand"
+              className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-medium text-ink-2 hover:border-brand-line hover:text-brand-text"
             >
               Ver grupo <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
             </Link>

@@ -51,7 +51,7 @@ export function GeneralForm({ settings, disabled }: { settings: AppSettings; dis
                     defaultChecked={settings.business_days.includes(i)}
                     className="peer sr-only"
                   />
-                  <span className="inline-flex h-9 w-12 items-center justify-center rounded-xl border border-line text-sm text-ink-2 transition peer-checked:border-brand peer-checked:bg-brand-soft peer-checked:text-brand">
+                  <span className="inline-flex h-9 w-12 items-center justify-center rounded-xl border border-line text-sm text-ink-2 transition peer-checked:border-brand-line peer-checked:bg-brand-soft peer-checked:text-brand-text">
                     {d}
                   </span>
                 </label>
@@ -70,7 +70,7 @@ export function GeneralForm({ settings, disabled }: { settings: AppSettings; dis
               <div className="flex h-11 items-center justify-between gap-2 rounded-xl border border-line bg-surface-2 px-3 text-sm sm:h-10">
                 <span>{settings.default_sla_minutes} min</span>
                 {!disabled && (
-                  <Link href="/settings/indicators" className="text-xs text-brand hover:underline">
+                  <Link href="/settings/indicators" className="text-xs text-brand-text hover:underline">
                     alterar
                   </Link>
                 )}

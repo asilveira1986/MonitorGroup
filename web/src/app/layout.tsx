@@ -1,12 +1,15 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { DM_Sans, JetBrains_Mono, Sora } from 'next/font/google';
 import { Toaster } from 'sonner';
 import './globals.css';
 
-const inter = Inter({ variable: '--font-inter', subsets: ['latin'] });
+// tipografia da identidade visual Monitor Group
+const dmSans = DM_Sans({ variable: '--font-dm-sans', subsets: ['latin'] });
+const sora = Sora({ variable: '--font-sora', subsets: ['latin'], weight: ['400', '600', '700'] });
+const jetbrains = JetBrains_Mono({ variable: '--font-jetbrains', subsets: ['latin'], weight: ['500'] });
 
 export const metadata: Metadata = {
-  title: 'MonitorGroup',
+  title: 'Monitor Group',
   description: 'Monitoramento de grupos de WhatsApp: garanta que todo cliente seja respondido.',
 };
 
@@ -15,8 +18,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: 'cover',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f6f7f5' },
-    { media: '(prefers-color-scheme: dark)', color: '#0d0d0d' },
+    { media: '(prefers-color-scheme: light)', color: '#f6f7f4' },
+    { media: '(prefers-color-scheme: dark)', color: '#0b1220' },
   ],
 };
 
@@ -26,7 +29,7 @@ const themeScript = `try{var t=localStorage.getItem('theme');if(t==='dark'||t===
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
+    <html lang="pt-BR" className={`${dmSans.variable} ${sora.variable} ${jetbrains.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

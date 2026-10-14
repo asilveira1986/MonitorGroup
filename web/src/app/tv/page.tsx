@@ -4,7 +4,7 @@ import { loadIndicatorFilters } from '@/lib/indicator-filters';
 import type { IndicatorValue } from '@/lib/indicators';
 import { TvBoard } from './board';
 
-export const metadata: Metadata = { title: 'MonitorGroup · Modo TV' };
+export const metadata: Metadata = { title: 'Monitor Group · Modo TV' };
 
 const nowIso = () => new Date().toISOString();
 // ?rotacao=N: segundos entre páginas de painéis. Padrão 0 = tudo numa tela só

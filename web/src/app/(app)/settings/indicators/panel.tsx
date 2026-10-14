@@ -35,7 +35,7 @@ function BusinessHoursEditor({ initial }: { initial: BusinessHours }) {
               onClick={() => setDays((prev) => (on ? prev.filter((x) => x !== i) : [...prev, i]))}
               className={cn(
                 'h-9 w-11 rounded-xl border text-sm transition',
-                on ? 'border-brand bg-brand-soft text-brand' : 'border-line text-ink-2',
+                on ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2',
               )}
             >
               {d}
@@ -47,7 +47,7 @@ function BusinessHoursEditor({ initial }: { initial: BusinessHours }) {
         <Input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="w-32" aria-label="Início do expediente" />
         às
         <Input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="w-32" aria-label="Fim do expediente" />
-        <a href="/settings" className="text-xs text-brand hover:underline">
+        <a href="/settings" className="text-xs text-brand-text hover:underline">
           {initial.holidays} feriado(s) cadastrado(s)
         </a>
       </div>

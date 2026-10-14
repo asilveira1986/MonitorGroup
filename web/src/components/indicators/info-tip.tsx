@@ -51,7 +51,7 @@ export function InfoTip({ children, label, className }: { children: ReactNode; l
         }}
         onKeyDown={(e) => e.stopPropagation()}
         className={cn(
-          'rounded-full p-0.5 text-muted/70 transition hover:text-ink-2 focus-visible:outline-2 focus-visible:outline-brand',
+          'rounded-full p-0.5 text-muted/70 transition hover:text-ink-2 focus-visible:outline-2 focus-visible:outline-brand-line',
           open && 'text-ink-2',
         )}
       >

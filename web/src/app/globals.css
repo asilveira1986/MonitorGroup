@@ -6,19 +6,25 @@
    ------------------------------------------------------------------ */
 :root {
   color-scheme: light;
-  --bg: #f6f7f5;
-  --surface: #ffffff;
-  --surface-2: #f1f2ef;
-  --border: rgba(11, 11, 11, 0.09);
-  --ink: #0b0b0b;
-  --ink-2: #52514e;
-  --muted: #898781;
-  --grid: #e9e8e2;
-  --axis: #c3c2b7;
+  --bg: #f6f7f4; /* surface */
+  --surface: #ffffff; /* surface-raised */
+  --surface-2: #eef0ec;
+  --border: #dfe3dc; /* line */
+  --ink: #0e1726;
+  --ink-2: #3b4657;
+  --muted: #5a6577; /* ink-muted */
+  --grid: #e8ebe5;
+  --axis: #c3c9bf;
 
-  --brand: #128c4a;
-  --brand-ink: #ffffff;
-  --brand-soft: rgba(18, 140, 74, 0.1);
+  /* marca: verde-limão Sinal (preenchimento) e suas versões para texto e fundo tingido */
+  --brand: #c6f432; /* signal */
+  --brand-ink: #0e1726; /* on-signal */
+  --brand-soft: #eef9c8; /* signal-soft */
+  --brand-text: #4a6600; /* signal-ink: sinal como texto, links, item ativo */
+  --brand-line: #4a6600; /* bordas de seleção e foco */
+  --deep: #0e1726; /* superfície escura da marca (menu lateral) */
+  --on-deep: #f6f7f4;
+  --mark-alert: #e5484d; /* só o ponto de alerta do símbolo */
 
   /* séries dos gráficos */
   --series-1: #2a78d6; /* recebidas (clientes) */
@@ -27,61 +33,93 @@
   --series-4: #eda100;
 
   /* status (sempre acompanhados de ícone + texto) */
-  --good: #0ca30c;
-  --good-ink: #006300;
-  --warning: #fab219;
-  --warning-ink: #8a5a00;
+  --good: #7fa60a;
+  --good-ink: #4a6600; /* Ativo: signal-ink */
+  --warning: #e8920c;
+  --warning-ink: #9a4a00; /* warn */
   --serious: #ec835a;
-  --critical: #d03b3b;
-  --critical-ink: #b42323;
+  --critical: #c2363b; /* alert */
+  --critical-ink: #c2363b;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0d0d0d;
-    --surface: #1a1a19;
-    --surface-2: #232321;
-    --border: rgba(255, 255, 255, 0.09);
-    --ink: #ffffff;
-    --ink-2: #c3c2b7;
-    --muted: #898781;
-    --grid: #2c2c2a;
-    --axis: #383835;
-    --brand: #25b864;
-    --brand-ink: #04140a;
-    --brand-soft: rgba(37, 184, 100, 0.14);
+    --bg: #0b1220;
+    --surface: #121b2d;
+    --surface-2: #1a2438;
+    --border: #24304a;
+    --ink: #eef2f7;
+    --ink-2: #c3ccd9;
+    --muted: #9aa6b8;
+    --grid: #1e2940;
+    --axis: #34425e;
+    --brand: #c6f432;
+    --brand-ink: #0e1726;
+    --brand-soft: #1e2a12;
+    --brand-text: #c6f432;
+    --brand-line: #c6f432;
+    --deep: #0e1726;
+    --on-deep: #eef2f7;
+    --mark-alert: #ff7a72;
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
     --series-4: #c98500;
-    --good-ink: #2fc42f;
-    --warning-ink: #fab219;
-    --critical-ink: #ef6b6b;
+    --good: #a8d42a;
+    --good-ink: #c6f432;
+    --warning: #ffb547;
+    --warning-ink: #ffb547;
+    --critical: #ff7a72;
+    --critical-ink: #ff7a72;
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0d0d0d;
-  --surface: #1a1a19;
-  --surface-2: #232321;
-  --border: rgba(255, 255, 255, 0.09);
-  --ink: #ffffff;
-  --ink-2: #c3c2b7;
-  --muted: #898781;
-  --grid: #2c2c2a;
-  --axis: #383835;
-  --brand: #25b864;
-  --brand-ink: #04140a;
-  --brand-soft: rgba(37, 184, 100, 0.14);
+  --bg: #0b1220;
+  --surface: #121b2d;
+  --surface-2: #1a2438;
+  --border: #24304a;
+  --ink: #eef2f7;
+  --ink-2: #c3ccd9;
+  --muted: #9aa6b8;
+  --grid: #1e2940;
+  --axis: #34425e;
+  --brand: #c6f432;
+  --brand-ink: #0e1726;
+  --brand-soft: #1e2a12;
+  --brand-text: #c6f432;
+  --brand-line: #c6f432;
+  --deep: #0e1726;
+  --on-deep: #eef2f7;
+  --mark-alert: #ff7a72;
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
   --series-4: #c98500;
-  --good-ink: #2fc42f;
-  --warning-ink: #fab219;
-  --critical-ink: #ef6b6b;
+  --good: #a8d42a;
+  --good-ink: #c6f432;
+  --warning: #ffb547;
+  --warning-ink: #ffb547;
+  --critical: #ff7a72;
+  --critical-ink: #ff7a72;
+}
+
+/* Menu lateral: superfície escura da marca (deep) nos dois temas.
+   Redefine os tokens só dentro dele, então as classes de sempre se adaptam. */
+.theme-deep {
+  --surface: var(--deep);
+  --surface-2: #1b2740;
+  --border: rgba(255, 255, 255, 0.08);
+  --ink: var(--on-deep);
+  --ink-2: #c9d1dc;
+  --muted: #8c97a8;
+  --brand-soft: #22314f;
+  --brand-text: #c6f432;
+  --mark-alert: #ff7a72;
+  color: var(--ink);
+  background: var(--surface);
 }
 
 @theme inline {
@@ -95,6 +133,10 @@
   --color-brand: var(--brand);
   --color-brand-ink: var(--brand-ink);
   --color-brand-soft: var(--brand-soft);
+  --color-brand-text: var(--brand-text);
+  --color-brand-line: var(--brand-line);
+  --color-deep: var(--deep);
+  --color-on-deep: var(--on-deep);
   --color-series-1: var(--series-1);
   --color-series-2: var(--series-2);
   --color-good: var(--good);
@@ -103,7 +145,10 @@
   --color-warning-ink: var(--warning-ink);
   --color-critical: var(--critical);
   --color-critical-ink: var(--critical-ink);
-  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* tipografia da marca: DM Sans (interface), Sora (títulos), JetBrains Mono (números e horários) */
+  --font-sans: var(--font-dm-sans), "Segoe UI", system-ui, sans-serif;
+  --font-display: var(--font-sora), "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, Menlo, monospace;
 }
 
 body {
@@ -112,8 +157,24 @@ body {
   font-family: var(--font-sans);
 }
 
+/* títulos em Sora */
+h1,
+h2,
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* métricas, contadores e horários em JetBrains Mono (números tabulares: o painel não "pula" ao atualizar) */
 .tabular {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* foco do teclado da marca: 2px com respiro */
+:focus-visible {
+  outline-color: var(--brand-line);
 }
 
 /* Recharts: remove o contorno de foco padrão */

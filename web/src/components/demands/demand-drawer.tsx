@@ -232,7 +232,7 @@ export function DemandDrawer({
             )}
             <Link
               href={`/groups/${demand.group_id}`}
-              className="inline-flex items-center gap-1 text-sm text-brand hover:underline"
+              className="inline-flex items-center gap-1 text-sm text-brand-text hover:underline"
             >
               Abrir conversa <ExternalLink className="h-3.5 w-3.5" />
             </Link>

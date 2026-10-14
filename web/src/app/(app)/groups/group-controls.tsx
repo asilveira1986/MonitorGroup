@@ -106,7 +106,7 @@ export function MarkTeamButton({ jid, name, phone }: { jid: string; name: string
   return (
     <button
       disabled={pending}
-      className="text-[11px] text-muted underline-offset-2 hover:text-brand hover:underline disabled:opacity-50"
+      className="text-[11px] text-muted underline-offset-2 hover:text-brand-text hover:underline disabled:opacity-50"
       onClick={() => {
         const finalName = window.prompt('Marcar este remetente como membro da equipe. Nome:', name);
         if (!finalName) return;

@@ -216,7 +216,7 @@ export function GroupsPanel({
                 value={sector}
                 onChange={(e) => setSector(e.target.value)}
                 aria-label="Filtrar por setor"
-                className="h-9 w-full rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none focus:border-brand sm:w-48"
+                className="h-9 w-full rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none focus:border-brand-line sm:w-48"
               >
                 <option value="all">Todos os setores</option>
                 {sectors.map((s) => (
@@ -236,7 +236,7 @@ export function GroupsPanel({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar grupo"
               aria-label="Buscar grupo"
-              className="h-9 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm outline-none focus:border-brand"
+              className="h-9 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm outline-none focus:border-brand-line"
             />
           </label>
         </div>

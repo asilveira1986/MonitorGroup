@@ -115,7 +115,7 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
                 {a.description && <p className="mt-1 whitespace-pre-line text-sm text-ink-2">{a.description}</p>}
                 <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted">
                   {a.group_id && (
-                    <Link href={`/groups/${a.group_id}`} className="text-brand hover:underline">
+                    <Link href={`/groups/${a.group_id}`} className="text-brand-text hover:underline">
                       Abrir conversa{a.groups?.name ? ` · ${a.groups.name}` : ''}
                     </Link>
                   )}

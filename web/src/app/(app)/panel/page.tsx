@@ -5,7 +5,7 @@ import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { GroupsPanel, type PanelGroup } from './panel';
 
-export const metadata: Metadata = { title: 'MonitorGroup · Painel de grupos' };
+export const metadata: Metadata = { title: 'Monitor Group · Painel de grupos' };
 
 /**
  * Painel de grupos: um cartão por grupo com as últimas mensagens recebidas.

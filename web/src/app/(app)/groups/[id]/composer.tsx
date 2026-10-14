@@ -91,7 +91,7 @@ export function Composer({
           placeholder="Mensagem para o grupo…"
           aria-label="Mensagem para o grupo"
           disabled={pending}
-          className="max-h-40 min-h-11 w-full resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-base text-ink outline-none transition placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand-soft sm:text-sm"
+          className="max-h-40 min-h-11 w-full resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-base text-ink outline-none transition placeholder:text-muted focus:border-brand-line focus:ring-2 focus:ring-brand-soft sm:text-sm"
         />
         <button
           onClick={send}
@@ -138,7 +138,7 @@ export function OutgoingBubble({ item, quoted }: { item: OutgoingMessage; quoted
           item.status === 'failed' ? 'border border-critical/40 bg-critical/5' : 'bg-brand-soft/60',
         )}
       >
-        <p className="mb-0.5 text-xs font-semibold text-brand">{item.sender_name}</p>
+        <p className="mb-0.5 text-xs font-semibold text-brand-text">{item.sender_name}</p>
         {quoted && (
           <p className="mb-1 truncate rounded-lg border-l-4 border-series-1 bg-surface/70 px-2 py-1 text-xs text-ink-2">
             {quoted.body ?? `[${quoted.message_type}]`}

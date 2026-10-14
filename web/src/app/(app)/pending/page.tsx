@@ -68,7 +68,7 @@ export default async function PendingPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Link href={`/groups/${item.id}`} className="truncate font-semibold hover:text-brand">
+                  <Link href={`/groups/${item.id}`} className="truncate font-semibold hover:text-brand-text">
                     {item.name}
                   </Link>
                   <Badge>{item.pending_count} msg</Badge>

@@ -151,7 +151,7 @@ function IndicatorCard({
         className={cn(
           // dash-compact: fonte menor dentro do cartão (ver globals.css)
           'dash-compact flex h-full flex-col rounded-2xl p-3.5 sm:p-4',
-          clickable && 'cursor-pointer transition hover:bg-surface-2/50 focus-visible:outline-2 focus-visible:outline-brand',
+          clickable && 'cursor-pointer transition hover:bg-surface-2/50 focus-visible:outline-2 focus-visible:outline-brand-line',
         )}
       >
         <div className="mb-2 flex items-start justify-between gap-2">

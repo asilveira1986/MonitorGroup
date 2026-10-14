@@ -103,7 +103,7 @@ export default async function ReportsPage({ searchParams }: PageProps<'/reports'
                       {ind.has_details && (
                         <a
                           href={exportHref(ind.key)}
-                          className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg px-2 py-1 text-xs font-medium text-brand hover:bg-brand-soft print:hidden"
+                          className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg px-2 py-1 text-xs font-medium text-brand-text hover:bg-brand-soft print:hidden"
                         >
                           <Download className="h-3.5 w-3.5" /> Lista detalhada (CSV)
                         </a>
@@ -123,7 +123,7 @@ export default async function ReportsPage({ searchParams }: PageProps<'/reports'
           {profile.role === 'admin' && (
             <p className="text-xs text-muted print:hidden">
               Para incluir ou tirar indicadores do relatório, use{' '}
-              <Link href="/settings/indicators" className="font-medium text-brand hover:underline">
+              <Link href="/settings/indicators" className="font-medium text-brand-text hover:underline">
                 Configurações › Indicadores
               </Link>
               .

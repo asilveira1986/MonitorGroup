@@ -85,7 +85,7 @@ export function Button({
 
 // text-base (16px) no celular evita o zoom automático do iPhone ao tocar no campo
 const fieldClass =
-  'w-full rounded-xl border border-line bg-surface px-3 text-base sm:text-sm text-ink placeholder:text-muted outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-soft';
+  'w-full rounded-xl border border-line bg-surface px-3 text-base sm:text-sm text-ink placeholder:text-muted outline-none transition focus:border-brand-line focus:ring-2 focus:ring-brand-soft';
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(fieldClass, 'h-11 sm:h-10', className)} {...props} />;
@@ -154,7 +154,7 @@ const tones: Record<Tone, string> = {
   good: 'bg-good/12 text-good-ink',
   warning: 'bg-warning/15 text-warning-ink',
   critical: 'bg-critical/12 text-critical-ink',
-  brand: 'bg-brand-soft text-brand',
+  brand: 'bg-brand-soft text-brand-text',
   info: 'bg-series-1/12 text-series-1',
 };
 

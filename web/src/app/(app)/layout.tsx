@@ -57,7 +57,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={profile.avatar_url} alt="" className="h-8 w-8 rounded-full" />
             ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
                 {initials}
               </div>
             )}

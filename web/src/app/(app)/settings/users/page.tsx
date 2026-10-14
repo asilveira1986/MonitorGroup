@@ -41,7 +41,7 @@ export default async function UsersPage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={u.avatar_url} alt="" className="h-9 w-9 rounded-full" />
                   ) : (
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft text-brand">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft text-brand-text">
                       <UserRound className="h-4 w-4" />
                     </span>
                   )}
