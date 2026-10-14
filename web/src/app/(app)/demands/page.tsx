@@ -1,7 +1,7 @@
 import { ClipboardList } from 'lucide-react';
 import Link from 'next/link';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
-import { requireProfile } from '@/lib/auth';
+import { requireMenu } from '@/lib/auth';
 import { DEFAULT_DEMAND_TYPES, demandsEnabled } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Demand, MyPermissions } from '@/lib/types';
@@ -16,7 +16,7 @@ const STATUS_FILTER: Record<string, string[]> = {
 const isUuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v);
 
 export default async function DemandsPage({ searchParams }: PageProps<'/demands'>) {
-  const profile = await requireProfile();
+  const profile = await requireMenu('/demands');
   const sp = await searchParams;
   const status = typeof sp.status === 'string' && sp.status in STATUS_FILTER ? sp.status : 'open';
   const groupId = isUuid(sp.group) ? sp.group : null;

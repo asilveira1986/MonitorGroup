@@ -7760,6 +7760,24 @@ end $$;
 
 notify pgrst, 'reload schema';
 
+-- >>>>>>>>>>>>>>>>>>>> 0031_menu_access.sql <<<<<<<<<<<<<<<<<<<<
+-- =====================================================================
+-- Menus do menu lateral liberados por empresa
+--
+-- Em Configurações › Menus o administrador escolhe, para cada item do menu
+-- lateral, quem o vê: todos os usuários, só administradores ou ninguém
+-- (oculto). Menu oculto também bloqueia a página (quem abrir pelo endereço
+-- volta para o primeiro menu liberado). Configurações fica sempre com os
+-- administradores, para ninguém se trancar do lado de fora.
+--  * app_settings.menu_access: {"/panel": "all" | "admin" | "none", ...};
+--    item sem valor = todos.
+-- =====================================================================
+
+alter table public.app_settings
+  add column if not exists menu_access jsonb not null default '{}'::jsonb;
+
+notify pgrst, 'reload schema';
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -7798,6 +7816,8 @@ from (values
   (22, 'Visão da gestão no dashboard (0029)', to_regprocedure('public.management_summary(timestamptz,timestamptz,uuid,uuid)') is not null),
   (23, 'Multiempresa (0030)', to_regclass('public.companies') is not null
       and to_regprocedure('public.create_company(text,text,text,text,text,integer,integer,text)') is not null),
-  (24, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (24, 'Menus liberados por empresa (0031)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'menu_access')),
+  (25, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

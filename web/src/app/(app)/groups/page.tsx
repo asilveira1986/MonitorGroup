@@ -1,7 +1,7 @@
 import { MessagesSquare, Search, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, EmptyState, Input, PageHeader } from '@/components/ui';
-import { requireProfile } from '@/lib/auth';
+import { requireMenu } from '@/lib/auth';
 import { cn } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Group } from '@/lib/types';
@@ -17,7 +17,7 @@ const FILTERS = [
 ];
 
 export default async function GroupsPage({ searchParams }: PageProps<'/groups'>) {
-  const profile = await requireProfile();
+  const profile = await requireMenu('/groups');
   const sp = await searchParams;
   const q = typeof sp.q === 'string' ? sp.q : '';
   const filter = typeof sp.filter === 'string' ? sp.filter : 'all';

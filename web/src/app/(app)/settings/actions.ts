@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAdmin, requireProfile } from '@/lib/auth';
 import { createCompanyUser } from '@/lib/company-users';
 import { friendlyDbError } from '@/lib/db-errors';
+import { MENU_ITEMS } from '@/lib/menu';
 import { createClient } from '@/lib/supabase/server';
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -424,6 +425,25 @@ export async function setDefaultSector(id: string | null): Promise<Result> {
   await requireAdmin();
   const supabase = await createClient();
   const { error } = await supabase.from('app_settings').update({ default_sector_id: id }).eq('company_id', (await requireAdmin()).company_id);
+  revalidatePath('/', 'layout');
+  return result(error);
+}
+
+// --------------------------------------------------------------- Menus do menu lateral
+/** Quem vê cada item do menu lateral: todos, só administradores ou ninguém. */
+export async function saveMenuAccess(access: Record<string, 'all' | 'admin' | 'none'>): Promise<Result> {
+  const admin = await requireAdmin();
+  const allowed = new Set(MENU_ITEMS.map((i) => i.href as string));
+  const clean = Object.fromEntries(
+    Object.entries(access).filter(
+      ([href, v]) => allowed.has(href) && (v === 'admin' || v === 'none') && !(href === '/settings' && v === 'none'),
+    ),
+  );
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('app_settings')
+    .update({ menu_access: clean, updated_at: new Date().toISOString() })
+    .eq('company_id', admin.company_id);
   revalidatePath('/', 'layout');
   return result(error);
 }

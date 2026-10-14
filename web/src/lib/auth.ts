@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
+import { canSeeMenu, MENU_ITEMS } from '@/lib/menu';
 import type { Profile } from '@/lib/types';
 
 /** Usuário logado + perfil ativo. Redireciona caso contrário. */
@@ -44,5 +45,27 @@ export async function requirePlatformAdmin(): Promise<Profile> {
 export async function requireAdmin(): Promise<Profile> {
   const profile = await requireProfile();
   if (profile.role !== 'admin' && !profile.platform_admin) redirect('/dashboard');
+  return profile;
+}
+
+/** Configuração dos menus da empresa (Configurações › Menus). */
+export const menuConfig = cache(async (): Promise<Record<string, unknown>> => {
+  const supabase = await createClient();
+  const { data } = await supabase.from('app_settings').select('menu_access').maybeSingle();
+  return (data?.menu_access as Record<string, unknown> | null) ?? {};
+});
+
+/**
+ * Página de um item do menu: se o menu está oculto para este usuário, vai para o primeiro menu
+ * liberado (o endereço digitado direto não fura a configuração).
+ */
+export async function requireMenu(href: string): Promise<Profile> {
+  const profile = await requireProfile();
+  const isAdmin = profile.role === 'admin' || profile.platform_admin;
+  const config = await menuConfig();
+  if (!canSeeMenu(config, href, isAdmin)) {
+    const first = MENU_ITEMS.find((i) => canSeeMenu(config, i.href, isAdmin));
+    redirect(first ? first.href : '/auth/pending');
+  }
   return profile;
 }

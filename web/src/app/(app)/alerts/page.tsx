@@ -1,3 +1,4 @@
+import { requireMenu } from '@/lib/auth';
 import { BellOff, Check, CheckCheck, Eye, Mail, MessageCircle, Webhook } from 'lucide-react';
 import Link from 'next/link';
 import { ActionButton } from '@/components/action-button';
@@ -13,6 +14,7 @@ const SEVERITIES = ['critical', 'warning', 'info'];
 const CHANNEL_ICON: Record<string, typeof Mail> = { email: Mail, whatsapp: MessageCircle, webhook: Webhook };
 
 export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>) {
+  await requireMenu('/alerts');
   const sp = await searchParams;
   const type = typeof sp.type === 'string' && sp.type in ALERT_TYPE_LABEL ? sp.type : null;
   const severity = typeof sp.severity === 'string' && SEVERITIES.includes(sp.severity) ? sp.severity : null;

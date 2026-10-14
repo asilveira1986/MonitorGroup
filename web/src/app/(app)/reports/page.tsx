@@ -2,7 +2,7 @@ import { AlertTriangle, Download, FileBarChart } from 'lucide-react';
 import Link from 'next/link';
 import { DataTable, IndicatorView } from '@/components/indicators/views';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
-import { requireProfile } from '@/lib/auth';
+import { requireMenu } from '@/lib/auth';
 import { loadIndicatorFilters } from '@/lib/indicator-filters';
 import type { IndicatorValue } from '@/lib/indicators';
 import { indicatorTable } from '@/lib/report';
@@ -10,7 +10,7 @@ import { DashboardFilters } from '../dashboard/filters';
 import { PrintButton } from './print-button';
 
 export default async function ReportsPage({ searchParams }: PageProps<'/reports'>) {
-  const profile = await requireProfile();
+  const profile = await requireMenu('/reports');
   const sp = await searchParams;
   const { supabase, periodLabel, today, tz, filters, groups, members } = await loadIndicatorFilters(sp);
 

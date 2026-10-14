@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { currentCompany, requireProfile } from '@/lib/auth';
 import { demandsEnabled } from '@/lib/format';
+import { canSeeMenu, MENU_ITEMS } from '@/lib/menu';
 import { createClient } from '@/lib/supabase/server';
 
 export default async function AppLayout({ children }: LayoutProps<'/'>) {
@@ -19,7 +20,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     supabase
       .from('app_settings')
       .select(
-        'demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, demand_commitment_enabled, msg_alert_enabled, msg_alert_auto_close, msg_alert_sound, msg_alert_alerts',
+        'demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, demand_commitment_enabled, msg_alert_enabled, msg_alert_auto_close, msg_alert_sound, msg_alert_alerts, menu_access',
       )
       .maybeSingle(),
     currentCompany(),
@@ -41,7 +42,13 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
       <Sidebar
         counts={{ pending: pending ?? 0, alerts: alerts ?? 0, demands: demands ?? 0 }}
         // demandas desligadas nas configurações: o item some do menu
-        hidden={demandsEnabled(settings) ? [] : ['/demands']}
+        // + os menus que a empresa ocultou para este usuário (Configurações › Menus)
+        hidden={[
+          ...(demandsEnabled(settings) ? [] : ['/demands']),
+          ...MENU_ITEMS.filter(
+            (i) => !canSeeMenu(settings?.menu_access as Record<string, unknown> | null, i.href, profile.role === 'admin' || profile.platform_admin),
+          ).map((i) => i.href),
+        ]}
         user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role }}
         platformAdmin={profile.platform_admin}
         company={company?.name ?? null}

@@ -34,6 +34,8 @@ from (values
   (22, 'Visão da gestão no dashboard (0029)', to_regprocedure('public.management_summary(timestamptz,timestamptz,uuid,uuid)') is not null),
   (23, 'Multiempresa (0030)', to_regclass('public.companies') is not null
       and to_regprocedure('public.create_company(text,text,text,text,text,integer,integer,text)') is not null),
-  (24, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (24, 'Menus liberados por empresa (0031)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'menu_access')),
+  (25, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

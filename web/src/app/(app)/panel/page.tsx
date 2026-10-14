@@ -1,7 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
-import { requireProfile } from '@/lib/auth';
+import { requireMenu } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { GroupsPanel, type PanelGroup } from './panel';
 
@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: 'Monitor Group · Painel de grupos' }
  * resposta e vermelho quando o tempo de resposta (SLA) foi excedido.
  */
 export default async function PanelPage() {
-  await requireProfile();
+  await requireMenu('/panel');
   const supabase = await createClient();
   const [{ data, error }, { data: groupSectors }, { data: sectors }] = await Promise.all([
     supabase.rpc('groups_panel'),

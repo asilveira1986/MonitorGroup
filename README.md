@@ -68,6 +68,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    28. `supabase/migrations/0028_commitment_triggers.sql`
    29. `supabase/migrations/0029_management_summary.sql`
    30. `supabase/migrations/0030_multi_company.sql`
+   31. `supabase/migrations/0031_menu_access.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -166,6 +167,10 @@ O sistema atende várias empresas com uma só instalação (um banco, um painel 
 - **Um e-mail pertence a uma empresa só.**
 - **Criar um administrador da plataforma** (acesso total: menu Empresas, cadastro de empresas e usuários, liberação de acessos e administrador em qualquer empresa): abra `supabase/criar_admin_plataforma.sql`, troque o e-mail, a senha e o nome no início e execute no SQL Editor do Supabase. Pode executar de novo para promover um usuário que já existe ou trocar a senha dele.
 - **Ao atualizar para esta versão**, os dados atuais viram a primeira empresa (com o nome de *Configurações › Geral*) e os administradores atuais passam a administrar a plataforma.
+
+## Menus do menu lateral
+
+Em **Configurações › Menus** (administradores) você escolhe, para cada item do menu lateral, quem o vê: **Todos**, **Só administradores** ou **Oculto**. Vale para todos os usuários da empresa (cada empresa tem a sua configuração). Menu oculto também bloqueia a página: quem abrir pelo endereço volta para o primeiro menu liberado. **Configurações** nunca some para administradores, para ninguém ficar trancado do lado de fora. As demandas desligadas em *Configurações › Geral* continuam saindo do menu sozinhas.
 
 ## Identidade visual
 

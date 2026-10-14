@@ -12,6 +12,7 @@ const TABS = [
   { href: '/settings/team', label: 'Equipe' },
   { href: '/settings/users', label: 'Usuários' },
   { href: '/settings/sectors', label: 'Setores', adminOnly: true },
+  { href: '/settings/menus', label: 'Menus', adminOnly: true },
 ];
 
 export function SettingsTabs({ isAdmin }: { isAdmin: boolean }) {

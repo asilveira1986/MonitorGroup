@@ -4,13 +4,13 @@ import { DashboardGrid } from '@/components/indicators/dashboard-grid';
 import { DetailsSection } from '@/components/indicators/details-section';
 import { ManagementSummary, type ManagementSummaryData } from '@/components/indicators/management-summary';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
-import { requireProfile } from '@/lib/auth';
+import { requireMenu } from '@/lib/auth';
 import { loadIndicatorFilters } from '@/lib/indicator-filters';
 import type { IndicatorValue, KpiData } from '@/lib/indicators';
 import { DashboardFilters } from './filters';
 
 export default async function DashboardPage({ searchParams }: PageProps<'/dashboard'>) {
-  const profile = await requireProfile();
+  const profile = await requireMenu('/dashboard');
   const { supabase, tz, filters, comparison, today, groups, members, periodLabel, period } = await loadIndicatorFilters(await searchParams, {
     defaultPeriod: 'today',
   });

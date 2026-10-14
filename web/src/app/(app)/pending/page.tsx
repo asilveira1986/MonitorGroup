@@ -1,3 +1,4 @@
+import { requireMenu } from '@/lib/auth';
 import { AlertOctagon, CheckCheck, Hourglass, PartyPopper } from 'lucide-react';
 import Link from 'next/link';
 import { ActionButton } from '@/components/action-button';
@@ -9,6 +10,7 @@ import type { PendingItem } from '@/lib/types';
 import { markGroupAnswered } from '../actions';
 
 export default async function PendingPage() {
+  await requireMenu('/pending');
   const supabase = await createClient();
   const [{ data }, { data: settings }] = await Promise.all([
     supabase.from('pending_queue').select('*'),
