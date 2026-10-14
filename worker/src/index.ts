@@ -129,7 +129,7 @@ async function main() {
   await heartbeat(manager);
   setInterval(() => void heartbeat(manager).catch(() => {}), HEARTBEAT_MS);
 
-  setWhatsAppSender((phone, text) => manager.sendText(phone, text));
+  setWhatsAppSender((companyId, phone, text) => manager.sendText(companyId, phone, text));
   await manager.init();
 
   setInterval(() => void runPeriodicChecks(), ALERT_CHECK_MS);

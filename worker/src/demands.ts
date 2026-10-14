@@ -20,6 +20,7 @@ import { findKeyword } from './text.js';
  */
 
 export type DemandMessage = {
+  companyId: string;
   groupId: string;
   groupName: string;
   messageId: string;
@@ -65,16 +66,17 @@ type Params = {
   categories: { name: string; keywords: string[] }[];
 };
 
-let paramsCache: { at: number; value: Params } | null = null;
+const paramsCache = new Map<string, { at: number; value: Params }>();
 
-/** Parâmetros lidos do catálogo (cache de 60s). */
-async function loadParams(): Promise<Params> {
-  if (paramsCache && Date.now() - paramsCache.at < 60_000) return paramsCache.value;
-  const { data } = await db
-    .from('indicators')
-    .select('key, params')
-    .in('key', ['retrabalho', 'confirmacao_cliente', 'tipo_demanda']);
-  const byKey = Object.fromEntries((data ?? []).map((r) => [r.key, (r.params ?? {}) as Record<string, unknown>]));
+/** Parâmetros dos indicadores da empresa: o padrão do catálogo + o que a empresa ajustou (cache de 60s). */
+async function loadParams(companyId: string): Promise<Params> {
+  const cached = paramsCache.get(companyId);
+  if (cached && Date.now() - cached.at < 60_000) return cached.value;
+  const keys = ['retrabalho', 'confirmacao_cliente', 'tipo_demanda'];
+  const results = await Promise.all(
+    keys.map((key) => db.rpc('company_indicator_params', { p_company_id: companyId, p_key: key })),
+  );
+  const byKey = Object.fromEntries(keys.map((k, i) => [k, (results[i].data ?? {}) as Record<string, unknown>]));
   const value: Params = {
     followup_keywords: (byKey.retrabalho?.followup_keywords as string[]) ?? [],
     reopen_keywords: (byKey.retrabalho?.reopen_keywords as string[]) ?? [],
@@ -83,7 +85,7 @@ async function loadParams(): Promise<Params> {
     confirm_window_days: Number(byKey.confirmacao_cliente?.confirm_window_days ?? 7),
     categories: (byKey.tipo_demanda?.categories as Params['categories']) ?? DEFAULT_CATEGORIES,
   };
-  paramsCache = { at: Date.now(), value };
+  paramsCache.set(companyId, { at: Date.now(), value });
   return value;
 }
 
@@ -177,8 +179,8 @@ async function demandFromCommitment(m: DemandMessage, when: Date | null, params:
 
 export async function processDemandSignals(m: DemandMessage) {
   try {
-    const settings = await getSettings();
-    const params = await loadParams();
+    const settings = await getSettings(m.companyId);
+    const params = await loadParams(m.companyId);
     const actor = `WhatsApp · ${m.senderName ?? (m.fromTeam ? 'Equipe' : 'Cliente')}`;
     const promiseOpts = { timeZone: settings.timezone, businessEnd: settings.business_end.slice(0, 5) };
 
@@ -271,7 +273,7 @@ export async function processDemandSignals(m: DemandMessage) {
           p_message_id: m.messageId,
           p_actor: actor,
         });
-        await onRework(delivered.id, m.groupId, m.groupName, 'reaberta pelo cliente');
+        await onRework(m.companyId, delivered.id, m.groupId, m.groupName, 'reaberta pelo cliente');
         return;
       }
       if (!delivered.confirmed_at && findKeyword(m.body, params.confirm_keywords)) {
@@ -294,7 +296,7 @@ export async function processDemandSignals(m: DemandMessage) {
         p_actor: actor,
       })) as Demand | null;
       if (updated && updated.followups_count >= params.followups_threshold) {
-        await onRework(open.id, m.groupId, m.groupName, `cobrada ${updated.followups_count} vezes`);
+        await onRework(m.companyId, open.id, m.groupId, m.groupName, `cobrada ${updated.followups_count} vezes`);
       }
       return;
     }

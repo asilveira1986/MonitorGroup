@@ -67,6 +67,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    27. `supabase/migrations/0027_sectors.sql`
    28. `supabase/migrations/0028_commitment_triggers.sql`
    29. `supabase/migrations/0029_management_summary.sql`
+   30. `supabase/migrations/0030_multi_company.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -116,6 +117,7 @@ O worker precisa ficar ligado 24 horas por dia, porque mantém a conexão com o 
 ### 4. Primeiro acesso
 
 1. Crie o primeiro usuário no Supabase: abra **Authentication › Users › Add user**, informe e-mail e senha e marque *Auto confirm*.
+   Ele administra a plataforma (menu **Empresas**) e a primeira empresa.
 
    **O primeiro usuário vira administrador automaticamente.**
 2. Em **Configurações › WhatsApp**, clique em **Nova conexão** e leia o QR code com o celular (*Aparelhos conectados › Conectar um aparelho*).
@@ -149,6 +151,20 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
 - **IA** (desligada por padrão): o Claude classifica mensagens pendentes dos clientes. Requer `ANTHROPIC_API_KEY` no worker. Mensagens que o modelo recusar são tratadas como não-demanda.
 
 O worker também detecta sozinho: prazo prometido pela equipe ("até amanhã", "em 2 dias"), cobranças do cliente, reabertura e confirmação após a entrega. As palavras usadas ficam nos parâmetros dos indicadores *Retrabalho* e *Confirmação do cliente*.
+
+## Multiempresa (vender para outras empresas)
+
+O sistema atende várias empresas com uma só instalação (um banco, um painel e um worker). Cada empresa fica **isolada**: grupos, mensagens, conexões do WhatsApp, alertas e regras, demandas, equipe, setores, usuários, feriados, configurações e indicadores pertencem a ela, e as regras do banco (RLS) não deixam uma empresa ver nada da outra.
+
+- **Quem administra a plataforma** (você) vê o item **Empresas** no menu. Lá você:
+  - **cadastra a empresa** com o primeiro administrador dela (e-mail e senha inicial). A empresa já nasce pronta: configurações padrão, setor **Geral** e as regras de alerta padrão (sem destinatários);
+  - **libera ou suspende o acesso**: empresa suspensa não entra no painel (a tela avisa *"Acesso da empresa suspenso"*) e o WhatsApp dela é desconectado, sem apagar a sessão nem os dados. Ao liberar de novo, o worker reconecta;
+  - define **limites** de grupos monitorados e de usuários (em branco = sem limite);
+  - acompanha o uso: usuários, grupos monitorados, WhatsApp conectado e mensagens dos últimos 30 dias;
+  - clica em **Entrar na empresa** (ou usa o seletor no topo do painel) para configurar ou dar suporte vendo exatamente o que a empresa vê.
+- **Cada empresa** conecta o próprio número em **Configurações › WhatsApp**, cadastra os próprios usuários em **Configurações › Usuários** e ajusta tudo nas suas configurações, sem afetar as outras. Os alertas por WhatsApp saem pelo número da própria empresa. As demandas são numeradas por empresa (#1, #2…).
+- **Um e-mail pertence a uma empresa só.**
+- **Ao atualizar para esta versão**, os dados atuais viram a primeira empresa (com o nome de *Configurações › Geral*) e os administradores atuais passam a administrar a plataforma.
 
 ## Identidade visual
 

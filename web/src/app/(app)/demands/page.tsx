@@ -44,9 +44,8 @@ export default async function DemandsPage({ searchParams }: PageProps<'/demands'
         .select(
           'timezone, demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, demand_commitment_enabled',
         )
-        .eq('id', 1)
         .single(),
-      supabase.from('indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
+      supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
       supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', STATUS_FILTER.open),
       supabase.rpc('my_permissions'),
     ]);

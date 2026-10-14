@@ -52,16 +52,16 @@ export default async function IndicatorsSettingsPage() {
   await requireAdmin();
   const supabase = await createClient();
   const [{ data: blocks }, { data: indicators }, { data: profiles }, { data: audit }, { data: settings }, { count: holidays }] = await Promise.all([
-    supabase.from('indicator_blocks').select('*').order('position'),
-    supabase.from('indicators').select('*').order('position'),
+    supabase.from('my_indicator_blocks').select('*').order('position'),
+    supabase.from('my_indicators').select('*').order('position'),
     supabase.from('profiles').select('id, full_name, email'),
     supabase
       .from('config_audit')
       .select('*')
-      .in('table_name', ['indicators', 'indicator_blocks', 'app_settings', 'holidays'])
+      .in('table_name', ['indicators', 'indicator_blocks', 'company_indicators', 'company_indicator_blocks', 'app_settings', 'holidays'])
       .order('changed_at', { ascending: false })
       .limit(30),
-    supabase.from('app_settings').select('business_days, business_start, business_end').eq('id', 1).single(),
+    supabase.from('app_settings').select('business_days, business_start, business_end').single(),
     supabase.from('holidays').select('day', { count: 'exact', head: true }),
   ]);
 

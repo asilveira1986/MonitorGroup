@@ -13,7 +13,7 @@ export default async function GeneralSettingsPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
   const [{ data }, { data: holidays }] = await Promise.all([
-    supabase.from('app_settings').select('*').eq('id', 1).single(),
+    supabase.from('app_settings').select('*').single(),
     supabase.from('holidays').select('day, name').order('day'),
   ]);
 

@@ -33,7 +33,6 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
     supabase
       .from('app_settings')
       .select('timezone, default_sla_minutes, demand_manual_enabled, reply_enabled, reply_sign_name, reply_allowed')
-      .eq('id', 1)
       .single(),
     // indicadores calculados no banco
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
@@ -41,7 +40,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
   const recentlySent = minutesAgo(5);
   const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }] = await Promise.all([
     supabase.from('team_members').select('id, name').eq('active', true).order('name'),
-    supabase.from('indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
+    supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
     // respostas do painel que ainda não voltaram pelo WhatsApp
     supabase
       .from('outgoing_messages')

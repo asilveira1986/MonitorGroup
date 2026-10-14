@@ -1,9 +1,10 @@
 import { LogOut } from 'lucide-react';
+import { CompanySwitcher } from '@/components/company-switcher';
 import { MessageNotifier, NotifyToggle } from '@/components/message-notifier';
 import { RealtimeListener } from '@/components/realtime-listener';
 import { Sidebar } from '@/components/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { requireProfile } from '@/lib/auth';
+import { currentCompany, requireProfile } from '@/lib/auth';
 import { demandsEnabled } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 
@@ -11,7 +12,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const [{ count: pending }, { count: alerts }, { count: demands }, { data: settings }] = await Promise.all([
+  const [{ count: pending }, { count: alerts }, { count: demands }, { data: settings }, company, { data: companies }] = await Promise.all([
     supabase.from('pending_queue').select('id', { count: 'exact', head: true }),
     supabase.from('alerts').select('id', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', ['aberta', 'em_andamento']),
@@ -20,8 +21,12 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
       .select(
         'demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, demand_commitment_enabled, msg_alert_enabled, msg_alert_auto_close, msg_alert_sound, msg_alert_alerts',
       )
-      .eq('id', 1)
       .maybeSingle(),
+    currentCompany(),
+    // quem administra a plataforma troca de empresa pelo topo
+    profile.platform_admin
+      ? supabase.from('companies').select('id, name, active').order('name')
+      : Promise.resolve({ data: null }),
   ]);
 
   const initials = (profile.full_name || profile.email)
@@ -38,6 +43,8 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         // demandas desligadas nas configurações: o item some do menu
         hidden={demandsEnabled(settings) ? [] : ['/demands']}
         user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role }}
+        platformAdmin={profile.platform_admin}
+        company={company?.name ?? null}
       />
       <RealtimeListener />
       <MessageNotifier
@@ -50,6 +57,11 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
       />
       <div className="transition-[padding] duration-200 lg:pl-64 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
         <header className="sticky top-0 z-20 hidden items-center justify-end gap-2 border-b border-line bg-bg/80 px-8 py-3 backdrop-blur lg:flex">
+          {company && (
+            <div className="mr-auto">
+              <CompanySwitcher current={company} companies={companies ?? undefined} />
+            </div>
+          )}
           <NotifyToggle />
           <ThemeToggle />
           <div className="ml-2 flex items-center gap-3 rounded-xl px-2 py-1">

@@ -1,7 +1,8 @@
 import { ShieldAlert } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 
-export default async function PendingAccessPage() {
+export default async function PendingAccessPage({ searchParams }: PageProps<'/auth/pending'>) {
+  const suspended = (await searchParams).reason === 'suspended';
   const supabase = await createClient();
   const {
     data: { user },
@@ -17,13 +18,19 @@ export default async function PendingAccessPage() {
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-warning/15 text-warning-ink">
           <ShieldAlert className="h-6 w-6" />
         </div>
-        <h1 className="text-lg font-semibold">{schemaError ? 'Banco de dados não preparado' : 'Acesso não liberado'}</h1>
+        <h1 className="text-lg font-semibold">
+          {schemaError ? 'Banco de dados não preparado' : suspended ? 'Acesso da empresa suspenso' : 'Acesso não liberado'}
+        </h1>
         {schemaError ? (
           <p className="mt-2 text-sm text-ink-2">
             O login funcionou, mas as tabelas do sistema não foram encontradas. No Supabase, abra o SQL Editor e
             execute, em ordem, os arquivos <code>0001</code> a <code>0004</code> da pasta{' '}
             <code>supabase/migrations</code>. Depois entre novamente.
             <span className="mt-2 block text-xs text-muted">Detalhe: {schemaError.message}</span>
+          </p>
+        ) : suspended ? (
+          <p className="mt-2 text-sm text-ink-2">
+            O acesso da sua empresa ao Monitor Group está suspenso no momento. Fale com o suporte para reativar.
           </p>
         ) : (
         <p className="mt-2 text-sm text-ink-2">

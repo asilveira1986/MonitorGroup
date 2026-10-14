@@ -18,7 +18,8 @@ export default async function UsersPage() {
     supabase.from('profiles').select('*').order('created_at'),
     supabase.from('allowed_emails').select('*').order('created_at'),
   ]);
-  const users = (profiles ?? []) as Profile[];
+  // quem administra a plataforma e está aqui para suporte não aparece para a empresa
+  const users = ((profiles ?? []) as Profile[]).filter((u) => me.platform_admin || !u.platform_admin);
   const invites = (allowed ?? []).filter((a) => !users.some((u) => u.email === a.email));
 
   return (

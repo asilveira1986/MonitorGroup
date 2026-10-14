@@ -2,6 +2,7 @@
 
 import {
   Bell,
+  Building2,
   ChevronsLeft,
   ChevronsRight,
   ClipboardList,
@@ -55,18 +56,26 @@ export function Sidebar({
   hidden = [],
   counts,
   user,
+  platformAdmin = false,
+  company = null,
 }: {
   counts: { pending: number; alerts: number; demands: number };
   /** itens do menu escondidos (ex.: funções desligadas nas configurações) */
   hidden?: string[];
   user: { name: string; role: string };
+  /** administra a plataforma: mostra o item Empresas */
+  platformAdmin?: boolean;
+  /** empresa atual (mostrada no menu do celular) */
+  company?: string | null;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
   const nav = (
     <nav className="space-y-1">
-      {NAV.filter((item) => !hidden.includes(item.href)).map(({ href, label, icon: Icon, badgeKey }) => {
+      {[...NAV, ...(platformAdmin ? [{ href: '/platform', label: 'Empresas', icon: Building2, badgeKey: undefined }] : [])]
+        .filter((item) => !hidden.includes(item.href))
+        .map(({ href, label, icon: Icon, badgeKey }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         const count = badgeKey ? counts[badgeKey] : 0;
         return (
@@ -169,7 +178,10 @@ export function Sidebar({
               <div className="flex items-center justify-between px-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{user.name}</p>
-                  <p className="text-xs text-muted">{user.role === 'admin' ? 'Administrador' : 'Atendente'}</p>
+                  <p className="text-xs text-muted">
+                    {user.role === 'admin' ? 'Administrador' : 'Atendente'}
+                    {company && ` · ${company}`}
+                  </p>
                 </div>
                 <div className="flex items-center">
                   <NotifyToggle />

@@ -15,7 +15,7 @@ import makeWASocket, {
 } from 'baileys';
 import { onClientMessage, resolveDisconnectAlerts } from './alerts.js';
 import { clearAuthState, hasAuthState, usePostgresAuthState } from './auth-state.js';
-import { findTeamMember, getSettings } from './cache.js';
+import { findTeamMember, getSettings, isCompanyActive } from './cache.js';
 import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
 import { extractContent, isAcknowledgement, phoneFromJid, quotedMessageId } from './text.js';
@@ -31,6 +31,8 @@ const HEARTBEAT_MS = 60_000;
 
 type Session = {
   instanceId: string;
+  /** empresa dona desta conexão (multiempresa) */
+  companyId: string;
   sock: WASocket;
   qrAttempts: number;
   stopped: boolean;
@@ -127,6 +129,13 @@ export class WhatsAppManager {
     const instances = (check(await db.from('whatsapp_instances').select('*'), 'load instances') ?? []) as InstanceRow[];
     for (const inst of instances) {
       if (inst.requested_action) continue; // tratado pelo poll
+      // empresa suspensa: a sessão fica salva, mas não conecta
+      if (!(await isCompanyActive(inst.company_id))) {
+        if (inst.status !== 'disconnected') {
+          await this.updateInstance(inst.id, { status: 'disconnected', qr_code: null, last_error: 'Empresa suspensa' });
+        }
+        continue;
+      }
       if (await hasAuthState(inst.id)) {
         await this.start(inst.id);
       } else if (inst.status !== 'disconnected') {
@@ -148,21 +157,36 @@ export class WhatsAppManager {
     return [...this.sessions.values()].map((s) => ({ instanceId: s.instanceId, user: s.sock.user?.id ?? null }));
   }
 
-  /** Envia uma mensagem de texto (usado para notificações de alerta). */
-  async sendText(phone: string, text: string) {
-    const session = [...this.sessions.values()].find((s) => s.sock.user);
-    if (!session) throw new Error('nenhum WhatsApp conectado para enviar a notificação');
+  /** Envia uma mensagem de texto (notificações de alerta) pelo WhatsApp conectado da própria empresa. */
+  async sendText(companyId: string, phone: string, text: string) {
+    const session = [...this.sessions.values()].find((s) => s.companyId === companyId && s.sock.user && !s.stopped);
+    if (!session) throw new Error('nenhum WhatsApp da empresa conectado para enviar a notificação');
     await session.sock.sendMessage(`${phone}@s.whatsapp.net`, { text });
   }
 
   /** Atende os comandos enviados pelo painel (conectar / desconectar). */
   private async poll() {
     try {
-      const rows = (check(await db.from('whatsapp_instances').select('id, requested_action'), 'poll instances') ??
-        []) as Pick<InstanceRow, 'id' | 'requested_action'>[];
+      const rows = (check(
+        await db.from('whatsapp_instances').select('id, requested_action, company_id, status'),
+        'poll instances',
+      ) ?? []) as Pick<InstanceRow, 'id' | 'requested_action' | 'company_id' | 'status'>[];
       const ids = new Set(rows.map((r) => r.id));
 
       for (const row of rows) {
+        // empresa suspensa: encerra a conexão (sem apagar a sessão) e ignora pedidos até ser reativada
+        if (!(await isCompanyActive(row.company_id))) {
+          if (this.sessions.has(row.id)) await this.stop(row.id);
+          if (row.requested_action || row.status !== 'disconnected') {
+            await this.updateInstance(row.id, {
+              requested_action: null,
+              status: 'disconnected',
+              qr_code: null,
+              last_error: 'Empresa suspensa',
+            });
+          }
+          continue;
+        }
         if (row.requested_action === 'connect') {
           await this.updateInstance(row.id, { requested_action: null });
           await this.stop(row.id);
@@ -289,6 +313,12 @@ export class WhatsAppManager {
     const log = logger.child({ instanceId });
     log.info('iniciando conexão com o WhatsApp');
 
+    const { data: inst } = await db.from('whatsapp_instances').select('company_id').eq('id', instanceId).maybeSingle();
+    const companyId = (inst?.company_id as string | undefined) ?? null;
+    if (!companyId || !(await isCompanyActive(companyId))) {
+      log.warn('empresa suspensa ou conexão sem empresa: não conecta');
+      return;
+    }
     await this.updateInstance(instanceId, { status: 'connecting', last_error: null });
     const { state, saveCreds } = await usePostgresAuthState(instanceId);
     const creds = state.creds as MonitorCreds;
@@ -297,7 +327,7 @@ export class WhatsAppManager {
     // pareamento novo: garante a versão atual do WhatsApp Web (versão velha = conexão recusada)
     await this.refreshVersion(!paired && failedAttempts > 0);
     if (this.sessions.has(instanceId)) return;
-    const wantsHistory = (await getSettings()).history_import_days > 0;
+    const wantsHistory = (await getSettings(companyId)).history_import_days > 0;
     const profile = chooseProfile({ paired, savedProfile: creds.monitorProfile, wantsHistory, failedAttempts });
     // guardado na sessão: depois do QR, as reconexões usam o mesmo perfil
     if (!paired) creds.monitorProfile = profile;
@@ -320,6 +350,7 @@ export class WhatsAppManager {
 
     const session: Session = {
       instanceId,
+      companyId,
       sock,
       qrAttempts: 0,
       stopped: false,
@@ -591,7 +622,7 @@ export class WhatsAppManager {
   }
 
   private async upsertGroup(session: Session, meta: Partial<GroupMetadata> & { id: string }): Promise<GroupRow> {
-    const settings = await getSettings();
+    const settings = await getSettings(session.companyId);
     const existing = (
       await db.from('groups').select('*').eq('instance_id', session.instanceId).eq('jid', meta.id).maybeSingle()
     ).data as GroupRow | null;
@@ -695,6 +726,7 @@ export class WhatsAppManager {
 
     if (result.inserted && !fromTeam && !result.stale && result.message_id) {
       await onClientMessage(
+        session.companyId,
         { id: group.id, name: group.name },
         { id: result.message_id, body: content.body, senderName },
       );
@@ -703,6 +735,7 @@ export class WhatsAppManager {
     // demandas: comandos, cobranças, confirmações, prazos e classificação
     if (result.inserted && !result.stale && result.message_id) {
       await processDemandSignals({
+        companyId: session.companyId,
         groupId: group.id,
         groupName: group.name,
         messageId: result.message_id,
@@ -722,8 +755,8 @@ export class WhatsAppManager {
     const fromMe = Boolean(msg.key.fromMe);
     const participant = fromMe ? jidNormalizedUser(session.sock.user?.id) : (msg.key.participant ?? null);
     const participantAlt = (msg.key as { participantAlt?: string }).participantAlt ?? null;
-    const member = fromMe ? null : await findTeamMember(participant, participantAlt);
-    const settings = await getSettings();
+    const member = fromMe ? null : await findTeamMember(session.companyId, participant, participantAlt);
+    const settings = await getSettings(session.companyId);
     return {
       fromMe,
       participant,
@@ -768,7 +801,7 @@ export class WhatsAppManager {
   }
 
   private async importHistoryBatch(session: Session, messages: WAMessage[]) {
-    const settings = await getSettings();
+    const settings = await getSettings(session.companyId);
     if (settings.history_import_days <= 0 || session.stopped) return;
     const cutoff = Date.now() / 1000 - settings.history_import_days * 86400;
 

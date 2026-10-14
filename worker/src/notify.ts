@@ -13,7 +13,8 @@ export type AlertPayload = {
   createdAt: string;
 };
 
-type WhatsAppSender = (phone: string, text: string) => Promise<void>;
+/** envia pelo WhatsApp conectado da própria empresa da regra */
+type WhatsAppSender = (companyId: string, phone: string, text: string) => Promise<void>;
 let whatsappSender: WhatsAppSender | null = null;
 
 export function setWhatsAppSender(sender: WhatsAppSender) {
@@ -41,7 +42,7 @@ export async function sendNotifications(rule: AlertRule, alert: AlertPayload): P
 
   if (rule.notify_emails?.length && env.resendApiKey) {
     tasks.push(
-      sendEmail(rule.notify_emails, `[Monitor WhatsApp] ${alert.title}`, alert)
+      sendEmail(rule.notify_emails, `[Monitor Group] ${alert.title}`, alert)
         .then(() => void delivered.push('email'))
         .catch((err) => logger.error({ err }, 'falha ao enviar e-mail de alerta')),
     );
@@ -50,7 +51,7 @@ export async function sendNotifications(rule: AlertRule, alert: AlertPayload): P
   if (rule.notify_whatsapp?.length && whatsappSender) {
     for (const phone of rule.notify_whatsapp) {
       tasks.push(
-        whatsappSender(digitsOnly(phone), text)
+        whatsappSender(rule.company_id, digitsOnly(phone), text)
           .then(() => {
             if (!delivered.includes('whatsapp')) delivered.push('whatsapp');
           })

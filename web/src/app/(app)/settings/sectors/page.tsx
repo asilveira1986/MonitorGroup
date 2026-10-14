@@ -19,7 +19,7 @@ export default async function SectorsPage() {
     supabase.from('sector_members').select('sector_id, user_id'),
     supabase.from('profiles').select('id, full_name, email, role, active').order('full_name'),
     supabase.from('groups').select('id, name, sector_id, monitored').is('removed_at', null).order('name'),
-    supabase.from('app_settings').select('default_sector_id').eq('id', 1).single(),
+    supabase.from('app_settings').select('default_sector_id').single(),
   ]);
   const list = (sectors ?? []) as SectorRow[];
   const allGroups = groups ?? [];

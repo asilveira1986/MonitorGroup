@@ -7,6 +7,7 @@ export const db = createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
 
 export type InstanceRow = {
   id: string;
+  company_id: string;
   name: string;
   phone: string | null;
   status: 'disconnected' | 'connecting' | 'qr' | 'connected';
@@ -16,6 +17,7 @@ export type InstanceRow = {
 
 export type GroupRow = {
   id: string;
+  company_id: string;
   instance_id: string;
   jid: string;
   name: string;
@@ -29,6 +31,7 @@ export type GroupRow = {
 
 export type TeamMemberRow = {
   id: string;
+  company_id: string;
   name: string;
   phone: string | null;
   jid: string | null;
@@ -36,6 +39,7 @@ export type TeamMemberRow = {
 };
 
 export type AppSettings = {
+  company_id: string;
   company_name: string;
   timezone: string;
   business_days: number[];
@@ -57,6 +61,7 @@ export type AppSettings = {
 
 export type AlertRule = {
   id: string;
+  company_id: string;
   name: string;
   type:
     | 'no_response'

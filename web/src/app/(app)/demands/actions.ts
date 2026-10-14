@@ -102,7 +102,7 @@ export async function saveDemandSettings(values: {
       demand_commitment_verbs: values.commitmentVerbs.map((k) => k.trim().toLowerCase()).filter(Boolean),
       updated_at: new Date().toISOString(),
     })
-    .eq('id', 1);
+    .eq('company_id', (await requireAdmin()).company_id);
   revalidatePath('/', 'layout');
   return result(error);
 }

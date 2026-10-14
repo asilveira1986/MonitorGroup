@@ -266,7 +266,7 @@ export function TvBoard({
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, refreshSoon)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'whatsapp_instances' }, refreshSoon)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'demands' }, refreshSoon)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'indicators' }, refreshSoon),
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_indicators' }, refreshSoon),
   );
 
   // troca de página dos painéis

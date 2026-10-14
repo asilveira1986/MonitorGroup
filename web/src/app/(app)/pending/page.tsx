@@ -12,7 +12,7 @@ export default async function PendingPage() {
   const supabase = await createClient();
   const [{ data }, { data: settings }] = await Promise.all([
     supabase.from('pending_queue').select('*'),
-    supabase.from('app_settings').select('timezone').eq('id', 1).single(),
+    supabase.from('app_settings').select('timezone').single(),
   ]);
   const items = (data ?? []) as PendingItem[];
   const overdue = items.filter((i) => i.overdue).length;

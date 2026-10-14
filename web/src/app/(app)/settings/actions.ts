@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { requireAdmin, requireProfile } from '@/lib/auth';
+import { createCompanyUser } from '@/lib/company-users';
 import { friendlyDbError } from '@/lib/db-errors';
-import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 
 type Result = { ok: true } | { ok: false; error: string };
 const result = (error: { message: string } | null | undefined): Result =>
@@ -39,7 +40,7 @@ export async function saveGeneralSettings(form: FormData): Promise<Result> {
         : 30,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', 1);
+    .eq('company_id', (await requireAdmin()).company_id);
   revalidatePath('/', 'layout');
   return result(error);
 }
@@ -183,24 +184,16 @@ export async function addAllowedEmail(form: FormData): Promise<Result> {
   const role = form.get('role') === 'admin' ? 'admin' : 'agent';
   const password = String(form.get('password') ?? '');
   const name = String(form.get('full_name') ?? '').trim();
-  if (!email) return { ok: false, error: 'Informe o e-mail.' };
-  // o acesso é só por e-mail e senha: a senha inicial é obrigatória
-  if (password.length < 8) return { ok: false, error: 'Defina uma senha inicial com ao menos 8 caracteres.' };
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return { ok: false, error: 'Configure SUPABASE_SERVICE_ROLE_KEY no servidor para criar usuários.' };
-  }
-
-  const { error } = await supabase.from('allowed_emails').upsert({ email, role, created_by: admin.id });
-  if (error) return result(error);
-
-  // cria o usuário já confirmado (login por e-mail e senha)
-  const { error: createError } = await createAdminClient().auth.admin.createUser({
+  // o acesso é só por e-mail e senha: a senha inicial é obrigatória; o usuário fica na empresa de quem cadastra
+  const res = await createCompanyUser({
+    companyId: admin.company_id!,
     email,
     password,
-    email_confirm: true,
-    user_metadata: name ? { full_name: name } : undefined,
+    role,
+    name,
+    createdBy: admin.id,
   });
-  if (createError) return result(createError);
+  if (!res.ok) return { ok: false, error: friendlyDbError(res.error) };
   revalidatePath('/settings/users');
   return { ok: true };
 }
@@ -222,7 +215,7 @@ export async function updateUser(id: string, values: { role?: 'admin' | 'agent';
   const { error } = await supabase.from('profiles').update(values).eq('id', id);
   if (!error && values.role) {
     const { data } = await supabase.from('profiles').select('email').eq('id', id).single();
-    if (data) await supabase.from('allowed_emails').upsert({ email: data.email, role: values.role });
+    if (data) await supabase.from('allowed_emails').upsert({ email: data.email, role: values.role, company_id: admin.company_id });
   }
   revalidatePath('/settings/users');
   return result(error);
@@ -268,7 +261,9 @@ export async function addHoliday(form: FormData): Promise<Result> {
   const name = String(form.get('name') ?? '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !name) return { ok: false, error: 'Informe a data e o nome do feriado.' };
   const supabase = await createClient();
-  const { error } = await supabase.from('holidays').upsert({ day, name, created_by: admin.id });
+  const { error } = await supabase
+    .from('holidays')
+    .upsert({ company_id: admin.company_id, day, name, created_by: admin.id }, { onConflict: 'company_id,day' });
   revalidatePath('/settings');
   return result(error);
 }
@@ -297,7 +292,7 @@ export async function saveBusinessHours(values: { days: number[]; start: string;
       business_end: values.end,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', 1);
+    .eq('company_id', (await requireAdmin()).company_id);
   revalidatePath('/', 'layout');
   return result(error);
 }
@@ -317,7 +312,7 @@ export async function saveReplySettings(values: {
       reply_allowed: values.allowed === 'admin' ? 'admin' : 'all',
       updated_at: new Date().toISOString(),
     })
-    .eq('id', 1);
+    .eq('company_id', (await requireAdmin()).company_id);
   revalidatePath('/', 'layout');
   return result(error);
 }
@@ -339,7 +334,7 @@ export async function saveMessageAlertSettings(values: {
       msg_alert_alerts: values.alerts,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', 1);
+    .eq('company_id', (await requireAdmin()).company_id);
   revalidatePath('/', 'layout');
   return result(error);
 }
@@ -428,7 +423,7 @@ export async function deleteSector(id: string): Promise<Result> {
 export async function setDefaultSector(id: string | null): Promise<Result> {
   await requireAdmin();
   const supabase = await createClient();
-  const { error } = await supabase.from('app_settings').update({ default_sector_id: id }).eq('id', 1);
+  const { error } = await supabase.from('app_settings').update({ default_sector_id: id }).eq('company_id', (await requireAdmin()).company_id);
   revalidatePath('/', 'layout');
   return result(error);
 }

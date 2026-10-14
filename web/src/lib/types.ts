@@ -8,6 +8,33 @@ export type Profile = {
   role: Role;
   active: boolean;
   created_at: string;
+  /** empresa em que o usuário está (multiempresa) */
+  company_id: string | null;
+  /** administra a plataforma: cadastra empresas e entra em qualquer uma para dar suporte */
+  platform_admin: boolean;
+};
+
+/** Empresa cliente (tela Empresas), com os números de uso. */
+export type Company = {
+  id: string;
+  name: string;
+  document: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  active: boolean;
+  max_groups: number | null;
+  max_users: number | null;
+  notes: string | null;
+  created_at: string;
+  users: number;
+  pending_invites: number;
+  admins: string[];
+  groups_monitored: number;
+  connections: number;
+  connected: number;
+  messages_30d: number;
+  last_message_at: string | null;
 };
 
 export type Instance = {

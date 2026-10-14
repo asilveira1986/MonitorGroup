@@ -1,4 +1,4 @@
-import { getSettings } from './cache.js';
+import { activeCompanyIds, getSettings, isCompanyActive } from './cache.js';
 import { check, db, type AlertRule, type GroupRow } from './db.js';
 import { isWithinBusinessHours } from './business-hours.js';
 import { logger } from './logger.js';
@@ -8,28 +8,33 @@ import { findKeyword } from './text.js';
 const minutesAgo = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
 
 /**
- * Indicadores cujo alerta está liberado (indicador ligado, bloco ligado e alerta ligado).
- * Lido do catálogo a cada verificação: mudanças no painel valem sem reiniciar o worker.
+ * Indicadores da empresa cujo alerta está liberado (indicador ligado, bloco ligado e alerta ligado):
+ * o catálogo dá o padrão e a empresa guarda o que mudou (company_indicators).
+ * Lido a cada verificação: mudanças no painel valem sem reiniciar o worker.
  */
-async function alertableIndicators(): Promise<Set<string> | null> {
-  const { data, error } = await db
-    .from('indicators')
-    .select('key, enabled, alert_enabled, indicator_blocks!inner(enabled)');
-  if (error) return null; // catálogo ainda não criado (script 0008 não executado): mantém o comportamento antigo
-  const rows = (data ?? []) as unknown as {
-    key: string;
-    enabled: boolean;
-    alert_enabled: boolean;
-    indicator_blocks: { enabled: boolean };
-  }[];
-  return new Set(rows.filter((r) => r.enabled && r.alert_enabled && r.indicator_blocks.enabled).map((r) => r.key));
+async function alertableIndicators(companyId: string): Promise<Set<string> | null> {
+  const [catalog, own, blocks] = await Promise.all([
+    db.from('indicators').select('key, block_key, default_enabled, default_alert_enabled'),
+    db.from('company_indicators').select('key, enabled, alert_enabled').eq('company_id', companyId),
+    db.from('company_indicator_blocks').select('key, enabled').eq('company_id', companyId),
+  ]);
+  if (catalog.error || own.error || blocks.error) return null;
+  const mine = new Map((own.data ?? []).map((r) => [r.key as string, r as { enabled: boolean | null; alert_enabled: boolean | null }]));
+  const offBlocks = new Set((blocks.data ?? []).filter((b) => !b.enabled).map((b) => b.key as string));
+  const keys = (catalog.data ?? [])
+    .filter((i) => {
+      const c = mine.get(i.key as string);
+      return (c?.enabled ?? i.default_enabled) && (c?.alert_enabled ?? i.default_alert_enabled) && !offBlocks.has(i.block_key as string);
+    })
+    .map((i) => i.key as string);
+  return new Set(keys);
 }
 
-export async function loadRules(type?: AlertRule['type']): Promise<AlertRule[]> {
-  let query = db.from('alert_rules').select('*').eq('active', true);
+export async function loadRules(companyId: string, type?: AlertRule['type']): Promise<AlertRule[]> {
+  let query = db.from('alert_rules').select('*').eq('active', true).eq('company_id', companyId);
   if (type) query = query.eq('type', type);
   const rules = (check(await query, 'load rules') ?? []) as AlertRule[];
-  const allowed = await alertableIndicators();
+  const allowed = await alertableIndicators(companyId);
   if (!allowed) return rules;
   // regra ligada a um indicador desativado (ou com alerta desligado) não dispara
   return rules.filter((r) => !r.indicator_key || allowed.has(r.indicator_key));
@@ -37,8 +42,8 @@ export async function loadRules(type?: AlertRule['type']): Promise<AlertRule[]> 
 
 const appliesToGroup = (rule: AlertRule, groupId: string) => !rule.group_ids?.length || rule.group_ids.includes(groupId);
 
-async function inBusinessHours() {
-  const s = await getSettings();
+async function inBusinessHours(companyId: string) {
+  const s = await getSettings(companyId);
   return isWithinBusinessHours(new Date(), {
     timezone: s.timezone,
     businessDays: s.business_days,
@@ -114,7 +119,7 @@ async function createAlert(
 // Verificações periódicas (a cada minuto)
 // ---------------------------------------------------------------------
 
-async function checkNoResponse(rules: AlertRule[], businessHours: boolean) {
+async function checkNoResponse(companyId: string, rules: AlertRule[], businessHours: boolean) {
   for (const rule of rules) {
     if (!rule.threshold_minutes) continue;
     if (rule.business_hours_only && !businessHours) continue;
@@ -123,6 +128,7 @@ async function checkNoResponse(rules: AlertRule[], businessHours: boolean) {
       await db
         .from('groups')
         .select('id, name, pending_since, pending_count, pending_message_id')
+        .eq('company_id', companyId)
         .eq('monitored', true)
         .is('removed_at', null)
         .not('pending_since', 'is', null)
@@ -154,7 +160,7 @@ async function checkNoResponse(rules: AlertRule[], businessHours: boolean) {
   }
 }
 
-async function checkInactivity(rules: AlertRule[], businessHours: boolean) {
+async function checkInactivity(companyId: string, rules: AlertRule[], businessHours: boolean) {
   for (const rule of rules) {
     if (!rule.threshold_minutes) continue;
     if (rule.business_hours_only && !businessHours) continue;
@@ -164,6 +170,7 @@ async function checkInactivity(rules: AlertRule[], businessHours: boolean) {
       await db
         .from('groups')
         .select('id, name, last_message_at, created_at')
+        .eq('company_id', companyId)
         .eq('monitored', true)
         .is('removed_at', null)
         .or(`last_message_at.lte.${limit},and(last_message_at.is.null,created_at.lte.${limit})`),
@@ -184,12 +191,14 @@ async function checkInactivity(rules: AlertRule[], businessHours: boolean) {
   }
 }
 
-async function checkDisconnected(rules: AlertRule[]) {
+async function checkDisconnected(companyId: string, rules: AlertRule[]) {
+  if (!rules.length) return;
   const instances =
     check(
       await db
         .from('whatsapp_instances')
         .select('id, name, status, connected_at, last_error')
+        .eq('company_id', companyId)
         .neq('status', 'connected')
         .not('connected_at', 'is', null)
         // tolerância de 2 minutos para reconexões rápidas
@@ -220,13 +229,14 @@ async function checkDisconnected(rules: AlertRule[]) {
  * resposta) na janela da regra. Avisa de novo só quando houver falha nova depois do
  * último aviso e passado o intervalo mínimo da regra.
  */
-async function checkRecurrence(rules: AlertRule[], businessHours: boolean) {
+async function checkRecurrence(companyId: string, rules: AlertRule[], businessHours: boolean) {
   for (const rule of rules) {
     if (!rule.threshold_count || !rule.threshold_minutes) continue;
     if (rule.business_hours_only && !businessHours) continue;
     const { data, error } = await db.rpc('recurrence_alert_candidates', {
       p_window_minutes: rule.threshold_minutes,
       p_min_failures: rule.threshold_count,
+      p_company_id: companyId,
     });
     if (error) {
       logger.warn({ error: error.message }, 'reincidência: execute o script 0015 no Supabase');
@@ -273,13 +283,21 @@ export async function runPeriodicChecks() {
   if (running) return;
   running = true;
   try {
-    const rules = await loadRules();
-    const businessHours = await inBusinessHours();
-    await checkNoResponse(rules.filter((r) => r.type === 'no_response'), businessHours);
-    await checkInactivity(rules.filter((r) => r.type === 'inactivity'), businessHours);
-    await checkDisconnected(rules.filter((r) => r.type === 'disconnected'));
-    await checkDeadlines(rules.filter((r) => r.type === 'deadline_missed'));
-    await checkRecurrence(rules.filter((r) => r.type === 'recurrence'), businessHours);
+    // cada empresa ativa com as suas regras, horário comercial e grupos
+    for (const companyId of await activeCompanyIds()) {
+      try {
+        const rules = await loadRules(companyId);
+        if (!rules.length) continue;
+        const businessHours = await inBusinessHours(companyId);
+        await checkNoResponse(companyId, rules.filter((r) => r.type === 'no_response'), businessHours);
+        await checkInactivity(companyId, rules.filter((r) => r.type === 'inactivity'), businessHours);
+        await checkDisconnected(companyId, rules.filter((r) => r.type === 'disconnected'));
+        await checkDeadlines(companyId, rules.filter((r) => r.type === 'deadline_missed'));
+        await checkRecurrence(companyId, rules.filter((r) => r.type === 'recurrence'), businessHours);
+      } catch (err) {
+        logger.error({ err, companyId }, 'erro na verificação de alertas da empresa');
+      }
+    }
   } catch (err) {
     logger.error({ err }, 'erro na verificação de alertas');
   } finally {
@@ -291,13 +309,18 @@ export async function runPeriodicChecks() {
 // Verificações em tempo real (a cada mensagem de cliente)
 // ---------------------------------------------------------------------
 
-export async function onClientMessage(group: { id: string; name: string }, message: { id: string; body: string | null; senderName: string | null }) {
+export async function onClientMessage(
+  companyId: string,
+  group: { id: string; name: string },
+  message: { id: string; body: string | null; senderName: string | null },
+) {
   try {
-    const rules = (await loadRules()).filter(
+    if (!(await isCompanyActive(companyId))) return;
+    const rules = (await loadRules(companyId)).filter(
       (r) => (r.type === 'keyword' || r.type === 'high_volume') && appliesToGroup(r, group.id),
     );
     if (!rules.length) return;
-    const businessHours = await inBusinessHours();
+    const businessHours = await inBusinessHours(companyId);
 
     for (const rule of rules) {
       if (rule.business_hours_only && !businessHours) continue;
@@ -361,11 +384,12 @@ async function demandAlerted(ruleId: string, demandId: string) {
   return (rows ?? []).length > 0;
 }
 
-async function checkDeadlines(rules: AlertRule[]) {
+async function checkDeadlines(companyId: string, rules: AlertRule[]) {
   if (!rules.length) return;
   const { data } = await db
     .from('demands')
     .select('id, number, description, promised_at, group_id, groups!inner(name, monitored, removed_at)')
+    .eq('company_id', companyId)
     .in('status', ['aberta', 'em_andamento'])
     .lt('promised_at', new Date().toISOString());
   const overdue = (data ?? []) as unknown as {
@@ -393,9 +417,9 @@ async function checkDeadlines(rules: AlertRule[]) {
 }
 
 /** Chamado pelo módulo de demandas quando uma demanda é reaberta ou muito cobrada. */
-export async function onRework(demandId: string, groupId: string, groupName: string, reason: string) {
+export async function onRework(companyId: string, demandId: string, groupId: string, groupName: string, reason: string) {
   try {
-    const rules = (await loadRules('rework')).filter((r) => appliesToGroup(r, groupId));
+    const rules = (await loadRules(companyId, 'rework')).filter((r) => appliesToGroup(r, groupId));
     if (!rules.length) return;
     const { data: d } = await db.from('demands').select('number, description').eq('id', demandId).single();
     for (const rule of rules) {
