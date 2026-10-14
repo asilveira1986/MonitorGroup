@@ -34,7 +34,7 @@ export async function createCompanyUser(input: {
   const { error } = await admin
     .from('allowed_emails')
     .upsert({ email, role: input.role, company_id: input.companyId, created_by: input.createdBy ?? null });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: serviceKeyHint(error.message) };
 
   if (!profile) {
     const { error: createError } = await admin.auth.admin.createUser({
@@ -48,9 +48,17 @@ export async function createCompanyUser(input: {
         ok: false,
         error: /already been registered|already exists/i.test(createError.message)
           ? 'Já existe um usuário com este e-mail.'
-          : createError.message,
+          : serviceKeyHint(createError.message),
       };
     }
   }
   return { ok: true };
+}
+
+/** Erros de configuração da chave de serviço, em linguagem de quem vai corrigir na Vercel. */
+function serviceKeyHint(message: string) {
+  if (/invalid api key|jwt|unauthorized|not allowed|invalid path/i.test(message)) {
+    return `Configuração do servidor: confira na Vercel a SUPABASE_SERVICE_ROLE_KEY (chave "service_role"/"secret" do Supabase) e a NEXT_PUBLIC_SUPABASE_URL (https://xxxx.supabase.co) e faça Redeploy. Detalhe: ${message}`;
+  }
+  return message;
 }

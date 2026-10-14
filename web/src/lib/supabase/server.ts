@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
-import { getSupabaseConfig } from './config';
+import { getSupabaseConfig, normalizeSupabaseUrl } from './config';
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -23,9 +23,16 @@ export async function createClient() {
   });
 }
 
-/** Cliente com service role - usar SOMENTE no servidor e após checar permissão. */
+/**
+ * Cliente com service role - usar SOMENTE no servidor e após checar permissão.
+ * Usa a mesma correção da URL do cliente comum (sem "/rest/v1", link do painel, aspas...):
+ * com a URL crua, a criação de usuários falhava com "Invalid path specified in request URL".
+ */
 export function createAdminClient() {
-  return createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+  const url = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim().replace(/^['"]|['"]$/g, '');
+  if (!url || !key) throw new Error('Supabase não configurado: faltam NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.');
+  return createSupabaseClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
