@@ -164,6 +164,7 @@ O sistema atende várias empresas com uma só instalação (um banco, um painel 
   - clica em **Entrar na empresa** (ou usa o seletor no topo do painel) para configurar ou dar suporte vendo exatamente o que a empresa vê.
 - **Cada empresa** conecta o próprio número em **Configurações › WhatsApp**, cadastra os próprios usuários em **Configurações › Usuários** e ajusta tudo nas suas configurações, sem afetar as outras. Os alertas por WhatsApp saem pelo número da própria empresa. As demandas são numeradas por empresa (#1, #2…).
 - **Um e-mail pertence a uma empresa só.**
+- **Criar um administrador da plataforma** (acesso total: menu Empresas, cadastro de empresas e usuários, liberação de acessos e administrador em qualquer empresa): abra `supabase/criar_admin_plataforma.sql`, troque o e-mail, a senha e o nome no início e execute no SQL Editor do Supabase. Pode executar de novo para promover um usuário que já existe ou trocar a senha dele.
 - **Ao atualizar para esta versão**, os dados atuais viram a primeira empresa (com o nome de *Configurações › Geral*) e os administradores atuais passam a administrar a plataforma.
 
 ## Identidade visual
