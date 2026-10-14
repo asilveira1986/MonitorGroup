@@ -9,7 +9,7 @@ Sistema web que acompanha as mensagens recebidas e enviadas nos grupos de WhatsA
 - **Indicadores configuráveis**: o dashboard é montado a partir de um catálogo de indicadores agrupados em blocos. Em **Configurações › Indicadores** (só administradores) é possível ligar/desligar cada indicador ou bloco, ligar/desligar o alerta, editar os parâmetros e restaurar o padrão. As mudanças valem na hora para todos e ficam registradas (quem e quando). Desligar não apaga dados.
 - **Importação do histórico**: ao ler o QR code, as mensagens anteriores dos grupos monitorados (padrão: últimos 30 dias, só texto) são importadas em segundo plano e as métricas do período já aparecem no dashboard. Para um número já conectado, use **Configurações › WhatsApp › Importar histórico** (gera um novo QR code, pois o WhatsApp só envia o histórico na conexão). A conversa de cada grupo carrega 50 mensagens por vez ao rolar.
 - **Grupos excluídos**: quando o número conectado sai ou é removido de um grupo, ou o grupo é apagado no celular, ele vai para a aba **Grupos › Excluídos**, sai da fila e dos alertas, mas o histórico continua disponível. O administrador pode excluí-lo definitivamente de lá. Se o número voltar ao grupo, ele é reativado sozinho.
-- **Login** com e-mail e senha pré-cadastrados ou com **Google**. Só entra quem um administrador autorizou.
+- **Login** com e-mail e senha cadastrados por um administrador. Só entra quem foi autorizado.
 - Tudo roda na nuvem: o navegador é o único programa necessário.
 
 ## Arquitetura
@@ -71,11 +71,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    - `Project URL`
    - `anon public` key
    - `service_role` key (é secreta: nunca coloque no navegador nem a compartilhe)
-4. **Login com Google** (opcional):
-   1. No [Google Cloud Console](https://console.cloud.google.com/apis/credentials), crie um *OAuth client ID* do tipo *Web application*.
-   2. Em *Authorized redirect URIs*, coloque `https://SEU-PROJETO.supabase.co/auth/v1/callback`.
-   3. No Supabase, abra **Authentication › Sign In / Providers › Google**, ative o provedor e cole o *Client ID* e o *Client Secret*.
-5. Depois do passo 3 (Vercel), volte em **Authentication › URL Configuration**:
+4. Depois do passo 3 (Vercel), volte em **Authentication › URL Configuration** (usado pelo link de "Esqueci minha senha"):
    - **Site URL**: `https://seu-painel.vercel.app`
    - **Redirect URLs**: `https://seu-painel.vercel.app/**`
 
@@ -115,22 +111,18 @@ O worker precisa ficar ligado 24 horas por dia, porque mantém a conexão com o 
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon public key |
    | `SUPABASE_SERVICE_ROLE_KEY` | service_role key (usada só no servidor, para criar usuários com senha) |
 
-4. Clique em **Deploy**. Depois, volte ao passo 1.5 e cadastre a URL gerada no Supabase.
+4. Clique em **Deploy**. Depois, volte ao passo 1.4 e cadastre a URL gerada no Supabase.
 
 ### 4. Primeiro acesso
 
-1. Crie o primeiro usuário de uma destas formas:
-   - entre com o Google no painel;
-   - ou, no Supabase, abra **Authentication › Users › Add user** e marque *Auto confirm*.
+1. Crie o primeiro usuário no Supabase: abra **Authentication › Users › Add user**, informe e-mail e senha e marque *Auto confirm*.
 
    **O primeiro usuário vira administrador automaticamente.**
 2. Em **Configurações › WhatsApp**, clique em **Nova conexão** e leia o QR code com o celular (*Aparelhos conectados › Conectar um aparelho*).
 3. Os grupos aparecem em **Grupos**. Desligue o monitoramento dos grupos que não são de clientes.
 4. Em **Configurações › Equipe**, cadastre os números dos atendentes que respondem pelo próprio celular.
 5. Em **Configurações › Geral**, ajuste o horário comercial e o SLA. Depois revise as regras em **Configurações › Regras de alerta**.
-6. Em **Configurações › Usuários**, cadastre as outras pessoas:
-   - **com senha**: elas entram com e-mail e senha;
-   - **sem senha**: elas entram com a conta Google desse e-mail.
+6. Em **Configurações › Usuários**, cadastre as outras pessoas com e-mail e uma senha inicial. Cada uma pode trocar a senha em **Esqueci minha senha**, na tela de login.
 
 ## Demandas
 
@@ -329,7 +321,7 @@ A tela de login mostra o motivo do erro. Os casos mais comuns:
 | *Não foi possível conectar ao Supabase* | URL errada ou projeto pausado (projetos gratuitos pausam após 7 dias sem uso; reative no painel do Supabase). |
 | *Banco de dados não preparado* | Execute os scripts `0001` a `0004` no SQL Editor. |
 | *Acesso não liberado* | O e-mail não está autorizado; um administrador precisa cadastrá-lo em **Configurações › Usuários**. |
-| Volta para o login após entrar com Google | Configure **Site URL** e **Redirect URLs** em **Authentication › URL Configuration**. |
+| O link de "Esqueci minha senha" volta para o login | Configure **Site URL** e **Redirect URLs** em **Authentication › URL Configuration**. |
 
 Criou o usuário antes de rodar os scripts? Basta executar o `0004`: ele cria os perfis que faltam e torna administrador o usuário mais antigo.
 
@@ -373,7 +365,7 @@ A tela **Configurações › WhatsApp** mostra no topo se o worker está no ar:
 
 - O sistema usa o WhatsApp Web de forma **não oficial** (biblioteca [Baileys](https://github.com/WhiskeySockets/Baileys)). Ele **só lê** os grupos e envia apenas as notificações de alerta que você configurar. Mesmo assim, o WhatsApp pode restringir números com comportamento suspeito. Use um número da empresa e não use o sistema para disparos em massa.
 - Todas as tabelas usam *Row Level Security*. Só usuários autorizados (ativos) leem os dados, e só administradores alteram as conexões, as regras e os usuários. A sessão do WhatsApp só é acessível ao worker.
-- Quem entra com uma conta Google não autorizada vê a tela *"Acesso não liberado"* e não consegue ler nenhum dado.
+- O acesso é só por e-mail e senha. Um usuário desativado vê a tela *"Acesso não liberado"* e não consegue ler nenhum dado.
 - Guarde a `service_role` key apenas nas variáveis de ambiente do Railway e da Vercel.
 
 ## Desenvolvimento local (opcional)

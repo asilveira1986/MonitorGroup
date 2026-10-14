@@ -1,14 +1,14 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-/** Retorno do login Google / link de recuperação de senha. */
+/** Retorno do link de recuperação de senha. */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next');
   const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
 
-  // O Supabase/Google devolve o motivo quando o login é recusado
+  // O Supabase devolve o motivo quando o link é recusado
   let reason = searchParams.get('error_description') ?? searchParams.get('error');
 
   if (code) {

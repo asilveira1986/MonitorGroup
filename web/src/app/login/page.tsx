@@ -53,7 +53,7 @@ export default function LoginPage() {
             <Logo />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">Entrar</h1>
-          <p className="mt-1 text-sm text-ink-2">Use seu e-mail cadastrado ou sua conta Google.</p>
+          <p className="mt-1 text-sm text-ink-2">Use o e-mail e a senha cadastrados pelo administrador.</p>
           <Suspense>
             <LoginForm configProblem={problem} />
           </Suspense>

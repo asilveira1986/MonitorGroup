@@ -184,25 +184,23 @@ export async function addAllowedEmail(form: FormData): Promise<Result> {
   const password = String(form.get('password') ?? '');
   const name = String(form.get('full_name') ?? '').trim();
   if (!email) return { ok: false, error: 'Informe o e-mail.' };
+  // o acesso é só por e-mail e senha: a senha inicial é obrigatória
+  if (password.length < 8) return { ok: false, error: 'Defina uma senha inicial com ao menos 8 caracteres.' };
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { ok: false, error: 'Configure SUPABASE_SERVICE_ROLE_KEY no servidor para criar usuários.' };
+  }
 
   const { error } = await supabase.from('allowed_emails').upsert({ email, role, created_by: admin.id });
   if (error) return result(error);
 
-  // Com senha: cria o usuário já confirmado (login por e-mail e senha).
-  // Sem senha: a pessoa entra com o Google usando este e-mail.
-  if (password) {
-    if (password.length < 8) return { ok: false, error: 'A senha deve ter ao menos 8 caracteres.' };
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return { ok: false, error: 'Configure SUPABASE_SERVICE_ROLE_KEY no servidor para criar usuários com senha.' };
-    }
-    const { error: createError } = await createAdminClient().auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: name ? { full_name: name } : undefined,
-    });
-    if (createError) return result(createError);
-  }
+  // cria o usuário já confirmado (login por e-mail e senha)
+  const { error: createError } = await createAdminClient().auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: name ? { full_name: name } : undefined,
+  });
+  if (createError) return result(createError);
   revalidatePath('/settings/users');
   return { ok: true };
 }

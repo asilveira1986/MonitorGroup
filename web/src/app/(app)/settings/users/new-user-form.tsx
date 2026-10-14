@@ -21,11 +21,8 @@ export function NewUserForm() {
               <option value="admin">Administrador - acesso total</option>
             </Select>
           </Field>
-          <Field
-            label="Senha inicial (opcional)"
-            hint="Com senha: login por e-mail e senha. Sem senha: a pessoa entra com a conta Google deste e-mail."
-          >
-            <Input name="password" type="password" minLength={8} autoComplete="new-password" placeholder="mínimo 8 caracteres" />
+          <Field label="Senha inicial" hint="A pessoa entra com este e-mail e esta senha e pode trocá-la em “Esqueci minha senha”.">
+            <Input name="password" type="password" required minLength={8} autoComplete="new-password" placeholder="mínimo 8 caracteres" />
           </Field>
           <Button disabled={pending} className="w-full">
             {pending ? 'Cadastrando…' : 'Cadastrar'}

@@ -97,7 +97,7 @@ export default async function UsersPage() {
         <Card>
           <CardHeader
             title="Convites pendentes"
-            description="E-mails autorizados que ainda não entraram (podem entrar com Google)."
+            description="E-mails autorizados que ainda não entraram. Sem senha cadastrada, remova e cadastre de novo com uma senha inicial."
           />
           <div className="p-2">
             {invites.length === 0 ? (
