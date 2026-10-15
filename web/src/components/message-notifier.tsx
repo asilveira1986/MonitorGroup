@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { ALERT_TYPE_LABEL, cn, formatDuration, formatPhone } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import type { Alert, Message } from '@/lib/types';
+import { playAlertSound, type AlertSound } from '@/lib/sounds';
 import { useRealtime } from '@/lib/use-realtime';
 import { renderTemplate, sampleValues, speak, spokenDuration, templateFor, type VoiceOptions } from '@/lib/voice';
 
@@ -77,6 +78,9 @@ type ScreenItem = {
   speech?: string;
 };
 
+/** som de cada tipo de aviso quando não há fala */
+const TONE_SOUND: Record<Tone, AlertSound> = { brand: 'message', info: 'info', warning: 'warning', critical: 'critical' };
+
 const TONE: Record<Tone, { header: string; border: string; button: string; glow: string }> = {
   brand: { header: 'bg-brand text-brand-ink', border: 'border-brand-line', button: 'bg-brand text-brand-ink', glow: 'var(--brand)' },
   critical: { header: 'bg-critical text-white', border: 'border-critical', button: 'bg-critical text-white', glow: 'var(--critical)' },
@@ -99,29 +103,6 @@ const VOICE_TYPE: Record<string, string> = {
 const messageText = (type: string, body: string | null) =>
   type === 'text' ? body : `${TYPE_LABEL[type] ?? type}${body ? ` ${body}` : ''}`;
 
-/** Bipe curto (dois tons) para chamar a atenção; o navegador pode bloquear até o primeiro clique na página. */
-function beep() {
-  try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new Ctx();
-    [880, 1175].forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      const t = ctx.currentTime + i * 0.18;
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(t);
-      osc.stop(t + 0.17);
-    });
-    setTimeout(() => void ctx.close(), 800);
-  } catch {
-    /* sem áudio */
-  }
-}
 
 /**
  * Avisos grandes no centro da tela, todos no mesmo formato:
@@ -143,10 +124,11 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
   const push = (item: ScreenItem) => {
     if (mutedHere()) return;
     setItems((prev) => [item, ...prev.filter((i) => i.key !== item.key)]);
-    if (configRef.current.sound) beep();
-    if (configRef.current.voice !== false && item.speech) {
-      speak(item.speech, configRef.current.voiceOptions, configRef.current.sound ? 450 : 0);
-    }
+    // com a voz falando: bipe curto e a fala; sem voz: o som do tipo do aviso
+    // (mensagem recebida, informativo, atenção ou crítico)
+    const speaking = configRef.current.voice !== false && Boolean(item.speech);
+    if (configRef.current.sound) playAlertSound(speaking ? 'voice' : TONE_SOUND[item.tone]);
+    if (speaking) speak(item.speech!, configRef.current.voiceOptions, configRef.current.sound ? 450 : 0);
   };
   const pushRef = useRef(push);
   useEffect(() => {

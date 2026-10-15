@@ -1,10 +1,11 @@
 'use client';
 
-import { AlarmClock, BellRing, PlayCircle, Save, Timer, Volume2 } from 'lucide-react';
+import { AlarmClock, BellRing, Play, PlayCircle, Save, Timer, Volume2 } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { TEST_EVENT } from '@/components/message-notifier';
 import { Button, Card, CardHeader, Select } from '@/components/ui';
+import { playAlertSound, SOUND_LABEL } from '@/lib/sounds';
 import type { AppSettings } from '@/lib/types';
 import { saveMessageAlertSettings } from './actions';
 import { Row } from './demand-settings';
@@ -86,7 +87,25 @@ export function MessageAlertSettings({ settings, disabled }: { settings: AppSett
             <Row
               icon={Volume2}
               title="Tocar som"
-              text="Um bipe curto junto com cada aviso. O navegador só libera o som depois do primeiro clique na página."
+              text={
+                <>
+                  Com o aviso por voz falando, um bipe curto antes da fala. Sem voz, cada tipo de aviso tem um som próprio,
+                  para reconhecer sem olhar a tela. O navegador só libera o som depois do primeiro clique na página.
+                  <span className="mt-2 flex flex-wrap gap-1.5">
+                    {(Object.keys(SOUND_LABEL) as (keyof typeof SOUND_LABEL)[]).map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => playAlertSound(k)}
+                        className="inline-flex items-center gap-1 rounded-full border border-line px-2.5 py-1 text-[11px] font-medium text-ink-2 hover:border-brand-line hover:text-ink"
+                        title={`Ouvir o som de: ${SOUND_LABEL[k]}`}
+                      >
+                        <Play className="h-3 w-3" aria-hidden /> {SOUND_LABEL[k]}
+                      </button>
+                    ))}
+                  </span>
+                </>
+              }
               checked={sound}
               onChange={setSound}
               disabled={disabled || pending}

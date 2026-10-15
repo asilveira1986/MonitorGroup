@@ -231,6 +231,7 @@ O sino no topo da tela silencia todos os avisos em tela só no navegador em uso.
 - liga ou desliga a voz, e escolhe falar ou não as mensagens novas e o SLA excedido (cada regra de alerta liga ou desliga a própria voz em *Editar regra*);
 - escolhe **o que cada aviso fala**: uma frase com itens clicáveis (nome do grupo, quem enviou, texto da mensagem, tempo esperando, SLA, tipo e gravidade do alerta…), com exemplo e botão **Ouvir**. Item sem valor (ex.: alerta sem grupo) sai da frase junto com a ligação ("no grupo …");
 - escolhe a **voz** (as instaladas no computador e no navegador; se não existir em outro computador, ele usa a voz em português padrão dele), a **velocidade** e o **tom**.
+**Sons dos avisos:** com a voz falando, toca um bipe curto antes da fala. Sem voz (desligada, ou o aviso/regra sem voz), cada tipo de aviso tem um som próprio: **mensagem recebida** (plim-plim suave), **informativo** (uma nota leve), **atenção** (dois bipes médios) e **crítico** (alarme curto com três bipes agudos, duas vezes; o SLA excedido usa este). Dá para ouvir cada um em *Regras de alerta › Avisos em tela › Tocar som*.
 O sino do topo silencia também a voz naquele navegador.
 
 ## Acompanhamento do dia a dia
