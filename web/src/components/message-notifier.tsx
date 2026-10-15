@@ -19,8 +19,12 @@ export type AlertConfig = {
   autoClose: number;
   /** toca o bipe */
   sound: boolean;
-  /** fala o aviso em voz alta (português) */
+  /** fala o aviso em voz alta (português) — Configurações › Regras de alerta */
   voice?: boolean;
+  /** voz: fala as mensagens novas */
+  voiceMessages?: boolean;
+  /** voz: fala o SLA excedido */
+  voiceSla?: boolean;
 };
 
 const STORAGE_KEY = 'notify-messages';
@@ -230,7 +234,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
             if (!g || !g.monitored) return;
             const who = m.sender_name || 'um cliente';
             pushRef.current({
-              speech: `Nova mensagem no grupo ${g.name}, de ${who}.`,
+              speech: configRef.current.voiceMessages !== false ? `Nova mensagem no grupo ${g.name}, de ${who}.` : undefined,
               key: `msg-${m.group_id}`,
               tone: 'brand',
               heading: 'Nova mensagem',
@@ -259,10 +263,12 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
           return;
         }
         const tone: Tone = a.severity === 'critical' ? 'critical' : a.severity === 'warning' ? 'warning' : 'info';
-        const show = (group: string | null) =>
+        // a regra do alerta escolhe se ele é falado (Editar regra › Aviso por voz)
+        const show = (group: string | null, voice: boolean) =>
           pushRef.current({
-            speech:
-              a.type === 'no_response' && group
+            speech: !voice
+              ? undefined
+              : a.type === 'no_response' && group
                 ? `Atenção: grupo ${group} sem resposta.`
                 : `${a.severity === 'critical' ? 'Atenção! ' : ''}Alerta: ${ALERT_TYPE_LABEL[a.type] ?? 'alerta'}${group ? `, no grupo ${group}` : ''}.`,
             // "cliente sem resposta" e "SLA excedido" do mesmo grupo viram um aviso só
@@ -277,13 +283,13 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
             action: a.group_id ? 'Abrir grupo' : 'Ver alertas',
             at: Date.now(),
           });
-        if (!a.group_id) return show(null);
-        void createClient()
-          .from('groups')
-          .select('name')
-          .eq('id', a.group_id)
-          .maybeSingle()
-          .then(({ data: g }) => show(g?.name ?? null));
+        const supabase = createClient();
+        void Promise.all([
+          a.group_id ? supabase.from('groups').select('name').eq('id', a.group_id).maybeSingle() : Promise.resolve({ data: null }),
+          a.rule_id ? supabase.from('alert_rules').select('voice').eq('id', a.rule_id).maybeSingle() : Promise.resolve({ data: null }),
+        ]).then(([{ data: g }, { data: r }]) =>
+          show((g as { name: string } | null)?.name ?? null, (r as { voice?: boolean } | null)?.voice !== false),
+        );
       }),
   );
 
@@ -314,7 +320,10 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         seen.add(key);
         if (first) continue;
         pushRef.current({
-          speech: `Atenção: SLA excedido no grupo ${b.group}, sem resposta há ${spokenDuration(b.waiting_seconds)}.`,
+          speech:
+            configRef.current.voiceSla !== false
+              ? `Atenção: SLA excedido no grupo ${b.group}, sem resposta há ${spokenDuration(b.waiting_seconds)}.`
+              : undefined,
           key: `late-${b.group_id}`,
           tone: 'critical',
           heading: 'SLA excedido',

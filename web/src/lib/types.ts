@@ -138,6 +138,8 @@ export type AlertRule = {
   notify_emails: string[];
   notify_whatsapp: string[];
   notify_webhook_url: string | null;
+  /** o alerta desta regra é falado (aviso por voz) */
+  voice?: boolean;
 };
 
 export type Alert = {
@@ -186,6 +188,10 @@ export type AppSettings = {
   msg_alert_sound: boolean;
   /** fala o aviso em voz alta (português) */
   msg_alert_voice?: boolean;
+  /** voz: fala as mensagens novas */
+  msg_alert_voice_messages?: boolean;
+  /** voz: fala o SLA excedido */
+  msg_alert_voice_sla?: boolean;
   /** alertas do sistema e SLA excedido também abrem no centro da tela */
   msg_alert_alerts: boolean;
   reply_allowed: 'all' | 'admin';

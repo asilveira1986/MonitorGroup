@@ -7794,6 +7794,26 @@ alter table public.app_settings
 
 notify pgrst, 'reload schema';
 
+-- >>>>>>>>>>>>>>>>>>>> 0033_voice_alert_rules.sql <<<<<<<<<<<<<<<<<<<<
+-- =====================================================================
+-- Aviso por voz configurado em Configurações › Regras de alerta
+--
+--  * app_settings.msg_alert_voice (0032): liga/desliga o aviso por voz;
+--  * app_settings.msg_alert_voice_messages: fala as mensagens novas;
+--  * app_settings.msg_alert_voice_sla: fala o SLA excedido;
+--  * alert_rules.voice: cada regra de alerta escolhe se o alerta dela é falado.
+-- Tudo ligado por padrão.
+-- =====================================================================
+
+alter table public.app_settings
+  add column if not exists msg_alert_voice_messages boolean not null default true,
+  add column if not exists msg_alert_voice_sla boolean not null default true;
+
+alter table public.alert_rules
+  add column if not exists voice boolean not null default true;
+
+notify pgrst, 'reload schema';
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -7836,6 +7856,8 @@ from (values
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'menu_access')),
   (25, 'Aviso por voz (0032)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'msg_alert_voice')),
-  (26, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (26, 'Aviso por voz nas regras de alerta (0033)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'alert_rules' and column_name = 'voice')),
+  (27, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

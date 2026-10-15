@@ -70,6 +70,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    30. `supabase/migrations/0030_multi_company.sql`
    31. `supabase/migrations/0031_menu_access.sql`
    32. `supabase/migrations/0032_voice_alert.sql`
+   33. `supabase/migrations/0033_voice_alert_rules.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -225,7 +226,7 @@ A configuração fica em **Configurações › Geral › Alertas em tela** (só 
 
 O sino no topo da tela silencia todos os avisos em tela só no navegador em uso.
 
-**Aviso por voz** (ligado por padrão, em *Configurações › Geral › Alertas em tela*): junto com o aviso, o navegador fala em português, logo depois do bipe: *"Nova mensagem no grupo Vendas SP, de Carla"*, *"Atenção: SLA excedido no grupo Vendas SP, sem resposta há 18 minutos"* ou o tipo do alerta e o grupo. Não lê o texto da mensagem. Usa a voz em português instalada no computador (no Windows e no Chrome já vem; sem ela, o navegador usa a voz padrão). O sino do topo silencia também a voz naquele navegador.
+**Aviso por voz** (ligado por padrão, em *Configurações › Regras de alerta › Aviso por voz*, onde também se escolhe falar ou não as mensagens novas e o SLA excedido; cada regra de alerta liga ou desliga a própria voz em *Editar regra*): junto com o aviso, o navegador fala em português, logo depois do bipe: *"Nova mensagem no grupo Vendas SP, de Carla"*, *"Atenção: SLA excedido no grupo Vendas SP, sem resposta há 18 minutos"* ou o tipo do alerta e o grupo. Não lê o texto da mensagem. Usa a voz em português instalada no computador (no Windows e no Chrome já vem; sem ela, o navegador usa a voz padrão). O sino do topo silencia também a voz naquele navegador.
 
 ## Acompanhamento do dia a dia
 

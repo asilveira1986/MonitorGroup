@@ -1,6 +1,6 @@
 'use client';
 
-import { BellRing, CalendarX, History, Repeat, Clock, KeyRound, Mail, MessageCircle, Pencil, Plus, Trash2, TrendingUp, Webhook, WifiOff, Moon } from 'lucide-react';
+import { BellRing, CalendarX, Clock, History, KeyRound, Mail, MessageCircle, Moon, Pencil, Plus, Repeat, Speech, Trash2, TrendingUp, Webhook, WifiOff } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { ActionForm } from '@/components/form-action';
@@ -220,6 +220,7 @@ function RuleEditor({
               {type !== 'disconnected' && (
                 <Toggle name="business_hours_only" defaultChecked={rule?.business_hours_only ?? false} label="Somente no horário comercial" />
               )}
+              <Toggle name="voice" defaultChecked={rule?.voice ?? true} label="Aviso por voz" />
             </div>
 
             <div className="flex gap-2">
@@ -289,6 +290,11 @@ export function RulesPanel({
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     <Badge>{rule.group_ids?.length ? `${rule.group_ids.length} grupo(s)` : 'Todos os grupos'}</Badge>
                     {rule.business_hours_only && <Badge>Horário comercial</Badge>}
+                    {rule.voice !== false && (
+                      <Badge tone="brand">
+                        <Speech className="h-3 w-3" /> voz
+                      </Badge>
+                    )}
                     {rule.notify_emails.length > 0 && (
                       <Badge tone="info">
                         <Mail className="h-3 w-3" /> {rule.notify_emails.length}

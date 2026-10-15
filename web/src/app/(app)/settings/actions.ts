@@ -113,6 +113,7 @@ export async function saveAlertRule(form: FormData): Promise<Result> {
     keywords: type === 'keyword' ? list(form.get('keywords')) : null,
     group_ids: groupIds.length ? groupIds : null,
     business_hours_only: form.get('business_hours_only') === 'on',
+    voice: form.get('voice') === 'on',
     cooldown_minutes: intOrNull(form.get('cooldown_minutes')) ?? (type === 'recurrence' ? 1440 : 60),
     notify_in_app: true,
     notify_emails: list(form.get('notify_emails')).map((e) => e.toLowerCase()),
@@ -323,7 +324,6 @@ export async function saveMessageAlertSettings(values: {
   alerts: boolean;
   autoClose: number;
   sound: boolean;
-  voice: boolean;
 }): Promise<Result> {
   await requireAdmin();
   const supabase = await createClient();
@@ -333,7 +333,6 @@ export async function saveMessageAlertSettings(values: {
       msg_alert_enabled: values.enabled,
       msg_alert_auto_close: Math.max(0, Math.min(600, Math.round(values.autoClose))),
       msg_alert_sound: values.sound,
-      msg_alert_voice: values.voice,
       msg_alert_alerts: values.alerts,
       updated_at: new Date().toISOString(),
     })
@@ -445,6 +444,23 @@ export async function saveMenuAccess(access: Record<string, 'all' | 'admin' | 'n
   const { error } = await supabase
     .from('app_settings')
     .update({ menu_access: clean, updated_at: new Date().toISOString() })
+    .eq('company_id', admin.company_id);
+  revalidatePath('/', 'layout');
+  return result(error);
+}
+
+// --------------------------------------------------------------- Aviso por voz (Regras de alerta)
+export async function saveVoiceSettings(values: { voice: boolean; messages: boolean; sla: boolean }): Promise<Result> {
+  const admin = await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('app_settings')
+    .update({
+      msg_alert_voice: values.voice,
+      msg_alert_voice_messages: values.messages,
+      msg_alert_voice_sla: values.sla,
+      updated_at: new Date().toISOString(),
+    })
     .eq('company_id', admin.company_id);
   revalidatePath('/', 'layout');
   return result(error);

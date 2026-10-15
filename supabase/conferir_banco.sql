@@ -38,6 +38,8 @@ from (values
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'menu_access')),
   (25, 'Aviso por voz (0032)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'msg_alert_voice')),
-  (26, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (26, 'Aviso por voz nas regras de alerta (0033)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'alert_rules' and column_name = 'voice')),
+  (27, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
