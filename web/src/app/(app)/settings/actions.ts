@@ -450,8 +450,23 @@ export async function saveMenuAccess(access: Record<string, 'all' | 'admin' | 'n
 }
 
 // --------------------------------------------------------------- Aviso por voz (Regras de alerta)
-export async function saveVoiceSettings(values: { voice: boolean; messages: boolean; sla: boolean }): Promise<Result> {
+export async function saveVoiceSettings(values: {
+  voice: boolean;
+  messages: boolean;
+  sla: boolean;
+  templates: Record<string, string | undefined>;
+  voiceName: string | null;
+  rate: number;
+  pitch: number;
+}): Promise<Result> {
   const admin = await requireAdmin();
+  // só as frases conhecidas, sem espaços sobrando e com tamanho razoável (vazia = frase padrão)
+  const templates = Object.fromEntries(
+    (['message', 'sla', 'alert'] as const)
+      .map((k) => [k, (values.templates[k] ?? '').replace(/\s+/g, ' ').trim().slice(0, 300)] as const)
+      .filter(([, t]) => t),
+  );
+  const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, Number(n) || 1));
   const supabase = await createClient();
   const { error } = await supabase
     .from('app_settings')
@@ -459,6 +474,10 @@ export async function saveVoiceSettings(values: { voice: boolean; messages: bool
       msg_alert_voice: values.voice,
       msg_alert_voice_messages: values.messages,
       msg_alert_voice_sla: values.sla,
+      msg_alert_voice_templates: templates,
+      msg_alert_voice_name: values.voiceName?.trim() || null,
+      msg_alert_voice_rate: Math.round(clamp(values.rate, 0.5, 2) * 10) / 10,
+      msg_alert_voice_pitch: Math.round(clamp(values.pitch, 0, 2) * 10) / 10,
       updated_at: new Date().toISOString(),
     })
     .eq('company_id', admin.company_id);

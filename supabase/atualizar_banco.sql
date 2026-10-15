@@ -7814,6 +7814,28 @@ alter table public.alert_rules
 
 notify pgrst, 'reload schema';
 
+-- >>>>>>>>>>>>>>>>>>>> 0034_voice_options.sql <<<<<<<<<<<<<<<<<<<<
+-- =====================================================================
+-- Aviso por voz: o que é falado, voz, velocidade e tom
+--
+--  * msg_alert_voice_templates: frase de cada aviso, com itens
+--    substituídos na hora ({grupo}, {remetente}, {mensagem}, {espera}...):
+--    {"message": "...", "sla": "...", "alert": "..."}; vazio = frase padrão;
+--  * msg_alert_voice_name: nome da voz escolhida (se não existir no
+--    computador, usa a voz em português padrão dele);
+--  * msg_alert_voice_rate / msg_alert_voice_pitch: velocidade e tom.
+-- =====================================================================
+
+alter table public.app_settings
+  add column if not exists msg_alert_voice_templates jsonb not null default '{}'::jsonb,
+  add column if not exists msg_alert_voice_name text,
+  add column if not exists msg_alert_voice_rate numeric(3,2) not null default 1
+    check (msg_alert_voice_rate between 0.5 and 2),
+  add column if not exists msg_alert_voice_pitch numeric(3,2) not null default 1
+    check (msg_alert_voice_pitch between 0 and 2);
+
+notify pgrst, 'reload schema';
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -7858,6 +7880,8 @@ from (values
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'msg_alert_voice')),
   (26, 'Aviso por voz nas regras de alerta (0033)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'alert_rules' and column_name = 'voice')),
-  (27, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (27, 'Opções do aviso por voz (0034)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'msg_alert_voice_templates')),
+  (28, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

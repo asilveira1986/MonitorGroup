@@ -4,15 +4,17 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/format';
 
+// organizadas: o essencial da empresa, as pessoas e o acesso, depois o monitoramento e os alertas
 const TABS = [
   { href: '/settings', label: 'Geral' },
   { href: '/settings/whatsapp', label: 'WhatsApp' },
-  { href: '/settings/indicators', label: 'Indicadores', adminOnly: true },
-  { href: '/settings/alerts', label: 'Regras de alerta' },
-  { href: '/settings/team', label: 'Equipe' },
   { href: '/settings/users', label: 'Usuários' },
+  { href: '/settings/team', label: 'Equipe' },
   { href: '/settings/sectors', label: 'Setores', adminOnly: true },
   { href: '/settings/menus', label: 'Menus', adminOnly: true },
+  { href: '/settings/indicators', label: 'Indicadores', adminOnly: true },
+  // tudo de alertas: regras, avisos em tela e aviso por voz
+  { href: '/settings/alerts', label: 'Regras de alerta' },
 ];
 
 export function SettingsTabs({ isAdmin }: { isAdmin: boolean }) {

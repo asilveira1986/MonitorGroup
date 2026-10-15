@@ -25,7 +25,7 @@ export function MessageAlertSettings({ settings, disabled }: { settings: AppSett
     <Card>
       <CardHeader
         title="Alertas em tela"
-        description="Avisos grandes no centro da tela: nova mensagem de cliente, SLA excedido e os alertas do sistema. Vale para todos os usuários; cada um ainda pode silenciar no próprio navegador pelo sino do topo. O aviso por voz fica em Regras de alerta."
+        description="Avisos grandes no centro da tela: nova mensagem de cliente, SLA excedido e os alertas do sistema. Vale para todos os usuários; cada um ainda pode silenciar no próprio navegador pelo sino do topo. O aviso por voz tem a seção própria ao lado."
       />
       <div className="divide-y divide-line px-4 pb-4 sm:px-5">
         <Row

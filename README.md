@@ -71,6 +71,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    31. `supabase/migrations/0031_menu_access.sql`
    32. `supabase/migrations/0032_voice_alert.sql`
    33. `supabase/migrations/0033_voice_alert_rules.sql`
+   34. `supabase/migrations/0034_voice_options.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -226,7 +227,11 @@ A configuração fica em **Configurações › Geral › Alertas em tela** (só 
 
 O sino no topo da tela silencia todos os avisos em tela só no navegador em uso.
 
-**Aviso por voz** (ligado por padrão, em *Configurações › Regras de alerta › Aviso por voz*, onde também se escolhe falar ou não as mensagens novas e o SLA excedido; cada regra de alerta liga ou desliga a própria voz em *Editar regra*): junto com o aviso, o navegador fala em português, logo depois do bipe: *"Nova mensagem no grupo Vendas SP, de Carla"*, *"Atenção: SLA excedido no grupo Vendas SP, sem resposta há 18 minutos"* ou o tipo do alerta e o grupo. Não lê o texto da mensagem. Usa a voz em português instalada no computador (no Windows e no Chrome já vem; sem ela, o navegador usa a voz padrão). O sino do topo silencia também a voz naquele navegador.
+**Aviso por voz** e **avisos em tela** ficam em *Configurações › Regras de alerta*, que reúne tudo de alertas em três seções: **Regras**, **Avisos em tela** (aviso grande, tempo na tela e som) e **Aviso por voz**. No aviso por voz você:
+- liga ou desliga a voz, e escolhe falar ou não as mensagens novas e o SLA excedido (cada regra de alerta liga ou desliga a própria voz em *Editar regra*);
+- escolhe **o que cada aviso fala**: uma frase com itens clicáveis (nome do grupo, quem enviou, texto da mensagem, tempo esperando, SLA, tipo e gravidade do alerta…), com exemplo e botão **Ouvir**. Item sem valor (ex.: alerta sem grupo) sai da frase junto com a ligação ("no grupo …");
+- escolhe a **voz** (as instaladas no computador e no navegador; se não existir em outro computador, ele usa a voz em português padrão dele), a **velocidade** e o **tom**.
+O sino do topo silencia também a voz naquele navegador.
 
 ## Acompanhamento do dia a dia
 

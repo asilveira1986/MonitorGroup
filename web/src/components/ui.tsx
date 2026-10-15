@@ -1,5 +1,5 @@
 import { AlertOctagon, AlertTriangle, Info } from 'lucide-react';
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, ComponentProps, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 import { cn, SEVERITY_LABEL } from '@/lib/format';
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
@@ -91,7 +91,7 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
   return <input className={cn(fieldClass, 'h-11 sm:h-10', className)} {...props} />;
 }
 
-export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea({ className, ...props }: ComponentProps<'textarea'>) {
   return <textarea className={cn(fieldClass, 'py-2', className)} {...props} />;
 }
 

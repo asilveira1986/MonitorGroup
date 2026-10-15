@@ -192,6 +192,11 @@ export type AppSettings = {
   msg_alert_voice_messages?: boolean;
   /** voz: fala o SLA excedido */
   msg_alert_voice_sla?: boolean;
+  /** voz: frase de cada aviso ({"message","sla","alert"}; vazio = padrão) */
+  msg_alert_voice_templates?: Record<string, string> | null;
+  msg_alert_voice_name?: string | null;
+  msg_alert_voice_rate?: number | string | null;
+  msg_alert_voice_pitch?: number | string | null;
   /** alertas do sistema e SLA excedido também abrem no centro da tela */
   msg_alert_alerts: boolean;
   reply_allowed: 'all' | 'admin';
