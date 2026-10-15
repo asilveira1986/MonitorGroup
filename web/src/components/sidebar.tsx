@@ -23,6 +23,7 @@ import { Logo } from '@/components/logo';
 import { NotifyToggle } from '@/components/message-notifier';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { cn } from '@/lib/format';
+import { ROLE_LABEL } from '@/lib/roles';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -179,7 +180,7 @@ export function Sidebar({
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{user.name}</p>
                   <p className="text-xs text-muted">
-                    {user.role === 'admin' ? 'Administrador' : 'Atendente'}
+                    {ROLE_LABEL[user.role as keyof typeof ROLE_LABEL] ?? 'Atendente'}
                     {company && ` · ${company}`}
                   </p>
                 </div>

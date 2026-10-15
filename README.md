@@ -72,6 +72,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    32. `supabase/migrations/0032_voice_alert.sql`
    33. `supabase/migrations/0033_voice_alert_rules.sql`
    34. `supabase/migrations/0034_voice_options.sql`
+   35. `supabase/migrations/0035_viewer_role.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -170,6 +171,18 @@ O sistema atende várias empresas com uma só instalação (um banco, um painel 
 - **Um e-mail pertence a uma empresa só.**
 - **Criar um administrador da plataforma** (acesso total: menu Empresas, cadastro de empresas e usuários, liberação de acessos e administrador em qualquer empresa): abra `supabase/criar_admin_plataforma.sql`, troque o e-mail, a senha e o nome no início e execute no SQL Editor do Supabase. Pode executar de novo para promover um usuário que já existe ou trocar a senha dele.
 - **Ao atualizar para esta versão**, os dados atuais viram a primeira empresa (com o nome de *Configurações › Geral*) e os administradores atuais passam a administrar a plataforma.
+
+## Perfis de usuário
+
+Em **Configurações › Usuários**, cada pessoa tem um perfil (dá para trocar na lista):
+
+| Perfil | O que faz |
+|---|---|
+| **Administrador** | Acesso total à empresa: configurações, usuários, regras e todos os grupos. |
+| **Atendente** | Atende os grupos dos seus setores: responde, cria demandas e trata alertas, conforme as permissões do setor. |
+| **Somente ver painéis** | Só acompanha: vê o **Dashboard**, o **Painel de grupos** e a conversa dos grupos dos seus setores, sem alterar nada (não responde, não cria demandas, não trata alertas, não mexe em grupos nem configurações). Bom para gestores e TVs. A regra vale no banco: qualquer alteração desse perfil é recusada. |
+
+Como os atendentes, quem só vê painéis enxerga os grupos dos setores em que está (*Configurações › Setores*).
 
 ## Menus do menu lateral
 

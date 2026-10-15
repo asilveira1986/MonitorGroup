@@ -42,6 +42,7 @@ from (values
       where table_schema = 'public' and table_name = 'alert_rules' and column_name = 'voice')),
   (27, 'Opções do aviso por voz (0034)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'msg_alert_voice_templates')),
-  (28, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (28, 'Perfil somente ver painéis (0035)', to_regprocedure('public.can_write()') is not null),
+  (29, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

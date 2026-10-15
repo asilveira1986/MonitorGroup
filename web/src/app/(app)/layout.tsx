@@ -7,6 +7,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { currentCompany, requireProfile } from '@/lib/auth';
 import { demandsEnabled } from '@/lib/format';
 import { canSeeMenu, MENU_ITEMS } from '@/lib/menu';
+import { ROLE_LABEL } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 
 export default async function AppLayout({ children }: LayoutProps<'/'>) {
@@ -46,7 +47,13 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         hidden={[
           ...(demandsEnabled(settings) ? [] : ['/demands']),
           ...MENU_ITEMS.filter(
-            (i) => !canSeeMenu(settings?.menu_access as Record<string, unknown> | null, i.href, profile.role === 'admin' || profile.platform_admin),
+            (i) =>
+              !canSeeMenu(
+                settings?.menu_access as Record<string, unknown> | null,
+                i.href,
+                profile.role === 'admin' || profile.platform_admin,
+                profile.role === 'viewer',
+              ),
           ).map((i) => i.href),
         ]}
         user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role }}
@@ -91,7 +98,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
             )}
             <div className="leading-tight">
               <p className="text-sm font-medium">{profile.full_name || profile.email.split('@')[0]}</p>
-              <p className="text-[11px] text-muted">{profile.role === 'admin' ? 'Administrador' : 'Atendente'}</p>
+              <p className="text-[11px] text-muted">{ROLE_LABEL[profile.role]}</p>
             </div>
           </div>
           <form action="/auth/signout" method="post">

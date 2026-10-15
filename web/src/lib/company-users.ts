@@ -9,7 +9,7 @@ export async function createCompanyUser(input: {
   companyId: string;
   email: string;
   password: string;
-  role: 'admin' | 'agent';
+  role: 'admin' | 'agent' | 'viewer';
   name?: string;
   createdBy?: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {

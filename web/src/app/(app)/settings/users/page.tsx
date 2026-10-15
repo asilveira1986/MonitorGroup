@@ -8,6 +8,8 @@ import { createClient } from '@/lib/supabase/server';
 import type { Profile } from '@/lib/types';
 import { removeAllowedEmail, updateUser } from '../actions';
 import { NewUserForm } from './new-user-form';
+import { RoleSelect } from './role-select';
+import { ROLE_HINT, ROLE_LABEL } from '@/lib/roles';
 
 export default async function UsersPage() {
   const me = await requireProfile();
@@ -56,23 +58,22 @@ export default async function UsersPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {u.role === 'admin' ? (
-                    <Badge tone="brand">
-                      <ShieldCheck className="h-3 w-3" /> Admin
-                    </Badge>
+                  {u.id === me.id ? (
+                    u.role === 'admin' ? (
+                      <Badge tone="brand">
+                        <ShieldCheck className="h-3 w-3" /> Admin
+                      </Badge>
+                    ) : (
+                      <Badge>{ROLE_LABEL[u.role]}</Badge>
+                    )
                   ) : (
-                    <Badge>Atendente</Badge>
+                    <span title={ROLE_HINT[u.role]}>
+                      <RoleSelect userId={u.id} role={u.role} />
+                    </span>
                   )}
                   {!u.active && <Badge tone="critical">Sem acesso</Badge>}
                   {u.id !== me.id && (
                     <>
-                      <ActionButton
-                        variant="ghost"
-                        action={updateUser.bind(null, u.id, { role: u.role === 'admin' ? 'agent' : 'admin' })}
-                        success="Permissão atualizada"
-                      >
-                        {u.role === 'admin' ? 'Tornar atendente' : 'Tornar admin'}
-                      </ActionButton>
                       {u.active ? (
                         <ActionButton
                           variant="ghost"
@@ -108,7 +109,7 @@ export default async function UsersPage() {
                 <div key={i.email} className="flex items-center justify-between rounded-xl px-3 py-3 hover:bg-surface-2">
                   <div>
                     <p className="text-sm font-medium">{i.email}</p>
-                    <p className="text-xs text-muted">{i.role === 'admin' ? 'Administrador' : 'Atendente'}</p>
+                    <p className="text-xs text-muted">{ROLE_LABEL[i.role as keyof typeof ROLE_LABEL] ?? i.role}</p>
                   </div>
                   <ActionButton variant="ghost" action={removeAllowedEmail.bind(null, i.email)} success="Convite removido">
                     Remover

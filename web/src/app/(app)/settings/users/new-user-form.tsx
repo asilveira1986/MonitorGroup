@@ -17,7 +17,8 @@ export function NewUserForm() {
           </Field>
           <Field label="Perfil">
             <Select name="role" defaultValue="agent">
-              <option value="agent">Atendente - vê painéis e responde alertas</option>
+              <option value="agent">Atendente - atende os grupos do setor</option>
+              <option value="viewer">Somente ver painéis - acompanha sem alterar nada</option>
               <option value="admin">Administrador - acesso total</option>
             </Select>
           </Field>

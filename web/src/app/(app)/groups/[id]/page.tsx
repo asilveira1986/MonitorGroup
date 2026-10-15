@@ -66,7 +66,10 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
   };
   const sla = (g.sla_minutes ?? settings?.default_sla_minutes ?? 30) * 60;
   const canReplyRole = settings?.reply_allowed !== 'admin' || profile.role === 'admin';
-  const replyBlocked = !settings?.reply_enabled
+  const viewer = profile.role === 'viewer';
+  const replyBlocked = viewer
+    ? 'Seu perfil é somente para ver os painéis.'
+    : !settings?.reply_enabled
     ? profile.role === 'admin'
       ? 'Responder pelo sistema está desligado. Ative em Configurações › Geral.'
       : null
@@ -85,10 +88,10 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
     <>
       <LiveMessages groupId={g.id} />
       <Link
-        href={g.removed_at ? '/groups?filter=removed' : '/groups'}
+        href={viewer ? '/panel' : g.removed_at ? '/groups?filter=removed' : '/groups'}
         className="mb-4 inline-flex items-center gap-1 text-sm text-ink-2 hover:text-ink"
       >
-        <ArrowLeft className="h-4 w-4" /> Grupos
+        <ArrowLeft className="h-4 w-4" /> {viewer ? 'Painel de grupos' : 'Grupos'}
       </Link>
 
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -108,7 +111,8 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
             )}
           </div>
         </div>
-        {!g.removed_at && (
+        {/* perfil "somente ver painéis": sem os controles do grupo */}
+        {!g.removed_at && !viewer && (
           <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
             <MonitorToggle groupId={g.id} monitored={g.monitored} label="Monitorar este grupo" />
             {profile.role === 'admin' && (
@@ -188,7 +192,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
               userName: profile.full_name || profile.email.split('@')[0],
             }}
             demands={{
-              manualEnabled: (settings?.demand_manual_enabled ?? true) && canDemandsHere !== false,
+              manualEnabled: !viewer && (settings?.demand_manual_enabled ?? true) && canDemandsHere !== false,
               groupName: g.name,
               members: members ?? [],
               types: categories?.length ? categories.map((c) => c.name).filter(Boolean) : DEFAULT_DEMAND_TYPES,

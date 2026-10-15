@@ -3,6 +3,8 @@
  * Acesso: 'all' = todos os usuários, 'admin' = só administradores, 'none' = oculto para todos.
  * Menu oculto também bloqueia a página (requireMenu).
  */
+import { VIEWER_MENUS } from '@/lib/roles';
+
 export type MenuAccess = 'all' | 'admin' | 'none';
 
 export const MENU_ITEMS = [
@@ -25,8 +27,14 @@ export function menuAccess(config: Record<string, unknown> | null | undefined, h
   return v === 'admin' || v === 'none' ? v : 'all';
 }
 
-/** O usuário pode ver/abrir este menu? */
-export function canSeeMenu(config: Record<string, unknown> | null | undefined, href: string, isAdmin: boolean): boolean {
+/** O usuário pode ver/abrir este menu? (perfil "somente ver painéis": só Dashboard e Painel de grupos) */
+export function canSeeMenu(
+  config: Record<string, unknown> | null | undefined,
+  href: string,
+  isAdmin: boolean,
+  viewer = false,
+): boolean {
+  if (viewer && !isAdmin && !VIEWER_MENUS.includes(href)) return false;
   const item = MENU_ITEMS.find((i) => i.href === href);
   if (item && 'alwaysForAdmins' in item && isAdmin) return true;
   const access = menuAccess(config, href);

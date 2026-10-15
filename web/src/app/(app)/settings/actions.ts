@@ -183,7 +183,8 @@ export async function addAllowedEmail(form: FormData): Promise<Result> {
   const admin = await requireAdmin();
   const supabase = await createClient();
   const email = String(form.get('email') ?? '').trim().toLowerCase();
-  const role = form.get('role') === 'admin' ? 'admin' : 'agent';
+  const raw = form.get('role');
+  const role = raw === 'admin' || raw === 'viewer' ? raw : 'agent';
   const password = String(form.get('password') ?? '');
   const name = String(form.get('full_name') ?? '').trim();
   // o acesso é só por e-mail e senha: a senha inicial é obrigatória; o usuário fica na empresa de quem cadastra
@@ -210,7 +211,7 @@ export async function removeAllowedEmail(email: string): Promise<Result> {
   return result(error);
 }
 
-export async function updateUser(id: string, values: { role?: 'admin' | 'agent'; active?: boolean }): Promise<Result> {
+export async function updateUser(id: string, values: { role?: 'admin' | 'agent' | 'viewer'; active?: boolean }): Promise<Result> {
   const admin = await requireAdmin();
   if (id === admin.id) return { ok: false, error: 'Você não pode alterar o seu próprio acesso.' };
   const supabase = await createClient();
