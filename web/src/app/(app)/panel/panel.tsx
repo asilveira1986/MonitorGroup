@@ -66,6 +66,8 @@ const STATUS: Record<
   },
 };
 const ORDER: PanelStatus[] = ['late', 'waiting', 'answered', 'neutral'];
+/** a partir de quantos dias sem mensagens o cartão destaca o silêncio (mesmo padrão do indicador Grupos silenciosos) */
+const SILENT_DAYS = 3;
 
 /** Cartão compacto: nome do grupo, mensagens recebidas hoje e, se houver, quantas estão sem resposta. Clicar abre o grupo. */
 function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
@@ -89,6 +91,10 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
   } else if (g.last_message_at) {
     time = { label: 'há', value: formatDuration(since(g.last_message_at)), title: 'Tempo desde a última mensagem do grupo' };
   }
+  // grupo sem interação hoje: o destaque é há quantos dias foi a última mensagem
+  const quiet = g.status === 'neutral';
+  const daysQuiet = g.last_message_at ? Math.floor(since(g.last_message_at) / 86400) : null;
+  const longQuiet = daysQuiet != null && daysQuiet >= SILENT_DAYS;
   return (
     <Link
       href={`/groups/${g.id}`}
@@ -103,7 +109,7 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
           <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', s.dot)} aria-hidden />
           <h3 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-ink">{g.name}</h3>
         </div>
-        {time && (
+        {time && !quiet && (
           <p
             className={cn(
               'mt-0.5 flex items-center gap-1 pl-3.5 text-[11px] tabular',
@@ -118,10 +124,35 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
         )}
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <p className="whitespace-nowrap text-xs text-ink-2">
-          <span className="text-base font-semibold tabular text-ink">{formatNumber(g.received_today)}</span>{' '}
-          {g.received_today === 1 ? 'mensagem hoje' : 'mensagens hoje'}
-        </p>
+        {quiet ? (
+          <p
+            className={cn('whitespace-nowrap text-xs', longQuiet ? 'text-warning-ink' : 'text-ink-2')}
+            title={
+              g.last_message_at
+                ? `Última mensagem em ${new Date(g.last_message_at).toLocaleString('pt-BR')}`
+                : 'O grupo ainda não teve mensagens'
+            }
+            suppressHydrationWarning
+          >
+            {daysQuiet == null ? (
+              'sem mensagens ainda'
+            ) : daysQuiet === 0 ? (
+              <>
+                última mensagem <span className="font-semibold tabular text-ink">há {formatDuration(since(g.last_message_at!))}</span>
+              </>
+            ) : (
+              <>
+                <span className={cn('text-base font-semibold tabular', longQuiet ? 'text-warning-ink' : 'text-ink')}>{daysQuiet}</span>{' '}
+                {daysQuiet === 1 ? 'dia' : 'dias'} sem mensagens
+              </>
+            )}
+          </p>
+        ) : (
+          <p className="whitespace-nowrap text-xs text-ink-2">
+            <span className="text-base font-semibold tabular text-ink">{formatNumber(g.received_today)}</span>{' '}
+            {g.received_today === 1 ? 'mensagem hoje' : 'mensagens hoje'}
+          </p>
+        )}
         {g.pending_count > 0 && (
           <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold', s.badge)}>
             <s.icon className="h-3 w-3" aria-hidden />
