@@ -1,6 +1,6 @@
 'use client';
 
-import { AlarmClock, BellRing, PlayCircle, Save, Timer, Volume2 } from 'lucide-react';
+import { AlarmClock, BellRing, PlayCircle, Save, Speech, Timer, Volume2 } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { TEST_EVENT } from '@/components/message-notifier';
@@ -17,6 +17,7 @@ export function MessageAlertSettings({ settings, disabled }: { settings: AppSett
   const [enabled, setEnabled] = useState(settings.msg_alert_enabled ?? true);
   const [autoClose, setAutoClose] = useState(settings.msg_alert_auto_close ?? 0);
   const [sound, setSound] = useState(settings.msg_alert_sound ?? true);
+  const [voice, setVoice] = useState(settings.msg_alert_voice ?? true);
   const [alerts, setAlerts] = useState(settings.msg_alert_alerts ?? true);
   const [pending, start] = useTransition();
   const mode = autoClose > 0 ? 'auto' : 'stay';
@@ -91,6 +92,20 @@ export function MessageAlertSettings({ settings, disabled }: { settings: AppSett
               onChange={setSound}
               disabled={disabled || pending}
             />
+            <Row
+              icon={Speech}
+              title="Aviso por voz"
+              text={
+                <>
+                  O navegador fala o aviso em português, logo depois do bipe: <i>“Nova mensagem no grupo Vendas SP, de
+                  Carla”</i>, <i>“Atenção: SLA excedido no grupo Vendas SP, sem resposta há 18 minutos”</i> ou o tipo do
+                  alerta e o grupo. Não lê o texto da mensagem. Usa a voz em português instalada no computador.
+                </>
+              }
+              checked={voice}
+              onChange={setVoice}
+              disabled={disabled || pending}
+            />
           </>
         )}
         <div className="flex flex-wrap gap-2 pt-4">
@@ -100,7 +115,7 @@ export function MessageAlertSettings({ settings, disabled }: { settings: AppSett
               disabled={pending}
               onClick={() =>
                 start(async () => {
-                  const res = await saveMessageAlertSettings({ enabled, alerts, autoClose, sound });
+                  const res = await saveMessageAlertSettings({ enabled, alerts, autoClose, sound, voice });
                   if (res.ok) toast.success('Configuração do alerta salva');
                   else toast.error(res.error);
                 })

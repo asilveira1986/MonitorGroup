@@ -323,6 +323,7 @@ export async function saveMessageAlertSettings(values: {
   alerts: boolean;
   autoClose: number;
   sound: boolean;
+  voice: boolean;
 }): Promise<Result> {
   await requireAdmin();
   const supabase = await createClient();
@@ -332,6 +333,7 @@ export async function saveMessageAlertSettings(values: {
       msg_alert_enabled: values.enabled,
       msg_alert_auto_close: Math.max(0, Math.min(600, Math.round(values.autoClose))),
       msg_alert_sound: values.sound,
+      msg_alert_voice: values.voice,
       msg_alert_alerts: values.alerts,
       updated_at: new Date().toISOString(),
     })

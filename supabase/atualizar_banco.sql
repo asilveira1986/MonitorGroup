@@ -7778,6 +7778,22 @@ alter table public.app_settings
 
 notify pgrst, 'reload schema';
 
+-- >>>>>>>>>>>>>>>>>>>> 0032_voice_alert.sql <<<<<<<<<<<<<<<<<<<<
+-- =====================================================================
+-- Aviso por voz junto com o alerta em tela
+--
+-- Quando o aviso grande abre no centro da tela, o navegador também fala,
+-- em português: "Nova mensagem no grupo Vendas SP, de Carla" ou
+-- "Atenção: SLA excedido no grupo Vendas SP, sem resposta há 18 minutos".
+--  * app_settings.msg_alert_voice: liga/desliga (padrão: ligado).
+-- Cada usuário ainda silencia no próprio navegador pelo sino do topo.
+-- =====================================================================
+
+alter table public.app_settings
+  add column if not exists msg_alert_voice boolean not null default true;
+
+notify pgrst, 'reload schema';
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -7818,6 +7834,8 @@ from (values
       and to_regprocedure('public.create_company(text,text,text,text,text,integer,integer,text)') is not null),
   (24, 'Menus liberados por empresa (0031)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'menu_access')),
-  (25, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (25, 'Aviso por voz (0032)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'msg_alert_voice')),
+  (26, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

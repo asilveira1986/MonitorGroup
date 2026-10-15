@@ -20,7 +20,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     supabase
       .from('app_settings')
       .select(
-        'demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, demand_commitment_enabled, msg_alert_enabled, msg_alert_auto_close, msg_alert_sound, msg_alert_alerts, menu_access',
+        'demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, demand_commitment_enabled, msg_alert_enabled, msg_alert_auto_close, msg_alert_sound, msg_alert_alerts, msg_alert_voice, menu_access',
       )
       .maybeSingle(),
     currentCompany(),
@@ -60,6 +60,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
           alerts: settings?.msg_alert_alerts ?? true,
           autoClose: settings?.msg_alert_auto_close ?? 0,
           sound: settings?.msg_alert_sound ?? true,
+          voice: settings?.msg_alert_voice ?? true,
         }}
       />
       <div className="transition-[padding] duration-200 lg:pl-64 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">

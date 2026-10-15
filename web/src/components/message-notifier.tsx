@@ -19,6 +19,8 @@ export type AlertConfig = {
   autoClose: number;
   /** toca o bipe */
   sound: boolean;
+  /** fala o aviso em voz alta (português) */
+  voice?: boolean;
 };
 
 const STORAGE_KEY = 'notify-messages';
@@ -64,6 +66,8 @@ type ScreenItem = {
   href: string | null;
   action: string;
   at: number;
+  /** frase do aviso por voz */
+  speech?: string;
 };
 
 const TONE: Record<Tone, { header: string; border: string; button: string; glow: string }> = {
@@ -100,6 +104,66 @@ function beep() {
   }
 }
 
+/** "18 minutos", "1 hora e 5 minutos" — tempo dito por extenso no aviso por voz. */
+export function spokenDuration(seconds: number) {
+  const total = Math.max(1, Math.round(seconds / 60));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  const hs = h === 1 ? '1 hora' : `${h} horas`;
+  const ms = m === 1 ? '1 minuto' : `${m} minutos`;
+  if (!h) return ms;
+  return m ? `${hs} e ${ms}` : hs;
+}
+
+/** Tira emojis e símbolos que a voz leria de forma estranha. */
+const speakable = (text: string) =>
+  text
+    .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '')
+    .replace(/[*_~`#|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/** Voz em português do computador (prefere pt-BR); sem nenhuma, usa a padrão com o idioma pt-BR. */
+function ptVoice(): SpeechSynthesisVoice | null {
+  const voices = window.speechSynthesis.getVoices();
+  return (
+    voices.find((v) => v.lang === 'pt-BR' && /google|natural|francisca|maria|luciana/i.test(v.name)) ??
+    voices.find((v) => v.lang === 'pt-BR') ??
+    voices.find((v) => v.lang?.toLowerCase().startsWith('pt')) ??
+    null
+  );
+}
+
+/**
+ * Aviso por voz (Web Speech API, no próprio navegador, sem custo). Fala depois do bipe; se chegarem
+ * muitos avisos de uma vez, descarta os mais antigos da fila para a voz não ficar minutos atrasada.
+ */
+function speak(text: string, afterBeep: boolean) {
+  try {
+    if (!('speechSynthesis' in window)) return;
+    const synth = window.speechSynthesis;
+    const phrase = speakable(text);
+    if (!phrase) return;
+    if (synth.pending) synth.cancel();
+    const u = new SpeechSynthesisUtterance(phrase);
+    u.lang = 'pt-BR';
+    const voice = ptVoice();
+    if (voice) u.voice = voice;
+    u.rate = 1;
+    u.pitch = 1;
+    u.volume = 1;
+    setTimeout(() => synth.speak(u), afterBeep ? 450 : 0);
+  } catch {
+    /* navegador sem voz */
+  }
+}
+
+// as vozes carregam depois: pede a lista cedo para a primeira fala já sair em português
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.addEventListener?.('voiceschanged', () => window.speechSynthesis.getVoices());
+}
+
 /**
  * Avisos grandes no centro da tela, todos no mesmo formato:
  *  - NOVA MENSAGEM: cliente escreveu (grupo, quem enviou e a mensagem);
@@ -121,6 +185,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
     if (mutedHere()) return;
     setItems((prev) => [item, ...prev.filter((i) => i.key !== item.key)]);
     if (configRef.current.sound) beep();
+    if (configRef.current.voice !== false && item.speech) speak(item.speech, configRef.current.sound);
   };
   const pushRef = useRef(push);
   useEffect(() => {
@@ -142,6 +207,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         href: null,
         action: 'Abrir grupo',
         at: Date.now(),
+        speech: 'Teste do aviso por voz. Nova mensagem no grupo de exemplo, de Cliente.',
       });
     window.addEventListener(TEST_EVENT, test);
     return () => window.removeEventListener(TEST_EVENT, test);
@@ -162,7 +228,9 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
           .maybeSingle()
           .then(({ data: g }) => {
             if (!g || !g.monitored) return;
+            const who = m.sender_name || 'um cliente';
             pushRef.current({
+              speech: `Nova mensagem no grupo ${g.name}, de ${who}.`,
               key: `msg-${m.group_id}`,
               tone: 'brand',
               heading: 'Nova mensagem',
@@ -193,6 +261,10 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         const tone: Tone = a.severity === 'critical' ? 'critical' : a.severity === 'warning' ? 'warning' : 'info';
         const show = (group: string | null) =>
           pushRef.current({
+            speech:
+              a.type === 'no_response' && group
+                ? `Atenção: grupo ${group} sem resposta.`
+                : `${a.severity === 'critical' ? 'Atenção! ' : ''}Alerta: ${ALERT_TYPE_LABEL[a.type] ?? 'alerta'}${group ? `, no grupo ${group}` : ''}.`,
             // "cliente sem resposta" e "SLA excedido" do mesmo grupo viram um aviso só
             key: a.type === 'no_response' && a.group_id ? `late-${a.group_id}` : `alert-${a.id}`,
             tone,
@@ -242,6 +314,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         seen.add(key);
         if (first) continue;
         pushRef.current({
+          speech: `Atenção: SLA excedido no grupo ${b.group}, sem resposta há ${spokenDuration(b.waiting_seconds)}.`,
           key: `late-${b.group_id}`,
           tone: 'critical',
           heading: 'SLA excedido',
