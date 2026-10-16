@@ -10,6 +10,7 @@ import makeWASocket, {
   makeCacheableSignalKeyStore,
   type BinaryNode,
   type GroupMetadata,
+  type GroupParticipant,
   type WAMessage,
   type WASocket,
 } from 'baileys';
@@ -658,7 +659,39 @@ export class WhatsAppManager {
       ) as GroupRow;
     }
     session.groupCache.set(meta.id, row);
+    if (meta.participants?.length) {
+      await this.syncParticipants(row.id, meta.participants).catch((err) =>
+        logger.warn({ err, group: row.name }, 'falha ao gravar os membros do grupo'),
+      );
+    }
     return row;
+  }
+
+  /**
+   * Membros do grupo (tela do grupo): grava quem está no grupo agora, com telefone, nome (quando o
+   * WhatsApp informa) e se é admin; quem saiu fica com left_at e volta a ativo se entrar de novo.
+   */
+  private async syncParticipants(groupId: string, participants: GroupParticipant[]) {
+    const { data: existing } = await db.from('group_participants').select('jid, name').eq('group_id', groupId);
+    const names = new Map((existing ?? []).map((r) => [r.jid as string, r.name as string | null]));
+    const now = new Date().toISOString();
+    const rows = participants.map((p) => ({
+      group_id: groupId,
+      jid: p.id,
+      lid: p.lid ?? (p.id.endsWith('@lid') ? p.id : null),
+      phone: phoneFromJid(p.phoneNumber) ?? phoneFromJid(p.id),
+      // o nome só vem às vezes: não apaga um nome já conhecido
+      name: p.name || p.notify || names.get(p.id) || null,
+      role: p.admin === 'superadmin' || p.isSuperAdmin ? 'superadmin' : p.admin === 'admin' || p.isAdmin ? 'admin' : 'member',
+      left_at: null,
+      updated_at: now,
+    }));
+    check(await db.from('group_participants').upsert(rows, { onConflict: 'group_id,jid' }), 'upsert participants');
+    const current = new Set(rows.map((r) => r.jid));
+    const gone = [...names.keys()].filter((jid) => !current.has(jid));
+    if (gone.length) {
+      await db.from('group_participants').update({ left_at: now }).eq('group_id', groupId).in('jid', gone).is('left_at', null);
+    }
   }
 
   private async getGroup(session: Session, jid: string): Promise<GroupRow> {

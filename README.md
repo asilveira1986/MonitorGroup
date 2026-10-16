@@ -73,6 +73,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    33. `supabase/migrations/0033_voice_alert_rules.sql`
    34. `supabase/migrations/0034_voice_options.sql`
    35. `supabase/migrations/0035_viewer_role.sql`
+   36. `supabase/migrations/0036_group_members.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -311,6 +312,10 @@ Em **Configurações › Setores** (somente admin) você cria setores, marca os 
 - **Administradores veem e fazem tudo.** Grupos sem setor e usuários sem setor ficam visíveis só para administradores.
 - **Grupos novos** entram no setor escolhido em *Setor dos grupos novos*. Com "Nenhum", só administradores veem até alguém definir.
 - **Na primeira atualização** é criado o setor **Geral** com todos os grupos e usuários, para nada mudar até você organizar os setores.
+
+## Membros do grupo
+
+Na tela de cada grupo, o cartão **Membros** lista quem está no grupo (a lista do próprio WhatsApp): nome, telefone, **criador** e **admins** do grupo, quem é da **Equipe** e a atividade de cada um (mensagens nos últimos 30 dias e a última mensagem). Dá para buscar por nome ou telefone, e o "N participantes" do topo leva direto à lista. O worker atualiza os membros ao sincronizar os grupos e sempre que alguém entra, sai ou vira admin; quem sai fica no histórico. O nome vem da equipe cadastrada, do WhatsApp ou das mensagens da pessoa; sem nenhum deles, aparece o telefone.
 
 ## Responder pelo sistema
 

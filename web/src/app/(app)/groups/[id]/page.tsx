@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { Group, Message, OutgoingMessage } from '@/lib/types';
 import { markGroupAnswered } from '../../actions';
 import { LiveMessages, MonitorToggle, SectorSelect, SlaForm } from '../group-controls';
+import { GroupMembers, type GroupMember } from './members';
 import { PAGE_SIZE } from './constants';
 import { Conversation } from './conversation';
 import { DeleteRemovedGroupButton } from '../removed-groups';
@@ -38,7 +39,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
   const recentlySent = minutesAgo(5);
-  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }] = await Promise.all([
+  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }] = await Promise.all([
     supabase.from('team_members').select('id, name').eq('active', true).order('name'),
     supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
     // respostas do painel que ainda não voltaram pelo WhatsApp
@@ -52,6 +53,8 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
     supabase.rpc('has_group_permission', { p_group_id: id, p_permission: 'reply' }),
     supabase.rpc('has_group_permission', { p_group_id: id, p_permission: 'demands' }),
     supabase.from('sectors').select('id, name').order('name'),
+    // membros do grupo (lista do WhatsApp)
+    supabase.rpc('group_members', { p_group_id: id }),
   ]);
   const categories = (typeInd?.params as { categories?: { name: string }[] } | undefined)?.categories;
   if (!group) notFound();
@@ -102,7 +105,11 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
           <div>
             <h1 className="text-xl font-semibold tracking-tight break-words sm:text-2xl">{g.name}</h1>
             <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-ink-2">
-              <Users className="h-4 w-4" /> {g.participants_count} participantes · última atividade {timeAgo(g.last_message_at)}
+              <Users className="h-4 w-4" />{' '}
+              <a href="#membros" className="underline-offset-2 hover:text-ink hover:underline" title="Ver os membros do grupo">
+                {g.participants_count} participantes
+              </a>{' '}
+              · última atividade {timeAgo(g.last_message_at)}
             </p>
             {profile.role !== 'admin' && (
               <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">
@@ -171,6 +178,9 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
               <p className="mt-1 text-2xl font-semibold">{k.value}</p>
             </Card>
           ))}
+          <div id="membros" className="col-span-2 scroll-mt-20 lg:col-span-1">
+            <GroupMembers members={(groupMembers ?? []) as GroupMember[]} total={g.participants_count} />
+          </div>
         </div>
 
         <Card className="lg:col-span-3">
