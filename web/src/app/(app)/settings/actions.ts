@@ -321,6 +321,23 @@ export async function saveReplySettings(values: {
   return result(error);
 }
 
+export async function saveMediaSettings(values: { enabled: boolean; types: string[]; days: number }): Promise<Result> {
+  const profile = await requireAdmin();
+  const allowed = ['image', 'audio', 'sticker', 'video', 'document'];
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('app_settings')
+    .update({
+      media_store_enabled: values.enabled,
+      media_store_types: allowed.filter((t) => values.types.includes(t)),
+      media_retention_days: [30, 60, 90, 180, 365, 0].includes(values.days) ? values.days : 90,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('company_id', profile.company_id);
+  revalidatePath('/', 'layout');
+  return result(error);
+}
+
 export async function saveMessageAlertSettings(values: {
   enabled: boolean;
   alerts: boolean;

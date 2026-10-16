@@ -75,6 +75,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    35. `supabase/migrations/0035_viewer_role.sql`
    36. `supabase/migrations/0036_group_members.sql`
    37. `supabase/migrations/0037_ignore_stickers_emoji.sql`
+   38. `supabase/migrations/0038_media_files.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

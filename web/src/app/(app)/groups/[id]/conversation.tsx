@@ -13,6 +13,8 @@ import { ClipboardList } from 'lucide-react';
 import { DemandForm } from '@/components/demands/demand-form';
 import { MarkTeamButton } from '../group-controls';
 import { PAGE_SIZE } from './constants';
+import { MessageMedia } from './message-media';
+import { useRealtime } from '@/lib/use-realtime';
 
 
 const TYPE_LABEL: Record<string, string> = {
@@ -30,9 +32,10 @@ const MEDIA_TYPES = new Set(['image', 'video', 'audio', 'document']);
 const SEEN_VIA: Record<string, string> = { whatsapp: 'no WhatsApp', painel: 'baixa no painel', resposta: 'equipe respondeu' };
 
 /** Situação de um arquivo do cliente: visto (no celular ou com baixa no painel) ou botão para dar baixa. */
-function MediaSeen({ message, timeZone }: { message: Message; timeZone?: string }) {
-  const [seen, setSeen] = useState(message.seen_at ? { at: message.seen_at, via: message.seen_via, by: message.seen_by } : null);
+function MediaSeen({ message, timeZone, viewed }: { message: Message; timeZone?: string; viewed?: boolean }) {
+  const [state, setSeen] = useState(message.seen_at ? { at: message.seen_at, via: message.seen_via, by: message.seen_by } : null);
   const [busy, startTransition] = useTransition();
+  const seen = state ?? (viewed ? { at: new Date().toISOString(), via: 'painel', by: null } : null);
   if (seen) {
     return (
       <span
@@ -98,6 +101,10 @@ export function Conversation({
   pendingSince: string | null;
 }) {
   const [older, setOlder] = useState<Message[]>([]);
+  // atualizações das mensagens já na tela (ex.: o arquivo da imagem/áudio terminou de ser guardado)
+  const [patches, setPatches] = useState<Map<string, Message>>(new Map());
+  // arquivos abertos/tocados agora: contam como vistos
+  const [viewed, setViewed] = useState<Set<string>>(new Set());
   const [demandFrom, setDemandFrom] = useState<Message | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [hasMore, setHasMore] = useState(initial.length >= PAGE_SIZE);
@@ -109,8 +116,32 @@ export function Conversation({
   const messages = useMemo(() => {
     const byId = new Map<string, Message>();
     for (const m of [...initial, ...older]) byId.set(m.id, m);
+    for (const [id, p] of patches) {
+      const m = byId.get(id);
+      if (m) byId.set(id, { ...m, ...p });
+    }
     return [...byId.values()].sort(newerFirst);
-  }, [initial, older]);
+  }, [initial, older, patches]);
+
+  useRealtime(`conversation-${groupId}`, (channel) =>
+    channel.on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId}` },
+      (payload) => {
+        const m = payload.new as Message;
+        setPatches((prev) => new Map(prev).set(m.id, m));
+      },
+    ),
+  );
+
+  const markViewed = useCallback(
+    (m: Message) => {
+      if (m.from_team || m.seen_at || viewed.has(m.id)) return;
+      setViewed((prev) => new Set(prev).add(m.id));
+      void markMediaSeen({ messageId: m.id });
+    },
+    [viewed],
+  );
 
   const loadOlder = useCallback(async () => {
     if (loading || !hasMore) return;
@@ -235,14 +266,15 @@ export function Conversation({
                       </button>
                     )}
                   </div>
+                  <MessageMedia message={m} onViewed={() => markViewed(m)} />
                   <p className="whitespace-pre-wrap break-words text-ink">
-                    {m.message_type !== 'text' && (
+                    {m.message_type !== 'text' && !m.media_path && (
                       <span className="text-ink-2">{TYPE_LABEL[m.message_type] ?? m.message_type} </span>
                     )}
                     {withoutSignature(m.body, m.from_me ? m.sender_name : null)}
                   </p>
                   <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-muted">
-                    {!m.from_team && MEDIA_TYPES.has(m.message_type) && <MediaSeen message={m} timeZone={timeZone} />}
+                    {!m.from_team && MEDIA_TYPES.has(m.message_type) && <MediaSeen message={m} timeZone={timeZone} viewed={viewed.has(m.id)} />}
                     {m.response_time_seconds != null && (
                       <Badge tone={m.response_time_seconds <= slaSeconds ? 'good' : 'critical'} className="py-0 text-[10px]">
                         respondeu em {formatDuration(m.response_time_seconds)}

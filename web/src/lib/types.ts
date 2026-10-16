@@ -98,6 +98,12 @@ export type Message = {
   demand_id?: string | null;
   /** figurinha/emoji do cliente desconsiderado como última mensagem */
   ignored_as_last?: boolean;
+  /** arquivo guardado (imagem, áudio...): caminho no bucket privado "media" */
+  media_path?: string | null;
+  media_mime?: string | null;
+  media_size?: number | null;
+  /** stored | too_large | failed | expired */
+  media_status?: string | null;
   /** quando a mensagem do cliente foi vista: lida no celular conectado ou baixa no painel */
   seen_at?: string | null;
   seen_via?: string | null;
@@ -172,6 +178,11 @@ export type AppSettings = {
   auto_monitor_new_groups: boolean;
   ignore_acknowledgements: boolean;
   ignore_stickers_emoji?: boolean;
+  /** guarda imagens e áudios para ver no painel */
+  media_store_enabled?: boolean;
+  media_store_types?: string[];
+  /** dias que os arquivos ficam guardados (0 = sempre) */
+  media_retention_days?: number;
   history_import_days: number;
   demand_manual_enabled: boolean;
   demand_command_enabled: boolean;

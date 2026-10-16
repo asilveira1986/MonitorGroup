@@ -6,10 +6,12 @@ import { refreshCache } from './cache.js';
 import { db } from './db.js';
 import { env } from './env.js';
 import { logger } from './logger.js';
+import { cleanupExpiredMedia } from './media.js';
 import { setWhatsAppSender } from './notify.js';
 import { WhatsAppManager } from './whatsapp.js';
 
 const ALERT_CHECK_MS = 60_000;
+const MEDIA_CLEANUP_MS = 6 * 60 * 60_000;
 const HEARTBEAT_MS = 20_000;
 const LOCK_TTL_S = 45;
 const LOCK_RENEW_MS = 15_000;
@@ -134,6 +136,9 @@ async function main() {
 
   setInterval(() => void runPeriodicChecks(), ALERT_CHECK_MS);
   setInterval(() => void refreshCache(true), ALERT_CHECK_MS);
+  // imagens e áudios mais antigos que o prazo de cada empresa
+  setTimeout(() => void cleanupExpiredMedia(), 2 * 60_000);
+  setInterval(() => void cleanupExpiredMedia(), MEDIA_CLEANUP_MS);
   logger.info('worker do MonitorGroup no ar');
 }
 

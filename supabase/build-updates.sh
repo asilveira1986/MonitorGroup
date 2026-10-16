@@ -68,7 +68,9 @@ from (values
   (29, 'Membros dos grupos (0036)', to_regclass('public.group_participants') is not null),
   (30, 'Desconsiderar figurinha/emoji (0037)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'messages' and column_name = 'ignored_as_last')),
-  (31, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (31, 'Imagens e áudios no sistema (0038)', to_regprocedure('public.media_usage()') is not null
+      and exists (select 1 from storage.buckets where id = 'media' and not public)),
+  (32, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
 SQL

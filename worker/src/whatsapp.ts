@@ -19,6 +19,7 @@ import { clearAuthState, hasAuthState, usePostgresAuthState } from './auth-state
 import { findTeamMember, getSettings, isCompanyActive } from './cache.js';
 import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
+import { storeMessageMedia } from './media.js';
 import { extractContent, isAcknowledgement, isStickerOrEmoji, phoneFromJid, quotedMessageId } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { selfReadIds } from './receipts.js';
@@ -757,6 +758,18 @@ export class WhatsAppManager {
       }),
       'ingest_message',
     ) as { inserted: boolean; message_id?: string; stale?: boolean; ignored?: boolean };
+
+    // imagem/áudio: guarda o arquivo para abrir no painel (em segundo plano, não atrasa a mensagem)
+    if (result.inserted && result.message_id) {
+      void storeMessageMedia({
+        sock: session.sock,
+        msg,
+        companyId: session.companyId,
+        groupId: group.id,
+        messageId: result.message_id,
+        type: content.type,
+      }).catch((err) => logger.warn({ err }, 'falha ao guardar o arquivo da mensagem'));
+    }
 
     if (result.inserted && !fromTeam && !result.stale && !result.ignored && result.message_id) {
       await onClientMessage(
