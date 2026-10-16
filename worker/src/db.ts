@@ -48,6 +48,7 @@ export type AppSettings = {
   default_sla_minutes: number;
   auto_monitor_new_groups: boolean;
   ignore_acknowledgements: boolean;
+  ignore_stickers_emoji?: boolean;
   history_import_days: number;
   demand_manual_enabled: boolean;
   demand_command_enabled: boolean;

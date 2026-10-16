@@ -16,7 +16,8 @@ from (values
   (9, 'Horários de pico com resumo (0016)', (select description like 'Quando os clientes mais escrevem%' from public.indicators where key = 'horarios_pico')),
   (10, 'Pendentes por grupo e arquivos recebidos (0017)', to_regprocedure('public.ind_arquivos_recebidos(jsonb,jsonb)') is not null),
   (11, 'Tempo de resposta desde a última mensagem do cliente (0018)',
-      coalesce(obj_description('public.ingest_message(uuid,text,text,text,text,boolean,boolean,uuid,text,text,timestamptz,boolean)'::regprocedure, 'pg_proc') like '%0018%', false)),
+      exists (select 1 from pg_proc where proname = 'ingest_message' and pronamespace = 'public'::regnamespace
+              and obj_description(oid, 'pg_proc') ~ '00(18|37)')),
   (12, 'Análise "Precisa de resposta?" (0019)', to_regprocedure('public.ind_analise_sem_resposta(jsonb,jsonb)') is not null),
   (13, 'Arquivos sem visualização (0020)', to_regprocedure('public.mark_media_seen(uuid,uuid)') is not null),
   (14, 'Início e fechamento das conversas (0021)', to_regprocedure('public.ind_conversas_ciclo(jsonb,jsonb)') is not null),
@@ -44,6 +45,8 @@ from (values
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'msg_alert_voice_templates')),
   (28, 'Perfil somente ver painéis (0035)', to_regprocedure('public.can_write()') is not null),
   (29, 'Membros dos grupos (0036)', to_regclass('public.group_participants') is not null),
-  (30, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (30, 'Desconsiderar figurinha/emoji (0037)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'messages' and column_name = 'ignored_as_last')),
+  (31, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

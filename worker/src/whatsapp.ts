@@ -19,7 +19,7 @@ import { clearAuthState, hasAuthState, usePostgresAuthState } from './auth-state
 import { findTeamMember, getSettings, isCompanyActive } from './cache.js';
 import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
-import { extractContent, isAcknowledgement, phoneFromJid, quotedMessageId } from './text.js';
+import { extractContent, isAcknowledgement, isStickerOrEmoji, phoneFromJid, quotedMessageId } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { selfReadIds } from './receipts.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
@@ -736,7 +736,7 @@ export class WhatsAppManager {
     }
 
     const d = await this.describeMessage(session, msg, content);
-    const { fromMe, participant, member, fromTeam, senderPhone, senderName, opensPending } = d;
+    const { fromMe, participant, member, fromTeam, senderPhone, senderName, opensPending, ignoredAsLast } = d;
     const ts = d.sentAtSeconds;
 
     const result = check(
@@ -753,11 +753,12 @@ export class WhatsAppManager {
         p_body: content.body,
         p_sent_at: new Date(ts * 1000).toISOString(),
         p_opens_pending: opensPending,
+        p_ignored_as_last: ignoredAsLast,
       }),
       'ingest_message',
-    ) as { inserted: boolean; message_id?: string; stale?: boolean };
+    ) as { inserted: boolean; message_id?: string; stale?: boolean; ignored?: boolean };
 
-    if (result.inserted && !fromTeam && !result.stale && result.message_id) {
+    if (result.inserted && !fromTeam && !result.stale && !result.ignored && result.message_id) {
       await onClientMessage(
         session.companyId,
         { id: group.id, name: group.name },
@@ -801,6 +802,9 @@ export class WhatsAppManager {
         : (member?.name ?? msg.pushName ?? null),
       sentAtSeconds: toSeconds(msg.messageTimestamp),
       opensPending: !(settings.ignore_acknowledgements && isAcknowledgement(content.type, content.body)),
+      // figurinha/emoji do cliente não conta como a última mensagem dele
+      ignoredAsLast:
+        !fromMe && !member && settings.ignore_stickers_emoji !== false && isStickerOrEmoji(content.type, content.body),
     };
   }
 
@@ -874,7 +878,8 @@ export class WhatsAppManager {
         message_type: content.type,
         body: content.body,
         sent_at: new Date(d.sentAtSeconds * 1000).toISOString(),
-        opens_pending: d.opensPending,
+        opens_pending: d.opensPending && !d.ignoredAsLast,
+        ignored_as_last: d.ignoredAsLast,
       });
     }
     if (!rows.length) return;

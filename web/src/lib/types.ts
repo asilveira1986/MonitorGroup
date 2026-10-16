@@ -96,6 +96,8 @@ export type Message = {
   response_time_seconds: number | null;
   answered_message_id: string | null;
   demand_id?: string | null;
+  /** figurinha/emoji do cliente desconsiderado como última mensagem */
+  ignored_as_last?: boolean;
   /** quando a mensagem do cliente foi vista: lida no celular conectado ou baixa no painel */
   seen_at?: string | null;
   seen_via?: string | null;
@@ -169,6 +171,7 @@ export type AppSettings = {
   default_sla_minutes: number;
   auto_monitor_new_groups: boolean;
   ignore_acknowledgements: boolean;
+  ignore_stickers_emoji?: boolean;
   history_import_days: number;
   demand_manual_enabled: boolean;
   demand_command_enabled: boolean;

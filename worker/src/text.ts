@@ -91,18 +91,28 @@ const ACKNOWLEDGEMENTS = new Set([
   'muito obrigado', 'muito obrigada', 'obrigado!', 'de nada', 'sim', 'ok obrigado', 'ok obrigada', 'joia', 'jóia',
 ]);
 
-/** Mensagem curta de confirmação/agradecimento que não exige resposta. */
-export function isAcknowledgement(type: string, body: string | null): boolean {
-  if (type === 'sticker') return true;
-  if (type !== 'text' || !body) return false;
-  const cleaned = body
+const cleanAck = (body: string) =>
+  body
     .trim()
     .toLowerCase()
     .replace(/[!.,;:?\s]+$/g, '')
     .replace(/\s+/g, ' ');
+
+/** Figurinha ou mensagem só com emojis (👍, 🙏, 😊 ...). */
+export function isStickerOrEmoji(type: string, body: string | null): boolean {
+  if (type === 'sticker') return true;
+  if (type !== 'text' || !body) return false;
+  const cleaned = cleanAck(body);
+  if (!cleaned || !/[\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(cleaned)) return false;
+  return /^[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}\u200D\uFE0F\u20E3\s]+$/u.test(cleaned);
+}
+
+/** Mensagem curta de confirmação/agradecimento que não exige resposta. */
+export function isAcknowledgement(type: string, body: string | null): boolean {
+  if (isStickerOrEmoji(type, body)) return true;
+  if (type !== 'text' || !body) return false;
+  const cleaned = cleanAck(body);
   if (!cleaned) return false;
-  // apenas emojis (👍, 🙏, 😊 ...)
-  if (/^[\p{Extended_Pictographic}\p{Emoji_Modifier}‍️\s]+$/u.test(cleaned)) return true;
   if (ACKNOWLEDGEMENTS.has(cleaned)) return true;
   // frase curta só com palavras de agradecimento/confirmação ("Recebi, obrigado!", "show, valeu 👍")
   if (/\?/.test(cleaned)) return false;

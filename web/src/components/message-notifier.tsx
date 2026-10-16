@@ -161,7 +161,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
       // nova mensagem de cliente
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         const m = payload.new as Message;
-        if (m.from_team || !configRef.current.enabled) return;
+        if (m.from_team || m.ignored_as_last || !configRef.current.enabled) return;
         // a importação do histórico não gera aviso
         if (Date.now() - new Date(m.sent_at).getTime() > 10 * 60_000) return;
         void createClient()

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isWithinBusinessHours } from './business-hours.js';
-import { extractContent, findKeyword, isAcknowledgement, phoneFromJid, samePhone } from './text.js';
+import { extractContent, findKeyword, isAcknowledgement, isStickerOrEmoji, phoneFromJid, samePhone } from './text.js';
 
 test('findKeyword ignora acentos e maiúsculas e respeita palavra inteira', () => {
   assert.equal(findKeyword('Isso é URGENTE!!', ['urgente']), 'urgente');
@@ -52,4 +52,18 @@ test('isAcknowledgement reconhece agradecimentos', () => {
   assert.ok(!isAcknowledgement('text', 'obrigado, e o boleto?'));
   assert.ok(!isAcknowledgement('text', 'recebi mas não abre'));
   assert.ok(!isAcknowledgement('text', 'ok, pode mandar o orçamento'));
+});
+
+test('isStickerOrEmoji reconhece só figurinha e emojis', () => {
+  assert.ok(isStickerOrEmoji('sticker', null));
+  assert.ok(isStickerOrEmoji('text', '👍'));
+  assert.ok(isStickerOrEmoji('text', '🙏🏻🙏🏻 '));
+  assert.ok(isStickerOrEmoji('text', '❤️'));
+  assert.ok(isStickerOrEmoji('text', '👨‍👩‍👧 😂!'));
+  assert.ok(isStickerOrEmoji('text', '🇧🇷'));
+  assert.ok(!isStickerOrEmoji('text', 'ok 👍'));
+  assert.ok(!isStickerOrEmoji('text', '123'));
+  assert.ok(!isStickerOrEmoji('text', '?'));
+  assert.ok(!isStickerOrEmoji('image', null));
+  assert.ok(!isStickerOrEmoji('text', null));
 });

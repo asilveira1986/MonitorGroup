@@ -36,6 +36,7 @@ export async function saveGeneralSettings(form: FormData): Promise<Result> {
       business_end: String(form.get('business_end') || '18:00'),
       auto_monitor_new_groups: form.get('auto_monitor_new_groups') === 'on',
       ignore_acknowledgements: form.get('ignore_acknowledgements') === 'on',
+      ignore_stickers_emoji: form.get('ignore_stickers_emoji') === 'on',
       history_import_days: [0, 7, 30, 60, 90].includes(Number(form.get('history_import_days')))
         ? Number(form.get('history_import_days'))
         : 30,
