@@ -6,6 +6,7 @@ import { createCompanyUser } from '@/lib/company-users';
 import { friendlyDbError } from '@/lib/db-errors';
 import { MENU_ITEMS } from '@/lib/menu';
 import { recalcCompanyGroups, type RecalcSummary } from '@/lib/recalc-groups';
+import { reapplyIgnoreRules, type ReapplySummary } from '@/lib/reapply-ignore';
 import { createClient } from '@/lib/supabase/server';
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -177,7 +178,7 @@ export async function saveIgnoreSettings(values: {
   acknowledgements: boolean;
   stickers: boolean;
   phrases: string[];
-}): Promise<Result> {
+}): Promise<Result & { summary?: ReapplySummary }> {
   const profile = await requireAdmin();
   const phrases = [...new Set(values.phrases.map((p) => p.trim().replace(/\s+/g, ' ')).filter(Boolean))]
     .map((p) => p.slice(0, 120))
@@ -192,8 +193,21 @@ export async function saveIgnoreSettings(values: {
       updated_at: new Date().toISOString(),
     })
     .eq('company_id', profile.company_id);
+  if (error) return result(error);
+  // as mensagens já recebidas passam pelas mesmas regras
+  let summary: ReapplySummary | undefined;
+  try {
+    if (profile.company_id) summary = await reapplyIgnoreRules(profile.company_id, {
+      acknowledgements: values.acknowledgements,
+      stickers: values.stickers,
+      phrases,
+    });
+  } catch (err) {
+    revalidatePath('/', 'layout');
+    return { ok: false, error: `Regras salvas, mas não foi possível atualizar as mensagens já recebidas: ${(err as Error).message}` };
+  }
   revalidatePath('/', 'layout');
-  return result(error);
+  return { ok: true, summary };
 }
 
 /** Botão "Recalcular grupos" (Configurações › Equipe). */

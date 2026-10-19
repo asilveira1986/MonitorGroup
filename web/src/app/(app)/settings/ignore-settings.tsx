@@ -81,7 +81,8 @@ export function IgnoreSettings({ settings, disabled }: { settings: AppSettings; 
           <div className="py-3">
             <p className="text-sm font-medium">Frases a ignorar</p>
             <p className="mt-0.5 text-xs text-ink-2">
-              Sem diferenciar acentos, maiúsculas e pontuação. A frase vale sozinha ou com agradecimento/emoji junto
+              Ao salvar, valem para as mensagens novas e também para as já recebidas (os grupos são recalculados). Sem
+              diferenciar acentos, maiúsculas e pontuação. A frase vale sozinha ou com agradecimento/emoji junto
               (&quot;Obrigado pelo retorno, doutora 🙏&quot;); se vier com pergunta ou pedido, a mensagem não é ignorada.
             </p>
             <div className="mt-2 flex gap-2">
@@ -187,8 +188,19 @@ export function IgnoreSettings({ settings, disabled }: { settings: AppSettings; 
             onClick={() =>
               start(async () => {
                 const res = await saveIgnoreSettings({ acknowledgements: acks, stickers, phrases });
-                if (res.ok) toast.success('Mensagens a ignorar salvas', { description: 'Valem para as mensagens novas.' });
-                else toast.error(res.error);
+                if (!res.ok) return void toast.error(res.error);
+                const s = res.summary;
+                const g = s?.grupos;
+                toast.success('Mensagens a ignorar salvas', {
+                  description: !s
+                    ? 'Valem para as mensagens novas e já recebidas.'
+                    : s.alteradas === 0
+                      ? `Mensagens já recebidas conferidas (${s.revisadas.toLocaleString('pt-BR')}): nenhuma mudou.`
+                      : `${s.alteradas.toLocaleString('pt-BR')} mensagem(ns) já recebida(s) atualizada(s)${
+                          g ? ` · aguardando resposta: ${g.aguardando_antes} → ${g.aguardando_depois}` : ''
+                        }.`,
+                  duration: 10_000,
+                });
               })
             }
           >

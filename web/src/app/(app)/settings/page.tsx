@@ -10,6 +10,9 @@ import { IgnoreSettings } from './ignore-settings';
 import { MediaSettings, type MediaUsage } from './media-settings';
 import { ReplySettings } from './reply-settings';
 
+// salvar "Mensagens a ignorar" reavalia as mensagens já recebidas (pode levar alguns segundos)
+export const maxDuration = 60;
+
 export default async function GeneralSettingsPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
