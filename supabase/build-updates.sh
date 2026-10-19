@@ -9,16 +9,20 @@ cd "$(dirname "$0")"
   echo "-- uma vez: o que já existe é mantido e o que falta é criado."
   echo "-- Pré-requisito: 0001_schema.sql já executado (instalação inicial)."
   echo "--"
-  echo "-- ANTES DE EXECUTAR: pause o worker no Railway (Settings > Pause Service)."
-  echo "-- Com o worker gravando mensagens ao mesmo tempo, o banco pode cancelar o"
-  echo "-- script com \"deadlock detected\" (nada fica pela metade: é só pausar e"
-  echo "-- executar de novo). Depois, religue o worker."
+  echo "-- Cada script é gravado ao terminar (commit), para não travar as tabelas"
+  echo "-- por muito tempo. Se aparecer \"deadlock detected\", o que já foi gravado"
+  echo "-- fica e basta executar de novo. Para evitar: pause o worker no Railway e"
+  echo "-- feche as abas do painel durante a atualização; depois, religue o worker."
   echo "-- ====================================================================="
   for f in migrations/0*.sql; do
     case "$f" in migrations/0001_*) continue ;; esac
     echo ""
     echo "-- >>>>>>>>>>>>>>>>>>>> $(basename "$f") <<<<<<<<<<<<<<<<<<<<"
     cat "$f"
+    # grava ao fim de cada script: as travas das tabelas duram só aquele trecho
+    # (um script único segurava tudo até o fim e dava "deadlock detected")
+    echo ""
+    echo "commit;"
   done
   echo ""
   echo "notify pgrst, 'reload schema';"

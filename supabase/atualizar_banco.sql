@@ -4,10 +4,10 @@
 -- uma vez: o que já existe é mantido e o que falta é criado.
 -- Pré-requisito: 0001_schema.sql já executado (instalação inicial).
 --
--- ANTES DE EXECUTAR: pause o worker no Railway (Settings > Pause Service).
--- Com o worker gravando mensagens ao mesmo tempo, o banco pode cancelar o
--- script com "deadlock detected" (nada fica pela metade: é só pausar e
--- executar de novo). Depois, religue o worker.
+-- Cada script é gravado ao terminar (commit), para não travar as tabelas
+-- por muito tempo. Se aparecer "deadlock detected", o que já foi gravado
+-- fica e basta executar de novo. Para evitar: pause o worker no Railway e
+-- feche as abas do painel durante a atualização; depois, religue o worker.
 -- =====================================================================
 
 -- >>>>>>>>>>>>>>>>>>>> 0002_metrics.sql <<<<<<<<<<<<<<<<<<<<
@@ -169,6 +169,8 @@ order by g.pending_since asc;
 
 grant select on public.pending_queue to authenticated;
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0003_ingest.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Registro atômico de mensagens + atualização do estado da conversa.
@@ -329,6 +331,8 @@ $$;
 
 grant execute on function public.mark_sender_as_team(text, text, text) to authenticated;
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0004_profile_fallback.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Garante o perfil de usuários criados ANTES de o esquema existir
@@ -401,6 +405,8 @@ where id = (
   )
   and not exists (select 1 from public.profiles where role = 'admin' and active);
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0005_worker_status.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Sinal de vida do worker do WhatsApp, exibido no painel.
@@ -420,6 +426,8 @@ alter table public.worker_status enable row level security;
 
 drop policy if exists worker_status_read on public.worker_status;
 create policy worker_status_read on public.worker_status for select using (public.is_active_user());
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0006_removed_groups.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -507,6 +515,8 @@ where g.monitored and g.removed_at is null and g.pending_since is not null
 order by g.pending_since asc;
 
 grant select on public.pending_queue to authenticated;
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0007_history_import.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -761,6 +771,8 @@ end;
 $$;
 
 grant execute on function public.group_stats(uuid, int) to authenticated;
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0008_indicators.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -1549,6 +1561,8 @@ update public.alert_rules set indicator_key = case type
   end
 where indicator_key is null and type in ('no_response', 'high_volume');
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0009_response_block.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Indicadores (etapa 2): Bloco 1 — Capacidade de resposta completo.
@@ -1950,6 +1964,8 @@ begin
   begin alter publication supabase_realtime add table public.app_settings; exception when others then null; end;
   begin alter publication supabase_realtime add table public.holidays; exception when others then null; end;
 end $$;
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0010_demands.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -2502,6 +2518,8 @@ end $$;
 alter table public.alerts add column if not exists demand_id uuid references public.demands(id) on delete cascade;
 create index if not exists alerts_demand_idx on public.alerts (demand_id) where demand_id is not null;
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0011_relationship_context.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Indicadores (etapa 4): blocos 3 (Saúde do relacionamento) e
@@ -3040,6 +3058,8 @@ begin
   end loop;
 end $$;
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0012_replies.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Responder os grupos pelo painel.
@@ -3209,6 +3229,8 @@ end $$;
 -- atualiza o cache da API do Supabase (evita "Could not find the ... column in the schema cache")
 notify pgrst, 'reload schema';
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0013_worker_lock.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Um único worker por vez usa o WhatsApp.
@@ -3274,6 +3296,8 @@ grant execute on function public.release_worker_lock(text) to service_role;
 
 -- atualiza o cache da API do Supabase (evita "Could not find the ... column in the schema cache")
 notify pgrst, 'reload schema';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0014_reincidence.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -3455,6 +3479,8 @@ end $$;
 
 notify pgrst, 'reload schema';
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0015_recurrence_alert.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Alerta de reincidência de falta de resposta.
@@ -3500,6 +3526,8 @@ revoke all on function public.recurrence_alert_candidates(int, int) from public,
 grant execute on function public.recurrence_alert_candidates(int, int) to service_role;
 
 notify pgrst, 'reload schema';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0016_peak_hours.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -3603,6 +3631,8 @@ set description = 'Quando os clientes mais escrevem: horário e dia de pico, mov
 where key = 'horarios_pico';
 
 notify pgrst, 'reload schema';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0017_dashboard_cards.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -3788,6 +3818,8 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0018_response_from_last_message.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -4074,6 +4106,8 @@ end $$;
 
 notify pgrst, 'reload schema';
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0019_reply_analysis.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Análise "Precisa de resposta?"
@@ -4352,6 +4386,8 @@ revoke all on function public.reply_signal(text, text, jsonb) from public, anon,
 
 notify pgrst, 'reload schema';
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0020_media_seen.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Imagens e arquivos sem visualização / sem baixa
@@ -4584,6 +4620,8 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0021_conversations.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -4958,6 +4996,8 @@ revoke all on function public.team_close_kind(text, jsonb) from public, anon, au
 
 notify pgrst, 'reload schema';
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0022_daily.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Acompanhamento do dia
@@ -5191,6 +5231,8 @@ end $$;
 
 notify pgrst, 'reload schema';
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0023_groups_panel.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Painel de grupos: um cartão por grupo com as últimas mensagens do dia
@@ -5294,6 +5336,8 @@ grant execute on function public.groups_panel() to authenticated;
 
 notify pgrst, 'reload schema';
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0024_message_alert.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Configuração do alerta de nova mensagem (Configurações › Geral)
@@ -5314,6 +5358,8 @@ alter table public.app_settings add constraint app_settings_msg_alert_auto_close
   check (msg_alert_auto_close between 0 and 600);
 
 notify pgrst, 'reload schema';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0025_sla_screen_alerts.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -5369,6 +5415,8 @@ grant execute on function public.sla_breaches() to authenticated;
 
 notify pgrst, 'reload schema';
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0026_commitment_demands.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Demandas automáticas pelo compromisso da equipe
@@ -5398,6 +5446,8 @@ alter table public.demands add constraint demands_source_check
   check (source in ('manual', 'keyword', 'ai', 'commitment'));
 
 notify pgrst, 'reload schema';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0027_sectors.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -5724,6 +5774,8 @@ end $$;
 
 notify pgrst, 'reload schema';
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0028_commitment_triggers.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Gatilhos de compromisso da equipe para registrar demandas
@@ -5754,6 +5806,8 @@ update public.app_settings
  where id = 1;
 
 notify pgrst, 'reload schema';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0029_management_summary.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -5878,6 +5932,8 @@ $$;
 grant execute on function public.management_summary(timestamptz, timestamptz, uuid, uuid) to authenticated;
 
 notify pgrst, 'reload schema';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0030_multi_company.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -7765,6 +7821,8 @@ end $$;
 
 notify pgrst, 'reload schema';
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0031_menu_access.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Menus do menu lateral liberados por empresa
@@ -7783,6 +7841,8 @@ alter table public.app_settings
 
 notify pgrst, 'reload schema';
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0032_voice_alert.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Aviso por voz junto com o alerta em tela
@@ -7798,6 +7858,8 @@ alter table public.app_settings
   add column if not exists msg_alert_voice boolean not null default true;
 
 notify pgrst, 'reload schema';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0033_voice_alert_rules.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -7818,6 +7880,8 @@ alter table public.alert_rules
   add column if not exists voice boolean not null default true;
 
 notify pgrst, 'reload schema';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0034_voice_options.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -7840,6 +7904,8 @@ alter table public.app_settings
     check (msg_alert_voice_pitch between 0 and 2);
 
 notify pgrst, 'reload schema';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0035_viewer_role.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -7978,6 +8044,8 @@ $$;
 
 notify pgrst, 'reload schema';
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0036_group_members.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Membros dos grupos
@@ -8070,6 +8138,8 @@ $$;
 grant execute on function public.group_members(uuid) to authenticated;
 
 notify pgrst, 'reload schema';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0037_ignore_stickers_emoji.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -8309,6 +8379,8 @@ $$;
 revoke all on function public.rebuild_group_state(uuid, timestamptz) from public, anon, authenticated;
 grant execute on function public.rebuild_group_state(uuid, timestamptz) to service_role;
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0038_media_files.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Ver imagens e áudios pelo sistema.
@@ -8363,6 +8435,8 @@ $$;
 
 revoke all on function public.media_usage() from public, anon;
 grant execute on function public.media_usage() to authenticated;
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0039_group_responsible.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -8422,6 +8496,8 @@ $$;
 drop trigger if exists demands_default_assignee on public.demands;
 create trigger demands_default_assignee before insert on public.demands
   for each row execute function public.demand_default_assignee();
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0040_recalc_groups.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -8542,6 +8618,8 @@ $$;
 revoke all on function public.recalc_groups() from public, anon;
 grant execute on function public.recalc_groups() to authenticated;
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0041_ignore_phrases.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Mensagens a ignorar: frases da empresa.
@@ -8554,6 +8632,8 @@ grant execute on function public.recalc_groups() to authenticated;
 
 alter table public.app_settings
   add column if not exists ignore_phrases text[] not null default '{}';
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0042_quick_replies.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -8590,6 +8670,8 @@ create policy quick_replies_admin on public.quick_replies for all
   with check ((select public.is_admin()) and company_id = (select public.current_company_id()));
 
 grant select, insert, update, delete on public.quick_replies to authenticated;
+
+commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0043_conversation_closing.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
@@ -8934,6 +9016,8 @@ grant execute on function public.send_group_message(uuid, text, uuid, boolean) t
 update public.groups set conversation_started_at = pending_since
  where pending_since is not null and conversation_started_at is null;
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0044_avatars.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Fotos de perfil: participantes dos grupos e imagem do grupo.
@@ -9019,6 +9103,8 @@ returns jsonb language sql stable security invoker set search_path = public as $
 $$;
 grant execute on function public.group_members(uuid) to authenticated;
 
+commit;
+
 -- >>>>>>>>>>>>>>>>>>>> 0045_avatar_full.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
 -- Foto de perfil em tamanho grande (coluna sem uso).
@@ -9030,6 +9116,8 @@ grant execute on function public.group_members(uuid) to authenticated;
 
 alter table public.contact_avatars
   add column if not exists full_path text;
+
+commit;
 
 notify pgrst, 'reload schema';
 
