@@ -4,6 +4,7 @@ import { AlertOctagon, Building2, CheckCircle2, Clock, Hourglass, Lock, MinusCir
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { Avatar } from '@/components/avatar';
 import { EmptyState } from '@/components/ui';
 import { cn, formatDuration, formatNumber } from '@/lib/format';
 
@@ -18,6 +19,8 @@ export type PanelGroup = {
   responsible_name?: string | null;
   /** conversa encerrada pela mensagem de fechamento */
   closed_at?: string | null;
+  /** jid do grupo quando há imagem do grupo guardada */
+  photo_jid?: string | null;
   status: PanelStatus;
   received_today: number;
   answers_today: number;
@@ -111,7 +114,14 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
     >
       <div>
         <div className="flex items-start gap-1.5">
-          <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', s.dot)} aria-hidden />
+          {g.photo_jid ? (
+            <span className="relative shrink-0">
+              <Avatar jid={g.photo_jid} hasPhoto name={g.name} className="h-6 w-6 rounded-full bg-surface-2 text-[9px]" />
+              <span className={cn('absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-surface', s.dot)} aria-hidden />
+            </span>
+          ) : (
+            <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', s.dot)} aria-hidden />
+          )}
           <h3 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-ink">{g.name}</h3>
         </div>
         {g.closed_at && (g.status === 'answered' || g.status === 'neutral') && (

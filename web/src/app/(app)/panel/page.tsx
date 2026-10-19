@@ -26,15 +26,19 @@ export default async function PanelPage() {
     sector_id: string | null;
     responsible_member_id: string | null;
     closed_at?: string | null;
+    jid?: string;
     team_members: { name: string } | null;
   };
   const infoOf = new Map(((groupSectors ?? []) as unknown as GroupInfo[]).map((g) => [g.id, g]));
+  const { data: photoRows } = await supabase.from('contact_avatars').select('jid').like('jid', '%@g.us').not('path', 'is', null);
+  const withPhoto = new Set((photoRows ?? []).map((r) => r.jid as string));
   const groups = ((data ?? []) as PanelGroup[]).map((g) => ({
     ...g,
     sector_id: infoOf.get(g.id)?.sector_id ?? null,
     responsible_id: infoOf.get(g.id)?.responsible_member_id ?? null,
     responsible_name: infoOf.get(g.id)?.team_members?.name ?? null,
     closed_at: infoOf.get(g.id)?.closed_at ?? null,
+    photo_jid: withPhoto.has(infoOf.get(g.id)?.jid ?? '') ? (infoOf.get(g.id)?.jid ?? null) : null,
   }));
   // filtro por responsável: toda a equipe ativa + quem ainda é responsável por algum grupo
   const names = new Map((team ?? []).map((t) => [t.id as string, t.name as string]));

@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarClock, HardDrive, Image as ImageIcon, Save } from 'lucide-react';
+import { CalendarClock, CircleUserRound, HardDrive, Image as ImageIcon, Save } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Card, CardHeader, Select } from '@/components/ui';
@@ -29,6 +29,7 @@ export function MediaSettings({ settings, usage, disabled }: { settings: AppSett
   const [enabled, setEnabled] = useState(settings.media_store_enabled !== false);
   const [types, setTypes] = useState<string[]>(settings.media_store_types ?? ['image', 'audio', 'sticker']);
   const [days, setDays] = useState(settings.media_retention_days ?? 90);
+  const [avatars, setAvatars] = useState(settings.avatars_enabled !== false);
   const [pending, start] = useTransition();
   const lock = disabled || pending;
   const toggleType = (key: string) => setTypes((t) => (t.includes(key) ? t.filter((x) => x !== key) : [...t, key]));
@@ -97,6 +98,14 @@ export function MediaSettings({ settings, usage, disabled }: { settings: AppSett
             </div>
           </>
         )}
+        <Row
+          icon={CircleUserRound}
+          title="Fotos de perfil"
+          text="Mostra a foto dos participantes e a imagem do grupo (quando houver e a privacidade do contato permitir). O worker busca aos poucos e atualiza a cada 7 dias."
+          checked={avatars}
+          onChange={setAvatars}
+          disabled={lock}
+        />
         {usage && (
           <div className="flex gap-3 py-3">
             <HardDrive className="mt-0.5 h-5 w-5 shrink-0 text-muted" />
@@ -113,7 +122,7 @@ export function MediaSettings({ settings, usage, disabled }: { settings: AppSett
             disabled={pending}
             onClick={() =>
               start(async () => {
-                const res = await saveMediaSettings({ enabled, types, days });
+                const res = await saveMediaSettings({ enabled, types, days, avatars });
                 if (res.ok) toast.success('Imagens e áudios salvos');
                 else toast.error(res.error);
               })

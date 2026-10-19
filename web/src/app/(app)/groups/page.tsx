@@ -56,6 +56,10 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
     groups = ((await query.limit(500)).data ?? []) as Group[];
   }
 
+  // imagens dos grupos guardadas pelo worker (sem o script 0044, fica sem)
+  const { data: photoRows } = await supabase.from('contact_avatars').select('jid').like('jid', '%@g.us').not('path', 'is', null);
+  const groupPhotos = (photoRows ?? []).map((r) => r.jid as string);
+
   return (
     <>
       <PageHeader title="Grupos" description="Todos os grupos do WhatsApp conectado. Escolha quais devem ser monitorados." />
@@ -105,7 +109,7 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
             description="Os grupos aparecem automaticamente depois que o WhatsApp é conectado em Configurações > WhatsApp."
           />
         ) : (
-          <GroupsTable groups={groups} />
+          <GroupsTable groups={groups} photos={groupPhotos} />
         )}
       </Card>
     </>

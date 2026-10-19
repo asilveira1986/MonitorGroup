@@ -20,6 +20,7 @@ import { closingTemplate, findTeamMember, getSettings, isCompanyActive } from '.
 import { isClosingMessage } from './closing.js';
 import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
+import { AvatarQueue } from './avatars.js';
 import { storeMessageMedia } from './media.js';
 import { extractContent, isAcknowledgement, isStickerOrEmoji, phoneFromJid, quotedMessageId } from './text.js';
 import { processDemandSignals } from './demands.js';
@@ -49,6 +50,8 @@ type Session = {
   outbox: Map<string, string>;
   /** respostas do painel que usaram a mensagem de fechamento (\fechamento) */
   closingOutbox: Set<string>;
+  /** fotos de perfil dos participantes e do grupo (uma de cada vez) */
+  avatars: AvatarQueue;
 };
 
 type HistoryImport = {
@@ -372,7 +375,9 @@ export class WhatsAppManager {
       history: null,
       outbox: new Map(),
       closingOutbox: new Set(),
+      avatars: null as unknown as AvatarQueue,
     };
+    session.avatars = new AvatarQueue(companyId, () => (session.stopped ? null : session.sock));
     session.groupsReady = new Promise((resolve) => (session.markGroupsReady = resolve));
     this.sessions.set(instanceId, session);
 
@@ -549,6 +554,12 @@ export class WhatsAppManager {
     });
 
     // conversa do grupo apagada no celular
+    // foto de perfil (contato ou grupo) mudou: busca de novo
+    sock.ev.on('contacts.update', (updates) => {
+      const changed = updates.filter((u) => u.id && 'imgUrl' in u).map((u) => u.id!);
+      if (changed.length) session.avatars.add(changed, true);
+    });
+
     sock.ev.on('chats.delete', (ids) => {
       for (const jid of ids) {
         if (!isJidGroup(jid)) continue;
@@ -561,6 +572,7 @@ export class WhatsAppManager {
     const session = this.sessions.get(instanceId);
     if (!session) return;
     session.stopped = true;
+    session.avatars.stop();
     this.sessions.delete(instanceId);
     try {
       session.sock.end(undefined);
@@ -573,6 +585,7 @@ export class WhatsAppManager {
     const session = this.sessions.get(instanceId);
     if (session) {
       session.stopped = true;
+      session.avatars.stop();
       try {
         await session.sock.logout();
       } catch {
@@ -670,6 +683,8 @@ export class WhatsAppManager {
       ) as GroupRow;
     }
     session.groupCache.set(meta.id, row);
+    // imagem do grupo e fotos dos participantes (fila, sem atrasar a sincronização)
+    session.avatars.add([meta.id, ...(meta.participants ?? []).map((p) => p.id)]);
     if (meta.participants?.length) {
       await this.syncParticipants(row.id, meta.participants).catch((err) =>
         logger.warn({ err, group: row.name }, 'falha ao gravar os membros do grupo'),

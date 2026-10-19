@@ -12,6 +12,7 @@ import { LiveMessages, MonitorToggle, ResponsibleSelect, SectorSelect, SlaForm }
 import { GroupMembers, type GroupMember } from './members';
 import { PAGE_SIZE } from './constants';
 import type { QuickReply } from '@/lib/quick-replies';
+import { Avatar } from '@/components/avatar';
 import { Conversation } from './conversation';
 import { DeleteRemovedGroupButton } from '../removed-groups';
 
@@ -40,7 +41,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
   const recentlySent = minutesAgo(5);
-  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }, { data: closingCfg }] = await Promise.all([
+  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }, { data: closingCfg }, { data: groupPhoto }] = await Promise.all([
     supabase.from('team_members').select('id, name').eq('active', true).order('name'),
     supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
     // respostas do painel que ainda não voltaram pelo WhatsApp
@@ -59,6 +60,8 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
     supabase.from('quick_replies').select('id, shortcut, title, body').order('shortcut'),
     // à parte: sem o script 0043 a coluna não existe e o resto da tela segue normal
     supabase.from('app_settings').select('closing_shortcut').maybeSingle(),
+    // imagem do grupo (guardada pelo worker)
+    supabase.from('contact_avatars').select('path').eq('jid', group?.jid ?? '').maybeSingle(),
   ]);
   const categories = (typeInd?.params as { categories?: { name: string }[] } | undefined)?.categories;
   if (!group) notFound();
@@ -103,9 +106,13 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
 
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-base font-semibold text-brand-text sm:h-14 sm:w-14 sm:text-lg">
-            {g.name.slice(0, 2).toUpperCase()}
-          </span>
+          <Avatar
+            jid={g.jid}
+            hasPhoto={Boolean((groupPhoto as { path?: string | null } | null)?.path)}
+            name={g.name}
+            fallback={g.name.slice(0, 2).toUpperCase()}
+            className="h-12 w-12 rounded-2xl bg-brand-soft text-base text-brand-text sm:h-14 sm:w-14 sm:text-lg"
+          />
           <div>
             <h1 className="text-xl font-semibold tracking-tight break-words sm:text-2xl">{g.name}</h1>
             <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-ink-2">

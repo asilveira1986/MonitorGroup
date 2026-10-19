@@ -418,7 +418,7 @@ export async function saveReplySettings(values: {
   return result(error);
 }
 
-export async function saveMediaSettings(values: { enabled: boolean; types: string[]; days: number }): Promise<Result> {
+export async function saveMediaSettings(values: { enabled: boolean; types: string[]; days: number; avatars: boolean }): Promise<Result> {
   const profile = await requireAdmin();
   const allowed = ['image', 'audio', 'sticker', 'video', 'document'];
   const supabase = await createClient();
@@ -428,6 +428,7 @@ export async function saveMediaSettings(values: { enabled: boolean; types: strin
       media_store_enabled: values.enabled,
       media_store_types: allowed.filter((t) => values.types.includes(t)),
       media_retention_days: [30, 60, 90, 180, 365, 0].includes(values.days) ? values.days : 90,
+      avatars_enabled: values.avatars,
       updated_at: new Date().toISOString(),
     })
     .eq('company_id', profile.company_id);

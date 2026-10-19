@@ -3,6 +3,7 @@
 import { Crown, Headset, Search, ShieldCheck, Smartphone, Users } from 'lucide-react';
 import { useState } from 'react';
 import { Badge, Card, CardHeader } from '@/components/ui';
+import { Avatar } from '@/components/avatar';
 import { cn, formatPhone, timeAgo } from '@/lib/format';
 
 export type GroupMember = {
@@ -15,6 +16,8 @@ export type GroupMember = {
   messages_30d: number;
   last_message_at: string | null;
   joined_at: string;
+  /** o worker guardou a foto de perfil */
+  has_avatar?: boolean;
 };
 
 const initials = (name: string) =>
@@ -70,15 +73,18 @@ export function GroupMembers({ members, total }: { members: GroupMember[]; total
               const label = m.is_me ? 'Número conectado' : m.name || formatPhone(m.phone) || 'Sem nome';
               return (
                 <li key={m.jid} className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 hover:bg-surface-2/60">
-                  <span
+                  <Avatar
+                    jid={m.jid}
+                    hasPhoto={m.has_avatar}
+                    name={m.name || label}
                     className={cn(
-                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
+                      'h-8 w-8 rounded-full text-[11px]',
                       m.team || m.is_me ? 'bg-deep text-on-deep' : 'bg-brand-soft text-brand-text',
                     )}
-                    aria-hidden
-                  >
-                    {m.is_me ? <Smartphone className="h-3.5 w-3.5" /> : initials(m.name || label) || <Users className="h-3.5 w-3.5" />}
-                  </span>
+                    fallback={
+                      m.is_me ? <Smartphone className="h-3.5 w-3.5" /> : initials(m.name || label) || <Users className="h-3.5 w-3.5" />
+                    }
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1 truncate text-sm font-medium">
                       <span className="truncate">{label}</span>

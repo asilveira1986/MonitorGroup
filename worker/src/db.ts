@@ -53,6 +53,8 @@ export type AppSettings = {
   ignore_phrases?: string[];
   /** atalho da mensagem rápida que encerra a conversa (padrão "fechamento") */
   closing_shortcut?: string;
+  /** fotos de perfil dos participantes e do grupo */
+  avatars_enabled?: boolean;
   media_store_enabled?: boolean;
   media_store_types?: string[];
   media_retention_days?: number;

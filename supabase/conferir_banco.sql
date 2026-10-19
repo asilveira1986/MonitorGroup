@@ -58,6 +58,7 @@ from (values
   (36, 'Fechamento da conversa (0043)', to_regprocedure('public.send_group_message(uuid,text,uuid,boolean)') is not null
       and exists (select 1 from information_schema.columns
                   where table_schema = 'public' and table_name = 'groups' and column_name = 'closed_at')),
-  (37, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (37, 'Fotos de perfil (0044)', to_regclass('public.contact_avatars') is not null),
+  (38, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
