@@ -3,7 +3,7 @@
 import { AlertOctagon, Building2, CheckCircle2, Clock, Hourglass, Lock, MinusCircle, Search, UserCheck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from '@/components/avatar';
 import { EmptyState } from '@/components/ui';
 import { cn, formatDuration, formatNumber } from '@/lib/format';
@@ -105,7 +105,7 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
   const longQuiet = daysQuiet != null && daysQuiet >= SILENT_DAYS;
   return (
     <Link
-      href={`/groups/${g.id}`}
+      href={`/groups/${g.id}?de=painel`}
       title={`${g.name} · ${s.label}`}
       className={cn(
         'flex min-h-[5.5rem] flex-col justify-between rounded-xl border p-3 shadow-sm transition hover:-translate-y-px hover:shadow-md',
@@ -195,6 +195,7 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
  * para o cartão ficar vermelho quando o tempo de resposta é excedido.
  */
 const RESPONSIBLE_KEY = 'panel-responsible';
+const FILTERS_KEY = 'panel-filters';
 
 const FIELD =
   'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none transition focus:border-brand-line focus:ring-2 focus:ring-brand/20';
@@ -278,6 +279,41 @@ export function GroupsPanel({
     [allGroups, sector, responsible],
   );
   const [query, setQuery] = useState('');
+
+  // ao voltar de um grupo, o painel reabre com os mesmos filtros (situação, setor e busca)
+  const restored = useRef(false);
+  useEffect(() => {
+    const load = () => {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(FILTERS_KEY) ?? 'null') as {
+          filter?: PanelStatus | 'all';
+          sector?: string;
+          query?: string;
+        } | null;
+        if (saved) {
+          if (saved.filter) setFilter(saved.filter);
+          if (saved.sector && (saved.sector === 'all' || saved.sector === 'none' || sectors.some((s) => s.id === saved.sector))) {
+            setSector(saved.sector);
+          }
+          if (typeof saved.query === 'string') setQuery(saved.query);
+        }
+      } catch {
+        /* sem armazenamento da sessão */
+      }
+      restored.current = true;
+    };
+    load();
+    // só ao abrir a tela
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!restored.current) return;
+    try {
+      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ filter, sector, query }));
+    } catch {
+      /* sem armazenamento da sessão */
+    }
+  }, [filter, sector, query]);
 
   // relógio dos tempos dos cartões (espera, última mensagem), atualizado a cada 30 s
   const [now, setNow] = useState(() => Date.now());

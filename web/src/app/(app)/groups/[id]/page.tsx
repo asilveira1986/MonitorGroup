@@ -18,8 +18,10 @@ import { DeleteRemovedGroupButton } from '../removed-groups';
 
 const minutesAgo = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
 
-export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
+export default async function GroupPage({ params, searchParams }: PageProps<'/groups/[id]'>) {
   const { id } = await params;
+  // aberto pelo Painel de grupos: o "voltar" leva de volta ao painel
+  const fromPanel = (await searchParams).de === 'painel';
   const profile = await requireProfile();
   const supabase = await createClient();
 
@@ -98,10 +100,10 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
     <>
       <LiveMessages groupId={g.id} />
       <Link
-        href={viewer ? '/panel' : g.removed_at ? '/groups?filter=removed' : '/groups'}
+        href={viewer || fromPanel ? '/panel' : g.removed_at ? '/groups?filter=removed' : '/groups'}
         className="mb-4 inline-flex items-center gap-1 text-sm text-ink-2 hover:text-ink"
       >
-        <ArrowLeft className="h-4 w-4" /> {viewer ? 'Painel de grupos' : 'Grupos'}
+        <ArrowLeft className="h-4 w-4" /> {viewer || fromPanel ? 'Painel de grupos' : 'Grupos'}
       </Link>
 
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
