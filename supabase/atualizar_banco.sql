@@ -3,6 +3,11 @@
 -- Junta os scripts 0002 em diante, na ordem. Pode ser executado mais de
 -- uma vez: o que já existe é mantido e o que falta é criado.
 -- Pré-requisito: 0001_schema.sql já executado (instalação inicial).
+--
+-- ANTES DE EXECUTAR: pause o worker no Railway (Settings > Pause Service).
+-- Com o worker gravando mensagens ao mesmo tempo, o banco pode cancelar o
+-- script com "deadlock detected" (nada fica pela metade: é só pausar e
+-- executar de novo). Depois, religue o worker.
 -- =====================================================================
 
 -- >>>>>>>>>>>>>>>>>>>> 0002_metrics.sql <<<<<<<<<<<<<<<<<<<<
