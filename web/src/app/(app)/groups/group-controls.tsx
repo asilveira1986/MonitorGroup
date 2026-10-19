@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Input, Select, Toggle } from '@/components/ui';
 import { useRealtime } from '@/lib/use-realtime';
-import { markSenderAsTeam, setGroupMonitored, setGroupSector, setGroupSla } from '../actions';
+import { markSenderAsTeam, setGroupMonitored, setGroupResponsible, setGroupSector, setGroupSla } from '../actions';
 
 /** Setor do grupo (somente admin): define quem vê e age sobre o grupo. */
 export function SectorSelect({
@@ -42,6 +42,47 @@ export function SectorSelect({
       {sectors.map((s) => (
         <option key={s.id} value={s.id}>
           {s.name}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+/** Responsável pelo grupo (somente admin): escolhido entre as pessoas da equipe. */
+export function ResponsibleSelect({
+  groupId,
+  memberId,
+  members,
+}: {
+  groupId: string;
+  memberId: string | null;
+  members: { id: string; name: string }[];
+}) {
+  const [value, setValue] = useState(memberId ?? '');
+  const [pending, start] = useTransition();
+  return (
+    <Select
+      value={value}
+      disabled={pending}
+      aria-label="Responsável pelo grupo"
+      className="h-9 text-sm"
+      onChange={(e) => {
+        const next = e.target.value;
+        const prev = value;
+        setValue(next);
+        start(async () => {
+          const res = await setGroupResponsible(groupId, next || null);
+          if (!res.ok) {
+            setValue(prev);
+            toast.error(res.error);
+          } else toast.success(next ? 'Responsável do grupo definido' : 'Grupo sem responsável');
+        });
+      }}
+    >
+      <option value="">Sem responsável</option>
+      {members.map((m) => (
+        <option key={m.id} value={m.id}>
+          {m.name}
         </option>
       ))}
     </Select>

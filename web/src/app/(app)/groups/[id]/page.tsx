@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CheckCheck, Hourglass, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, Building2, CheckCheck, Hourglass, Trash2, UserCheck, Users } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ActionButton } from '@/components/action-button';
@@ -8,7 +8,7 @@ import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { Group, Message, OutgoingMessage } from '@/lib/types';
 import { markGroupAnswered } from '../../actions';
-import { LiveMessages, MonitorToggle, SectorSelect, SlaForm } from '../group-controls';
+import { LiveMessages, MonitorToggle, ResponsibleSelect, SectorSelect, SlaForm } from '../group-controls';
 import { GroupMembers, type GroupMember } from './members';
 import { PAGE_SIZE } from './constants';
 import { Conversation } from './conversation';
@@ -22,7 +22,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
   const supabase = await createClient();
 
   const [{ data: group }, { data: msgs }, { data: settings }, { data: stats }] = await Promise.all([
-    supabase.from('groups').select('*').eq('id', id).maybeSingle(),
+    supabase.from('groups').select('*, team_members(name)').eq('id', id).maybeSingle(),
     // só as mais recentes; as anteriores são carregadas ao rolar a conversa
     supabase
       .from('messages')
@@ -111,11 +111,22 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
               </a>{' '}
               · última atividade {timeAgo(g.last_message_at)}
             </p>
-            {profile.role !== 'admin' && (
-              <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">
-                <Building2 className="h-3.5 w-3.5" /> Setor: {sectors?.find((s) => s.id === g.sector_id)?.name ?? '—'}
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {profile.role !== 'admin' && (
+                <p className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">
+                  <Building2 className="h-3.5 w-3.5" /> Setor: {sectors?.find((s) => s.id === g.sector_id)?.name ?? '—'}
+                </p>
+              )}
+              <p
+                className={
+                  g.team_members?.name
+                    ? 'inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand-text'
+                    : 'inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted'
+                }
+              >
+                <UserCheck className="h-3.5 w-3.5" /> Responsável: {g.team_members?.name ?? 'não definido'}
               </p>
-            )}
+            </div>
           </div>
         </div>
         {/* perfil "somente ver painéis": sem os controles do grupo */}
@@ -128,6 +139,32 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
                   <Building2 className="h-3.5 w-3.5" /> Setor (quem vê e atende o grupo)
                 </p>
                 <SectorSelect groupId={g.id} sectorId={g.sector_id ?? null} sectors={sectors ?? []} />
+              </div>
+            )}
+            {profile.role === 'admin' && (
+              <div>
+                <p className="mb-1 flex items-center gap-1 text-xs font-medium text-ink-2">
+                  <UserCheck className="h-3.5 w-3.5" /> Responsável pelo grupo (da equipe)
+                </p>
+                <ResponsibleSelect
+                  groupId={g.id}
+                  memberId={g.responsible_member_id ?? null}
+                  members={
+                    // inclui o responsável atual mesmo se ele foi desativado da equipe
+                    g.responsible_member_id && !(members ?? []).some((m) => m.id === g.responsible_member_id)
+                      ? [...(members ?? []), { id: g.responsible_member_id, name: `${g.team_members?.name ?? 'Responsável'} (inativo)` }]
+                      : (members ?? [])
+                  }
+                />
+                {(members ?? []).length === 0 && (
+                  <p className="mt-1 text-[11px] text-muted">
+                    Cadastre as pessoas em{' '}
+                    <Link href="/settings/team" className="underline">
+                      Configurações › Equipe
+                    </Link>
+                    .
+                  </p>
+                )}
               </div>
             )}
             <div>

@@ -1,4 +1,4 @@
-import { Building2, Hourglass } from 'lucide-react';
+import { Building2, Hourglass, UserCheck } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui';
 import { cn, formatNumber, timeAgo } from '@/lib/format';
@@ -30,6 +30,16 @@ function SectorTag({ g }: { g: Group }) {
   );
 }
 
+/** Responsável pelo grupo (pessoa da equipe). */
+function ResponsibleTag({ g }: { g: Group }) {
+  if (!g.team_members?.name) return null;
+  return (
+    <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-ink-2" title="Responsável pelo grupo">
+      <UserCheck className="h-3 w-3" aria-hidden /> {g.team_members.name}
+    </span>
+  );
+}
+
 export function GroupsTable({ groups }: { groups: Group[] }) {
   return (
     <>
@@ -47,7 +57,10 @@ export function GroupsTable({ groups }: { groups: Group[] }) {
                   <span className="shrink-0 text-[11px] text-muted">{timeAgo(g.last_message_at)}</span>
                 </span>
                 <span className="mt-0.5 block truncate text-sm text-ink-2">{g.last_message_preview ?? '—'}</span>
-                <SectorTag g={g} />
+                <span className="flex flex-wrap gap-x-3">
+                  <SectorTag g={g} />
+                  <ResponsibleTag g={g} />
+                </span>
                 <span className="mt-1.5 block">
                   <Status g={g} />
                 </span>
@@ -82,7 +95,10 @@ export function GroupsTable({ groups }: { groups: Group[] }) {
                   </span>
                   <span className="min-w-0">
                     <span className="block max-w-[240px] truncate font-medium">{g.name}</span>
-                    <SectorTag g={g} />
+                    <span className="flex flex-wrap gap-x-3">
+                      <SectorTag g={g} />
+                      <ResponsibleTag g={g} />
+                    </span>
                   </span>
                 </Link>
               </td>

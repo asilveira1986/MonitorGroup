@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertOctagon, Building2, CheckCircle2, Clock, Hourglass, MinusCircle, Search } from 'lucide-react';
+import { AlertOctagon, Building2, CheckCircle2, Clock, Hourglass, MinusCircle, Search, UserCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -13,6 +13,9 @@ export type PanelGroup = {
   id: string;
   name: string;
   sector_id?: string | null;
+  /** responsável pelo grupo (pessoa da equipe) */
+  responsible_id?: string | null;
+  responsible_name?: string | null;
   status: PanelStatus;
   received_today: number;
   answers_today: number;
@@ -109,6 +112,11 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
           <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', s.dot)} aria-hidden />
           <h3 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-ink">{g.name}</h3>
         </div>
+        {g.responsible_name && (
+          <p className="mt-0.5 flex items-center gap-1 truncate pl-3.5 text-[11px] text-ink-2" title="Responsável pelo grupo">
+            <UserCheck className="h-3 w-3 shrink-0" aria-hidden /> <span className="truncate">{g.responsible_name}</span>
+          </p>
+        )}
         {time && !quiet && (
           <p
             className={cn(
@@ -174,7 +182,11 @@ export function GroupsPanel({
   sectors,
   hasNoSector,
   defaultSector,
+  responsibles,
+  hasNoResponsible,
 }: {
+  responsibles: { id: string; name: string }[];
+  hasNoResponsible: boolean;
   groups: PanelGroup[];
   sectors: { id: string; name: string }[];
   hasNoSector: boolean;
@@ -185,9 +197,16 @@ export function GroupsPanel({
   const [filter, setFilter] = useState<PanelStatus | 'all'>('all');
   // setor: 'all' (todos), 'none' (sem setor) ou o id do setor
   const [sector, setSector] = useState(defaultSector);
+  // responsável: 'all', 'none' (sem responsável) ou o id da pessoa da equipe
+  const [responsible, setResponsible] = useState('all');
   const groups = useMemo(
-    () => (sector === 'all' ? allGroups : allGroups.filter((g) => (sector === 'none' ? !g.sector_id : g.sector_id === sector))),
-    [allGroups, sector],
+    () =>
+      allGroups.filter(
+        (g) =>
+          (sector === 'all' || (sector === 'none' ? !g.sector_id : g.sector_id === sector)) &&
+          (responsible === 'all' || (responsible === 'none' ? !g.responsible_id : g.responsible_id === responsible)),
+      ),
+    [allGroups, sector, responsible],
   );
   const [query, setQuery] = useState('');
 
@@ -256,6 +275,25 @@ export function GroupsPanel({
                   </option>
                 ))}
                 {hasNoSector && <option value="none">Sem setor</option>}
+              </select>
+            </label>
+          )}
+          {responsibles.length > 0 && (
+            <label className="flex items-center gap-2 text-xs text-muted">
+              <UserCheck className="h-4 w-4 shrink-0" aria-hidden />
+              <select
+                value={responsible}
+                onChange={(e) => setResponsible(e.target.value)}
+                aria-label="Filtrar por responsável"
+                className="h-9 w-full rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none focus:border-brand-line sm:w-48"
+              >
+                <option value="all">Todos os responsáveis</option>
+                {responsibles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+                {hasNoResponsible && <option value="none">Sem responsável</option>}
               </select>
             </label>
           )}

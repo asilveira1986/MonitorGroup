@@ -61,6 +61,10 @@ export type Group = {
   sector_id?: string | null;
   /** nome do setor (quando a consulta inclui sectors(name)) */
   sectors?: { name: string } | null;
+  /** responsável pelo grupo (pessoa da equipe) */
+  responsible_member_id?: string | null;
+  /** nome do responsável (quando a consulta inclui team_members(name)) */
+  team_members?: { name: string } | null;
   id: string;
   instance_id: string;
   jid: string;

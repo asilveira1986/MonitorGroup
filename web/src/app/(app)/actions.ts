@@ -103,6 +103,15 @@ export async function setGroupSector(groupId: string, sectorId: string | null): 
   return fail(error);
 }
 
+/** Responsável pelo grupo (somente admin): uma pessoa da equipe, ou nenhum. */
+export async function setGroupResponsible(groupId: string, memberId: string | null): Promise<Result> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from('groups').update({ responsible_member_id: memberId }).eq('id', groupId);
+  revalidatePath('/', 'layout');
+  return fail(error);
+}
+
 /** Dá baixa num arquivo recebido (ou em todos os arquivos sem visualização do grupo). */
 export async function markMediaSeen(target: { messageId?: string; groupId?: string }): Promise<Result> {
   await requireProfile();

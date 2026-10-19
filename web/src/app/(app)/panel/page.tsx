@@ -17,14 +17,23 @@ export default async function PanelPage() {
   const supabase = await createClient();
   const [{ data, error }, { data: groupSectors }, { data: sectors }] = await Promise.all([
     supabase.rpc('groups_panel'),
-    supabase.from('groups').select('id, sector_id'),
+    supabase.from('groups').select('id, sector_id, responsible_member_id, team_members(name)'),
     supabase.from('sectors').select('id, name').order('name'),
   ]);
-  const sectorOf = new Map((groupSectors ?? []).map((g) => [g.id as string, (g.sector_id as string | null) ?? null]));
+  type GroupInfo = { id: string; sector_id: string | null; responsible_member_id: string | null; team_members: { name: string } | null };
+  const infoOf = new Map(((groupSectors ?? []) as unknown as GroupInfo[]).map((g) => [g.id, g]));
   const groups = ((data ?? []) as PanelGroup[]).map((g) => ({
     ...g,
-    sector_id: sectorOf.get(g.id) ?? null,
+    sector_id: infoOf.get(g.id)?.sector_id ?? null,
+    responsible_id: infoOf.get(g.id)?.responsible_member_id ?? null,
+    responsible_name: infoOf.get(g.id)?.team_members?.name ?? null,
   }));
+  // responsáveis dos grupos no painel, para o filtro
+  const responsibles = [
+    ...new Map(groups.filter((g) => g.responsible_id).map((g) => [g.responsible_id!, g.responsible_name ?? 'Responsável'])),
+  ]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   // setores que têm grupo no painel (o usuário só recebe os grupos que pode ver)
   const used = new Set(groups.map((g) => g.sector_id));
   const sectorOptions = (sectors ?? []).filter((s) => used.has(s.id));
@@ -41,7 +50,14 @@ export default async function PanelPage() {
           <EmptyState icon={<AlertTriangle />} title="Não foi possível carregar o painel" description={error.message} />
         </Card>
       ) : (
-        <GroupsPanel groups={groups} sectors={sectorOptions} hasNoSector={used.has(null)} defaultSector={geral?.id ?? 'all'} />
+        <GroupsPanel
+          groups={groups}
+          sectors={sectorOptions}
+          hasNoSector={used.has(null)}
+          defaultSector={geral?.id ?? 'all'}
+          responsibles={responsibles}
+          hasNoResponsible={groups.some((g) => !g.responsible_id)}
+        />
       )}
     </div>
   );
