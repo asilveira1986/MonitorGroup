@@ -5,6 +5,7 @@ import { requireAdmin, requireProfile } from '@/lib/auth';
 import { createCompanyUser } from '@/lib/company-users';
 import { friendlyDbError } from '@/lib/db-errors';
 import { MENU_ITEMS } from '@/lib/menu';
+import { normalizeShortcut, type QuickReply } from '@/lib/quick-replies';
 import { recalcCompanyGroups, type RecalcSummary } from '@/lib/recalc-groups';
 import { reapplyIgnoreRules, type ReapplySummary } from '@/lib/reapply-ignore';
 import { createClient } from '@/lib/supabase/server';
@@ -208,6 +209,39 @@ export async function saveIgnoreSettings(values: {
   }
   revalidatePath('/', 'layout');
   return { ok: true, summary };
+}
+
+// --------------------------------------------------------------- Mensagens rápidas
+export async function saveQuickReply(values: {
+  id: string | null;
+  shortcut: string;
+  title: string;
+  body: string;
+}): Promise<Result & { item?: QuickReply }> {
+  await requireAdmin();
+  const shortcut = normalizeShortcut(values.shortcut);
+  const body = values.body.trim();
+  if (!shortcut) return { ok: false, error: 'Informe o atalho (letras, números, - ou _).' };
+  if (!body) return { ok: false, error: 'Escreva o texto da mensagem.' };
+  const row = { shortcut, title: values.title.trim() || null, body: body.slice(0, 4000), updated_at: new Date().toISOString() };
+  const supabase = await createClient();
+  const query = values.id
+    ? supabase.from('quick_replies').update(row).eq('id', values.id)
+    : supabase.from('quick_replies').insert(row);
+  const { data, error } = await query.select('id, shortcut, title, body').single();
+  if (error?.code === '23505') return { ok: false, error: `Já existe uma mensagem rápida com o atalho \\${shortcut}.` };
+  if (error) return result(error);
+  revalidatePath('/settings/quick-replies');
+  revalidatePath('/groups', 'layout');
+  return { ok: true, item: data as QuickReply };
+}
+
+export async function deleteQuickReply(id: string): Promise<Result> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from('quick_replies').delete().eq('id', id);
+  revalidatePath('/settings/quick-replies');
+  return result(error);
 }
 
 /** Botão "Recalcular grupos" (Configurações › Equipe). */

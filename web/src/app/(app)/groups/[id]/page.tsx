@@ -11,6 +11,7 @@ import { markGroupAnswered } from '../../actions';
 import { LiveMessages, MonitorToggle, ResponsibleSelect, SectorSelect, SlaForm } from '../group-controls';
 import { GroupMembers, type GroupMember } from './members';
 import { PAGE_SIZE } from './constants';
+import type { QuickReply } from '@/lib/quick-replies';
 import { Conversation } from './conversation';
 import { DeleteRemovedGroupButton } from '../removed-groups';
 
@@ -39,7 +40,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
   const recentlySent = minutesAgo(5);
-  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }] = await Promise.all([
+  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }] = await Promise.all([
     supabase.from('team_members').select('id, name').eq('active', true).order('name'),
     supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
     // respostas do painel que ainda não voltaram pelo WhatsApp
@@ -55,6 +56,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
     supabase.from('sectors').select('id, name').order('name'),
     // membros do grupo (lista do WhatsApp)
     supabase.rpc('group_members', { p_group_id: id }),
+    supabase.from('quick_replies').select('id, shortcut, title, body').order('shortcut'),
   ]);
   const categories = (typeInd?.params as { categories?: { name: string }[] } | undefined)?.categories;
   if (!group) notFound();
@@ -237,6 +239,8 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
               disabledReason: replyBlocked,
               signName: settings?.reply_sign_name ?? true,
               userName: profile.full_name || profile.email.split('@')[0],
+              quickReplies: (quickReplies ?? []) as QuickReply[],
+              groupName: g.name,
             }}
             demands={{
               manualEnabled: !viewer && (settings?.demand_manual_enabled ?? true) && canDemandsHere !== false,

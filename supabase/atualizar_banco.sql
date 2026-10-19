@@ -8550,6 +8550,42 @@ grant execute on function public.recalc_groups() to authenticated;
 alter table public.app_settings
   add column if not exists ignore_phrases text[] not null default '{}';
 
+-- >>>>>>>>>>>>>>>>>>>> 0042_quick_replies.sql <<<<<<<<<<<<<<<<<<<<
+-- =====================================================================
+-- Mensagens rápidas.
+--
+-- Textos prontos da empresa para responder pelo sistema: na caixa de
+-- resposta da conversa, digite \ e o atalho (ex.: \boleto) para inserir.
+-- Aceitam itens trocados na hora: {cliente}, {grupo}, {atendente},
+-- {saudacao} (bom dia / boa tarde / boa noite).
+-- Cadastro em Configurações › Mensagens rápidas (administradores).
+-- =====================================================================
+
+create table if not exists public.quick_replies (
+  id         uuid primary key default gen_random_uuid(),
+  company_id uuid not null default public.default_company_id() references public.companies(id) on delete cascade,
+  shortcut   text not null check (shortcut ~ '^[a-z0-9_-]{1,30}$'),
+  title      text,
+  body       text not null check (length(trim(body)) between 1 and 4000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists quick_replies_company_shortcut_idx on public.quick_replies (company_id, shortcut);
+
+alter table public.quick_replies enable row level security;
+
+drop policy if exists quick_replies_read on public.quick_replies;
+create policy quick_replies_read on public.quick_replies for select
+  using ((select public.is_active_user()) and company_id = (select public.current_company_id()));
+
+drop policy if exists quick_replies_admin on public.quick_replies;
+create policy quick_replies_admin on public.quick_replies for all
+  using ((select public.is_admin()) and company_id = (select public.current_company_id()))
+  with check ((select public.is_admin()) and company_id = (select public.current_company_id()));
+
+grant select, insert, update, delete on public.quick_replies to authenticated;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -8608,6 +8644,7 @@ from (values
   (33, 'Recalcular grupos pela equipe (0040)', to_regprocedure('public.recalc_company_groups(uuid)') is not null),
   (34, 'Frases a ignorar (0041)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'ignore_phrases')),
-  (35, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (35, 'Mensagens rápidas (0042)', to_regclass('public.quick_replies') is not null),
+  (36, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

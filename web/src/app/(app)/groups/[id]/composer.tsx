@@ -1,10 +1,11 @@
 'use client';
 
-import { AlertCircle, Check, Clock, Loader2, Lock, RotateCcw, SendHorizontal, Trash2, X } from 'lucide-react';
+import { AlertCircle, Check, Clock, Loader2, Lock, RotateCcw, SendHorizontal, Trash2, X, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useRef, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { cn, formatPhone } from '@/lib/format';
+import { findShortcutTrigger, greeting, matchQuickReplies, renderQuickReply, type QuickReply } from '@/lib/quick-replies';
 import type { Message, OutgoingMessage } from '@/lib/types';
 import { discardGroupMessage, retryGroupMessage, sendGroupMessage } from '../../actions';
 
@@ -14,6 +15,9 @@ export type ReplyConfig = {
   disabledReason: string | null;
   signName: boolean;
   userName: string;
+  /** mensagens rápidas da empresa (\atalho na caixa de resposta) */
+  quickReplies?: QuickReply[];
+  groupName?: string;
 };
 
 const MAX = 4000;
@@ -36,6 +40,56 @@ export function Composer({
   const [text, setText] = useState('');
   const [pending, start] = useTransition();
   const ref = useRef<HTMLTextAreaElement>(null);
+  // mensagens rápidas: "\" + atalho antes do cursor abre a lista
+  const [trigger, setTrigger] = useState<{ start: number; query: string } | null>(null);
+  const [active, setActive] = useState(0);
+  const quick = useMemo(() => config.quickReplies ?? [], [config.quickReplies]);
+  const options = useMemo(() => (trigger ? matchQuickReplies(quick, trigger.query) : []), [quick, trigger]);
+  const open = Boolean(trigger) && quick.length > 0;
+
+  const detect = (value: string, caret: number) => {
+    const t = findShortcutTrigger(value, caret);
+    setTrigger(t);
+    if (!t || t.query !== trigger?.query) setActive(0);
+  };
+
+  const insertQuick = (r: QuickReply) => {
+    const el = ref.current;
+    if (!trigger) return;
+    const caret = el?.selectionStart ?? text.length;
+    const before = text.slice(0, trigger.start);
+    const atSentenceStart = !before.trim() || /[.!?\n]\s*$/.test(before);
+    const hello = greeting();
+    const body = renderQuickReply(r.body, {
+      saudacao: atSentenceStart ? hello.charAt(0).toUpperCase() + hello.slice(1) : hello,
+      cliente: replyTo && !replyTo.from_team ? replyTo.sender_name || null : null,
+      grupo: config.groupName ?? null,
+      atendente: config.userName,
+    });
+    const next = (before + body + text.slice(caret)).slice(0, MAX);
+    setText(next);
+    setTrigger(null);
+    const pos = Math.min(MAX, before.length + body.length);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+    });
+  };
+
+  const openList = () => {
+    const el = ref.current;
+    const caret = el?.selectionStart ?? text.length;
+    const needsSpace = caret > 0 && !/\s/.test(text[caret - 1]);
+    const next = `${text.slice(0, caret)}${needsSpace ? ' ' : ''}\\${text.slice(caret)}`;
+    setText(next);
+    const pos = caret + (needsSpace ? 2 : 1);
+    setTrigger({ start: pos - 1, query: '' });
+    setActive(0);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+    });
+  };
 
   if (!config.enabled) {
     if (!config.disabledReason) return null;
@@ -75,12 +129,73 @@ export function Composer({
           </button>
         </div>
       )}
-      <div className="flex items-end gap-2">
+      <div className="relative flex items-end gap-2">
+        {open && (
+          <div
+            className="absolute bottom-full left-0 right-14 z-20 mb-2 overflow-hidden rounded-xl border border-line bg-surface shadow-lg"
+            role="listbox"
+            aria-label="Mensagens rápidas"
+          >
+            <p className="flex items-center gap-1.5 border-b border-line px-3 py-1.5 text-[11px] font-medium text-muted">
+              <Zap className="h-3.5 w-3.5" /> Mensagens rápidas · ↑↓ escolhe · Enter insere · Esc fecha
+            </p>
+            {options.length === 0 ? (
+              <p className="px-3 py-3 text-xs text-muted">Nenhuma mensagem rápida com “{trigger?.query}”.</p>
+            ) : (
+              <ul className="max-h-64 overflow-y-auto py-1">
+                {options.map((r, i) => (
+                  <li key={r.id} role="option" aria-selected={i === active}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        insertQuick(r);
+                      }}
+                      onMouseEnter={() => setActive(i)}
+                      className={cn('flex w-full items-start gap-2 px-3 py-2 text-left', i === active && 'bg-brand-soft')}
+                    >
+                      <span className="shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-xs font-semibold text-brand-text">
+                        \{r.shortcut}
+                      </span>
+                      <span className="min-w-0">
+                        {r.title && <span className="block truncate text-xs font-medium text-ink">{r.title}</span>}
+                        <span className="block truncate text-xs text-ink-2">{r.body}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         <textarea
           ref={ref}
           value={text}
-          onChange={(e) => setText(e.target.value.slice(0, MAX))}
+          onChange={(e) => {
+            const value = e.target.value.slice(0, MAX);
+            setText(value);
+            detect(value, e.target.selectionStart ?? value.length);
+          }}
+          onSelect={(e) => detect(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
+          onBlur={() => setTrigger(null)}
           onKeyDown={(e) => {
+            if (open) {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (options.length) setActive((a) => (a + (e.key === 'ArrowDown' ? 1 : options.length - 1)) % options.length);
+                return;
+              }
+              if ((e.key === 'Enter' || e.key === 'Tab') && options.length) {
+                e.preventDefault();
+                insertQuick(options[Math.min(active, options.length - 1)]);
+                return;
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setTrigger(null);
+                return;
+              }
+            }
             // Enter envia; Shift+Enter quebra a linha
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
@@ -93,6 +208,18 @@ export function Composer({
           disabled={pending}
           className="max-h-40 min-h-11 w-full resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-base text-ink outline-none transition placeholder:text-muted focus:border-brand-line focus:ring-2 focus:ring-brand-soft sm:text-sm"
         />
+        {quick.length > 0 && (
+          <button
+            type="button"
+            onClick={openList}
+            disabled={pending}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line text-ink-2 transition hover:border-brand-line hover:text-brand-text disabled:opacity-40"
+            aria-label="Mensagens rápidas"
+            title="Mensagens rápidas (digite \ e o atalho)"
+          >
+            <Zap className="h-5 w-5" />
+          </button>
+        )}
         <button
           onClick={send}
           disabled={pending || !text.trim()}
@@ -106,6 +233,7 @@ export function Composer({
       <p className="mt-1.5 text-[11px] text-muted">
         Sai pelo número conectado e aparece também no celular
         {config.signName ? ` · assinada como *${config.userName}:*` : ''} · Enter envia, Shift+Enter quebra a linha
+        {quick.length > 0 ? ' · \\ + atalho insere uma mensagem rápida' : ''}
       </p>
     </div>
   );
