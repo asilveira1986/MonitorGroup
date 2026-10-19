@@ -77,8 +77,6 @@ export function GroupMembers({ members, total }: { members: GroupMember[]; total
                     jid={m.jid}
                     hasPhoto={m.has_avatar}
                     name={m.name || label}
-                    expandable
-                    subtitle={m.phone ? formatPhone(m.phone) : undefined}
                     className={cn(
                       'h-8 w-8 rounded-full text-[11px]',
                       m.team || m.is_me ? 'bg-deep text-on-deep' : 'bg-brand-soft text-brand-text',

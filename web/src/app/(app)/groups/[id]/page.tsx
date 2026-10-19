@@ -110,8 +110,6 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
             jid={g.jid}
             hasPhoto={Boolean((groupPhoto as { path?: string | null } | null)?.path)}
             name={g.name}
-            expandable
-            subtitle={`Grupo · ${g.participants_count} participantes`}
             fallback={g.name.slice(0, 2).toUpperCase()}
             className="h-12 w-12 rounded-2xl bg-brand-soft text-base text-brand-text sm:h-14 sm:w-14 sm:text-lg"
           />

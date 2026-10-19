@@ -9021,10 +9021,11 @@ grant execute on function public.group_members(uuid) to authenticated;
 
 -- >>>>>>>>>>>>>>>>>>>> 0045_avatar_full.sql <<<<<<<<<<<<<<<<<<<<
 -- =====================================================================
--- Foto de perfil em tamanho grande, para ampliar ao clicar (como no
--- WhatsApp). O worker guarda as duas versões: a pequena para as listas e a
--- grande para a visualização ampliada. Fotos já guardadas sem a versão
--- grande são buscadas de novo automaticamente.
+-- Foto de perfil em tamanho grande (coluna sem uso).
+--
+-- A visualização ampliada da foto foi retirada para o worker buscar só a
+-- versão pequena (menos requisições ao WhatsApp). A coluna fica para não
+-- quebrar bancos que já executaram este script.
 -- =====================================================================
 
 alter table public.contact_avatars
