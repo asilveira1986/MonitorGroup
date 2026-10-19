@@ -2,12 +2,15 @@ import { Info, UserRound } from 'lucide-react';
 import { ActionButton } from '@/components/action-button';
 import { Card, CardHeader, EmptyState } from '@/components/ui';
 import { formatPhone } from '@/lib/format';
+import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { TeamMember } from '@/lib/types';
 import { removeTeamMember } from '../actions';
 import { NewMemberForm } from './new-member-form';
+import { RecalcButton } from './recalc-button';
 
 export default async function TeamPage() {
+  const profile = await requireProfile();
   const supabase = await createClient();
   const { data } = await supabase.from('team_members').select('*').order('name');
   const members = (data ?? []) as TeamMember[];
@@ -30,7 +33,18 @@ export default async function TeamPage() {
       </Card>
 
       <Card className="lg:col-span-2">
-        <CardHeader title="Equipe" description={`${members.length} atendente(s)`} />
+        <CardHeader
+          title="Equipe"
+          description={`${members.length} atendente(s)`}
+          action={profile.role === 'admin' ? <RecalcButton /> : undefined}
+        />
+        {profile.role === 'admin' && (
+          <p className="px-4 pt-2 text-xs text-ink-2 sm:px-5">
+            Cadastrou pessoas que já falavam nos grupos? <strong>Recalcular grupos</strong> passa as mensagens antigas delas
+            para a equipe e tira de &quot;aguardando resposta&quot; os grupos que já foram respondidos (também roda sozinho
+            ao adicionar alguém por aqui).
+          </p>
+        )}
         <div className="p-2">
           {members.length === 0 ? (
             <EmptyState icon={<UserRound />} title="Nenhum atendente cadastrado" />

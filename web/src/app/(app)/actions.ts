@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAdmin, requireProfile } from '@/lib/auth';
 import type { DetailsData } from '@/lib/indicators';
 import { friendlyDbError } from '@/lib/db-errors';
+import { recalcCompanyGroups } from '@/lib/recalc-groups';
 import { createClient } from '@/lib/supabase/server';
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -38,13 +39,15 @@ export async function setGroupSla(groupId: string, slaMinutes: number | null): P
 }
 
 export async function markSenderAsTeam(senderJid: string, name: string, phone: string | null): Promise<Result> {
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = await createClient();
   const { error } = await supabase.rpc('mark_sender_as_team', {
     p_sender_jid: senderJid,
     p_name: name,
     p_phone: phone ?? '',
   });
+  // os grupos em que a pessoa já tinha respondido saem de "aguardando"
+  if (!error) await recalcCompanyGroups(profile.company_id);
   revalidatePath('/', 'layout');
   return fail(error);
 }

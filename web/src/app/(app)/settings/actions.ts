@@ -5,6 +5,7 @@ import { requireAdmin, requireProfile } from '@/lib/auth';
 import { createCompanyUser } from '@/lib/company-users';
 import { friendlyDbError } from '@/lib/db-errors';
 import { MENU_ITEMS } from '@/lib/menu';
+import { recalcCompanyGroups, type RecalcSummary } from '@/lib/recalc-groups';
 import { createClient } from '@/lib/supabase/server';
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -162,13 +163,25 @@ export async function deleteAlertRule(id: string): Promise<Result> {
 
 // --------------------------------------------------------------- Equipe
 export async function addTeamMember(form: FormData): Promise<Result> {
-  await requireProfile();
+  const profile = await requireProfile();
   const supabase = await createClient();
   const phone = String(form.get('phone') ?? '').replace(/\D/g, '');
   if (!phone) return { ok: false, error: 'Informe o telefone com DDI e DDD (ex.: 5511999998888).' };
   const { error } = await supabase.from('team_members').insert({ name: String(form.get('name') || phone), phone });
-  revalidatePath('/settings/team');
+  // mensagens antigas da pessoa passam a contar como da equipe
+  if (!error) await recalcCompanyGroups(profile.company_id);
+  revalidatePath('/', 'layout');
   return result(error);
+}
+
+/** Botão "Recalcular grupos" (Configurações › Equipe). */
+export async function recalcGroups(): Promise<Result & { summary?: RecalcSummary }> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('recalc_groups');
+  revalidatePath('/', 'layout');
+  if (error) return result(error);
+  return { ok: true, summary: data as RecalcSummary };
 }
 
 export async function removeTeamMember(id: string): Promise<Result> {
