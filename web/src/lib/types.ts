@@ -182,6 +182,8 @@ export type AppSettings = {
   auto_monitor_new_groups: boolean;
   ignore_acknowledgements: boolean;
   ignore_stickers_emoji?: boolean;
+  /** frases do cliente a ignorar (além dos agradecimentos padrão) */
+  ignore_phrases?: string[];
   /** guarda imagens e áudios para ver no painel */
   media_store_enabled?: boolean;
   media_store_types?: string[];

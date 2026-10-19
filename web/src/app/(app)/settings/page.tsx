@@ -6,6 +6,7 @@ import type { AppSettings } from '@/lib/types';
 import { GeneralForm } from './general-form';
 import { DemandSettings } from './demand-settings';
 import { Holidays } from './holidays';
+import { IgnoreSettings } from './ignore-settings';
 import { MediaSettings, type MediaUsage } from './media-settings';
 import { ReplySettings } from './reply-settings';
 
@@ -30,6 +31,7 @@ export default async function GeneralSettingsPage() {
           <GeneralForm settings={data as AppSettings} disabled={profile.role !== 'admin'} />
         </div>
       </Card>
+      <IgnoreSettings settings={data as AppSettings} disabled={profile.role !== 'admin'} />
       <ReplySettings settings={data as AppSettings} disabled={profile.role !== 'admin'} />
       <MediaSettings settings={data as AppSettings} usage={(usage as MediaUsage | null) ?? null} disabled={profile.role !== 'admin'} />
       <DemandSettings settings={data as AppSettings} disabled={profile.role !== 'admin'} />

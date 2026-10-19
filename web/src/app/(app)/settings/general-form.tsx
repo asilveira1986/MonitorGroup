@@ -97,24 +97,6 @@ export function GeneralForm({ settings, disabled }: { settings: AppSettings; dis
               defaultChecked={settings.auto_monitor_new_groups}
               label="Monitorar automaticamente novos grupos"
             />
-            <Toggle
-              name="ignore_acknowledgements"
-              defaultChecked={settings.ignore_acknowledgements}
-              label='Ignorar agradecimentos ("ok", "obrigado", 👍) após a resposta da equipe'
-            />
-            <Toggle
-              name="ignore_stickers_emoji"
-              defaultChecked={settings.ignore_stickers_emoji !== false}
-              label={
-                <>
-                  Desconsiderar figurinha e emoji como última mensagem do cliente
-                  <span className="mt-0.5 block text-xs text-ink-2">
-                    Continua na conversa, mas não abre pendência, não conta no tempo de resposta, não vira a última
-                    mensagem do grupo no painel e não gera aviso.
-                  </span>
-                </>
-              }
-            />
           </div>
 
           {!disabled && (

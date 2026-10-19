@@ -36,8 +36,6 @@ export async function saveGeneralSettings(form: FormData): Promise<Result> {
       business_start: String(form.get('business_start') || '08:00'),
       business_end: String(form.get('business_end') || '18:00'),
       auto_monitor_new_groups: form.get('auto_monitor_new_groups') === 'on',
-      ignore_acknowledgements: form.get('ignore_acknowledgements') === 'on',
-      ignore_stickers_emoji: form.get('ignore_stickers_emoji') === 'on',
       history_import_days: [0, 7, 30, 60, 90].includes(Number(form.get('history_import_days')))
         ? Number(form.get('history_import_days'))
         : 30,
@@ -170,6 +168,30 @@ export async function addTeamMember(form: FormData): Promise<Result> {
   const { error } = await supabase.from('team_members').insert({ name: String(form.get('name') || phone), phone });
   // mensagens antigas da pessoa passam a contar como da equipe
   if (!error) await recalcCompanyGroups(profile.company_id);
+  revalidatePath('/', 'layout');
+  return result(error);
+}
+
+/** Mensagens a ignorar: agradecimentos, figurinha/emoji e frases da empresa. */
+export async function saveIgnoreSettings(values: {
+  acknowledgements: boolean;
+  stickers: boolean;
+  phrases: string[];
+}): Promise<Result> {
+  const profile = await requireAdmin();
+  const phrases = [...new Set(values.phrases.map((p) => p.trim().replace(/\s+/g, ' ')).filter(Boolean))]
+    .map((p) => p.slice(0, 120))
+    .slice(0, 200);
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('app_settings')
+    .update({
+      ignore_acknowledgements: values.acknowledgements,
+      ignore_stickers_emoji: values.stickers,
+      ignore_phrases: phrases,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('company_id', profile.company_id);
   revalidatePath('/', 'layout');
   return result(error);
 }

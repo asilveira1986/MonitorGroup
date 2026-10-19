@@ -78,6 +78,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    38. `supabase/migrations/0038_media_files.sql`
    39. `supabase/migrations/0039_group_responsible.sql`
    40. `supabase/migrations/0040_recalc_groups.sql`
+   41. `supabase/migrations/0041_ignore_phrases.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

@@ -8537,6 +8537,19 @@ $$;
 revoke all on function public.recalc_groups() from public, anon;
 grant execute on function public.recalc_groups() to authenticated;
 
+-- >>>>>>>>>>>>>>>>>>>> 0041_ignore_phrases.sql <<<<<<<<<<<<<<<<<<<<
+-- =====================================================================
+-- Mensagens a ignorar: frases da empresa.
+--
+-- Além dos agradecimentos padrão ("ok", "obrigado", 👍), cada empresa
+-- cadastra as frases do cliente que não pedem resposta (ex.: "obrigado
+-- pelo retorno, doutora", "fico no aguardo"). Valem com a opção "Ignorar
+-- agradecimentos" ligada (Configurações › Geral › Mensagens a ignorar).
+-- =====================================================================
+
+alter table public.app_settings
+  add column if not exists ignore_phrases text[] not null default '{}';
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -8593,6 +8606,8 @@ from (values
   (32, 'Responsável pelo grupo (0039)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'groups' and column_name = 'responsible_member_id')),
   (33, 'Recalcular grupos pela equipe (0040)', to_regprocedure('public.recalc_company_groups(uuid)') is not null),
-  (34, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (34, 'Frases a ignorar (0041)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'ignore_phrases')),
+  (35, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

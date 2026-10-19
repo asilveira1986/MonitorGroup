@@ -814,7 +814,9 @@ export class WhatsAppManager {
         ? (session.outbox.get(msg.key.id ?? '') ?? session.sock.user?.name ?? 'Número conectado')
         : (member?.name ?? msg.pushName ?? null),
       sentAtSeconds: toSeconds(msg.messageTimestamp),
-      opensPending: !(settings.ignore_acknowledgements && isAcknowledgement(content.type, content.body)),
+      opensPending: !(
+        settings.ignore_acknowledgements && isAcknowledgement(content.type, content.body, settings.ignore_phrases)
+      ),
       // figurinha/emoji do cliente não conta como a última mensagem dele
       ignoredAsLast:
         !fromMe && !member && settings.ignore_stickers_emoji !== false && isStickerOrEmoji(content.type, content.body),
