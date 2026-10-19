@@ -177,6 +177,8 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
  * Atualiza sozinha: a cada mensagem nova (tempo real do app) e a cada minuto,
  * para o cartão ficar vermelho quando o tempo de resposta é excedido.
  */
+const RESPONSIBLE_KEY = 'panel-responsible';
+
 export function GroupsPanel({
   groups: allGroups,
   sectors,
@@ -185,7 +187,8 @@ export function GroupsPanel({
   responsibles,
   hasNoResponsible,
 }: {
-  responsibles: { id: string; name: string }[];
+  /** pessoas da equipe e quantos grupos (no painel) cada uma é responsável */
+  responsibles: { id: string; name: string; groups: number }[];
   hasNoResponsible: boolean;
   groups: PanelGroup[];
   sectors: { id: string; name: string }[];
@@ -198,7 +201,27 @@ export function GroupsPanel({
   // setor: 'all' (todos), 'none' (sem setor) ou o id do setor
   const [sector, setSector] = useState(defaultSector);
   // responsável: 'all', 'none' (sem responsável) ou o id da pessoa da equipe
-  const [responsible, setResponsible] = useState('all');
+  const [responsible, setResponsibleState] = useState('all');
+  // lembra a escolha neste navegador (ex.: cada atendente abre já nos seus grupos)
+  useEffect(() => {
+    const load = () => {
+      try {
+        const saved = localStorage.getItem(RESPONSIBLE_KEY);
+        if (saved && (saved === 'none' || responsibles.some((r) => r.id === saved))) setResponsibleState(saved);
+      } catch {
+        /* sem armazenamento local */
+      }
+    };
+    load();
+  }, [responsibles]);
+  const setResponsible = (value: string) => {
+    setResponsibleState(value);
+    try {
+      localStorage.setItem(RESPONSIBLE_KEY, value);
+    } catch {
+      /* sem armazenamento local */
+    }
+  };
   const groups = useMemo(
     () =>
       allGroups.filter(
@@ -278,7 +301,7 @@ export function GroupsPanel({
               </select>
             </label>
           )}
-          {responsibles.length > 0 && (
+          {(responsibles.length > 0 || hasNoResponsible) && (
             <label className="flex items-center gap-2 text-xs text-muted">
               <UserCheck className="h-4 w-4 shrink-0" aria-hidden />
               <select
@@ -290,10 +313,10 @@ export function GroupsPanel({
                 <option value="all">Todos os responsáveis</option>
                 {responsibles.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.name}
+                    {r.name} ({r.groups})
                   </option>
                 ))}
-                {hasNoResponsible && <option value="none">Sem responsável</option>}
+                <option value="none">Sem responsável ({allGroups.filter((g) => !g.responsible_id).length})</option>
               </select>
             </label>
           )}

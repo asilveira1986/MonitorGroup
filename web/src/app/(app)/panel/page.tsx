@@ -15,10 +15,11 @@ export const metadata: Metadata = { title: 'Monitor Group · Painel de grupos' }
 export default async function PanelPage() {
   await requireMenu('/panel');
   const supabase = await createClient();
-  const [{ data, error }, { data: groupSectors }, { data: sectors }] = await Promise.all([
+  const [{ data, error }, { data: groupSectors }, { data: sectors }, { data: team }] = await Promise.all([
     supabase.rpc('groups_panel'),
     supabase.from('groups').select('id, sector_id, responsible_member_id, team_members(name)'),
     supabase.from('sectors').select('id, name').order('name'),
+    supabase.from('team_members').select('id, name').eq('active', true).order('name'),
   ]);
   type GroupInfo = { id: string; sector_id: string | null; responsible_member_id: string | null; team_members: { name: string } | null };
   const infoOf = new Map(((groupSectors ?? []) as unknown as GroupInfo[]).map((g) => [g.id, g]));
@@ -28,11 +29,11 @@ export default async function PanelPage() {
     responsible_id: infoOf.get(g.id)?.responsible_member_id ?? null,
     responsible_name: infoOf.get(g.id)?.team_members?.name ?? null,
   }));
-  // responsáveis dos grupos no painel, para o filtro
-  const responsibles = [
-    ...new Map(groups.filter((g) => g.responsible_id).map((g) => [g.responsible_id!, g.responsible_name ?? 'Responsável'])),
-  ]
-    .map(([id, name]) => ({ id, name }))
+  // filtro por responsável: toda a equipe ativa + quem ainda é responsável por algum grupo
+  const names = new Map((team ?? []).map((t) => [t.id as string, t.name as string]));
+  for (const g of groups) if (g.responsible_id && !names.has(g.responsible_id)) names.set(g.responsible_id, g.responsible_name ?? 'Responsável');
+  const responsibles = [...names]
+    .map(([id, name]) => ({ id, name, groups: groups.filter((g) => g.responsible_id === id).length }))
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   // setores que têm grupo no painel (o usuário só recebe os grupos que pode ver)
   const used = new Set(groups.map((g) => g.sector_id));
