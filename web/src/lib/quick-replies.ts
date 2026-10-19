@@ -37,7 +37,11 @@ export function renderQuickReply(body: string, values: Partial<Record<string, st
       const v = values[key]?.trim();
       return v ? `${space}${v}` : '';
     })
-    .replace(/ +([,.!?])/g, '$1');
+    .replace(/ +([,.!?])/g, '$1')
+    // item vazio deixa pontuação sobrando: "Boa tarde,!" -> "Boa tarde!"
+    .replace(/,+(?=[.!?;:])/g, '')
+    .replace(/,{2,}/g, ',')
+    .replace(/^[\s,]+/, '');
 }
 
 /**

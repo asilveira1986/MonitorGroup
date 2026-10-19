@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertOctagon, Building2, CheckCircle2, Clock, Hourglass, MinusCircle, Search, UserCheck, X } from 'lucide-react';
+import { AlertOctagon, Building2, CheckCircle2, Clock, Hourglass, Lock, MinusCircle, Search, UserCheck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -16,6 +16,8 @@ export type PanelGroup = {
   /** responsável pelo grupo (pessoa da equipe) */
   responsible_id?: string | null;
   responsible_name?: string | null;
+  /** conversa encerrada pela mensagem de fechamento */
+  closed_at?: string | null;
   status: PanelStatus;
   received_today: number;
   answers_today: number;
@@ -112,6 +114,11 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
           <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', s.dot)} aria-hidden />
           <h3 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-ink">{g.name}</h3>
         </div>
+        {g.closed_at && (g.status === 'answered' || g.status === 'neutral') && (
+          <p className="mt-0.5 flex items-center gap-1 pl-3.5 text-[11px] font-medium text-good-ink" title="Encerrada pela mensagem de fechamento">
+            <Lock className="h-3 w-3 shrink-0" aria-hidden /> conversa encerrada
+          </p>
+        )}
         {g.responsible_name && (
           <p className="mt-0.5 flex items-center gap-1 truncate pl-3.5 text-[11px] text-ink-2" title="Responsável pelo grupo">
             <UserCheck className="h-3 w-3 shrink-0" aria-hidden /> <span className="truncate">{g.responsible_name}</span>

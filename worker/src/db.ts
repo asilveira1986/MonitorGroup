@@ -51,6 +51,8 @@ export type AppSettings = {
   ignore_stickers_emoji?: boolean;
   /** frases do cliente a ignorar (além dos agradecimentos padrão) */
   ignore_phrases?: string[];
+  /** atalho da mensagem rápida que encerra a conversa (padrão "fechamento") */
+  closing_shortcut?: string;
   media_store_enabled?: boolean;
   media_store_types?: string[];
   media_retention_days?: number;

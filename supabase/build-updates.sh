@@ -38,7 +38,7 @@ from (values
   (10, 'Pendentes por grupo e arquivos recebidos (0017)', to_regprocedure('public.ind_arquivos_recebidos(jsonb,jsonb)') is not null),
   (11, 'Tempo de resposta desde a última mensagem do cliente (0018)',
       exists (select 1 from pg_proc where proname = 'ingest_message' and pronamespace = 'public'::regnamespace
-              and obj_description(oid, 'pg_proc') ~ '00(18|37)')),
+              and obj_description(oid, 'pg_proc') ~ '00(18|37|43)')),
   (12, 'Análise "Precisa de resposta?" (0019)', to_regprocedure('public.ind_analise_sem_resposta(jsonb,jsonb)') is not null),
   (13, 'Arquivos sem visualização (0020)', to_regprocedure('public.mark_media_seen(uuid,uuid)') is not null),
   (14, 'Início e fechamento das conversas (0021)', to_regprocedure('public.ind_conversas_ciclo(jsonb,jsonb)') is not null),
@@ -76,7 +76,10 @@ from (values
   (34, 'Frases a ignorar (0041)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'ignore_phrases')),
   (35, 'Mensagens rápidas (0042)', to_regclass('public.quick_replies') is not null),
-  (36, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (36, 'Fechamento da conversa (0043)', to_regprocedure('public.send_group_message(uuid,text,uuid,boolean)') is not null
+      and exists (select 1 from information_schema.columns
+                  where table_schema = 'public' and table_name = 'groups' and column_name = 'closed_at')),
+  (37, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
 SQL

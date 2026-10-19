@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, Check, Clock, Loader2, Lock, RotateCcw, SendHorizontal, Trash2, X, Zap } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Clock, Loader2, Lock, RotateCcw, SendHorizontal, Trash2, X, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -18,6 +18,8 @@ export type ReplyConfig = {
   /** mensagens rápidas da empresa (\atalho na caixa de resposta) */
   quickReplies?: QuickReply[];
   groupName?: string;
+  /** atalho da mensagem rápida que encerra a conversa */
+  closingShortcut?: string;
 };
 
 const MAX = 4000;
@@ -43,6 +45,9 @@ export function Composer({
   // mensagens rápidas: "\" + atalho antes do cursor abre a lista
   const [trigger, setTrigger] = useState<{ start: number; query: string } | null>(null);
   const [active, setActive] = useState(0);
+  // a resposta usou a mensagem de fechamento: ao enviar, a conversa do grupo é encerrada
+  const [closing, setClosing] = useState(false);
+  const closingShortcut = config.closingShortcut || 'fechamento';
   const quick = useMemo(() => config.quickReplies ?? [], [config.quickReplies]);
   const options = useMemo(() => (trigger ? matchQuickReplies(quick, trigger.query) : []), [quick, trigger]);
   const open = Boolean(trigger) && quick.length > 0;
@@ -69,6 +74,7 @@ export function Composer({
     const next = (before + body + text.slice(caret)).slice(0, MAX);
     setText(next);
     setTrigger(null);
+    if (r.shortcut === closingShortcut) setClosing(true);
     const pos = Math.min(MAX, before.length + body.length);
     requestAnimationFrame(() => {
       el?.focus();
@@ -104,11 +110,13 @@ export function Composer({
     const body = text.trim();
     if (!body || pending) return;
     start(async () => {
-      const res = await sendGroupMessage(groupId, body, replyTo?.id ?? null);
+      const res = await sendGroupMessage(groupId, body, replyTo?.id ?? null, closing);
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
+      if (closing) toast.success('Conversa encerrada', { description: 'A próxima mensagem do cliente inicia uma nova conversa.' });
+      setClosing(false);
       setText('');
       onClearReply();
       router.refresh();
@@ -125,6 +133,23 @@ export function Composer({
             <p className="truncate text-ink-2">{replyTo.body ?? `[${replyTo.message_type}]`}</p>
           </div>
           <button onClick={onClearReply} className="rounded p-0.5 text-muted hover:text-ink" aria-label="Cancelar resposta citada">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      {closing && (
+        <div className="mb-2 flex items-center gap-2 rounded-xl border border-good/40 bg-good/10 px-3 py-1.5 text-xs text-good-ink">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span className="flex-1">
+            Esta resposta <strong>encerra a conversa</strong> (\{closingShortcut}). A próxima mensagem do cliente inicia uma nova.
+          </span>
+          <button
+            type="button"
+            onClick={() => setClosing(false)}
+            className="rounded p-0.5 hover:text-ink"
+            aria-label="Não encerrar a conversa"
+            title="Enviar sem encerrar a conversa"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -174,6 +199,7 @@ export function Composer({
           onChange={(e) => {
             const value = e.target.value.slice(0, MAX);
             setText(value);
+            if (!value.trim()) setClosing(false);
             detect(value, e.target.selectionStart ?? value.length);
           }}
           onSelect={(e) => detect(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}

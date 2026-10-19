@@ -1,18 +1,31 @@
 'use client';
 
-import { MessageSquareText, Pencil, Plus, Save, Search, Trash2, X, Zap } from 'lucide-react';
+import { Lock, MessageSquareText, Pencil, Plus, Save, Search, Trash2, X, Zap } from 'lucide-react';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Button, Card, CardHeader, EmptyState, Input, Textarea } from '@/components/ui';
+import { Button, Card, CardHeader, EmptyState, Input, Select, Textarea } from '@/components/ui';
 import { greeting, normalizeShortcut, QUICK_REPLY_VARIABLES, renderQuickReply, type QuickReply } from '@/lib/quick-replies';
-import { deleteQuickReply, saveQuickReply } from '../actions';
+import { deleteQuickReply, saveClosingShortcut, saveQuickReply } from '../actions';
 
 const EMPTY = { id: null as string | null, shortcut: '', title: '', body: '' };
 const SAMPLE = { cliente: 'Carla', grupo: 'Vendas SP', atendente: 'Ana Souza' };
+const CLOSING_TEMPLATE =
+  '{saudacao}, {cliente}! Estamos encerrando este atendimento. Qualquer dúvida, é só chamar por aqui.';
 
 /** Cadastro das mensagens rápidas (usadas na conversa com \atalho). */
-export function QuickReplies({ initial, canEdit, missingTable }: { initial: QuickReply[]; canEdit: boolean; missingTable: boolean }) {
+export function QuickReplies({
+  initial,
+  canEdit,
+  missingTable,
+  closingShortcut,
+}: {
+  initial: QuickReply[];
+  canEdit: boolean;
+  missingTable: boolean;
+  closingShortcut: string;
+}) {
   const [list, setList] = useState(initial);
+  const [closing, setClosing] = useState(closingShortcut);
   const [form, setForm] = useState(EMPTY);
   const [query, setQuery] = useState('');
   const [pending, start] = useTransition();
@@ -71,7 +84,67 @@ export function QuickReplies({ initial, canEdit, missingTable }: { initial: Quic
     );
   }
 
+  const closingReply = list.find((r) => r.shortcut === closing);
+  const changeClosing = (value: string) =>
+    start(async () => {
+      const prev = closing;
+      setClosing(value);
+      const res = await saveClosingShortcut(value);
+      if (!res.ok) {
+        setClosing(prev);
+        toast.error(res.error);
+      } else toast.success(`\\${value} agora encerra a conversa`);
+    });
+
   return (
+    <div className="space-y-4">
+      <Card className="border-good/40">
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex gap-3">
+            <Lock className="mt-0.5 h-5 w-5 shrink-0 text-good-ink" />
+            <div>
+              <p className="text-sm font-medium">Mensagem de fechamento</p>
+              <p className="mt-0.5 text-xs text-ink-2">
+                Quando a equipe envia esta mensagem (pelo sistema ou pelo celular, com o mesmo texto), a conversa do grupo é
+                encerrada: agradecimentos e mensagens configuradas para ignorar não a reabrem, e a próxima mensagem do cliente
+                que pedir resposta inicia uma nova conversa.
+              </p>
+              {!closingReply && (
+                <p className="mt-1 text-xs font-medium text-warning-ink">
+                  Ainda não existe a mensagem rápida \{closing}: crie-a para usar o fechamento.
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {canEdit && list.length > 0 && (
+              <Select
+                value={closing}
+                onChange={(e) => changeClosing(e.target.value)}
+                disabled={pending}
+                aria-label="Atalho que encerra a conversa"
+                className="h-9 w-44 font-mono text-sm"
+              >
+                {!closingReply && <option value={closing}>\{closing} (não criada)</option>}
+                {list.map((r) => (
+                  <option key={r.id} value={r.shortcut}>
+                    \{r.shortcut}
+                  </option>
+                ))}
+              </Select>
+            )}
+            {canEdit && !closingReply && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setForm({ id: null, shortcut: closing, title: 'Fechamento do atendimento', body: CLOSING_TEMPLATE })}
+              >
+                <Plus className="h-4 w-4" /> Criar \{closing}
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
     <div className="grid gap-4 lg:grid-cols-5">
       {canEdit && (
         <Card className="lg:col-span-2">
@@ -187,6 +260,11 @@ export function QuickReplies({ initial, canEdit, missingTable }: { initial: Quic
                     \{r.shortcut}
                   </span>
                   <div className="min-w-0 flex-1">
+                    {r.shortcut === closing && (
+                      <span className="mb-0.5 inline-flex items-center gap-1 rounded-full bg-good/15 px-1.5 py-px text-[10px] font-medium text-good-ink">
+                        <Lock className="h-3 w-3" /> encerra a conversa
+                      </span>
+                    )}
                     {r.title && <p className="text-sm font-medium">{r.title}</p>}
                     <p className="line-clamp-3 whitespace-pre-wrap text-xs text-ink-2">{r.body}</p>
                   </div>
@@ -217,6 +295,7 @@ export function QuickReplies({ initial, canEdit, missingTable }: { initial: Quic
           )}
         </div>
       </Card>
+    </div>
     </div>
   );
 }

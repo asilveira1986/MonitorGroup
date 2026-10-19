@@ -11,6 +11,8 @@ const REFRESH_MS = 60_000;
 let settings = new Map<string, AppSettings>();
 let team = new Map<string, TeamMemberRow[]>();
 let companies = new Map<string, { name: string; active: boolean }>();
+/** mensagens rápidas por empresa (atalho -> texto), para reconhecer o \fechamento */
+let quickReplies = new Map<string, Map<string, string>>();
 let loadedAt = 0;
 
 export async function refreshCache(force = false) {
@@ -28,6 +30,13 @@ export async function refreshCache(force = false) {
     team = new Map();
     for (const m of members) team.set(m.company_id, [...(team.get(m.company_id) ?? []), m]);
     companies = new Map(list.map((c) => [c.id, { name: c.name, active: c.active }]));
+    // sem o script 0042 a tabela não existe: segue sem fechamento
+    const { data: qr } = await db.from('quick_replies').select('company_id, shortcut, body');
+    quickReplies = new Map();
+    for (const r of (qr ?? []) as { company_id: string; shortcut: string; body: string }[]) {
+      if (!quickReplies.has(r.company_id)) quickReplies.set(r.company_id, new Map());
+      quickReplies.get(r.company_id)!.set(r.shortcut, r.body);
+    }
     loadedAt = Date.now();
   } catch (err) {
     logger.error({ err }, 'falha ao carregar configurações');
@@ -74,4 +83,10 @@ export async function findTeamMember(
       (m) => (m.jid && candidates.includes(m.jid)) || (m.phone && phones.some((p) => samePhone(p, m.phone!))),
     ) ?? null
   );
+}
+
+/** Texto da mensagem rápida que encerra a conversa (Configurações › Mensagens rápidas). */
+export async function closingTemplate(companyId: string): Promise<string | null> {
+  const s = await getSettings(companyId);
+  return quickReplies.get(companyId)?.get(s.closing_shortcut || 'fechamento') ?? null;
 }

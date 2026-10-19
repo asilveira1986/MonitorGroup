@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCheck, Clock, Loader2, Reply } from 'lucide-react';
+import { CheckCheck, Clock, Loader2, Lock, Reply } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { markMediaSeen } from '../../actions';
 import { Badge, EmptyState } from '@/components/ui';
@@ -274,6 +274,11 @@ export function Conversation({
                     {withoutSignature(m.body, m.from_me ? m.sender_name : null)}
                   </p>
                   <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-muted">
+                    {m.closes_conversation && (
+                      <Badge tone="good" className="py-0 text-[10px]">
+                        <Lock className="h-3 w-3" /> encerrou a conversa
+                      </Badge>
+                    )}
                     {!m.from_team && MEDIA_TYPES.has(m.message_type) && <MediaSeen message={m} timeZone={timeZone} viewed={viewed.has(m.id)} />}
                     {m.response_time_seconds != null && (
                       <Badge tone={m.response_time_seconds <= slaSeconds ? 'good' : 'critical'} className="py-0 text-[10px]">
@@ -284,6 +289,13 @@ export function Conversation({
                   </div>
                 </div>
               </div>
+              {m.closes_conversation && (
+                <div className="my-3 flex items-center gap-2 text-[11px] text-good-ink" role="separator">
+                  <span className="h-px flex-1 bg-good/30" />
+                  <Lock className="h-3 w-3" /> Conversa encerrada · a próxima mensagem do cliente inicia uma nova
+                  <span className="h-px flex-1 bg-good/30" />
+                </div>
+              )}
             </div>
           );
         })}

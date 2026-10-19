@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, CheckCheck, Hourglass, Trash2, UserCheck, Users } from 'lucide-react';
+import { ArrowLeft, Building2, CheckCheck, Hourglass, Lock, Trash2, UserCheck, Users } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ActionButton } from '@/components/action-button';
@@ -40,7 +40,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
   const recentlySent = minutesAgo(5);
-  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }] = await Promise.all([
+  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }, { data: closingCfg }] = await Promise.all([
     supabase.from('team_members').select('id, name').eq('active', true).order('name'),
     supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
     // respostas do painel que ainda não voltaram pelo WhatsApp
@@ -57,6 +57,8 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
     // membros do grupo (lista do WhatsApp)
     supabase.rpc('group_members', { p_group_id: id }),
     supabase.from('quick_replies').select('id, shortcut, title, body').order('shortcut'),
+    // à parte: sem o script 0043 a coluna não existe e o resto da tela segue normal
+    supabase.from('app_settings').select('closing_shortcut').maybeSingle(),
   ]);
   const categories = (typeInd?.params as { categories?: { name: string }[] } | undefined)?.categories;
   if (!group) notFound();
@@ -190,6 +192,17 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
         </Card>
       )}
 
+      {!g.pending_since && g.closed_at && (
+        <Card className="mb-4 flex items-center gap-2 border-good/40 bg-good/5 p-4 text-sm">
+          <Lock className="h-4 w-4 shrink-0 text-good-ink" />
+          <span>
+            <strong>Conversa encerrada</strong> {timeAgo(g.closed_at)} pela mensagem de fechamento. A próxima mensagem do
+            cliente que pedir resposta inicia uma nova conversa (agradecimentos e mensagens configuradas para ignorar não
+            reabrem).
+          </span>
+        </Card>
+      )}
+
       {g.pending_since && (
         <Card className="mb-4 flex flex-col gap-3 border-warning/50 bg-warning/5 p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-center gap-2 text-sm">
@@ -241,6 +254,7 @@ export default async function GroupPage({ params }: PageProps<'/groups/[id]'>) {
               userName: profile.full_name || profile.email.split('@')[0],
               quickReplies: (quickReplies ?? []) as QuickReply[],
               groupName: g.name,
+              closingShortcut: (closingCfg as { closing_shortcut?: string } | null)?.closing_shortcut ?? 'fechamento',
             }}
             demands={{
               manualEnabled: !viewer && (settings?.demand_manual_enabled ?? true) && canDemandsHere !== false,

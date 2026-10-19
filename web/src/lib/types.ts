@@ -61,6 +61,9 @@ export type Group = {
   sector_id?: string | null;
   /** nome do setor (quando a consulta inclui sectors(name)) */
   sectors?: { name: string } | null;
+  /** conversa encerrada pela mensagem de fechamento (a próxima do cliente inicia outra) */
+  closed_at?: string | null;
+  conversation_started_at?: string | null;
   /** responsável pelo grupo (pessoa da equipe) */
   responsible_member_id?: string | null;
   /** nome do responsável (quando a consulta inclui team_members(name)) */
@@ -102,6 +105,8 @@ export type Message = {
   demand_id?: string | null;
   /** figurinha/emoji do cliente desconsiderado como última mensagem */
   ignored_as_last?: boolean;
+  /** mensagem de fechamento da equipe (\fechamento): encerra a conversa */
+  closes_conversation?: boolean;
   /** arquivo guardado (imagem, áudio...): caminho no bucket privado "media" */
   media_path?: string | null;
   media_mime?: string | null;
@@ -184,6 +189,8 @@ export type AppSettings = {
   ignore_stickers_emoji?: boolean;
   /** frases do cliente a ignorar (além dos agradecimentos padrão) */
   ignore_phrases?: string[];
+  /** atalho da mensagem rápida que encerra a conversa (padrão "fechamento") */
+  closing_shortcut?: string;
   /** guarda imagens e áudios para ver no painel */
   media_store_enabled?: boolean;
   media_store_types?: string[];

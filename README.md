@@ -80,6 +80,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    40. `supabase/migrations/0040_recalc_groups.sql`
    41. `supabase/migrations/0041_ignore_phrases.sql`
    42. `supabase/migrations/0042_quick_replies.sql`
+   43. `supabase/migrations/0043_conversation_closing.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

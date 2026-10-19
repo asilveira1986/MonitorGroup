@@ -16,7 +16,8 @@ import makeWASocket, {
 } from 'baileys';
 import { onClientMessage, resolveDisconnectAlerts } from './alerts.js';
 import { clearAuthState, hasAuthState, usePostgresAuthState } from './auth-state.js';
-import { findTeamMember, getSettings, isCompanyActive } from './cache.js';
+import { closingTemplate, findTeamMember, getSettings, isCompanyActive } from './cache.js';
+import { isClosingMessage } from './closing.js';
 import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
 import { storeMessageMedia } from './media.js';
@@ -46,6 +47,8 @@ type Session = {
   history: HistoryImport | null;
   /** respostas enviadas pelo painel: id da mensagem no WhatsApp -> nome de quem respondeu */
   outbox: Map<string, string>;
+  /** respostas do painel que usaram a mensagem de fechamento (\fechamento) */
+  closingOutbox: Set<string>;
 };
 
 type HistoryImport = {
@@ -73,6 +76,7 @@ type OutgoingRow = {
   text_to_send: string;
   quoted_message_id: string | null;
   sender_name: string;
+  closes_conversation?: boolean;
 };
 
 const baileysLogger = logger.child({ module: 'baileys' });
@@ -251,7 +255,7 @@ export class WhatsAppManager {
           .update({ status: 'sending' })
           .eq('id', id)
           .eq('status', 'pending')
-          .select('id, group_id, text_to_send, quoted_message_id, sender_name')
+          .select('id, group_id, text_to_send, quoted_message_id, sender_name, closes_conversation')
           .maybeSingle();
         if (claimed) await this.sendOutgoing(session, me, claimed as OutgoingRow);
       }
@@ -281,14 +285,19 @@ export class WhatsAppManager {
 
       // registrado antes do envio: a mensagem volta pelo messages.upsert com o nome de quem respondeu
       session.outbox.set(waId, row.sender_name);
+      if (row.closes_conversation) session.closingOutbox.add(waId);
       await session.sock.sendMessage(group.jid, { text: row.text_to_send }, { messageId: waId, quoted });
       await db
         .from('outgoing_messages')
         .update({ status: 'sent', wa_message_id: waId, sent_at: new Date().toISOString(), error: null })
         .eq('id', row.id);
-      setTimeout(() => session.outbox.delete(waId), 10 * 60_000);
+      setTimeout(() => {
+        session.outbox.delete(waId);
+        session.closingOutbox.delete(waId);
+      }, 10 * 60_000);
     } catch (err) {
       session.outbox.delete(waId);
+      session.closingOutbox.delete(waId);
       logger.warn({ err, id: row.id }, 'falha ao enviar resposta do painel');
       await db
         .from('outgoing_messages')
@@ -362,6 +371,7 @@ export class WhatsAppManager {
       markGroupsReady: () => {},
       history: null,
       outbox: new Map(),
+      closingOutbox: new Set(),
     };
     session.groupsReady = new Promise((resolve) => (session.markGroupsReady = resolve));
     this.sessions.set(instanceId, session);
@@ -737,7 +747,7 @@ export class WhatsAppManager {
     }
 
     const d = await this.describeMessage(session, msg, content);
-    const { fromMe, participant, member, fromTeam, senderPhone, senderName, opensPending, ignoredAsLast } = d;
+    const { fromMe, participant, member, fromTeam, senderPhone, senderName, opensPending, ignoredAsLast, closes } = d;
     const ts = d.sentAtSeconds;
 
     const result = check(
@@ -755,6 +765,7 @@ export class WhatsAppManager {
         p_sent_at: new Date(ts * 1000).toISOString(),
         p_opens_pending: opensPending,
         p_ignored_as_last: ignoredAsLast,
+        p_closes: closes,
       }),
       'ingest_message',
     ) as { inserted: boolean; message_id?: string; stale?: boolean; ignored?: boolean };
@@ -820,6 +831,11 @@ export class WhatsAppManager {
       // figurinha/emoji do cliente não conta como a última mensagem dele
       ignoredAsLast:
         !fromMe && !member && settings.ignore_stickers_emoji !== false && isStickerOrEmoji(content.type, content.body),
+      // \fechamento: encerra a conversa (marcado no envio pelo painel ou reconhecido pelo texto)
+      closes:
+        (fromMe || Boolean(member)) &&
+        (session.closingOutbox.has(msg.key.id ?? '') ||
+          isClosingMessage(content.body, await closingTemplate(session.companyId))),
     };
   }
 
@@ -895,6 +911,7 @@ export class WhatsAppManager {
         sent_at: new Date(d.sentAtSeconds * 1000).toISOString(),
         opens_pending: d.opensPending && !d.ignoredAsLast,
         ignored_as_last: d.ignoredAsLast,
+        closes_conversation: d.closes,
       });
     }
     if (!rows.length) return;

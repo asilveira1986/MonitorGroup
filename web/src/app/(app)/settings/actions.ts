@@ -236,6 +236,20 @@ export async function saveQuickReply(values: {
   return { ok: true, item: data as QuickReply };
 }
 
+/** Qual mensagem rápida encerra a conversa (padrão \fechamento). */
+export async function saveClosingShortcut(shortcut: string): Promise<Result> {
+  const profile = await requireAdmin();
+  const value = normalizeShortcut(shortcut);
+  if (!value) return { ok: false, error: 'Escolha a mensagem rápida de fechamento.' };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('app_settings')
+    .update({ closing_shortcut: value, updated_at: new Date().toISOString() })
+    .eq('company_id', profile.company_id);
+  revalidatePath('/', 'layout');
+  return result(error);
+}
+
 export async function deleteQuickReply(id: string): Promise<Result> {
   await requireAdmin();
   const supabase = await createClient();

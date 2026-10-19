@@ -17,17 +17,24 @@ export default async function PanelPage() {
   const supabase = await createClient();
   const [{ data, error }, { data: groupSectors }, { data: sectors }, { data: team }] = await Promise.all([
     supabase.rpc('groups_panel'),
-    supabase.from('groups').select('id, sector_id, responsible_member_id, team_members(name)'),
+    supabase.from('groups').select('*, team_members(name)'),
     supabase.from('sectors').select('id, name').order('name'),
     supabase.from('team_members').select('id, name').eq('active', true).order('name'),
   ]);
-  type GroupInfo = { id: string; sector_id: string | null; responsible_member_id: string | null; team_members: { name: string } | null };
+  type GroupInfo = {
+    id: string;
+    sector_id: string | null;
+    responsible_member_id: string | null;
+    closed_at?: string | null;
+    team_members: { name: string } | null;
+  };
   const infoOf = new Map(((groupSectors ?? []) as unknown as GroupInfo[]).map((g) => [g.id, g]));
   const groups = ((data ?? []) as PanelGroup[]).map((g) => ({
     ...g,
     sector_id: infoOf.get(g.id)?.sector_id ?? null,
     responsible_id: infoOf.get(g.id)?.responsible_member_id ?? null,
     responsible_name: infoOf.get(g.id)?.team_members?.name ?? null,
+    closed_at: infoOf.get(g.id)?.closed_at ?? null,
   }));
   // filtro por responsável: toda a equipe ativa + quem ainda é responsável por algum grupo
   const names = new Map((team ?? []).map((t) => [t.id as string, t.name as string]));

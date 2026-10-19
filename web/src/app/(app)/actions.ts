@@ -152,6 +152,7 @@ export async function sendGroupMessage(
   groupId: string,
   body: string,
   quotedMessageId: string | null,
+  closes = false,
 ): Promise<Result> {
   await requireProfile();
   const supabase = await createClient();
@@ -159,6 +160,8 @@ export async function sendGroupMessage(
     p_group_id: groupId,
     p_body: body,
     p_quoted_message_id: quotedMessageId,
+    // resposta com \fechamento: encerra a conversa do grupo
+    p_closes: closes,
   });
   return fail(error);
 }
