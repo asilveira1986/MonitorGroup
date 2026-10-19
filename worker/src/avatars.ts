@@ -14,9 +14,11 @@ import { MEDIA_BUCKET } from './media.js';
 const REFRESH_MS = 7 * 86_400_000;
 const GAP_MS = 1_500;
 const MAX_BYTES = 512 * 1024;
+/** versão grande (visualização ampliada ao clicar) */
+const MAX_FULL_BYTES = 3 * 1024 * 1024;
 
-export const avatarPath = (companyId: string, jid: string) =>
-  `${companyId}/avatars/${createHash('sha1').update(jid).digest('hex').slice(0, 20)}.jpg`;
+export const avatarPath = (companyId: string, jid: string, full = false) =>
+  `${companyId}/avatars/${createHash('sha1').update(jid).digest('hex').slice(0, 20)}${full ? '.full' : ''}.jpg`;
 
 /** Sem foto ou foto escondida pela privacidade do contato (não é falha). */
 const isNoPicture = (err: unknown) => /item-not-found|not-authorized|404|401|forbidden/i.test(String((err as Error)?.message ?? err));
@@ -58,7 +60,7 @@ export class AvatarQueue {
         const batch = [...this.pending.entries()].slice(0, 200);
         const { data, error } = await db
           .from('contact_avatars')
-          .select('jid, checked_at')
+          .select('jid, checked_at, path, full_path')
           .eq('company_id', this.companyId)
           .in('jid', batch.map(([jid]) => jid));
         if (error) {
@@ -66,7 +68,12 @@ export class AvatarQueue {
           this.pending.clear();
           break;
         }
-        const fresh = new Map((data ?? []).map((r) => [r.jid as string, Date.parse(r.checked_at as string)]));
+        // foto guardada antes da versão grande existir: busca de novo
+        const fresh = new Map(
+          (data ?? [])
+            .filter((r) => !(r.path && !r.full_path))
+            .map((r) => [r.jid as string, Date.parse(r.checked_at as string)]),
+        );
         for (const [jid, force] of batch) {
           this.pending.delete(jid);
           if (this.stopped) break;
@@ -86,6 +93,7 @@ export class AvatarQueue {
     const sock = this.sock();
     if (!sock) return;
     let path: string | null = null;
+    let fullPath: string | null = null;
     try {
       const url = await sock.profilePictureUrl(jid, 'preview', 10_000);
       if (url) {
@@ -96,6 +104,7 @@ export class AvatarQueue {
           path = avatarPath(this.companyId, jid);
           const up = await db.storage.from(MEDIA_BUCKET).upload(path, buf, { contentType: 'image/jpeg', upsert: true });
           if (up.error) throw new Error(up.error.message);
+          fullPath = await this.fetchFull(sock, jid);
         }
       }
     } catch (err) {
@@ -106,10 +115,34 @@ export class AvatarQueue {
     }
     if (!path) {
       // ficou sem foto: apaga a antiga, se havia
-      await db.storage.from(MEDIA_BUCKET).remove([avatarPath(this.companyId, jid)]).catch(() => undefined);
+      await db.storage
+        .from(MEDIA_BUCKET)
+        .remove([avatarPath(this.companyId, jid), avatarPath(this.companyId, jid, true)])
+        .catch(() => undefined);
     }
     await db
       .from('contact_avatars')
-      .upsert({ company_id: this.companyId, jid, path, checked_at: new Date().toISOString() }, { onConflict: 'company_id,jid' });
+      .upsert(
+        { company_id: this.companyId, jid, path, full_path: fullPath, checked_at: new Date().toISOString() },
+        { onConflict: 'company_id,jid' },
+      );
+  }
+
+  /** Versão grande da foto; sem ela, a visualização ampliada usa a pequena. */
+  private async fetchFull(sock: WASocket, jid: string): Promise<string | null> {
+    try {
+      await new Promise((r) => setTimeout(r, GAP_MS));
+      const url = await sock.profilePictureUrl(jid, 'image', 10_000);
+      if (!url) return null;
+      const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+      if (!res.ok) return null;
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (!buf.length || buf.length > MAX_FULL_BYTES) return null;
+      const path = avatarPath(this.companyId, jid, true);
+      const up = await db.storage.from(MEDIA_BUCKET).upload(path, buf, { contentType: 'image/jpeg', upsert: true });
+      return up.error ? null : path;
+    } catch {
+      return null;
+    }
   }
 }

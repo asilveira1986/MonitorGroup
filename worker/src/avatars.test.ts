@@ -11,4 +11,5 @@ test('caminho da foto: por empresa, estável e sem o jid exposto', () => {
   assert.notEqual(a, avatarPath('emp-1', '5511999997777@s.whatsapp.net'));
   assert.match(a, /^emp-1\/avatars\/[0-9a-f]{20}\.jpg$/);
   assert.ok(!a.includes('5511'));
+  assert.equal(avatarPath('emp-1', '5511999998888@s.whatsapp.net', true), a.replace(/\.jpg$/, '.full.jpg'));
 });

@@ -59,6 +59,8 @@ from (values
       and exists (select 1 from information_schema.columns
                   where table_schema = 'public' and table_name = 'groups' and column_name = 'closed_at')),
   (37, 'Fotos de perfil (0044)', to_regclass('public.contact_avatars') is not null),
-  (38, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (38, 'Foto de perfil ampliada (0045)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'contact_avatars' and column_name = 'full_path')),
+  (39, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

@@ -9014,6 +9014,17 @@ returns jsonb language sql stable security invoker set search_path = public as $
 $$;
 grant execute on function public.group_members(uuid) to authenticated;
 
+-- >>>>>>>>>>>>>>>>>>>> 0045_avatar_full.sql <<<<<<<<<<<<<<<<<<<<
+-- =====================================================================
+-- Foto de perfil em tamanho grande, para ampliar ao clicar (como no
+-- WhatsApp). O worker guarda as duas versões: a pequena para as listas e a
+-- grande para a visualização ampliada. Fotos já guardadas sem a versão
+-- grande são buscadas de novo automaticamente.
+-- =====================================================================
+
+alter table public.contact_avatars
+  add column if not exists full_path text;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -9077,6 +9088,8 @@ from (values
       and exists (select 1 from information_schema.columns
                   where table_schema = 'public' and table_name = 'groups' and column_name = 'closed_at')),
   (37, 'Fotos de perfil (0044)', to_regclass('public.contact_avatars') is not null),
-  (38, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (38, 'Foto de perfil ampliada (0045)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'contact_avatars' and column_name = 'full_path')),
+  (39, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
