@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertOctagon, Building2, CheckCircle2, Clock, Hourglass, MinusCircle, Search, UserCheck } from 'lucide-react';
+import { AlertOctagon, Building2, CheckCircle2, Clock, Hourglass, MinusCircle, Search, UserCheck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -179,6 +179,35 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
  */
 const RESPONSIBLE_KEY = 'panel-responsible';
 
+const FIELD =
+  'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none transition focus:border-brand-line focus:ring-2 focus:ring-brand/20';
+/** campo com filtro aplicado: destacado para ver de relance o que está filtrando */
+const ACTIVE_FIELD = 'border-brand-line bg-brand-soft/40 font-medium';
+const CHIP = 'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition';
+const COUNT = 'tabular min-w-[1.375rem] rounded-full px-1.5 py-px text-center text-[11px] font-semibold';
+
+/** Campo do filtro com o nome em cima. */
+function FilterField({
+  label,
+  icon: Icon,
+  className,
+  children,
+}: {
+  label: string;
+  icon?: typeof Search;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={cn('block min-w-0', className)}>
+      <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+        {Icon && <Icon className="h-3.5 w-3.5" aria-hidden />} {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
 export function GroupsPanel({
   groups: allGroups,
   sectors,
@@ -249,49 +278,42 @@ export function GroupsPanel({
     [groups],
   );
   const q = query.trim().toLowerCase();
+  const activeFilters = [filter !== 'all', sector !== 'all', responsible !== 'all', Boolean(q)].filter(Boolean).length;
+  const clearFilters = () => {
+    setFilter('all');
+    setSector('all');
+    setResponsible('all');
+    setQuery('');
+  };
   const shown = groups.filter((g) => (filter === 'all' || g.status === filter) && (!q || g.name.toLowerCase().includes(q)));
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por situação">
-          <button
-            type="button"
-            onClick={() => setFilter('all')}
-            className={cn(
-              'rounded-full border px-3 py-1.5 text-xs font-medium',
-              filter === 'all' ? 'border-ink bg-ink text-bg' : 'border-line bg-surface text-ink-2 hover:text-ink',
-            )}
-          >
-            Todos <span className="tabular opacity-70">{groups.length}</span>
-          </button>
-          {ORDER.map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setFilter(filter === k ? 'all' : k)}
-              aria-pressed={filter === k}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium',
-                filter === k ? 'border-ink bg-ink text-bg' : 'border-line bg-surface text-ink-2 hover:text-ink',
-              )}
-            >
-              <span className={cn('h-2 w-2 rounded-full', STATUS[k].dot)} aria-hidden />
-              {STATUS[k].filter} <span className="tabular opacity-70">{counts[k]}</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          {(sectors.length > 1 || hasNoSector) && (
-            <label className="flex items-center gap-2 text-xs text-muted">
-              <Building2 className="h-4 w-4 shrink-0" aria-hidden />
+      <div className="space-y-3 rounded-2xl border border-line bg-surface p-3 shadow-sm sm:p-4">
+        {/* busca, setor e responsável */}
+        <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:gap-x-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <FilterField label="Buscar" className="col-span-2 lg:col-span-1">
+            <span className="relative block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Nome do grupo"
+                aria-label="Buscar grupo"
+                className={cn(FIELD, 'pl-9', q && ACTIVE_FIELD)}
+              />
+            </span>
+          </FilterField>
+          {(sectors.length > 0 || hasNoSector) && (
+            <FilterField label="Setor" icon={Building2}>
               <select
                 value={sector}
                 onChange={(e) => setSector(e.target.value)}
                 aria-label="Filtrar por setor"
-                className="h-9 w-full rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none focus:border-brand-line sm:w-48"
+                className={cn(FIELD, sector !== 'all' && ACTIVE_FIELD)}
               >
-                <option value="all">Todos os setores</option>
+                <option value="all">Todos</option>
                 {sectors.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -299,18 +321,17 @@ export function GroupsPanel({
                 ))}
                 {hasNoSector && <option value="none">Sem setor</option>}
               </select>
-            </label>
+            </FilterField>
           )}
           {(responsibles.length > 0 || hasNoResponsible) && (
-            <label className="flex items-center gap-2 text-xs text-muted">
-              <UserCheck className="h-4 w-4 shrink-0" aria-hidden />
+            <FilterField label="Responsável" icon={UserCheck}>
               <select
                 value={responsible}
                 onChange={(e) => setResponsible(e.target.value)}
                 aria-label="Filtrar por responsável"
-                className="h-9 w-full rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none focus:border-brand-line sm:w-48"
+                className={cn(FIELD, responsible !== 'all' && ACTIVE_FIELD)}
               >
-                <option value="all">Todos os responsáveis</option>
+                <option value="all">Todos</option>
                 {responsibles.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name} ({r.groups})
@@ -318,19 +339,61 @@ export function GroupsPanel({
                 ))}
                 <option value="none">Sem responsável ({allGroups.filter((g) => !g.responsible_id).length})</option>
               </select>
-            </label>
+            </FilterField>
           )}
-          <label className="relative block sm:w-64">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar grupo"
-              aria-label="Buscar grupo"
-              className="h-9 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm outline-none focus:border-brand-line"
-            />
-          </label>
+        </div>
+
+        {/* situação: um botão por cor do cartão, com a quantidade */}
+        <div className="flex flex-col gap-2 border-t border-line pt-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 sm:flex-wrap" role="group" aria-label="Filtrar por situação">
+            <button
+              type="button"
+              onClick={() => setFilter('all')}
+              aria-pressed={filter === 'all'}
+              className={cn(CHIP, filter === 'all' ? 'border-ink bg-ink text-bg' : 'border-line text-ink-2 hover:border-ink-2 hover:text-ink')}
+            >
+              Todos
+              <span className={cn(COUNT, filter === 'all' ? 'bg-bg/20 text-bg' : 'bg-surface-2 text-ink')}>{groups.length}</span>
+            </button>
+            {ORDER.map((k) => {
+              const Icon = STATUS[k].icon;
+              const on = filter === k;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setFilter(on ? 'all' : k)}
+                  aria-pressed={on}
+                  title={STATUS[k].label}
+                  disabled={!counts[k] && !on}
+                  className={cn(
+                    CHIP,
+                    'disabled:cursor-default disabled:opacity-45',
+                    on ? cn(STATUS[k].card, 'text-ink') : 'border-line text-ink-2 hover:border-ink-2 hover:text-ink',
+                  )}
+                >
+                  <Icon className={cn('h-3.5 w-3.5', on ? '' : 'opacity-70')} aria-hidden />
+                  {STATUS[k].filter}
+                  <span className={cn(COUNT, counts[k] ? STATUS[k].badge : 'bg-surface-2 text-muted')}>{counts[k]}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex shrink-0 items-center justify-between gap-3 text-xs text-ink-2 lg:justify-end">
+            <span>
+              Mostrando <strong className="tabular text-ink">{shown.length}</strong> de{' '}
+              <span className="tabular">{allGroups.length}</span> grupos
+            </span>
+            {activeFilters > 0 && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium text-brand-text hover:bg-brand-soft"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden /> Limpar filtros ({activeFilters})
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
