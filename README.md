@@ -83,6 +83,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    43. `supabase/migrations/0043_conversation_closing.sql`
    44. `supabase/migrations/0044_avatars.sql`
    45. `supabase/migrations/0045_avatar_full.sql`
+   46. `supabase/migrations/0046_faster_keywords.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

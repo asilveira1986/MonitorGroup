@@ -8,14 +8,41 @@ import { useRealtime } from '@/lib/use-realtime';
  * Escuta novos alertas e mudanças nos grupos em tempo real e atualiza a tela
  * (os avisos em tela ficam no MessageNotifier).
  */
+const MIN_INTERVAL_MS = 10_000;
+
 export function RealtimeListener() {
   const router = useRouter();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // cada mensagem que chega atualiza o grupo: sem limite, a tela inteira era recarregada a cada
+  // 1,5 s em empresas movimentadas, disputando com os cliques no menu. Agora: no máximo uma vez a
+  // cada 10 s, e só com a aba visível (ao voltar para a aba, atualiza).
+  const last = useRef(0);
+  const missed = useRef(false);
   const refresh = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => router.refresh(), 1500);
+    if (document.visibilityState !== 'visible') {
+      missed.current = true;
+      return;
+    }
+    if (timer.current) return;
+    const wait = Math.max(1500, MIN_INTERVAL_MS - (Date.now() - last.current));
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      last.current = Date.now();
+      router.refresh();
+    }, wait);
   };
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && missed.current) {
+        missed.current = false;
+        refresh();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  });
 
   useEffect(
     () => () => {

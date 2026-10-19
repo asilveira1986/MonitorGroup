@@ -38,9 +38,11 @@ export async function proxy(request: NextRequest) {
   );
 
   // Supabase fora do ar ou chave inválida não deve derrubar o site.
+  // getClaims confere a assinatura do token sem ir ao servidor de login (chaves assimétricas) e
+  // renova a sessão quando expira; com chave antiga (HS256), ela mesma consulta o servidor.
   const user = await supabase.auth
-    .getUser()
-    .then(({ data }) => data.user)
+    .getClaims()
+    .then(({ data }) => (data?.claims?.sub ? data.claims : null))
     .catch(() => null);
 
   if (!user && !isPublic) {

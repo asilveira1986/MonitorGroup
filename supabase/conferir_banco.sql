@@ -61,6 +61,9 @@ from (values
   (37, 'Fotos de perfil (0044)', to_regclass('public.contact_avatars') is not null),
   (38, 'Foto de perfil ampliada (0045)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'contact_avatars' and column_name = 'full_path')),
-  (39, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (39, 'Busca de palavras-chave mais rápida (0046)',
+      coalesce(obj_description('public.match_keyword(text,jsonb)'::regprocedure, 'pg_proc'), '') like '%0046%'
+      or exists (select 1 from pg_proc where proname = 'match_keyword' and prolang = (select oid from pg_language where lanname = 'plpgsql'))),
+  (40, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
