@@ -67,3 +67,10 @@ test('isStickerOrEmoji reconhece só figurinha e emojis', () => {
   assert.ok(!isStickerOrEmoji('image', null));
   assert.ok(!isStickerOrEmoji('text', null));
 });
+
+test('pacotes técnicos do WhatsApp não viram mensagem', () => {
+  for (const key of ['secretEncryptedMessage', 'encEventResponseMessage', 'encCommentMessage', 'placeholderMessage']) {
+    assert.equal(extractContent({ [key]: {} } as never), null, key);
+  }
+  assert.deepEqual(extractContent({ conversation: 'oi' }), { type: 'text', body: 'oi' });
+});

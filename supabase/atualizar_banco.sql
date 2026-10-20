@@ -9238,6 +9238,45 @@ grant execute on function public.group_members(uuid) to authenticated;
 
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0048_ignore_technical_messages.sql <<<<<<<<<<<<<<<<<<<<
+-- =====================================================================
+-- Limpa "mensagens" técnicas do WhatsApp gravadas por engano.
+--
+-- Pacotes criptografados/técnicos (respostas a Eventos, edições e
+-- comentários criptografados, resumo de enquete, marcador de "aguardando
+-- esta mensagem", menção do grupo em status) não têm texto e apareciam na
+-- conversa como "secretEncrypted", contando como mensagem do cliente (o
+-- grupo podia ficar "aguardando resposta" à toa). O worker passa a ignorá-los;
+-- aqui os já gravados são apagados e os grupos afetados, recalculados.
+-- =====================================================================
+
+do $$
+declare
+  v_company uuid;
+  v_n int;
+begin
+  create temp table _tech_groups on commit drop as
+    select distinct m.group_id
+    from public.messages m
+    where m.message_type in ('secretEncrypted', 'encEventResponse', 'encComment',
+                             'pollResultSnapshot', 'placeholder', 'statusMention');
+
+  delete from public.messages
+   where message_type in ('secretEncrypted', 'encEventResponse', 'encComment',
+                          'pollResultSnapshot', 'placeholder', 'statusMention');
+  get diagnostics v_n = row_count;
+  raise notice 'Mensagens técnicas apagadas: %', v_n;
+
+  -- recalcula a situação das empresas com grupos afetados (pendência só diminui)
+  for v_company in
+    select distinct g.company_id from public.groups g join _tech_groups t on t.group_id = g.id
+  loop
+    perform public.recalc_company_groups(v_company);
+  end loop;
+end $$;
+
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -9307,6 +9346,8 @@ from (values
       coalesce(obj_description('public.match_keyword(text,jsonb)'::regprocedure, 'pg_proc'), '') like '%0046%'
       or exists (select 1 from pg_proc where proname = 'match_keyword' and prolang = (select oid from pg_language where lanname = 'plpgsql'))),
   (40, 'Nome e telefone do cliente na conversa (0047)', coalesce(pg_get_functiondef('public.group_members(uuid)'::regprocedure) like '%p.lid,%', false)),
-  (41, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (41, 'Sem mensagens técnicas do WhatsApp (0048)', not exists (select 1 from public.messages
+      where message_type in ('secretEncrypted', 'encEventResponse', 'encComment', 'pollResultSnapshot', 'placeholder', 'statusMention'))),
+  (42, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

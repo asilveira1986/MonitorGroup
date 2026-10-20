@@ -10,6 +10,15 @@ const IGNORED_TYPES = new Set<string>([
   'keepInChatMessage',
   'pinInChatMessage',
   'encReactionMessage',
+  // pacotes técnicos/criptografados do WhatsApp, sem texto para mostrar: respostas a Eventos
+  // ("vou / não vou"), edições e comentários criptografados, resumo de enquete, marcador de
+  // "aguardando esta mensagem" e menção do grupo em status. Antes apareciam como "secretEncrypted".
+  'secretEncryptedMessage',
+  'encEventResponseMessage',
+  'encCommentMessage',
+  'pollResultSnapshotMessage',
+  'placeholderMessage',
+  'statusMentionMessage',
 ]);
 
 const TYPE_LABELS: Record<string, string> = {
