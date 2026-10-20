@@ -1,21 +1,6 @@
 'use client';
 
-import {
-  Bell,
-  Building2,
-  ChevronsLeft,
-  ChevronsRight,
-  ClipboardList,
-  Clock,
-  FileBarChart,
-  LayoutDashboard,
-  LayoutGrid,
-  LogOut,
-  Menu,
-  MessagesSquare,
-  Settings,
-  X,
-} from 'lucide-react';
+import { Bell, Building2, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -74,7 +59,16 @@ export function Sidebar({
 
   const nav = (
     <nav className="space-y-1">
-      {[...NAV, ...(platformAdmin ? [{ href: '/platform', label: 'Empresas', icon: Building2, badgeKey: undefined }] : [])]
+      {[
+        ...NAV,
+        ...(platformAdmin
+          ? [
+              { href: '/platform', label: 'Empresas', icon: Building2, badgeKey: undefined },
+              // log de atividades dos usuários: só quem administra a plataforma
+              { href: '/logs', label: 'Log', icon: ScrollText, badgeKey: undefined },
+            ]
+          : []),
+      ]
         .filter((item) => !hidden.includes(item.href))
         .map(({ href, label, icon: Icon, badgeKey }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
