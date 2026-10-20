@@ -23,11 +23,40 @@ test('frase cadastrada com pedido ou pergunta não é ignorada', () => {
 test('lista padrão continua valendo sem frases cadastradas', () => {
   assert.ok(isAcknowledgement('text', 'Obrigado!'));
   assert.ok(isAcknowledgement('text', 'Recebi, obrigado!'));
-  assert.ok(!isAcknowledgement('text', 'fico no aguardo'));
+  assert.ok(!isAcknowledgement('text', 'aguardo o envio do contrato'));
 });
 
 test('cópia do painel é idêntica à do worker', () => {
   const worker = readFileSync(new URL('./acknowledgement.ts', import.meta.url), 'utf8');
   const web = readFileSync(new URL('../../web/src/lib/acknowledgement.ts', import.meta.url), 'utf8');
   assert.equal(web, worker, 'atualize web/src/lib/acknowledgement.ts com o mesmo conteúdo');
+});
+
+test('agradecimento retribuído, despedidas e cortesias são ignorados', () => {
+  for (const m of [
+    'Eu que agradeço!',
+    'Qualquer dúvida só nos chamar',
+    'Bom final de semana!',
+    'Obrigada, bom final de semana para vocês',
+    'Nós que agradecemos 🙏',
+    'Igualmente!',
+    'Obrigado, doutora!',
+    'Até mais, boa semana',
+    'Fico à disposição',
+  ]) {
+    assert.ok(isAcknowledgement('text', m), m);
+  }
+});
+
+test('pedidos e perguntas continuam pedindo resposta', () => {
+  for (const m of [
+    'Bom dia, alguém pode me ajudar?',
+    'Doutora, preciso da cópia do contrato',
+    'Qualquer dúvida sobre o processo eu pergunto',
+    'Até amanhã envio os documentos',
+    'Boa tarde, o boleto não chegou',
+    'Eu que agradeço, mas e a audiência de amanhã?',
+  ]) {
+    assert.ok(!isAcknowledgement('text', m), m);
+  }
 });
