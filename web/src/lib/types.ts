@@ -120,6 +120,8 @@ export type Message = {
 };
 
 export type TeamMember = {
+  /** e-mail do usuário do sistema criado para esta pessoa (Equipe › Dar acesso) */
+  user_email?: string | null;
   id: string;
   name: string;
   phone: string | null;

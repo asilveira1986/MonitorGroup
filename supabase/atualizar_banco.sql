@@ -9277,6 +9277,31 @@ end $$;
 
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0049_files_and_team_users.sql <<<<<<<<<<<<<<<<<<<<
+-- =====================================================================
+-- 1) Imagens, arquivos e vídeos disponíveis no sistema.
+--    Vídeos e documentos passam a ser guardados por padrão (antes só imagens,
+--    áudios e figurinhas) e o limite por arquivo sobe de 25 MB para 50 MB.
+--    Empresas que estavam com a lista padrão antiga recebem a nova; quem já
+--    escolheu os tipos em Configurações › Geral › Imagens e áudios fica como está.
+-- 2) Membro da equipe com acesso ao sistema: guarda o e-mail do usuário
+--    criado a partir da pessoa da equipe (Configurações › Equipe).
+-- =====================================================================
+
+alter table public.app_settings
+  alter column media_store_types set default '{image,audio,sticker,video,document}';
+
+update public.app_settings
+   set media_store_types = '{image,audio,sticker,video,document}'
+ where media_store_types = '{image,audio,sticker}';
+
+update storage.buckets set file_size_limit = 52428800 where id = 'media';
+
+alter table public.team_members
+  add column if not exists user_email text;
+
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -9348,6 +9373,8 @@ from (values
   (40, 'Nome e telefone do cliente na conversa (0047)', coalesce(pg_get_functiondef('public.group_members(uuid)'::regprocedure) like '%p.lid,%', false)),
   (41, 'Sem mensagens técnicas do WhatsApp (0048)', not exists (select 1 from public.messages
       where message_type in ('secretEncrypted', 'encEventResponse', 'encComment', 'pollResultSnapshot', 'placeholder', 'statusMention'))),
-  (42, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (42, 'Arquivos e vídeos + equipe com acesso (0049)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'team_members' and column_name = 'user_email')),
+  (43, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

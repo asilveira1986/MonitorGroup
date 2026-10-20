@@ -27,7 +27,7 @@ const formatBytes = (b: number) =>
 /** Imagens e áudios guardados para ver pelo sistema: liga/desliga, tipos e prazo de guarda. */
 export function MediaSettings({ settings, usage, disabled }: { settings: AppSettings; usage: MediaUsage | null; disabled: boolean }) {
   const [enabled, setEnabled] = useState(settings.media_store_enabled !== false);
-  const [types, setTypes] = useState<string[]>(settings.media_store_types ?? ['image', 'audio', 'sticker']);
+  const [types, setTypes] = useState<string[]>(settings.media_store_types ?? ['image', 'audio', 'sticker', 'video', 'document']);
   const [days, setDays] = useState(settings.media_retention_days ?? 90);
   const [avatars, setAvatars] = useState(settings.avatars_enabled !== false);
   const [pending, start] = useTransition();
@@ -53,7 +53,7 @@ export function MediaSettings({ settings, usage, disabled }: { settings: AppSett
           <>
             <div className="py-3">
               <p className="text-sm font-medium">O que guardar</p>
-              <p className="mt-0.5 text-xs text-ink-2">Vídeos e documentos ocupam mais espaço. Arquivos acima de 25 MB não são guardados.</p>
+              <p className="mt-0.5 text-xs text-ink-2">Vídeos e documentos ocupam mais espaço. Arquivos acima de 50 MB não são guardados.</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {TYPES.map((t) => (
                   <button

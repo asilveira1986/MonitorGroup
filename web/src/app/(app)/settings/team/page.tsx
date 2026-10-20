@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { TeamMember } from '@/lib/types';
 import { removeTeamMember } from '../actions';
 import { NewMemberForm } from './new-member-form';
+import { GrantAccess } from './grant-access';
 import { RecalcButton } from './recalc-button';
 
 export default async function TeamPage() {
@@ -59,6 +60,7 @@ export default async function TeamPage() {
                     <p className="truncate text-sm font-medium">{m.name}</p>
                     <p className="text-xs text-muted">{m.phone ? formatPhone(m.phone) : 'Identificado pela conversa'}</p>
                   </div>
+                  {profile.role === 'admin' && <GrantAccess member={m} />}
                   <ActionButton
                     action={removeTeamMember.bind(null, m.id)}
                     variant="ghost"

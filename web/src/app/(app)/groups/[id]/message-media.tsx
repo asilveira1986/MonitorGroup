@@ -14,7 +14,7 @@ const UNAVAILABLE: Record<string, (m: Message) => string> = {
 };
 
 /** Imagem ampliada, por cima da tela. */
-function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+export function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);

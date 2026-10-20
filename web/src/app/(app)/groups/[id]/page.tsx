@@ -14,6 +14,7 @@ import { PAGE_SIZE } from './constants';
 import type { QuickReply } from '@/lib/quick-replies';
 import { Avatar } from '@/components/avatar';
 import { Conversation } from './conversation';
+import { GroupFiles } from './group-files';
 import { DeleteRemovedGroupButton } from '../removed-groups';
 
 const minutesAgo = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
@@ -275,6 +276,8 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
           />
         </Card>
       </div>
+
+      <GroupFiles groupId={g.id} timeZone={tz} />
     </>
   );
 }

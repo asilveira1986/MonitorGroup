@@ -268,6 +268,34 @@ export async function recalcGroups(): Promise<Result & { summary?: RecalcSummary
   return { ok: true, summary: data as RecalcSummary };
 }
 
+/** Administrador: cria o usuário do sistema para uma pessoa da equipe (nome dela, e-mail e senha inicial). */
+export async function grantTeamMemberAccess(values: {
+  memberId: string;
+  email: string;
+  role: 'agent' | 'viewer' | 'admin';
+  password: string;
+}): Promise<Result> {
+  const admin = await requireAdmin();
+  const supabase = await createClient();
+  const { data: member } = await supabase.from('team_members').select('id, name').eq('id', values.memberId).maybeSingle();
+  if (!member) return { ok: false, error: 'Pessoa da equipe não encontrada.' };
+  const email = values.email.trim().toLowerCase();
+  const role = values.role === 'admin' || values.role === 'viewer' ? values.role : 'agent';
+  const res = await createCompanyUser({
+    companyId: admin.company_id!,
+    email,
+    password: values.password,
+    role,
+    name: member.name,
+    createdBy: admin.id,
+  });
+  if (!res.ok) return { ok: false, error: friendlyDbError(res.error) };
+  const { error } = await supabase.from('team_members').update({ user_email: email }).eq('id', member.id);
+  revalidatePath('/settings/team');
+  revalidatePath('/settings/users');
+  return result(error);
+}
+
 export async function removeTeamMember(id: string): Promise<Result> {
   await requireProfile();
   const supabase = await createClient();

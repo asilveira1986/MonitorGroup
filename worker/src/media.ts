@@ -10,10 +10,10 @@ import { FALLBACK_MIME, mediaExtension, mediaInfo } from './media-info.js';
  */
 export const MEDIA_BUCKET = 'media';
 /** acima disso o arquivo não é guardado (fica só o aviso na conversa) */
-export const MEDIA_MAX_BYTES = 25 * 1024 * 1024;
+export const MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 /** tipos que podem ser guardados (cada empresa escolhe quais) */
 export const MEDIA_TYPES = ['image', 'audio', 'sticker', 'video', 'document'] as const;
-export const DEFAULT_MEDIA_TYPES = ['image', 'audio', 'sticker'];
+export const DEFAULT_MEDIA_TYPES = ['image', 'audio', 'sticker', 'video', 'document'];
 
 /** Guarda a figura/áudio/arquivo da mensagem, se a empresa estiver guardando esse tipo. */
 export async function storeMessageMedia(opts: {
