@@ -2,6 +2,7 @@
 
 import { CheckCheck, Clock, Loader2, Lock, Reply } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { toast } from 'sonner';
 import { markMediaSeen } from '../../actions';
 import { Badge, EmptyState } from '@/components/ui';
 import { cn, formatDateTime, formatDuration, formatPhone, formatTime } from '@/lib/format';
@@ -88,7 +89,10 @@ export function Conversation({
   demands,
   reply,
   outgoing,
+  contacts,
 }: {
+  /** participantes do grupo: completa nome e telefone de quem só veio com um dos dois (ou com LID) */
+  contacts?: { jid: string; lid?: string | null; phone: string | null; name: string | null }[];
   reply: ReplyConfig;
   /** respostas do painel ainda na fila, enviando, com falha ou recém-enviadas */
   outgoing: OutgoingMessage[];
@@ -183,6 +187,17 @@ export function Conversation({
     return outgoing.filter((o) => !o.wa_message_id || !arrived.has(o.wa_message_id));
   }, [messages, outgoing]);
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+  // jid/LID/telefone -> participante
+  const people = useMemo(() => {
+    const map = new Map<string, { phone: string | null; name: string | null }>();
+    for (const c of contacts ?? []) {
+      const v = { phone: c.phone, name: c.name };
+      map.set(c.jid, v);
+      if (c.lid) map.set(c.lid, v);
+      if (c.phone) map.set(`tel:${c.phone}`, v);
+    }
+    return map;
+  }, [contacts]);
 
   return (
     <div>
@@ -215,7 +230,13 @@ export function Conversation({
         {chronological.map((m, i) => {
           const day = dayFormat.format(new Date(m.sent_at));
           const showDay = i === 0 || day !== dayFormat.format(new Date(chronological[i - 1].sent_at));
-          const sender = m.sender_name || formatPhone(m.sender_phone) || (m.from_me ? 'Número conectado' : 'Cliente');
+          const who =
+            (m.sender_jid ? people.get(m.sender_jid) : undefined) ?? (m.sender_phone ? people.get(`tel:${m.sender_phone}`) : undefined);
+          const phone = m.sender_phone || who?.phone || null;
+          const name = m.sender_name || who?.name || null;
+          const sender = name || formatPhone(phone) || (m.from_me ? 'Número conectado' : 'Cliente');
+          // cliente: nome e telefone juntos (o telefone só some quando já é o próprio nome)
+          const showPhone = !m.from_me && phone && name && name.replace(/\D/g, '') !== phone;
           return (
             <div key={m.id}>
               {showDay && (
@@ -235,8 +256,20 @@ export function Conversation({
                     <span className={cn('text-xs font-semibold', m.from_team ? 'text-brand-text' : 'text-series-1')}>
                       {sender}
                     </span>
+                    {showPhone && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void navigator.clipboard?.writeText(formatPhone(phone)).then(() => toast.success('Telefone copiado'));
+                        }}
+                        className="tabular text-[11px] text-muted hover:text-ink"
+                        title="Copiar telefone"
+                      >
+                        {formatPhone(phone)}
+                      </button>
+                    )}
                     {!m.from_team && m.sender_jid && (
-                      <MarkTeamButton jid={m.sender_jid} name={m.sender_name ?? ''} phone={m.sender_phone} />
+                      <MarkTeamButton jid={m.sender_jid} name={name ?? ''} phone={phone} />
                     )}
                     {m.demand_id ? (
                       <Link

@@ -251,6 +251,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
           />
           <Conversation
             groupId={g.id}
+            contacts={(groupMembers ?? []) as { jid: string; lid?: string | null; phone: string | null; name: string | null }[]}
             initial={(msgs ?? []) as Message[]}
             timeZone={tz}
             slaSeconds={sla}
