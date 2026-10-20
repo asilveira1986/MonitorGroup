@@ -278,7 +278,7 @@ function FlowChart({ data, hourly }: { data: NonNullable<ManagementSummaryData['
 function SectionTitle({ icon: Icon, title, context, help }: { icon: LucideIcon; title: string; context: string; help: string }) {
   return (
     <div className="mb-3 flex items-center gap-2">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand-text">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-[#8fc41a] text-brand-ink shadow-[0_6px_14px_-6px_rgba(150,200,20,0.9)]">
         <Icon className="h-4 w-4" aria-hidden />
       </span>
       <h3 className="min-w-0 flex-1 text-sm font-semibold">
@@ -368,12 +368,13 @@ export function ManagementSummary({
 
   return (
     <section aria-labelledby="gestao" className="mb-8 space-y-4">
-      <h2 id="gestao" className="text-xs font-semibold uppercase tracking-wide text-muted">
+      <h2 id="gestao" className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+        <span className="h-2 w-2 rounded-full bg-brand shadow-[0_0_0_3px_rgba(198,244,50,0.25)]" aria-hidden />
         Visão da gestão
       </h2>
 
       {/* 1. atendimento */}
-      <Card className="overflow-hidden p-4 sm:p-5">
+      <Card className="accent-top overflow-hidden p-4 sm:p-5">
         <SectionTitle
           icon={MessagesSquare}
           title="Atendimento"
@@ -493,7 +494,7 @@ export function ManagementSummary({
 
       {/* 3. demandas e conversas */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="p-4 sm:p-5">
+        <Card className="accent-top overflow-hidden p-4 sm:p-5">
           <SectionTitle
             icon={ClipboardList}
             title="Demandas"
@@ -552,7 +553,7 @@ export function ManagementSummary({
           </div>
         </Card>
 
-        <Card className="p-4 sm:p-5">
+        <Card className="accent-top overflow-hidden p-4 sm:p-5">
           <SectionTitle
             icon={Users}
             title="Conversas e grupos"

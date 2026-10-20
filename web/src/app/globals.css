@@ -25,6 +25,8 @@
   --deep: #0e1726; /* superfície escura da marca (menu lateral) */
   --on-deep: #f6f7f4;
   --mark-alert: #e5484d; /* só o ponto de alerta do símbolo */
+  --glow-1: rgba(198, 244, 50, 0.32);
+  --glow-2: rgba(42, 120, 214, 0.14);
 
   /* séries dos gráficos */
   --series-1: #2a78d6; /* recebidas (clientes) */
@@ -62,6 +64,8 @@
     --deep: #0e1726;
     --on-deep: #eef2f7;
     --mark-alert: #ff7a72;
+    --glow-1: rgba(198, 244, 50, 0.07);
+    --glow-2: rgba(57, 135, 229, 0.12);
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
@@ -94,6 +98,8 @@
   --deep: #0e1726;
   --on-deep: #eef2f7;
   --mark-alert: #ff7a72;
+  --glow-1: rgba(198, 244, 50, 0.07);
+  --glow-2: rgba(57, 135, 229, 0.12);
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
@@ -152,9 +158,87 @@
 }
 
 body {
-  background: var(--bg);
+  /* fundo com brilho suave da marca (verde-sinal no alto à direita, azul à esquerda) */
+  background:
+    radial-gradient(1100px 520px at 88% -12%, var(--glow-1), transparent 62%),
+    radial-gradient(900px 480px at 8% -18%, var(--glow-2), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-sans);
+}
+
+/* cartões: sombra em camadas, mais profundidade sem pesar */
+.card-elev {
+  box-shadow:
+    0 1px 2px rgba(14, 23, 38, 0.04),
+    0 10px 28px -16px rgba(14, 23, 38, 0.16);
+}
+:root[data-theme="dark"] .card-elev {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.03) inset,
+    0 12px 32px -18px rgba(0, 0, 0, 0.6);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .card-elev {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.03) inset,
+      0 12px 32px -18px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* botão principal: verde-sinal com leve degradê e brilho */
+.btn-signal {
+  background: linear-gradient(180deg, #d6fb5c 0%, #c6f432 45%, #afe01d 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.45) inset,
+    0 8px 20px -10px rgba(138, 182, 16, 0.9);
+}
+.btn-signal:hover {
+  filter: brightness(1.04) saturate(1.05);
+}
+
+/* menu lateral: azul-marinho com degradê e brilho verde no topo */
+.theme-deep.sidebar-glow {
+  background:
+    radial-gradient(420px 220px at 0% 0%, rgba(198, 244, 50, 0.14), transparent 70%),
+    linear-gradient(180deg, #0e1726 0%, #13233d 55%, #0e1726 100%);
+}
+/* item ativo do menu: pílula verde-sinal com brilho */
+.nav-active {
+  background: linear-gradient(90deg, #c6f432, #b4e526);
+  color: #0e1726 !important;
+  box-shadow: 0 8px 22px -12px rgba(198, 244, 50, 0.85);
+}
+.nav-active svg {
+  color: #0e1726 !important;
+}
+
+/* linha da marca sob o topo e no título das páginas */
+.brand-hairline {
+  position: relative;
+}
+.brand-hairline::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: linear-gradient(90deg, #c6f432 0%, rgba(42, 120, 214, 0.55) 45%, transparent 100%);
+  opacity: 0.8;
+}
+.accent-top {
+  position: relative;
+}
+.accent-top::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, #c6f432, #2a78d6 60%, #eb6834);
+  opacity: 0.9;
+}
+.title-accent {
+  background: linear-gradient(180deg, #c6f432, #2a78d6);
 }
 
 /* títulos em Sora */

@@ -3,7 +3,7 @@ import type { ButtonHTMLAttributes, ComponentProps, InputHTMLAttributes, ReactNo
 import { cn, SEVERITY_LABEL } from '@/lib/format';
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn('rounded-2xl border border-line bg-surface shadow-sm', className)}>{children}</div>;
+  return <div className={cn('card-elev rounded-2xl border border-line/80 bg-surface', className)}>{children}</div>;
 }
 
 export function CardHeader({
@@ -18,8 +18,11 @@ export function CardHeader({
   return (
     <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
       <div className="min-w-0">
-        <h3 className="text-sm font-semibold text-ink">{title}</h3>
-        {description && <p className="mt-0.5 text-xs text-muted">{description}</p>}
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
+          <span className="h-3.5 w-1 shrink-0 rounded-full bg-brand" aria-hidden />
+          {title}
+        </h3>
+        {description && <p className="mt-0.5 pl-3 text-xs text-muted">{description}</p>}
       </div>
       {action}
     </div>
@@ -45,9 +48,12 @@ export function PageHeader({
         stackAction ? 'min-[1600px]:flex-row min-[1600px]:items-end min-[1600px]:justify-between' : 'sm:flex-row sm:items-end sm:justify-between',
       )}
     >
-      <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight text-ink sm:text-2xl">{title}</h1>
-        {description && <p className="mt-1 text-sm text-ink-2">{description}</p>}
+      <div className="flex min-w-0 gap-3">
+        <span className="title-accent mt-1 w-1.5 shrink-0 self-stretch rounded-full" aria-hidden />
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold tracking-tight text-ink sm:text-[1.7rem]">{title}</h1>
+          {description && <p className="mt-1 max-w-4xl text-sm text-ink-2">{description}</p>}
+        </div>
       </div>
       {action && (
         <div className={cn('flex flex-wrap items-center gap-2', stackAction && 'w-full min-[1600px]:w-auto')}>{action}</div>
@@ -58,7 +64,7 @@ export function PageHeader({
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 const buttonVariants: Record<ButtonVariant, string> = {
-  primary: 'bg-brand text-brand-ink hover:opacity-90',
+  primary: 'btn-signal text-brand-ink',
   secondary: 'border border-line bg-surface text-ink hover:bg-surface-2',
   ghost: 'text-ink-2 hover:bg-surface-2 hover:text-ink',
   danger: 'bg-critical text-white hover:opacity-90',
@@ -140,7 +146,7 @@ export function Toggle({
           onChange={(e) => onChange?.(e.target.checked)}
           className="peer sr-only"
         />
-        <span className="h-6 w-11 rounded-full bg-surface-2 ring-1 ring-line transition peer-checked:bg-brand" />
+        <span className="h-6 w-11 rounded-full bg-surface-2 ring-1 ring-line transition peer-checked:bg-brand peer-checked:shadow-[0_0_0_4px_rgba(198,244,50,0.18)] peer-checked:ring-brand-line/40" />
         <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
       </span>
       {label && <span className="text-sm text-ink">{label}</span>}
@@ -150,12 +156,12 @@ export function Toggle({
 
 type Tone = 'neutral' | 'good' | 'warning' | 'critical' | 'brand' | 'info';
 const tones: Record<Tone, string> = {
-  neutral: 'bg-surface-2 text-ink-2',
-  good: 'bg-good/12 text-good-ink',
-  warning: 'bg-warning/15 text-warning-ink',
-  critical: 'bg-critical/12 text-critical-ink',
-  brand: 'bg-brand-soft text-brand-text',
-  info: 'bg-series-1/12 text-series-1',
+  neutral: 'bg-surface-2 text-ink-2 ring-1 ring-inset ring-line',
+  good: 'bg-good/15 text-good-ink ring-1 ring-inset ring-good/30',
+  warning: 'bg-warning/15 text-warning-ink ring-1 ring-inset ring-warning/35',
+  critical: 'bg-critical/12 text-critical-ink ring-1 ring-inset ring-critical/30',
+  brand: 'bg-brand-soft text-brand-text ring-1 ring-inset ring-brand-line/25',
+  info: 'bg-series-1/12 text-series-1 ring-1 ring-inset ring-series-1/30',
 };
 
 export function Badge({ tone = 'neutral', children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
@@ -180,7 +186,9 @@ export function SeverityBadge({ severity }: { severity: string }) {
 export function EmptyState({ icon, title, description, action }: { icon: ReactNode; title: string; description?: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-2 text-muted">{icon}</div>
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-soft to-series-1/10 text-brand-text ring-1 ring-inset ring-brand-line/20">
+        {icon}
+      </div>
       <p className="text-sm font-medium text-ink">{title}</p>
       {description && <p className="mt-1 max-w-sm text-sm text-muted">{description}</p>}
       {action && <div className="mt-4">{action}</div>}

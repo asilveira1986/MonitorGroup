@@ -79,7 +79,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         }}
       />
       <div className="transition-[padding] duration-200 lg:pl-64 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
-        <header className="sticky top-0 z-20 hidden items-center justify-end gap-2 border-b border-line bg-bg/80 px-8 py-3 backdrop-blur lg:flex">
+        <header className="brand-hairline sticky top-0 z-20 hidden items-center justify-end gap-2 bg-surface/70 px-8 py-3 backdrop-blur-md lg:flex">
           {company && (
             <div className="mr-auto">
               <CompanySwitcher current={company} companies={companies ?? undefined} />
@@ -92,7 +92,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={profile.avatar_url} alt="" className="h-8 w-8 rounded-full" />
             ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand to-[#8fc41a] text-xs font-bold text-brand-ink shadow-[0_4px_12px_-4px_rgba(150,200,20,0.8)]">
                 {initials}
               </div>
             )}

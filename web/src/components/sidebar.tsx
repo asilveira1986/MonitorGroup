@@ -83,7 +83,7 @@ export function Sidebar({
               'relative flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition lg:py-2',
               '[[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:px-0',
               // ativo: placa azul-escura da marca, texto claro e ícone em verde-limão
-              active ? 'bg-brand-soft font-semibold text-ink [&>svg]:text-brand-text' : 'text-ink-2 hover:bg-surface-2 hover:text-ink',
+              active ? 'nav-active font-semibold' : 'text-ink-2 hover:bg-white/[0.06] hover:text-ink',
             )}
           >
             <Icon className="h-4 w-4 shrink-0 [[data-sidebar=collapsed]_aside_&]:h-5 [[data-sidebar=collapsed]_aside_&]:w-5" />
@@ -121,7 +121,7 @@ export function Sidebar({
 
   return (
     <>
-      <aside className="theme-deep fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface px-4 py-5 transition-[width] duration-200 lg:flex [[data-sidebar=collapsed]_&]:w-[4.5rem] [[data-sidebar=collapsed]_&]:px-3">
+      <aside className="theme-deep sidebar-glow fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface px-4 py-5 transition-[width] duration-200 lg:flex [[data-sidebar=collapsed]_&]:w-[4.5rem] [[data-sidebar=collapsed]_&]:px-3">
         {/* recolher/expandir: discreto, no canto superior direito (vira uma aba na borda quando recolhido) */}
         <button
           type="button"
@@ -161,7 +161,7 @@ export function Sidebar({
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="theme-deep absolute inset-y-0 left-0 flex w-[85%] max-w-xs flex-col bg-surface px-4 py-5 shadow-xl">
+          <div className="theme-deep sidebar-glow absolute inset-y-0 left-0 flex w-[85%] max-w-xs flex-col bg-surface px-4 py-5 shadow-xl">
             <div className="mb-6 flex items-center justify-between px-2">
               <Logo />
               <button onClick={() => setOpen(false)} className="rounded-lg p-2.5 text-ink-2 hover:bg-surface-2" aria-label="Fechar menu">
