@@ -68,17 +68,6 @@ async function hasRecentAlert(ruleId: string, target: { groupId?: string; instan
   return rows.length > 0;
 }
 
-/** Grupo silenciado agora (Silenciar alertas)? Sem o script 0052, nunca. */
-async function isGroupMuted(groupId: string): Promise<boolean> {
-  const { data, error } = await db
-    .from('group_mutes')
-    .select('group_id')
-    .eq('group_id', groupId)
-    .gt('muted_until', new Date().toISOString())
-    .maybeSingle();
-  return !error && Boolean(data);
-}
-
 async function createAlert(
   rule: AlertRule,
   data: {
@@ -111,12 +100,6 @@ async function createAlert(
   )!;
 
   logger.info({ rule: rule.name, title: data.title }, 'alerta criado');
-
-  // grupo silenciado: o alerta fica registrado, mas ninguém é avisado (WhatsApp/e-mail)
-  if (data.groupId && (await isGroupMuted(data.groupId))) {
-    logger.info({ group: data.groupName }, 'grupo silenciado: alerta sem aviso');
-    return;
-  }
 
   const channels = await sendNotifications(rule, {
     id: inserted.id,

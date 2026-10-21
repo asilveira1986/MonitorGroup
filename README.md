@@ -90,6 +90,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    50. `supabase/migrations/0050_activity_log.sql`
    51. `supabase/migrations/0051_lid_team_messages.sql`
    52. `supabase/migrations/0052_group_mute.sql`
+   53. `supabase/migrations/0053_remove_group_mute.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

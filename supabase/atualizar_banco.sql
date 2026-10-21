@@ -127,7 +127,8 @@ begin
       where table_schema = 'public' and table_name = 'team_members' and column_name = 'user_email')),
   (43, 'Log de atividades (0050)', to_regprocedure('public.platform_activity_log(timestamptz,timestamptz,uuid,text,text,integer,integer)') is not null),
   (44, 'Equipe reconhecida pelo LID (0051)', coalesce(pg_get_functiondef('public.recalc_company_groups(uuid)'::regprocedure) like '%gp.lid = m.sender_jid%', false)),
-  (45, 'Silenciar alertas do grupo (0052)', to_regclass('public.group_mutes') is not null and to_regprocedure('public.set_company_mute(timestamptz)') is not null),
+  (45, 'Silenciar grupo retirado (0053)', to_regclass('public.group_mutes') is null and not exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'sectors' and column_name = 'can_mute')),
   (46, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
@@ -137,7 +138,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -10041,6 +10042,44 @@ grant execute on function public.set_company_mute(timestamptz) to authenticated;
 $mig0052$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0053_remove_group_mute.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0053', $mig0053$
+-- =====================================================================
+-- Retira o "Silenciar grupo" (0052): os avisos de todos os grupos voltam
+-- ao normal. Apaga a tabela de grupos silenciados, as funções e a
+-- permissão "Silenciar" dos setores.
+-- =====================================================================
+
+drop function if exists public.set_group_mute(uuid, timestamptz);
+drop function if exists public.set_company_mute(timestamptz);
+drop table if exists public.group_mutes;
+
+-- permissões dos setores sem o "mute"
+create or replace function public.has_group_permission(p_group_id uuid, p_permission text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.groups where id = p_group_id and company_id = public.current_company_id())
+     and public.is_active_user()
+     and (p_permission = 'view' or public.can_write())
+     and (public.is_admin() or exists (
+       select 1
+       from public.groups g
+       join public.sectors s on s.id = g.sector_id
+       join public.sector_members sm on sm.sector_id = s.id and sm.user_id = auth.uid()
+       where g.id = p_group_id
+         and case p_permission
+               when 'view' then true
+               when 'reply' then s.can_reply
+               when 'demands' then s.can_manage_demands
+               when 'alerts' then s.can_handle_alerts
+               else false
+             end
+     ))
+$$;
+
+alter table public.sectors drop column if exists can_mute;
+$mig0053$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -10116,7 +10155,8 @@ from (values
       where table_schema = 'public' and table_name = 'team_members' and column_name = 'user_email')),
   (43, 'Log de atividades (0050)', to_regprocedure('public.platform_activity_log(timestamptz,timestamptz,uuid,text,text,integer,integer)') is not null),
   (44, 'Equipe reconhecida pelo LID (0051)', coalesce(pg_get_functiondef('public.recalc_company_groups(uuid)'::regprocedure) like '%gp.lid = m.sender_jid%', false)),
-  (45, 'Silenciar alertas do grupo (0052)', to_regclass('public.group_mutes') is not null and to_regprocedure('public.set_company_mute(timestamptz)') is not null),
+  (45, 'Silenciar grupo retirado (0053)', to_regclass('public.group_mutes') is null and not exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'sectors' and column_name = 'can_mute')),
   (46, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

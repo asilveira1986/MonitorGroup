@@ -106,25 +106,6 @@ export async function setGroupSector(groupId: string, sectorId: string | null): 
   return fail(error);
 }
 
-/** Silenciar / reativar os avisos de um grupo (until null = reativar; 'sempre' = sem fim). */
-export async function setGroupMute(groupId: string, until: string | null): Promise<Result> {
-  await requireProfile();
-  const supabase = await createClient();
-  const { error } = await supabase.rpc('set_group_mute', { p_group_id: groupId, p_until: until });
-  revalidatePath('/', 'layout');
-  return fail(error);
-}
-
-/** Quem administra a plataforma: silenciar / reativar todos os grupos da empresa atual. */
-export async function setCompanyMute(until: string | null): Promise<Result & { count?: number }> {
-  await requireProfile();
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc('set_company_mute', { p_until: until });
-  revalidatePath('/', 'layout');
-  if (error) return fail(error);
-  return { ok: true, count: Number(data ?? 0) };
-}
-
 /** Responsável pelo grupo (somente admin): uma pessoa da equipe, ou nenhum. */
 export async function setGroupResponsible(groupId: string, memberId: string | null): Promise<Result> {
   await requireAdmin();

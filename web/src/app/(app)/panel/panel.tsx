@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertOctagon, BellOff, Building2, CheckCircle2, Clock, Hourglass, Lock, MinusCircle, Search, UserCheck, X } from 'lucide-react';
+import { AlertOctagon, Building2, CheckCircle2, Clock, Hourglass, Lock, MinusCircle, Search, UserCheck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -19,8 +19,6 @@ export type PanelGroup = {
   responsible_name?: string | null;
   /** conversa encerrada pela mensagem de fechamento */
   closed_at?: string | null;
-  /** grupo silenciado (sem avisos) */
-  muted?: boolean;
   /** jid do grupo quando há imagem do grupo guardada */
   photo_jid?: string | null;
   status: PanelStatus;
@@ -124,8 +122,7 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
           ) : (
             <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', s.dot)} aria-hidden />
           )}
-          <h3 className="line-clamp-2 min-w-0 flex-1 text-sm font-semibold leading-snug text-ink">{g.name}</h3>
-          {g.muted && <BellOff className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" aria-label="Alertas silenciados" />}
+          <h3 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-ink">{g.name}</h3>
         </div>
         {g.closed_at && (g.status === 'answered' || g.status === 'neutral') && (
           <p className="mt-0.5 flex items-center gap-1 pl-3.5 text-[11px] font-medium text-good-ink" title="Encerrada pela mensagem de fechamento">

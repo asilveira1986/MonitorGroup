@@ -13,7 +13,6 @@ import { GroupMembers, type GroupMember } from './members';
 import { PAGE_SIZE } from './constants';
 import type { QuickReply } from '@/lib/quick-replies';
 import { Avatar } from '@/components/avatar';
-import { MuteControl } from '@/components/mute-control';
 import { Conversation } from './conversation';
 import { GroupFiles } from './group-files';
 import { DeleteRemovedGroupButton } from '../removed-groups';
@@ -45,7 +44,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
   const recentlySent = minutesAgo(5);
-  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }, { data: closingCfg }, { data: groupPhoto }, { data: muteRow }, { data: canMuteHere }] = await Promise.all([
+  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }, { data: closingCfg }, { data: groupPhoto }] = await Promise.all([
     supabase.from('team_members').select('id, name').eq('active', true).order('name'),
     supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
     // respostas do painel que ainda não voltaram pelo WhatsApp
@@ -66,9 +65,6 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     supabase.from('app_settings').select('closing_shortcut').maybeSingle(),
     // imagem do grupo (guardada pelo worker)
     supabase.from('contact_avatars').select('path').eq('jid', group?.jid ?? '').maybeSingle(),
-    // silenciar grupo: situação e permissão
-    supabase.from('group_mutes').select('muted_until, muted_by_name').eq('group_id', id).maybeSingle(),
-    supabase.rpc('has_group_permission', { p_group_id: id, p_permission: 'mute' }),
   ]);
   const categories = (typeInd?.params as { categories?: { name: string }[] } | undefined)?.categories;
   if (!group) notFound();
@@ -130,9 +126,6 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
               · última atividade {timeAgo(g.last_message_at)}
             </p>
             <div className="mt-1 flex flex-wrap gap-1.5">
-              {viewer && (
-                <MuteControl groupId={g.id} mutedUntil={(muteRow as { muted_until?: string } | null)?.muted_until ?? null} canMute={false} />
-              )}
               {profile.role !== 'admin' && (
                 <p className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">
                   <Building2 className="h-3.5 w-3.5" /> Setor: {sectors?.find((s) => s.id === g.sector_id)?.name ?? '—'}
@@ -154,11 +147,6 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
         {!g.removed_at && !viewer && (
           <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
             <MonitorToggle groupId={g.id} monitored={g.monitored} label="Monitorar este grupo" />
-            <MuteControl
-              groupId={g.id}
-              mutedUntil={(muteRow as { muted_until?: string } | null)?.muted_until ?? null}
-              canMute={Boolean(canMuteHere) || profile.platform_admin}
-            />
             {profile.role === 'admin' && (
               <div>
                 <p className="mb-1 flex items-center gap-1 text-xs font-medium text-ink-2">

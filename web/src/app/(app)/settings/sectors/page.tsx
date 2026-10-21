@@ -98,7 +98,7 @@ export default async function SectorsPage() {
                 .filter((g) => g.sector_id === s.id)
                 .map((g) => g.id)
                 .sort()
-                .join(',')}:${s.name}:${s.can_reply}${s.can_manage_demands}${s.can_handle_alerts}${s.can_mute}`}
+                .join(',')}:${s.name}:${s.can_reply}${s.can_manage_demands}${s.can_handle_alerts}`}
               sector={s}
               users={people}
               memberIds={(members ?? []).filter((m) => m.sector_id === s.id).map((m) => m.user_id as string)}
