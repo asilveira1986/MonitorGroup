@@ -7,6 +7,7 @@ import { ALERT_TYPE_LABEL, cn, formatDateTime, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Alert, MyPermissions } from '@/lib/types';
 import { resolveAllAlerts, updateAlertStatus } from '../actions';
+import { AlertMutes, type AlertMuteItem, type AlertMuteRow } from './alert-mutes';
 import { AlertFilters } from './filters';
 
 const SEVERITIES = ['critical', 'warning', 'info'];
@@ -30,7 +31,7 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
     if (severity) q = q.eq('severity', severity);
     return q;
   };
-  const [{ data: active }, { data: resolved }, { data: settings }, { data: rules }, { data: indicators }, { data: blocks }, { data: perms }] =
+  const [{ data: active }, { data: resolved }, { data: settings }, { data: rules }, { data: indicators }, { data: blocks }, { data: perms }, { data: mutes }, { data: canMute }] =
     await Promise.all([
     base().neq('status', 'resolved').limit(200),
     base().eq('status', 'resolved').limit(100),
@@ -39,6 +40,9 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
     supabase.from('my_indicators').select('key, block_key, enabled, alert_enabled'),
     supabase.from('my_indicator_blocks').select('key, enabled'),
     supabase.rpc('my_permissions'),
+    // silenciar alertas por tipo (0054)
+    supabase.from('alert_type_mutes').select('type, muted_until, muted_by_name').gt('muted_until', new Date().toISOString()),
+    supabase.rpc('can_mute_alerts'),
   ]);
 
   // tipos do filtro = os das regras ativas nas configurações (regra presa a um indicador desligado,
@@ -52,6 +56,15 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
   const enabledTypes = Object.keys(ALERT_TYPE_LABEL).filter((t) =>
     (rules ?? []).some((r) => r.type === t && (!r.indicator_key || alertable.has(r.indicator_key))),
   );
+  // o que dá para silenciar: nova mensagem, SLA excedido e os tipos das regras ligadas
+  const muteRows = (mutes ?? []) as AlertMuteRow[];
+  const muteItems: AlertMuteItem[] = [
+    { type: 'message', label: 'Nova mensagem de cliente', hint: 'Aviso em tela, voz e som quando um cliente escreve.' },
+    { type: 'sla', label: 'SLA excedido', hint: 'Aviso em tela e voz quando a mensagem passa do tempo de resposta.' },
+    ...Object.keys(ALERT_TYPE_LABEL)
+      .filter((t) => enabledTypes.includes(t) || muteRows.some((m) => m.type === t))
+      .map((t) => ({ type: t, label: ALERT_TYPE_LABEL[t], hint: 'Aviso em tela, voz e o aviso por WhatsApp/e-mail da regra.' })),
+  ];
   const alerts = [...(active ?? []), ...(resolved ?? [])] as (Alert & {
     groups: { name: string } | null;
     profiles: { full_name: string | null; email: string } | null;
@@ -74,6 +87,8 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
           )
         }
       />
+
+      <AlertMutes items={muteItems} mutes={muteRows} canMute={Boolean(canMute)} />
 
       <AlertFilters types={type && !enabledTypes.includes(type) ? [...enabledTypes, type] : enabledTypes} />
 

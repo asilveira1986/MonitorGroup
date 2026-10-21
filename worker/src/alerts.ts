@@ -68,6 +68,18 @@ async function hasRecentAlert(ruleId: string, target: { groupId?: string; instan
   return rows.length > 0;
 }
 
+/** Tipo de alerta silenciado agora na empresa (Alertas › Silenciar alertas)? Sem o script 0054, nunca. */
+async function isAlertTypeMuted(companyId: string, type: string): Promise<boolean> {
+  const { data, error } = await db
+    .from('alert_type_mutes')
+    .select('type')
+    .eq('company_id', companyId)
+    .eq('type', type)
+    .gt('muted_until', new Date().toISOString())
+    .maybeSingle();
+  return !error && Boolean(data);
+}
+
 async function createAlert(
   rule: AlertRule,
   data: {
@@ -100,6 +112,12 @@ async function createAlert(
   )!;
 
   logger.info({ rule: rule.name, title: data.title }, 'alerta criado');
+
+  // tipo silenciado: o alerta fica registrado, mas ninguém é avisado (WhatsApp/e-mail/webhook)
+  if (await isAlertTypeMuted(rule.company_id, rule.type)) {
+    logger.info({ rule: rule.name, type: rule.type }, 'alertas silenciados: alerta sem aviso');
+    return;
+  }
 
   const channels = await sendNotifications(rule, {
     id: inserted.id,

@@ -74,7 +74,8 @@ CHECKS=$(cat <<'SQL'
   (44, 'Equipe reconhecida pelo LID (0051)', coalesce(pg_get_functiondef('public.recalc_company_groups(uuid)'::regprocedure) like '%gp.lid = m.sender_jid%', false)),
   (45, 'Silenciar grupo retirado (0053)', to_regclass('public.group_mutes') is null and not exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'sectors' and column_name = 'can_mute')),
-  (46, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (46, 'Silenciar alertas por tipo (0054)', to_regclass('public.alert_type_mutes') is not null and to_regprocedure('public.set_alert_type_mute(text,timestamptz)') is not null),
+  (47, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)
