@@ -121,6 +121,7 @@ export async function saveAlertRule(form: FormData): Promise<Result> {
     notify_emails: list(form.get('notify_emails')).map((e) => e.toLowerCase()),
     notify_whatsapp: list(form.get('notify_whatsapp')).map((p) => p.replace(/\D/g, '')).filter(Boolean),
     notify_webhook_url: String(form.get('notify_webhook_url') || '').trim() || null,
+    notify_responsibles: form.get('notify_responsibles') === 'on',
     indicator_key: RULE_INDICATOR[type] ?? null,
     updated_at: new Date().toISOString(),
   };
@@ -300,6 +301,15 @@ export async function removeTeamMember(id: string): Promise<Result> {
   await requireProfile();
   const supabase = await createClient();
   const { error } = await supabase.from('team_members').delete().eq('id', id);
+  revalidatePath('/settings/team');
+  return result(error);
+}
+
+/** Avisos da pessoa da equipe: só dos grupos em que ela é responsável (true) ou de todos (false). */
+export async function setMemberAlertsOwnGroups(id: string, only: boolean): Promise<Result> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from('team_members').update({ alerts_own_groups_only: only }).eq('id', id);
   revalidatePath('/settings/team');
   return result(error);
 }

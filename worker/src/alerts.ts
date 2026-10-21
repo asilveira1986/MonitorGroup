@@ -3,6 +3,7 @@ import { check, db, type AlertRule, type GroupRow } from './db.js';
 import { isWithinBusinessHours } from './business-hours.js';
 import { logger } from './logger.js';
 import { sendNotifications } from './notify.js';
+import { alertRecipients, type RecipientMember } from './recipients.js';
 import { findKeyword } from './text.js';
 
 const minutesAgo = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
@@ -68,6 +69,24 @@ async function hasRecentAlert(ruleId: string, target: { groupId?: string; instan
   return rows.length > 0;
 }
 
+/** WhatsApp e e-mail do alerta (sem o script 0056, só os da regra). */
+async function recipientsFor(rule: AlertRule, groupId: string | null) {
+  const fallback = { phones: rule.notify_whatsapp ?? [], emails: rule.notify_emails ?? [] };
+  const [team, group] = await Promise.all([
+    db.from('team_members').select('id, phone, user_email, alerts_own_groups_only').eq('company_id', rule.company_id).eq('active', true),
+    groupId ? db.from('groups').select('responsible_member_ids').eq('id', groupId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+  ]);
+  if (team.error || group.error) return fallback;
+  return alertRecipients({
+    phones: fallback.phones,
+    emails: fallback.emails,
+    notifyResponsibles: Boolean(rule.notify_responsibles),
+    groupId,
+    responsibleIds: ((group.data as { responsible_member_ids?: string[] } | null)?.responsible_member_ids ?? []) as string[],
+    members: (team.data ?? []) as RecipientMember[],
+  });
+}
+
 async function createAlert(
   rule: AlertRule,
   data: {
@@ -101,7 +120,9 @@ async function createAlert(
 
   logger.info({ rule: rule.name, title: data.title }, 'alerta criado');
 
-  const channels = await sendNotifications(rule, {
+  // destinatários: os da regra + responsáveis do grupo; quem recebe só dos seus grupos fica de fora dos outros
+  const recipients = await recipientsFor(rule, data.groupId ?? null);
+  const channels = await sendNotifications({ ...rule, notify_whatsapp: recipients.phones, notify_emails: recipients.emails }, {
     id: inserted.id,
     title: data.title,
     description: data.description,

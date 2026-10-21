@@ -46,14 +46,19 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
   } else {
     let query = supabase
       .from('groups')
-      .select('*, sectors(name), team_members(name)')
+      .select('*, sectors(name)')
       .is('removed_at', null)
       .order('last_message_at', { ascending: false, nullsFirst: false });
     if (q) query = query.ilike('name', `%${q}%`);
     if (filter === 'pending') query = query.eq('monitored', true).not('pending_since', 'is', null);
     if (filter === 'monitored') query = query.eq('monitored', true);
     if (filter === 'ignored') query = query.eq('monitored', false);
-    groups = ((await query.limit(500)).data ?? []) as Group[];
+    const [{ data: rows }, { data: team }] = await Promise.all([query.limit(500), supabase.from('team_members').select('id, name')]);
+    const teamName = new Map((team ?? []).map((t) => [t.id as string, t.name as string]));
+    groups = ((rows ?? []) as Group[]).map((g) => {
+      const ids = g.responsible_member_ids?.length ? g.responsible_member_ids : g.responsible_member_id ? [g.responsible_member_id] : [];
+      return { ...g, responsible_names: ids.map((id) => teamName.get(id) ?? 'Responsável') };
+    });
   }
 
   // imagens dos grupos guardadas pelo worker (sem o script 0044, fica sem)

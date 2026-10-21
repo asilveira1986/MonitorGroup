@@ -15,8 +15,8 @@ export type PanelGroup = {
   name: string;
   sector_id?: string | null;
   /** responsável pelo grupo (pessoa da equipe) */
-  responsible_id?: string | null;
-  responsible_name?: string | null;
+  responsible_ids?: string[];
+  responsible_names?: string[];
   /** conversa encerrada pela mensagem de fechamento */
   closed_at?: string | null;
   /** jid do grupo quando há imagem do grupo guardada */
@@ -129,9 +129,12 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
             <Lock className="h-3 w-3 shrink-0" aria-hidden /> conversa encerrada
           </p>
         )}
-        {g.responsible_name && (
-          <p className="mt-0.5 flex items-center gap-1 truncate pl-3.5 text-[11px] text-ink-2" title="Responsável pelo grupo">
-            <UserCheck className="h-3 w-3 shrink-0" aria-hidden /> <span className="truncate">{g.responsible_name}</span>
+        {Boolean(g.responsible_names?.length) && (
+          <p
+            className="mt-0.5 flex items-center gap-1 truncate pl-3.5 text-[11px] text-ink-2"
+            title={`${g.responsible_names!.length > 1 ? 'Responsáveis' : 'Responsável'}: ${g.responsible_names!.join(', ')}`}
+          >
+            <UserCheck className="h-3 w-3 shrink-0" aria-hidden /> <span className="truncate">{g.responsible_names!.join(', ')}</span>
           </p>
         )}
         {time && !quiet && (
@@ -274,7 +277,8 @@ export function GroupsPanel({
       allGroups.filter(
         (g) =>
           (sector === 'all' || (sector === 'none' ? !g.sector_id : g.sector_id === sector)) &&
-          (responsible === 'all' || (responsible === 'none' ? !g.responsible_id : g.responsible_id === responsible)),
+          (responsible === 'all' ||
+            (responsible === 'none' ? !g.responsible_ids?.length : Boolean(g.responsible_ids?.includes(responsible)))),
       ),
     [allGroups, sector, responsible],
   );
@@ -390,7 +394,7 @@ export function GroupsPanel({
                     {r.name} ({r.groups})
                   </option>
                 ))}
-                <option value="none">Sem responsável ({allGroups.filter((g) => !g.responsible_id).length})</option>
+                <option value="none">Sem responsável ({allGroups.filter((g) => !g.responsible_ids?.length).length})</option>
               </select>
             </FilterField>
           )}

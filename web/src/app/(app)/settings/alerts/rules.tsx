@@ -1,6 +1,6 @@
 'use client';
 
-import { BellRing, CalendarX, Clock, History, KeyRound, Mail, MessageCircle, Moon, Pencil, Plus, Repeat, Speech, Trash2, TrendingUp, Webhook, WifiOff } from 'lucide-react';
+import { BellRing, CalendarX, Clock, History, KeyRound, Mail, MessageCircle, Moon, Pencil, Plus, Repeat, Speech, Trash2, TrendingUp, Webhook, WifiOff, UserCheck } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { ActionForm } from '@/components/form-action';
@@ -213,6 +213,19 @@ function RuleEditor({
                   <Input name="notify_webhook_url" type="url" defaultValue={rule?.notify_webhook_url ?? ''} placeholder="https://hooks.slack.com/…" />
                 </Field>
               </div>
+              {type !== 'disconnected' && (
+                <div className="mt-4">
+                  <Toggle
+                    name="notify_responsibles"
+                    defaultChecked={rule?.notify_responsibles ?? false}
+                    label="Avisar também os responsáveis do grupo (WhatsApp no telefone e e-mail de acesso de cada um)"
+                  />
+                </div>
+              )}
+              <p className="mt-3 text-xs text-muted">
+                Quem está marcado em Configurações › Equipe com &quot;Avisos só dos seus grupos&quot; recebe por aqui apenas os
+                alertas dos grupos em que é responsável.
+              </p>
             </div>
 
             <div className="flex flex-wrap gap-6">
@@ -303,6 +316,11 @@ export function RulesPanel({
                     {rule.notify_whatsapp.length > 0 && (
                       <Badge tone="good">
                         <MessageCircle className="h-3 w-3" /> {rule.notify_whatsapp.length}
+                      </Badge>
+                    )}
+                    {rule.notify_responsibles && (
+                      <Badge tone="brand">
+                        <UserCheck className="h-3 w-3" /> responsáveis
                       </Badge>
                     )}
                     {rule.notify_webhook_url && (

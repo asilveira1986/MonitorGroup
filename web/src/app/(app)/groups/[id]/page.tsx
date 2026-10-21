@@ -8,7 +8,7 @@ import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { Group, Message, OutgoingMessage } from '@/lib/types';
 import { markGroupAnswered } from '../../actions';
-import { LiveMessages, MonitorToggle, ResponsibleSelect, SectorSelect, SlaForm } from '../group-controls';
+import { LiveMessages, MonitorToggle, ResponsiblesSelect, SectorSelect, SlaForm } from '../group-controls';
 import { GroupMembers, type GroupMember } from './members';
 import { PAGE_SIZE } from './constants';
 import type { QuickReply } from '@/lib/quick-replies';
@@ -45,7 +45,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
   ]);
   const recentlySent = minutesAgo(5);
   const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }, { data: closingCfg }, { data: groupPhoto }] = await Promise.all([
-    supabase.from('team_members').select('id, name').eq('active', true).order('name'),
+    supabase.from('team_members').select('id, name, active').order('name'),
     supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
     // respostas do painel que ainda não voltaram pelo WhatsApp
     supabase
@@ -69,6 +69,13 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
   const categories = (typeInd?.params as { categories?: { name: string }[] } | undefined)?.categories;
   if (!group) notFound();
   const g = group as Group;
+  // responsáveis do grupo (inclui quem foi desativado da equipe, marcado como inativo)
+  const allTeam = (members ?? []) as { id: string; name: string; active: boolean }[];
+  const responsibleIds: string[] = g.responsible_member_ids?.length ? g.responsible_member_ids : g.responsible_member_id ? [g.responsible_member_id] : [];
+  const responsibleNames = responsibleIds.map((rid) => allTeam.find((m) => m.id === rid)?.name ?? 'Responsável');
+  const teamOptions = allTeam
+    .filter((m) => m.active || responsibleIds.includes(m.id))
+    .map((m) => ({ id: m.id, name: m.active ? m.name : `${m.name} (inativo)` }));
   const tz = settings?.timezone;
   const st = (stats ?? {}) as {
     received?: number;
@@ -133,12 +140,13 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
               )}
               <p
                 className={
-                  g.team_members?.name
+                  responsibleNames.length
                     ? 'inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand-text'
                     : 'inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted'
                 }
               >
-                <UserCheck className="h-3.5 w-3.5" /> Responsável: {g.team_members?.name ?? 'não definido'}
+                <UserCheck className="h-3.5 w-3.5" /> {responsibleNames.length > 1 ? 'Responsáveis' : 'Responsável'}:{' '}
+                {responsibleNames.length ? responsibleNames.join(', ') : 'não definido'}
               </p>
             </div>
           </div>
@@ -158,19 +166,10 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             {profile.role === 'admin' && (
               <div>
                 <p className="mb-1 flex items-center gap-1 text-xs font-medium text-ink-2">
-                  <UserCheck className="h-3.5 w-3.5" /> Responsável pelo grupo (da equipe)
+                  <UserCheck className="h-3.5 w-3.5" /> Responsáveis pelo grupo (da equipe)
                 </p>
-                <ResponsibleSelect
-                  groupId={g.id}
-                  memberId={g.responsible_member_id ?? null}
-                  members={
-                    // inclui o responsável atual mesmo se ele foi desativado da equipe
-                    g.responsible_member_id && !(members ?? []).some((m) => m.id === g.responsible_member_id)
-                      ? [...(members ?? []), { id: g.responsible_member_id, name: `${g.team_members?.name ?? 'Responsável'} (inativo)` }]
-                      : (members ?? [])
-                  }
-                />
-                {(members ?? []).length === 0 && (
+                <ResponsiblesSelect groupId={g.id} memberIds={responsibleIds} members={teamOptions} />
+                {teamOptions.length === 0 && (
                   <p className="mt-1 text-[11px] text-muted">
                     Cadastre as pessoas em{' '}
                     <Link href="/settings/team" className="underline">
@@ -270,7 +269,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             demands={{
               manualEnabled: !viewer && (settings?.demand_manual_enabled ?? true) && canDemandsHere !== false,
               groupName: g.name,
-              members: members ?? [],
+              members: allTeam.filter((m) => m.active).map((m) => ({ id: m.id, name: m.name })),
               types: categories?.length ? categories.map((c) => c.name).filter(Boolean) : DEFAULT_DEMAND_TYPES,
             }}
           />

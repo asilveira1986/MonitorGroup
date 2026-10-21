@@ -106,11 +106,11 @@ export async function setGroupSector(groupId: string, sectorId: string | null): 
   return fail(error);
 }
 
-/** Responsável pelo grupo (somente admin): uma pessoa da equipe, ou nenhum. */
-export async function setGroupResponsible(groupId: string, memberId: string | null): Promise<Result> {
+/** Responsáveis pelo grupo (somente admin): pessoas da equipe, ou nenhuma. */
+export async function setGroupResponsibles(groupId: string, memberIds: string[]): Promise<Result> {
   await requireAdmin();
   const supabase = await createClient();
-  const { error } = await supabase.from('groups').update({ responsible_member_id: memberId }).eq('id', groupId);
+  const { error } = await supabase.from('groups').update({ responsible_member_ids: memberIds }).eq('id', groupId);
   revalidatePath('/', 'layout');
   return fail(error);
 }

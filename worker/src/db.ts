@@ -94,6 +94,8 @@ export type AlertRule = {
   notify_emails: string[];
   notify_whatsapp: string[];
   notify_webhook_url: string | null;
+  /** avisa também os responsáveis do grupo (0056) */
+  notify_responsibles?: boolean;
   indicator_key?: string | null;
 };
 

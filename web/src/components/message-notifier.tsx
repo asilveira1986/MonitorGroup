@@ -103,6 +103,19 @@ const VOICE_TYPE: Record<string, string> = {
 const messageText = (type: string, body: string | null) =>
   type === 'text' ? body : `${TYPE_LABEL[type] ?? type}${body ? ` ${body}` : ''}`;
 
+/**
+ * Quem recebe avisos só dos grupos em que é responsável (Configurações › Equipe): os grupos dele.
+ * null = todos os grupos. Lido no máximo a cada 30 s.
+ */
+let scopeCache: { at: number; groups: Set<string> | null } | null = null;
+async function inMyAlertScope(groupId: string | null | undefined): Promise<boolean> {
+  if (!groupId) return true; // alerta sem grupo (ex.: WhatsApp desconectado) chega para todos
+  if (!scopeCache || Date.now() - scopeCache.at > 30_000) {
+    const { data, error } = await createClient().rpc('my_alert_groups');
+    scopeCache = { at: Date.now(), groups: error || !Array.isArray(data) ? null : new Set(data as string[]) };
+  }
+  return !scopeCache.groups || scopeCache.groups.has(groupId);
+}
 
 /**
  * Avisos grandes no centro da tela, todos no mesmo formato:
@@ -164,13 +177,11 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         if (m.from_team || m.ignored_as_last || !configRef.current.enabled) return;
         // a importação do histórico não gera aviso
         if (Date.now() - new Date(m.sent_at).getTime() > 10 * 60_000) return;
-        void createClient()
-          .from('groups')
-          .select('name, monitored')
-          .eq('id', m.group_id)
-          .maybeSingle()
-          .then(({ data: g }) => {
-            if (!g || !g.monitored) return;
+        void Promise.all([
+          createClient().from('groups').select('name, monitored').eq('id', m.group_id).maybeSingle(),
+          inMyAlertScope(m.group_id),
+        ]).then(([{ data: g }, mine]) => {
+            if (!g || !g.monitored || !mine) return;
             const v = configRef.current;
             pushRef.current({
               speech:
@@ -199,48 +210,51 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
       // alerta criado pelo sistema
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'alerts' }, (payload) => {
         const a = payload.new as Alert;
-        if (!configRef.current.alerts) {
-          // alertas em tela desligados: aviso pequeno no canto, como antes
-          const show = a.severity === 'critical' ? toast.error : a.severity === 'warning' ? toast.warning : toast.info;
-          show(a.title, {
-            description: a.description?.slice(0, 140),
-            action: { label: 'Ver', onClick: () => router.push('/alerts') },
-            duration: 10_000,
-          });
-          return;
-        }
-        const tone: Tone = a.severity === 'critical' ? 'critical' : a.severity === 'warning' ? 'warning' : 'info';
-        // a regra do alerta escolhe se ele é falado (Editar regra › Aviso por voz)
-        const show = (group: string | null, voice: boolean) =>
-          pushRef.current({
-            speech: !voice
-              ? undefined
-              : renderTemplate(templateFor(configRef.current.voiceOptions, 'alert'), {
-                  tipo: ALERT_TYPE_LABEL[a.type] ?? 'alerta',
-                  gravidade: a.severity === 'critical' ? 'crítico' : a.severity === 'warning' ? 'atenção' : 'informativo',
-                  grupo: group,
-                  titulo: a.title,
-                  descricao: a.description,
-                }),
-            // "cliente sem resposta" e "SLA excedido" do mesmo grupo viram um aviso só
-            key: a.type === 'no_response' && a.group_id ? `late-${a.group_id}` : `alert-${a.id}`,
-            tone,
-            heading: ALERT_TYPE_LABEL[a.type] ?? 'Alerta',
-            icon: a.severity === 'critical' ? AlertOctagon : a.severity === 'warning' ? AlertTriangle : Info,
-            group: group ?? a.title,
-            who: group ? a.title : null,
-            text: a.description,
-            href: a.group_id ? `/groups/${a.group_id}` : '/alerts',
-            action: a.group_id ? 'Abrir grupo' : 'Ver alertas',
-            at: Date.now(),
-          });
-        const supabase = createClient();
-        void Promise.all([
-          a.group_id ? supabase.from('groups').select('name').eq('id', a.group_id).maybeSingle() : Promise.resolve({ data: null }),
-          a.rule_id ? supabase.from('alert_rules').select('voice').eq('id', a.rule_id).maybeSingle() : Promise.resolve({ data: null }),
-        ]).then(([{ data: g }, { data: r }]) =>
-          show((g as { name: string } | null)?.name ?? null, (r as { voice?: boolean } | null)?.voice !== false),
-        );
+        void inMyAlertScope(a.group_id).then((mine) => {
+          if (!mine) return;
+          if (!configRef.current.alerts) {
+            // alertas em tela desligados: aviso pequeno no canto, como antes
+            const show = a.severity === 'critical' ? toast.error : a.severity === 'warning' ? toast.warning : toast.info;
+            show(a.title, {
+              description: a.description?.slice(0, 140),
+              action: { label: 'Ver', onClick: () => router.push('/alerts') },
+              duration: 10_000,
+            });
+            return;
+          }
+          const tone: Tone = a.severity === 'critical' ? 'critical' : a.severity === 'warning' ? 'warning' : 'info';
+          // a regra do alerta escolhe se ele é falado (Editar regra › Aviso por voz)
+          const show = (group: string | null, voice: boolean) =>
+            pushRef.current({
+              speech: !voice
+                ? undefined
+                : renderTemplate(templateFor(configRef.current.voiceOptions, 'alert'), {
+                    tipo: ALERT_TYPE_LABEL[a.type] ?? 'alerta',
+                    gravidade: a.severity === 'critical' ? 'crítico' : a.severity === 'warning' ? 'atenção' : 'informativo',
+                    grupo: group,
+                    titulo: a.title,
+                    descricao: a.description,
+                  }),
+              // "cliente sem resposta" e "SLA excedido" do mesmo grupo viram um aviso só
+              key: a.type === 'no_response' && a.group_id ? `late-${a.group_id}` : `alert-${a.id}`,
+              tone,
+              heading: ALERT_TYPE_LABEL[a.type] ?? 'Alerta',
+              icon: a.severity === 'critical' ? AlertOctagon : a.severity === 'warning' ? AlertTriangle : Info,
+              group: group ?? a.title,
+              who: group ? a.title : null,
+              text: a.description,
+              href: a.group_id ? `/groups/${a.group_id}` : '/alerts',
+              action: a.group_id ? 'Abrir grupo' : 'Ver alertas',
+              at: Date.now(),
+            });
+          const supabase = createClient();
+          void Promise.all([
+            a.group_id ? supabase.from('groups').select('name').eq('id', a.group_id).maybeSingle() : Promise.resolve({ data: null }),
+            a.rule_id ? supabase.from('alert_rules').select('voice').eq('id', a.rule_id).maybeSingle() : Promise.resolve({ data: null }),
+          ]).then(([{ data: g }, { data: r }]) =>
+            show((g as { name: string } | null)?.name ?? null, (r as { voice?: boolean } | null)?.voice !== false),
+          );
+        });
       }),
   );
 
@@ -270,6 +284,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         if (seen.has(key)) continue;
         seen.add(key);
         if (first) continue;
+        if (!(await inMyAlertScope(b.group_id))) continue;
         pushRef.current({
           speech:
             configRef.current.voiceSla !== false

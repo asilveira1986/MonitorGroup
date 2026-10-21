@@ -76,7 +76,10 @@ CHECKS=$(cat <<'SQL'
       where table_schema = 'public' and table_name = 'sectors' and column_name = 'can_mute')),
   (46, 'Silenciar alertas retirado (0055)', to_regclass('public.alert_type_mutes') is null and not exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'sectors' and column_name = 'can_mute_alerts')),
-  (47, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (47, 'Vários responsáveis por grupo (0056)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'groups' and column_name = 'responsible_member_ids')
+      and to_regprocedure('public.my_alert_groups()') is not null),
+  (48, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

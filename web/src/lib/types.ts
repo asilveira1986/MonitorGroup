@@ -64,8 +64,12 @@ export type Group = {
   /** conversa encerrada pela mensagem de fechamento (a próxima do cliente inicia outra) */
   closed_at?: string | null;
   conversation_started_at?: string | null;
-  /** responsável pelo grupo (pessoa da equipe) */
+  /** primeiro responsável pelo grupo (pessoa da equipe) */
   responsible_member_id?: string | null;
+  /** responsáveis pelo grupo (pessoas da equipe, 0056) */
+  responsible_member_ids?: string[] | null;
+  /** nomes dos responsáveis (montado pela página) */
+  responsible_names?: string[];
   /** nome do responsável (quando a consulta inclui team_members(name)) */
   team_members?: { name: string } | null;
   id: string;
@@ -122,6 +126,8 @@ export type Message = {
 export type TeamMember = {
   /** e-mail do usuário do sistema criado para esta pessoa (Equipe › Dar acesso) */
   user_email?: string | null;
+  /** recebe os avisos só dos grupos em que é responsável (0056) */
+  alerts_own_groups_only?: boolean;
   id: string;
   name: string;
   phone: string | null;
@@ -157,6 +163,8 @@ export type AlertRule = {
   notify_emails: string[];
   notify_whatsapp: string[];
   notify_webhook_url: string | null;
+  /** avisa também os responsáveis do grupo (WhatsApp e e-mail de acesso, 0056) */
+  notify_responsibles?: boolean;
   /** o alerta desta regra é falado (aviso por voz) */
   voice?: boolean;
 };

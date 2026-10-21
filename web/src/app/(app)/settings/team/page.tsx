@@ -7,14 +7,22 @@ import { createClient } from '@/lib/supabase/server';
 import type { TeamMember } from '@/lib/types';
 import { removeTeamMember } from '../actions';
 import { NewMemberForm } from './new-member-form';
+import { AlertScope } from './alert-scope';
 import { GrantAccess } from './grant-access';
 import { RecalcButton } from './recalc-button';
 
 export default async function TeamPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
-  const { data } = await supabase.from('team_members').select('*').order('name');
+  const [{ data }, { data: groupRows }] = await Promise.all([
+    supabase.from('team_members').select('*').order('name'),
+    supabase.from('groups').select('responsible_member_ids').is('removed_at', null),
+  ]);
   const members = (data ?? []) as TeamMember[];
+  // quantos grupos cada pessoa tem como responsável
+  const groupsOf = new Map<string, number>();
+  for (const g of (groupRows ?? []) as { responsible_member_ids: string[] | null }[])
+    for (const id of g.responsible_member_ids ?? []) groupsOf.set(id, (groupsOf.get(id) ?? 0) + 1);
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -46,29 +54,42 @@ export default async function TeamPage() {
             ao adicionar alguém por aqui).
           </p>
         )}
+        {profile.role === 'admin' && (
+          <p className="px-4 pt-2 text-xs text-ink-2 sm:px-5">
+            <strong>Avisos só dos seus grupos</strong>: a pessoa recebe os avisos em tela e voz (no usuário com acesso dela) e
+            os avisos das regras por WhatsApp/e-mail apenas dos grupos em que é responsável. Os responsáveis são escolhidos na
+            tela de cada grupo.
+          </p>
+        )}
         <div className="p-2">
           {members.length === 0 ? (
             <EmptyState icon={<UserRound />} title="Nenhum atendente cadastrado" />
           ) : (
             <ul>
               {members.map((m) => (
-                <li key={m.id} className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-surface-2">
+                <li key={m.id} className="flex flex-wrap items-center gap-3 rounded-xl px-3 py-3 hover:bg-surface-2">
                   <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
                     {m.name.slice(0, 2).toUpperCase()}
                   </span>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-60">
                     <p className="truncate text-sm font-medium">{m.name}</p>
-                    <p className="text-xs text-muted">{m.phone ? formatPhone(m.phone) : 'Identificado pela conversa'}</p>
+                    <p className="text-xs text-muted">
+                      {m.phone ? formatPhone(m.phone) : 'Identificado pela conversa'}
+                      {groupsOf.get(m.id) ? ` · responsável por ${groupsOf.get(m.id)} grupo(s)` : ''}
+                    </p>
                   </div>
-                  {profile.role === 'admin' && <GrantAccess member={m} />}
-                  <ActionButton
-                    action={removeTeamMember.bind(null, m.id)}
-                    variant="ghost"
-                    confirm={`Remover ${m.name} da equipe?`}
-                    success="Removido"
-                  >
-                    Remover
-                  </ActionButton>
+                  <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                    {profile.role === 'admin' && <AlertScope member={m} groups={groupsOf.get(m.id) ?? 0} />}
+                    {profile.role === 'admin' && <GrantAccess member={m} />}
+                    <ActionButton
+                      action={removeTeamMember.bind(null, m.id)}
+                      variant="ghost"
+                      confirm={`Remover ${m.name} da equipe?`}
+                      success="Removido"
+                    >
+                      Remover
+                    </ActionButton>
+                  </div>
                 </li>
               ))}
             </ul>
