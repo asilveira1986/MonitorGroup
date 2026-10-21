@@ -1,16 +1,149 @@
 -- =====================================================================
 -- ATUALIZAÇÃO COMPLETA DO BANCO (gerado por supabase/build-updates.sh)
--- Junta os scripts 0002 em diante, na ordem. Pode ser executado mais de
--- uma vez: o que já existe é mantido e o que falta é criado.
+-- Junta os scripts 0002 em diante, na ordem. Pode ser executado quantas
+-- vezes quiser.
 -- Pré-requisito: 0001_schema.sql já executado (instalação inicial).
 --
--- Cada script é gravado ao terminar (commit), para não travar as tabelas
--- por muito tempo. Se aparecer "deadlock detected", o que já foi gravado
--- fica e basta executar de novo. Para evitar: pause o worker no Railway e
--- feche as abas do painel durante a atualização; depois, religue o worker.
+-- O banco guarda quais scripts já foram aplicados (schema_migrations):
+-- só os que faltam rodam, então quase nada é travado. Se mesmo assim o
+-- banco acusar "deadlock detected" (o worker e o painel usando as tabelas),
+-- a parte é repetida sozinha, até 5 vezes. Se ainda assim falhar, o que já
+-- foi aplicado fica e basta executar de novo.
 -- =====================================================================
 
+-- controle dos scripts aplicados
+create table if not exists public.schema_migrations (
+  version    text primary key,
+  applied_at timestamptz not null default now()
+);
+alter table public.schema_migrations enable row level security;
+
+-- aplica um script uma vez só; deadlock ou trava demorada: espera e tenta de novo
+create or replace function public._apply_migration(p_version text, p_sql text)
+returns text
+language plpgsql
+as $fn$
+declare
+  i int;
+begin
+  if exists (select 1 from public.schema_migrations where version = p_version) then
+    return p_version || ': já aplicado';
+  end if;
+  for i in 1..5 loop
+    begin
+      perform set_config('lock_timeout', '15s', true);
+      execute p_sql;
+      insert into public.schema_migrations (version) values (p_version) on conflict do nothing;
+      return p_version || ': aplicado';
+    exception when deadlock_detected or lock_not_available then
+      if i = 5 then
+        raise;
+      end if;
+      raise notice '%: tabela ocupada (tentativa %), tentando de novo...', p_version, i;
+      perform pg_sleep(2 * i);
+    end;
+  end loop;
+  return p_version;
+end;
+$fn$;
+
+-- primeira vez com o controle: marca como aplicados os scripts que o banco já
+-- tem (todos antes do primeiro item da conferência que falta), para não refazer tudo
+do $seed$
+declare
+  v_fail text;
+begin
+  if exists (select 1 from public.schema_migrations) then
+    return;
+  end if;
+  begin
+    execute $q$
+      select coalesce(min(substring(item from '\((\d{4})\)')), '9999')
+      from (values
+  (1, 'Indicadores e configurações (0008)', to_regclass('public.indicators') is not null),
+  (2, 'Horário comercial nos indicadores (0009)', to_regprocedure('public.business_seconds(timestamptz,timestamptz,jsonb)') is not null),
+  (3, 'Demandas (0010)', to_regclass('public.demands') is not null),
+  (4, 'Blocos 3 e 4 de indicadores (0011)', to_regprocedure('public.ind_grupos_silenciosos(jsonb,jsonb)') is not null),
+  (5, 'Responder pelo sistema (0012)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'reply_allowed')),
+  (6, 'Um worker por vez (0013)', to_regclass('public.worker_lock') is not null),
+  (7, 'Reincidência de falta de resposta (0014)', to_regprocedure('public.ind_reincidencia_sem_resposta(jsonb,jsonb)') is not null),
+  (8, 'Alerta de reincidência (0015)', exists (select 1 from public.alert_rules where type = 'recurrence')),
+  (9, 'Horários de pico com resumo (0016)', (select description like 'Quando os clientes mais escrevem%' from public.indicators where key = 'horarios_pico')),
+  (10, 'Pendentes por grupo e arquivos recebidos (0017)', to_regprocedure('public.ind_arquivos_recebidos(jsonb,jsonb)') is not null),
+  (11, 'Tempo de resposta desde a última mensagem do cliente (0018)',
+      exists (select 1 from pg_proc where proname = 'ingest_message' and pronamespace = 'public'::regnamespace
+              and obj_description(oid, 'pg_proc') ~ '00(18|37|43)')),
+  (12, 'Análise "Precisa de resposta?" (0019)', to_regprocedure('public.ind_analise_sem_resposta(jsonb,jsonb)') is not null),
+  (13, 'Arquivos sem visualização (0020)', to_regprocedure('public.mark_media_seen(uuid,uuid)') is not null),
+  (14, 'Início e fechamento das conversas (0021)', to_regprocedure('public.ind_conversas_ciclo(jsonb,jsonb)') is not null),
+  (15, 'Acompanhamento do dia (0022)', to_regprocedure('public.ind_dia_hora_a_hora(jsonb,jsonb)') is not null),
+  (16, 'Painel de grupos (0023)', to_regprocedure('public.groups_panel()') is not null),
+  (17, 'Configuração do alerta de nova mensagem (0024)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'msg_alert_auto_close')),
+  (18, 'Alertas em tela e SLA excedido (0025)', to_regprocedure('public.sla_breaches()') is not null),
+  (19, 'Demandas pelo compromisso da equipe (0026)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'demand_commitment_enabled')),
+  (20, 'Setores e permissões por setor (0027)', to_regclass('public.sectors') is not null
+      and (select not prosecdef from pg_proc where oid = 'public.indicator_values(timestamptz,timestamptz,uuid,uuid)'::regprocedure)),
+  (21, 'Gatilhos de compromisso para demandas (0028)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'demand_commitment_verbs')),
+  (22, 'Visão da gestão no dashboard (0029)', to_regprocedure('public.management_summary(timestamptz,timestamptz,uuid,uuid)') is not null),
+  (23, 'Multiempresa (0030)', to_regclass('public.companies') is not null
+      and to_regprocedure('public.create_company(text,text,text,text,text,integer,integer,text)') is not null),
+  (24, 'Menus liberados por empresa (0031)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'menu_access')),
+  (25, 'Aviso por voz (0032)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'msg_alert_voice')),
+  (26, 'Aviso por voz nas regras de alerta (0033)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'alert_rules' and column_name = 'voice')),
+  (27, 'Opções do aviso por voz (0034)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'msg_alert_voice_templates')),
+  (28, 'Perfil somente ver painéis (0035)', to_regprocedure('public.can_write()') is not null),
+  (29, 'Membros dos grupos (0036)', to_regclass('public.group_participants') is not null),
+  (30, 'Desconsiderar figurinha/emoji (0037)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'messages' and column_name = 'ignored_as_last')),
+  (31, 'Imagens e áudios no sistema (0038)', to_regprocedure('public.media_usage()') is not null
+      and exists (select 1 from storage.buckets where id = 'media' and not public)),
+  (32, 'Responsável pelo grupo (0039)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'groups' and column_name = 'responsible_member_id')),
+  (33, 'Recalcular grupos pela equipe (0040)', to_regprocedure('public.recalc_company_groups(uuid)') is not null),
+  (34, 'Frases a ignorar (0041)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'ignore_phrases')),
+  (35, 'Mensagens rápidas (0042)', to_regclass('public.quick_replies') is not null),
+  (36, 'Fechamento da conversa (0043)', to_regprocedure('public.send_group_message(uuid,text,uuid,boolean)') is not null
+      and exists (select 1 from information_schema.columns
+                  where table_schema = 'public' and table_name = 'groups' and column_name = 'closed_at')),
+  (37, 'Fotos de perfil (0044)', to_regclass('public.contact_avatars') is not null),
+  (38, 'Foto de perfil ampliada (0045)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'contact_avatars' and column_name = 'full_path')),
+  (39, 'Busca de palavras-chave mais rápida (0046)',
+      coalesce(obj_description('public.match_keyword(text,jsonb)'::regprocedure, 'pg_proc'), '') like '%0046%'
+      or exists (select 1 from pg_proc where proname = 'match_keyword' and prolang = (select oid from pg_language where lanname = 'plpgsql'))),
+  (40, 'Nome e telefone do cliente na conversa (0047)', coalesce(pg_get_functiondef('public.group_members(uuid)'::regprocedure) like '%p.lid,%', false)),
+  (41, 'Sem mensagens técnicas do WhatsApp (0048)', not exists (select 1 from public.messages
+      where message_type in ('secretEncrypted', 'encEventResponse', 'encComment', 'pollResultSnapshot', 'placeholder', 'statusMention'))),
+  (42, 'Arquivos e vídeos + equipe com acesso (0049)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'team_members' and column_name = 'user_email')),
+  (43, 'Log de atividades (0050)', to_regprocedure('public.platform_activity_log(timestamptz,timestamptz,uuid,text,text,integer,integer)') is not null),
+  (44, 'Equipe reconhecida pelo LID (0051)', coalesce(pg_get_functiondef('public.recalc_company_groups(uuid)'::regprocedure) like '%gp.lid = m.sender_jid%', false)),
+  (45, 'Silenciar grupo (0052)', to_regclass('public.group_mutes') is not null and to_regprocedure('public.set_company_mute(timestamptz)') is not null),
+  (46, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+      ) as t(ord, item, ok)
+      where not coalesce(ok, false)
+    $q$ into v_fail;
+  exception when others then
+    v_fail := null; -- banco antigo: aplica tudo (o que já existe é mantido)
+  end;
+  if v_fail is not null then
+    insert into public.schema_migrations (version)
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052', ',')) v where v < v_fail
+    on conflict do nothing;
+  end if;
+end $seed$;
+
 -- >>>>>>>>>>>>>>>>>>>> 0002_metrics.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0002', $mig0002$
 -- =====================================================================
 -- Funções de métricas para o dashboard
 -- =====================================================================
@@ -168,10 +301,11 @@ where g.monitored and g.pending_since is not null
 order by g.pending_since asc;
 
 grant select on public.pending_queue to authenticated;
-
+$mig0002$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0003_ingest.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0003', $mig0003$
 -- =====================================================================
 -- Registro atômico de mensagens + atualização do estado da conversa.
 -- Usado somente pelo worker (service_role).
@@ -330,10 +464,11 @@ end;
 $$;
 
 grant execute on function public.mark_sender_as_team(text, text, text) to authenticated;
-
+$mig0003$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0004_profile_fallback.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0004', $mig0004$
 -- =====================================================================
 -- Garante o perfil de usuários criados ANTES de o esquema existir
 -- (ex.: usuário criado no painel do Supabase antes de rodar o 0001).
@@ -404,10 +539,11 @@ where id = (
     order by u.created_at limit 1
   )
   and not exists (select 1 from public.profiles where role = 'admin' and active);
-
+$mig0004$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0005_worker_status.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0005', $mig0005$
 -- =====================================================================
 -- Sinal de vida do worker do WhatsApp, exibido no painel.
 -- Permite saber se o worker está no ar e conectado ao banco.
@@ -426,10 +562,11 @@ alter table public.worker_status enable row level security;
 
 drop policy if exists worker_status_read on public.worker_status;
 create policy worker_status_read on public.worker_status for select using (public.is_active_user());
-
+$mig0005$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0006_removed_groups.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0006', $mig0006$
 -- =====================================================================
 -- Grupos excluídos do WhatsApp.
 --
@@ -515,10 +652,11 @@ where g.monitored and g.removed_at is null and g.pending_since is not null
 order by g.pending_since asc;
 
 grant select on public.pending_queue to authenticated;
-
+$mig0006$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0007_history_import.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0007', $mig0007$
 -- =====================================================================
 -- Importação do histórico dos grupos.
 --
@@ -771,10 +909,11 @@ end;
 $$;
 
 grant execute on function public.group_stats(uuid, int) to authenticated;
-
+$mig0007$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0008_indicators.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0008', $mig0008$
 -- =====================================================================
 -- Indicadores configuráveis (etapa 1): catálogo, auditoria e feriados.
 --
@@ -1560,10 +1699,11 @@ update public.alert_rules set indicator_key = case type
     when 'high_volume' then 'volume_por_grupo'
   end
 where indicator_key is null and type in ('no_response', 'high_volume');
-
+$mig0008$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0009_response_block.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0009', $mig0009$
 -- =====================================================================
 -- Indicadores (etapa 2): Bloco 1 — Capacidade de resposta completo.
 --
@@ -1964,10 +2104,11 @@ begin
   begin alter publication supabase_realtime add table public.app_settings; exception when others then null; end;
   begin alter publication supabase_realtime add table public.holidays; exception when others then null; end;
 end $$;
-
+$mig0009$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0010_demands.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0010', $mig0010$
 -- =====================================================================
 -- Indicadores (etapa 3): Demandas e Bloco 2 — Entregas e demandas.
 --
@@ -2517,10 +2658,11 @@ end $$;
 -- alerta ligado a uma demanda (prazo vencido, retrabalho)
 alter table public.alerts add column if not exists demand_id uuid references public.demands(id) on delete cascade;
 create index if not exists alerts_demand_idx on public.alerts (demand_id) where demand_id is not null;
-
+$mig0010$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0011_relationship_context.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0011', $mig0011$
 -- =====================================================================
 -- Indicadores (etapa 4): blocos 3 (Saúde do relacionamento) e
 -- 4 (Contexto operacional).
@@ -3057,10 +3199,11 @@ begin
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
   end loop;
 end $$;
-
+$mig0011$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0012_replies.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0012', $mig0012$
 -- =====================================================================
 -- Responder os grupos pelo painel.
 --
@@ -3228,10 +3371,11 @@ end $$;
 
 -- atualiza o cache da API do Supabase (evita "Could not find the ... column in the schema cache")
 notify pgrst, 'reload schema';
-
+$mig0012$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0013_worker_lock.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0013', $mig0013$
 -- =====================================================================
 -- Um único worker por vez usa o WhatsApp.
 --
@@ -3296,10 +3440,11 @@ grant execute on function public.release_worker_lock(text) to service_role;
 
 -- atualiza o cache da API do Supabase (evita "Could not find the ... column in the schema cache")
 notify pgrst, 'reload schema';
-
+$mig0013$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0014_reincidence.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0014', $mig0014$
 -- =====================================================================
 -- Indicador: Reincidência de falta de resposta (Bloco 1).
 --
@@ -3478,10 +3623,11 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
-
+$mig0014$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0015_recurrence_alert.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0015', $mig0015$
 -- =====================================================================
 -- Alerta de reincidência de falta de resposta.
 --
@@ -3526,10 +3672,11 @@ revoke all on function public.recurrence_alert_candidates(int, int) from public,
 grant execute on function public.recurrence_alert_candidates(int, int) to service_role;
 
 notify pgrst, 'reload schema';
-
+$mig0015$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0016_peak_hours.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0016', $mig0016$
 -- =====================================================================
 -- Horários de pico mais fácil de ler.
 --
@@ -3631,10 +3778,11 @@ set description = 'Quando os clientes mais escrevem: horário e dia de pico, mov
 where key = 'horarios_pico';
 
 notify pgrst, 'reload schema';
-
+$mig0016$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0017_dashboard_cards.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0017', $mig0017$
 -- =====================================================================
 -- Ajustes de cartões do dashboard:
 --  * Mensagens pendentes: lista os grupos, um por linha, com quantas
@@ -3818,10 +3966,11 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
-
+$mig0017$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0018_response_from_last_message.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0018', $mig0018$
 -- =====================================================================
 -- Tempo de resposta contado a partir da ÚLTIMA mensagem do cliente.
 --
@@ -4105,10 +4254,11 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
-
+$mig0018$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0019_reply_analysis.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0019', $mig0019$
 -- =====================================================================
 -- Análise "Precisa de resposta?"
 --
@@ -4385,10 +4535,11 @@ end $$;
 revoke all on function public.reply_signal(text, text, jsonb) from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
-
+$mig0019$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0020_media_seen.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0020', $mig0020$
 -- =====================================================================
 -- Imagens e arquivos sem visualização / sem baixa
 --
@@ -4620,10 +4771,11 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
-
+$mig0020$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0021_conversations.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0021', $mig0021$
 -- =====================================================================
 -- Início e fechamento das conversas nos grupos
 --
@@ -4995,10 +5147,11 @@ end $$;
 revoke all on function public.team_close_kind(text, jsonb) from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
-
+$mig0021$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0022_daily.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0022', $mig0022$
 -- =====================================================================
 -- Acompanhamento do dia
 --
@@ -5230,10 +5383,11 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
-
+$mig0022$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0023_groups_panel.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0023', $mig0023$
 -- =====================================================================
 -- Painel de grupos: um cartão por grupo com as últimas mensagens do dia
 --
@@ -5335,10 +5489,11 @@ revoke all on function public.groups_panel() from public, anon;
 grant execute on function public.groups_panel() to authenticated;
 
 notify pgrst, 'reload schema';
-
+$mig0023$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0024_message_alert.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0024', $mig0024$
 -- =====================================================================
 -- Configuração do alerta de nova mensagem (Configurações › Geral)
 --  * msg_alert_enabled:    mostra o alerta no centro da tela;
@@ -5358,10 +5513,11 @@ alter table public.app_settings add constraint app_settings_msg_alert_auto_close
   check (msg_alert_auto_close between 0 and 600);
 
 notify pgrst, 'reload schema';
-
+$mig0024$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0025_sla_screen_alerts.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0025', $mig0025$
 -- =====================================================================
 -- Alertas em tela (mesmo formato do aviso de nova mensagem)
 --  * msg_alert_alerts: abre no centro da tela os alertas do sistema e o
@@ -5414,10 +5570,11 @@ revoke all on function public.sla_breaches() from public, anon;
 grant execute on function public.sla_breaches() to authenticated;
 
 notify pgrst, 'reload schema';
-
+$mig0025$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0026_commitment_demands.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0026', $mig0026$
 -- =====================================================================
 -- Demandas automáticas pelo compromisso da equipe
 --
@@ -5446,10 +5603,11 @@ alter table public.demands add constraint demands_source_check
   check (source in ('manual', 'keyword', 'ai', 'commitment'));
 
 notify pgrst, 'reload schema';
-
+$mig0026$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0027_sectors.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0027', $mig0027$
 -- =====================================================================
 -- Setores: cada grupo pertence a um setor; os usuários do setor só veem
 -- (e só agem sobre) os grupos do seu setor. Administradores veem tudo.
@@ -5773,10 +5931,11 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
-
+$mig0027$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0028_commitment_triggers.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0028', $mig0028$
 -- =====================================================================
 -- Gatilhos de compromisso da equipe para registrar demandas
 --
@@ -5806,10 +5965,11 @@ update public.app_settings
  where id = 1;
 
 notify pgrst, 'reload schema';
-
+$mig0028$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0029_management_summary.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0029', $mig0029$
 -- =====================================================================
 -- Resumo da gestão (topo do dashboard)
 --
@@ -5932,10 +6092,11 @@ $$;
 grant execute on function public.management_summary(timestamptz, timestamptz, uuid, uuid) to authenticated;
 
 notify pgrst, 'reload schema';
-
+$mig0029$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0030_multi_company.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0030', $mig0030$
 -- =====================================================================
 -- Multiempresa: o sistema atende várias empresas, cada uma isolada
 --
@@ -7820,10 +7981,11 @@ do $$ begin
 end $$;
 
 notify pgrst, 'reload schema';
-
+$mig0030$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0031_menu_access.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0031', $mig0031$
 -- =====================================================================
 -- Menus do menu lateral liberados por empresa
 --
@@ -7840,10 +8002,11 @@ alter table public.app_settings
   add column if not exists menu_access jsonb not null default '{}'::jsonb;
 
 notify pgrst, 'reload schema';
-
+$mig0031$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0032_voice_alert.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0032', $mig0032$
 -- =====================================================================
 -- Aviso por voz junto com o alerta em tela
 --
@@ -7858,10 +8021,11 @@ alter table public.app_settings
   add column if not exists msg_alert_voice boolean not null default true;
 
 notify pgrst, 'reload schema';
-
+$mig0032$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0033_voice_alert_rules.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0033', $mig0033$
 -- =====================================================================
 -- Aviso por voz configurado em Configurações › Regras de alerta
 --
@@ -7880,10 +8044,11 @@ alter table public.alert_rules
   add column if not exists voice boolean not null default true;
 
 notify pgrst, 'reload schema';
-
+$mig0033$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0034_voice_options.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0034', $mig0034$
 -- =====================================================================
 -- Aviso por voz: o que é falado, voz, velocidade e tom
 --
@@ -7904,10 +8069,11 @@ alter table public.app_settings
     check (msg_alert_voice_pitch between 0 and 2);
 
 notify pgrst, 'reload schema';
-
+$mig0034$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0035_viewer_role.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0035', $mig0035$
 -- =====================================================================
 -- Perfil "Somente ver painéis" (role = 'viewer')
 --
@@ -8043,10 +8209,11 @@ end;
 $$;
 
 notify pgrst, 'reload schema';
-
+$mig0035$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0036_group_members.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0036', $mig0036$
 -- =====================================================================
 -- Membros dos grupos
 --
@@ -8138,10 +8305,11 @@ $$;
 grant execute on function public.group_members(uuid) to authenticated;
 
 notify pgrst, 'reload schema';
-
+$mig0036$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0037_ignore_stickers_emoji.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0037', $mig0037$
 -- =====================================================================
 -- Desconsiderar figurinha / emoji como última mensagem do cliente.
 --
@@ -8378,10 +8546,11 @@ $$;
 
 revoke all on function public.rebuild_group_state(uuid, timestamptz) from public, anon, authenticated;
 grant execute on function public.rebuild_group_state(uuid, timestamptz) to service_role;
-
+$mig0037$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0038_media_files.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0038', $mig0038$
 -- =====================================================================
 -- Ver imagens e áudios pelo sistema.
 --
@@ -8435,10 +8604,11 @@ $$;
 
 revoke all on function public.media_usage() from public, anon;
 grant execute on function public.media_usage() to authenticated;
-
+$mig0038$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0039_group_responsible.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0039', $mig0039$
 -- =====================================================================
 -- Responsável pelo grupo.
 --
@@ -8496,10 +8666,11 @@ $$;
 drop trigger if exists demands_default_assignee on public.demands;
 create trigger demands_default_assignee before insert on public.demands
   for each row execute function public.demand_default_assignee();
-
+$mig0039$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0040_recalc_groups.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0040', $mig0040$
 -- =====================================================================
 -- Recalcular os grupos depois de cadastrar a equipe.
 --
@@ -8617,10 +8788,11 @@ $$;
 
 revoke all on function public.recalc_groups() from public, anon;
 grant execute on function public.recalc_groups() to authenticated;
-
+$mig0040$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0041_ignore_phrases.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0041', $mig0041$
 -- =====================================================================
 -- Mensagens a ignorar: frases da empresa.
 --
@@ -8632,10 +8804,11 @@ commit;
 
 alter table public.app_settings
   add column if not exists ignore_phrases text[] not null default '{}';
-
+$mig0041$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0042_quick_replies.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0042', $mig0042$
 -- =====================================================================
 -- Mensagens rápidas.
 --
@@ -8670,10 +8843,11 @@ create policy quick_replies_admin on public.quick_replies for all
   with check ((select public.is_admin()) and company_id = (select public.current_company_id()));
 
 grant select, insert, update, delete on public.quick_replies to authenticated;
-
+$mig0042$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0043_conversation_closing.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0043', $mig0043$
 -- =====================================================================
 -- Fechamento da conversa (\fechamento).
 --
@@ -9015,10 +9189,11 @@ grant execute on function public.send_group_message(uuid, text, uuid, boolean) t
 -- grupos que já estão em dia não têm conversa aberta registrada: marca o início das abertas
 update public.groups set conversation_started_at = pending_since
  where pending_since is not null and conversation_started_at is null;
-
+$mig0043$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0044_avatars.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0044', $mig0044$
 -- =====================================================================
 -- Fotos de perfil: participantes dos grupos e imagem do grupo.
 --
@@ -9102,10 +9277,11 @@ returns jsonb language sql stable security invoker set search_path = public as $
   where public.can_view_group(p_group_id)
 $$;
 grant execute on function public.group_members(uuid) to authenticated;
-
+$mig0044$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0045_avatar_full.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0045', $mig0045$
 -- =====================================================================
 -- Foto de perfil em tamanho grande (coluna sem uso).
 --
@@ -9116,10 +9292,11 @@ commit;
 
 alter table public.contact_avatars
   add column if not exists full_path text;
-
+$mig0045$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0046_faster_keywords.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0046', $mig0046$
 -- =====================================================================
 -- Desempenho: busca de palavras-chave (indicadores do dashboard).
 --
@@ -9171,10 +9348,11 @@ begin
   return null;
 end;
 $$;
-
+$mig0046$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0047_members_lid.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0047', $mig0047$
 -- =====================================================================
 -- Conversa: nome e telefone do cliente em cada mensagem.
 --
@@ -9235,10 +9413,11 @@ returns jsonb language sql stable security invoker set search_path = public as $
   where public.can_view_group(p_group_id)
 $$;
 grant execute on function public.group_members(uuid) to authenticated;
-
+$mig0047$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0048_ignore_technical_messages.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0048', $mig0048$
 -- =====================================================================
 -- Limpa "mensagens" técnicas do WhatsApp gravadas por engano.
 --
@@ -9274,10 +9453,11 @@ begin
     perform public.recalc_company_groups(v_company);
   end loop;
 end $$;
-
+$mig0048$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0049_files_and_team_users.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0049', $mig0049$
 -- =====================================================================
 -- 1) Imagens, arquivos e vídeos disponíveis no sistema.
 --    Vídeos e documentos passam a ser guardados por padrão (antes só imagens,
@@ -9299,10 +9479,11 @@ update storage.buckets set file_size_limit = 52428800 where id = 'media';
 
 alter table public.team_members
   add column if not exists user_email text;
-
+$mig0049$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0050_activity_log.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0050', $mig0050$
 -- =====================================================================
 -- Log de atividades (aba "Log", só para quem administra a plataforma).
 --
@@ -9600,10 +9781,11 @@ end;
 $$;
 revoke all on function public.purge_activity_log() from public, anon;
 grant execute on function public.purge_activity_log() to authenticated;
-
+$mig0050$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0051_lid_team_messages.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0051', $mig0051$
 -- =====================================================================
 -- Mensagens da equipe que chegaram só com o LID eram tratadas como do
 -- cliente.
@@ -9718,10 +9900,11 @@ begin
     raise notice 'empresa %: %', v_c, v_r;
   end loop;
 end $$;
-
+$mig0051$);
 commit;
 
 -- >>>>>>>>>>>>>>>>>>>> 0052_group_mute.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0052', $mig0052$
 -- =====================================================================
 -- Silenciar grupo.
 --
@@ -9855,7 +10038,7 @@ end;
 $$;
 revoke all on function public.set_company_mute(timestamptz) from public, anon;
 grant execute on function public.set_company_mute(timestamptz) to authenticated;
-
+$mig0052$);
 commit;
 
 notify pgrst, 'reload schema';

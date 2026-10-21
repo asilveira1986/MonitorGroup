@@ -2,38 +2,9 @@
 # Gera supabase/atualizar_banco.sql juntando os scripts 0002 em diante, na ordem.
 # Uso: sh supabase/build-updates.sh
 cd "$(dirname "$0")"
-{
-  echo "-- ====================================================================="
-  echo "-- ATUALIZAÇÃO COMPLETA DO BANCO (gerado por supabase/build-updates.sh)"
-  echo "-- Junta os scripts 0002 em diante, na ordem. Pode ser executado mais de"
-  echo "-- uma vez: o que já existe é mantido e o que falta é criado."
-  echo "-- Pré-requisito: 0001_schema.sql já executado (instalação inicial)."
-  echo "--"
-  echo "-- Cada script é gravado ao terminar (commit), para não travar as tabelas"
-  echo "-- por muito tempo. Se aparecer \"deadlock detected\", o que já foi gravado"
-  echo "-- fica e basta executar de novo. Para evitar: pause o worker no Railway e"
-  echo "-- feche as abas do painel durante a atualização; depois, religue o worker."
-  echo "-- ====================================================================="
-  for f in migrations/0*.sql; do
-    case "$f" in migrations/0001_*) continue ;; esac
-    echo ""
-    echo "-- >>>>>>>>>>>>>>>>>>>> $(basename "$f") <<<<<<<<<<<<<<<<<<<<"
-    cat "$f"
-    # grava ao fim de cada script: as travas das tabelas duram só aquele trecho
-    # (um script único segurava tudo até o fim e dava "deadlock detected")
-    echo ""
-    echo "commit;"
-  done
-  echo ""
-  echo "notify pgrst, 'reload schema';"
-  cat <<'SQL'
-
--- ---------------------------------------------------------------------
--- Conferência: o SQL Editor mostra esta tabela no final.
--- Todas as linhas com "OK" = banco atualizado.
--- ---------------------------------------------------------------------
-select item as "Item", case when ok then 'OK' else 'FALTANDO' end as "Situação"
-from (values
+# itens da conferência: (ordem, rótulo com a versão entre parênteses, está aplicado?)
+# usados no fim do arquivo e na primeira execução com o controle de versões
+CHECKS=$(cat <<'SQL'
   (1, 'Indicadores e configurações (0008)', to_regclass('public.indicators') is not null),
   (2, 'Horário comercial nos indicadores (0009)', to_regprocedure('public.business_seconds(timestamptz,timestamptz,jsonb)') is not null),
   (3, 'Demandas (0010)', to_regclass('public.demands') is not null),
@@ -103,6 +74,113 @@ from (values
   (44, 'Equipe reconhecida pelo LID (0051)', coalesce(pg_get_functiondef('public.recalc_company_groups(uuid)'::regprocedure) like '%gp.lid = m.sender_jid%', false)),
   (45, 'Silenciar grupo (0052)', to_regclass('public.group_mutes') is not null and to_regprocedure('public.set_company_mute(timestamptz)') is not null),
   (46, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+SQL
+)
+VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)
+{
+  echo "-- ====================================================================="
+  echo "-- ATUALIZAÇÃO COMPLETA DO BANCO (gerado por supabase/build-updates.sh)"
+  echo "-- Junta os scripts 0002 em diante, na ordem. Pode ser executado quantas"
+  echo "-- vezes quiser."
+  echo "-- Pré-requisito: 0001_schema.sql já executado (instalação inicial)."
+  echo "--"
+  echo "-- O banco guarda quais scripts já foram aplicados (schema_migrations):"
+  echo "-- só os que faltam rodam, então quase nada é travado. Se mesmo assim o"
+  echo "-- banco acusar \"deadlock detected\" (o worker e o painel usando as tabelas),"
+  echo "-- a parte é repetida sozinha, até 5 vezes. Se ainda assim falhar, o que já"
+  echo "-- foi aplicado fica e basta executar de novo."
+  echo "-- ====================================================================="
+  cat <<'SQL'
+
+-- controle dos scripts aplicados
+create table if not exists public.schema_migrations (
+  version    text primary key,
+  applied_at timestamptz not null default now()
+);
+alter table public.schema_migrations enable row level security;
+
+-- aplica um script uma vez só; deadlock ou trava demorada: espera e tenta de novo
+create or replace function public._apply_migration(p_version text, p_sql text)
+returns text
+language plpgsql
+as $fn$
+declare
+  i int;
+begin
+  if exists (select 1 from public.schema_migrations where version = p_version) then
+    return p_version || ': já aplicado';
+  end if;
+  for i in 1..5 loop
+    begin
+      perform set_config('lock_timeout', '15s', true);
+      execute p_sql;
+      insert into public.schema_migrations (version) values (p_version) on conflict do nothing;
+      return p_version || ': aplicado';
+    exception when deadlock_detected or lock_not_available then
+      if i = 5 then
+        raise;
+      end if;
+      raise notice '%: tabela ocupada (tentativa %), tentando de novo...', p_version, i;
+      perform pg_sleep(2 * i);
+    end;
+  end loop;
+  return p_version;
+end;
+$fn$;
+
+-- primeira vez com o controle: marca como aplicados os scripts que o banco já
+-- tem (todos antes do primeiro item da conferência que falta), para não refazer tudo
+do $seed$
+declare
+  v_fail text;
+begin
+  if exists (select 1 from public.schema_migrations) then
+    return;
+  end if;
+  begin
+    execute $q$
+      select coalesce(min(substring(item from '\((\d{4})\)')), '9999')
+      from (values
+SQL
+  printf '%s\n' "$CHECKS"
+  cat <<SQL
+      ) as t(ord, item, ok)
+      where not coalesce(ok, false)
+    \$q\$ into v_fail;
+  exception when others then
+    v_fail := null; -- banco antigo: aplica tudo (o que já existe é mantido)
+  end;
+  if v_fail is not null then
+    insert into public.schema_migrations (version)
+    select v from unnest(string_to_array('$VERSIONS', ',')) v where v < v_fail
+    on conflict do nothing;
+  end if;
+end \$seed\$;
+SQL
+  for f in migrations/0*.sql; do
+    case "$f" in migrations/0001_*) continue ;; esac
+    v=$(basename "$f" | cut -c1-4)
+    echo ""
+    echo "-- >>>>>>>>>>>>>>>>>>>> $(basename "$f") <<<<<<<<<<<<<<<<<<<<"
+    echo "select public._apply_migration('$v', \$mig$v\$"
+    cat "$f"
+    echo "\$mig$v\$);"
+    # grava ao fim de cada script: as travas das tabelas duram só aquele trecho
+    echo "commit;"
+  done
+  echo ""
+  echo "notify pgrst, 'reload schema';"
+  cat <<'SQL'
+
+-- ---------------------------------------------------------------------
+-- Conferência: o SQL Editor mostra esta tabela no final.
+-- Todas as linhas com "OK" = banco atualizado.
+-- ---------------------------------------------------------------------
+select item as "Item", case when ok then 'OK' else 'FALTANDO' end as "Situação"
+from (values
+SQL
+  printf '%s\n' "$CHECKS"
+  cat <<'SQL'
 ) as t(ord, item, ok)
 order by ord;
 SQL
