@@ -14,7 +14,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const [{ count: pending }, { count: alerts }, { count: demands }, { data: settings }, company, { data: companies }] = await Promise.all([
+  const [{ count: pending }, { count: alerts }, { count: demands }, { data: settings }, company, { data: companies }, { data: due }] = await Promise.all([
     supabase.from('pending_queue').select('id', { count: 'exact', head: true }),
     supabase.from('alerts').select('id', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', ['aberta', 'em_andamento']),
@@ -29,7 +29,11 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     profile.platform_admin
       ? supabase.from('companies').select('id, name, active').order('name')
       : Promise.resolve({ data: null }),
+    // agenda: demandas do usuário para entregar hoje e atrasadas (sem o script 0059, nada)
+    supabase.rpc('my_due_demands'),
   ]);
+  const dueToday = Number((due as { hoje?: number } | null)?.hoje ?? 0);
+  const dueLate = Number((due as { atrasadas?: number } | null)?.atrasadas ?? 0);
 
   const initials = (profile.full_name || profile.email)
     .split(/[\s@.]+/)
@@ -41,11 +45,11 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   return (
     <div className="min-h-screen">
       <Sidebar
-        counts={{ pending: pending ?? 0, alerts: alerts ?? 0, demands: demands ?? 0 }}
+        counts={{ pending: pending ?? 0, alerts: alerts ?? 0, demands: demands ?? 0, agenda: dueToday + dueLate }}
         // demandas desligadas nas configurações: o item some do menu
         // + os menus que a empresa ocultou para este usuário (Configurações › Menus)
         hidden={[
-          ...(demandsEnabled(settings) ? [] : ['/demands']),
+          ...(demandsEnabled(settings) ? [] : ['/demands', '/agenda']),
           ...MENU_ITEMS.filter(
             (i) =>
               !canSeeMenu(

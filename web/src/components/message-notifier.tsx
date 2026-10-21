@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertOctagon, AlertTriangle, Bell, BellOff, BellRing, Clock, Info } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, Bell, BellOff, BellRing, CalendarDays, Clock, Info } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -261,6 +261,52 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         });
       }),
   );
+
+  // Agenda: aviso das demandas para entregar hoje (e atrasadas). Uma vez por dia neste navegador,
+  // e de novo quando aumentam; confere a cada 10 min.
+  useEffect(() => {
+    let stop = false;
+    const check = async () => {
+      const { data, error } = await createClient().rpc('my_due_demands');
+      if (stop || error || !data || configRef.current.userOff || mutedHere()) return;
+      const today = Number((data as { hoje?: number }).hoje ?? 0);
+      const late = Number((data as { atrasadas?: number }).atrasadas ?? 0);
+      const total = today + late;
+      const storageKey = `due-notice:${new Date().toLocaleDateString('en-CA')}`;
+      let shown = 0;
+      try {
+        shown = Number(localStorage.getItem(storageKey) ?? 0);
+      } catch {}
+      if (total === 0 || total <= shown) return;
+      try {
+        localStorage.setItem(storageKey, String(total));
+      } catch {}
+      const parts = [today ? `${today} para entregar hoje` : null, late ? `${late} atrasada(s)` : null].filter(Boolean);
+      pushRef.current({
+        key: 'agenda-hoje',
+        tone: late ? 'critical' : 'warning',
+        heading: 'Demandas do dia',
+        icon: CalendarDays,
+        group: 'Sua agenda',
+        who: parts.join(' · '),
+        text: 'Abra a agenda para ver o que entregar e marcar como entregue.',
+        href: '/agenda',
+        action: 'Abrir agenda',
+        at: Date.now(),
+        speech:
+          configRef.current.voice !== false
+            ? `Você tem ${[today ? `${today} ${today === 1 ? 'demanda' : 'demandas'} para entregar hoje` : null, late ? `${late} ${late === 1 ? 'atrasada' : 'atrasadas'}` : null].filter(Boolean).join(' e ')}.`
+            : undefined,
+      });
+    };
+    const first = setTimeout(() => void check(), 3000);
+    const timer = setInterval(() => void check(), 10 * 60_000);
+    return () => {
+      stop = true;
+      clearTimeout(first);
+      clearInterval(timer);
+    };
+  }, []);
 
   // SLA excedido: confere a cada 30 s quais grupos passaram do tempo de resposta.
   // Avisa na virada (a mesma pendência só uma vez); as que já estavam vencidas ao abrir a tela não abrem aviso.

@@ -58,6 +58,7 @@ export function DemandsBoard({
   editableGroupIds,
   openCount,
   filters,
+  myMemberIds,
 }: {
   rows: DemandRow[];
   groups: Option[];
@@ -70,6 +71,8 @@ export function DemandsBoard({
   openCount: number;
   filters: { status: string; groupId: string | null; assigneeId: string | null; q: string };
   isAdmin: boolean;
+  /** pessoas da equipe ligadas ao usuário logado (só o responsável entrega) */
+  myMemberIds: string[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -228,6 +231,7 @@ export function DemandsBoard({
           types={types}
           timeZone={timeZone}
           locked={editableGroupIds !== null && !editableGroupIds.includes(open.group_id)}
+          myMemberIds={myMemberIds}
           onClose={() => go('id', null)}
         />
       )}

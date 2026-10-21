@@ -228,6 +228,16 @@ export async function processDemandSignals(m: DemandMessage) {
                     const when = parsePromise(`até ${rest}`, new Date(), promiseOpts);
                     return when ? { promised_at: when.toISOString() } : {};
                   })();
+      // entregue: só o responsável pela demanda (sem responsável, quem entrega passa a ser o responsável)
+      if (changes.status === 'entregue') {
+        const { data: d } = await db.from('demands').select('assignee_id').eq('id', target.id).maybeSingle();
+        const assignee = (d?.assignee_id as string | null | undefined) ?? null;
+        if (!m.fromTeam || !m.teamMemberId || (assignee && assignee !== m.teamMemberId)) {
+          logger.info({ demand: target.id, sender: m.senderName }, '#entregue ignorado: não é o responsável pela demanda');
+          return;
+        }
+        if (!assignee) changes.assignee_id = m.teamMemberId;
+      }
       if (Object.keys(changes).length) {
         await rpc('update_demand', { p_id: target.id, p_changes: changes, p_message_id: m.messageId, p_actor: actor });
       }

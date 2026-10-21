@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, ExternalLink, Loader2, MessageSquareWarning, X } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Loader2, MessageSquareWarning, PackageCheck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -39,6 +39,7 @@ export function DemandDrawer({
   types,
   timeZone,
   locked = false,
+  myMemberIds = [],
   onClose,
 }: {
   demand: DemandRow;
@@ -47,6 +48,8 @@ export function DemandDrawer({
   timeZone: string;
   /** setor do grupo sem permissão de gerenciar demandas: só consulta */
   locked?: boolean;
+  /** pessoas da equipe ligadas ao usuário logado: só o responsável entrega */
+  myMemberIds?: string[];
   onClose: () => void;
 }) {
   const [events, setEvents] = useState<DemandEvent[] | null>(null);
@@ -84,6 +87,8 @@ export function DemandDrawer({
       else toast.error(res.error);
     });
 
+  const isOpen = ['aberta', 'em_andamento'].includes(demand.status);
+  const canDeliver = Boolean(demand.assignee_id && myMemberIds.includes(demand.assignee_id));
   const overdue = demand.promised_at && !['entregue', 'cancelada'].includes(demand.status) && new Date(demand.promised_at) < new Date();
 
   return (
@@ -134,11 +139,14 @@ export function DemandDrawer({
                 disabled={pending || locked}
                 onChange={(e) => save({ status: e.target.value as DemandStatus }, 'Status atualizado')}
               >
-                {Object.entries(DEMAND_STATUS_LABEL).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
+                {/* "Entregue" só pelo botão do responsável */}
+                {Object.entries(DEMAND_STATUS_LABEL)
+                  .filter(([k]) => k !== 'entregue' || demand.status === 'entregue')
+                  .map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
               </Select>
             </Field>
             <Field label="Responsável">
@@ -181,6 +189,38 @@ export function DemandDrawer({
               />
             </Field>
           </div>
+
+          {isOpen && (
+            <div
+              className={
+                canDeliver
+                  ? 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-line bg-brand-soft p-3'
+                  : 'rounded-xl border border-line bg-surface-2 p-3 text-xs text-ink-2'
+              }
+            >
+              {canDeliver ? (
+                <>
+                  <p className="text-sm">Terminou? Marque a entrega para o cliente e para a sua agenda.</p>
+                  <Button
+                    disabled={pending || locked}
+                    onClick={() =>
+                      confirm(`Confirmar a entrega da demanda #${demand.number}?`) &&
+                      save({ status: 'entregue' }, 'Demanda entregue')
+                    }
+                  >
+                    <PackageCheck className="h-4 w-4" /> Demanda entregue
+                  </Button>
+                </>
+              ) : demand.assignee_id ? (
+                <p>
+                  Só o responsável (<strong>{demand.assignee_name ?? 'responsável'}</strong>) pode marcar esta demanda como
+                  entregue, pelo botão &quot;Demanda entregue&quot; ou com #entregue no WhatsApp.
+                </p>
+              ) : (
+                <p>Defina o responsável: só ele pode marcar a demanda como entregue.</p>
+              )}
+            </div>
+          )}
 
           <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
             <div>

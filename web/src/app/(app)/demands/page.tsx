@@ -34,7 +34,7 @@ export default async function DemandsPage({ searchParams }: PageProps<'/demands'
   if (assigneeId) query = query.eq('assignee_id', assigneeId);
   if (q) query = query.ilike('description', `%${q}%`);
 
-  const [{ data }, { data: groups }, { data: members }, { data: settings }, { data: typeInd }, { count: openCount }, { data: perms }] =
+  const [{ data }, { data: groups }, { data: members }, { data: settings }, { data: typeInd }, { count: openCount }, { data: perms }, { data: myIds }] =
     await Promise.all([
       query,
       supabase.from('groups').select('id, name').eq('monitored', true).is('removed_at', null).order('name'),
@@ -48,6 +48,7 @@ export default async function DemandsPage({ searchParams }: PageProps<'/demands'
       supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
       supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', STATUS_FILTER.open),
       supabase.rpc('my_permissions'),
+      supabase.rpc('my_team_member_ids'),
     ]);
   // grupos em que o usuário pode gerenciar demandas (administrador: todos)
   const myPerms = perms as MyPermissions | null;
@@ -106,6 +107,7 @@ export default async function DemandsPage({ searchParams }: PageProps<'/demands'
         openCount={openCount ?? 0}
         filters={{ status, groupId, assigneeId, q }}
         isAdmin={profile.role === 'admin'}
+        myMemberIds={Array.isArray(myIds) ? (myIds as string[]) : []}
       />
       {rows.length === 0 && (
         <Card className="mt-4">

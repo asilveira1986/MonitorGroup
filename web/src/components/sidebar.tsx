@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Building2, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
+import { Bell, Building2, CalendarDays, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -15,6 +15,7 @@ const NAV = [
   { href: '/panel', label: 'Painel de grupos', icon: LayoutGrid },
   { href: '/pending', label: 'Aguardando resposta', icon: Clock, badgeKey: 'pending' as const },
   { href: '/demands', label: 'Demandas', icon: ClipboardList, badgeKey: 'demands' as const },
+  { href: '/agenda', label: 'Agenda', icon: CalendarDays, badgeKey: 'agenda' as const },
   { href: '/groups', label: 'Grupos', icon: MessagesSquare },
   { href: '/alerts', label: 'Alertas', icon: Bell, badgeKey: 'alerts' as const },
   { href: '/reports', label: 'Relatórios', icon: FileBarChart },
@@ -46,7 +47,8 @@ export function Sidebar({
   company = null,
   alertsOff,
 }: {
-  counts: { pending: number; alerts: number; demands: number };
+  /** agenda: demandas do usuário para entregar hoje + atrasadas */
+  counts: { pending: number; alerts: number; demands: number; agenda?: number };
   /** itens do menu escondidos (ex.: funções desligadas nas configurações) */
   hidden?: string[];
   user: { name: string; role: string };
@@ -75,7 +77,7 @@ export function Sidebar({
         .filter((item) => !hidden.includes(item.href))
         .map(({ href, label, icon: Icon, badgeKey }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
-        const count = badgeKey ? counts[badgeKey] : 0;
+        const count = badgeKey ? (counts[badgeKey] ?? 0) : 0;
         return (
           <Link
             key={href}
@@ -96,7 +98,7 @@ export function Sidebar({
               <span
                 className={cn(
                   'absolute right-2.5 top-1.5 hidden h-2 w-2 rounded-full ring-2 ring-surface [[data-sidebar=collapsed]_aside_&]:block',
-                  badgeKey === 'alerts' ? 'bg-critical' : badgeKey === 'demands' ? 'bg-ink-2' : 'bg-warning',
+                  badgeKey === 'alerts' || badgeKey === 'agenda' ? 'bg-critical' : badgeKey === 'demands' ? 'bg-ink-2' : 'bg-warning',
                 )}
                 aria-hidden
               />
@@ -106,7 +108,7 @@ export function Sidebar({
                 className={cn(
                   COLLAPSED_HIDE,
                   'tabular rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                  badgeKey === 'alerts'
+                  badgeKey === 'alerts' || badgeKey === 'agenda'
                     ? 'bg-critical text-white'
                     : badgeKey === 'demands'
                       ? 'bg-surface-2 text-ink-2 ring-1 ring-line'

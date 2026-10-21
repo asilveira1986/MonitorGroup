@@ -136,7 +136,9 @@ begin
       and to_regprocedure('public.my_alert_groups()') is not null),
   (48, 'Grupo sem responsável avisa todos (0057)', coalesce(pg_get_functiondef('public.my_alert_groups()'::regprocedure) like '%cardinality(g.responsible_member_ids) = 0%', false)),
   (49, 'Meus alertas (0058)', to_regprocedure('public.set_my_alerts_off(boolean)') is not null),
-  (50, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (50, 'Entrega pelo responsável e agenda (0059)', to_regprocedure('public.my_due_demands()') is not null
+      and exists (select 1 from pg_trigger where tgname = 'demands_check_delivery')),
+  (51, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -145,7 +147,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -10496,6 +10498,82 @@ grant execute on function public.set_my_alerts_off(boolean) to authenticated;
 $mig0058$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0059_demand_delivery_agenda.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0059', $mig0059$
+-- =====================================================================
+-- Demandas: entrega pelo responsável e agenda por usuário.
+--
+--  * Só o responsável marca a demanda como entregue (botão "Demanda
+--    entregue"). No painel, o responsável é o usuário com o e-mail de
+--    acesso da pessoa da equipe (Configurações › Equipe › Dar acesso).
+--    Pelo WhatsApp (#entregue), o worker aceita só a mensagem do próprio
+--    responsável.
+--  * my_team_member_ids(): as pessoas da equipe ligadas ao usuário logado.
+--  * my_due_demands(): quantas demandas o usuário tem para entregar hoje e
+--    quantas estão atrasadas (aviso do dia e número no menu Agenda).
+-- =====================================================================
+
+create or replace function public.my_team_member_ids()
+returns uuid[]
+language sql stable security definer set search_path = public
+as $$
+  select coalesce(array_agg(t.id), '{}')
+  from public.team_members t join public.profiles p on lower(p.email) = lower(t.user_email)
+  where p.id = auth.uid() and t.company_id = public.current_company_id()
+$$;
+revoke all on function public.my_team_member_ids() from public, anon;
+grant execute on function public.my_team_member_ids() to authenticated;
+
+-- entrega só pelo responsável (usuário do painel; o worker confere pelo remetente)
+create or replace function public.check_demand_delivery()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if new.status = 'entregue' and old.status is distinct from 'entregue' and auth.uid() is not null then
+    if new.assignee_id is null then
+      raise exception 'Defina o responsável da demanda: só ele pode marcar como entregue.' using errcode = '42501';
+    end if;
+    if not exists (select 1 from public.team_members t join public.profiles p on lower(p.email) = lower(t.user_email)
+                    where t.id = new.assignee_id and p.id = auth.uid()) then
+      raise exception 'Só o responsável pela demanda (%) pode marcar como entregue.',
+        coalesce((select name from public.team_members where id = new.assignee_id), '?') using errcode = '42501';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists demands_check_delivery on public.demands;
+create trigger demands_check_delivery before update of status on public.demands
+  for each row execute function public.check_demand_delivery();
+
+-- para entregar hoje e atrasadas (no fuso da empresa)
+create or replace function public.my_due_demands()
+returns jsonb
+language sql stable security definer set search_path = public
+as $$
+  with cfg as (
+    select coalesce((select timezone from public.app_settings where company_id = public.current_company_id()),
+                    'America/Sao_Paulo') as tz
+  ), mine as (
+    select d.promised_at from public.demands d, cfg
+    where d.company_id = public.current_company_id()
+      and d.status in ('aberta', 'em_andamento')
+      and d.assignee_id = any(public.my_team_member_ids())
+      and d.promised_at is not null
+  )
+  select jsonb_build_object(
+    'hoje', (select count(*) from mine, cfg
+              where (promised_at at time zone cfg.tz)::date = (now() at time zone cfg.tz)::date and promised_at >= now()),
+    'atrasadas', (select count(*) from mine where promised_at < now())
+  )
+$$;
+revoke all on function public.my_due_demands() from public, anon;
+grant execute on function public.my_due_demands() to authenticated;
+$mig0059$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -10580,6 +10658,8 @@ from (values
       and to_regprocedure('public.my_alert_groups()') is not null),
   (48, 'Grupo sem responsável avisa todos (0057)', coalesce(pg_get_functiondef('public.my_alert_groups()'::regprocedure) like '%cardinality(g.responsible_member_ids) = 0%', false)),
   (49, 'Meus alertas (0058)', to_regprocedure('public.set_my_alerts_off(boolean)') is not null),
-  (50, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (50, 'Entrega pelo responsável e agenda (0059)', to_regprocedure('public.my_due_demands()') is not null
+      and exists (select 1 from pg_trigger where tgname = 'demands_check_delivery')),
+  (51, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
