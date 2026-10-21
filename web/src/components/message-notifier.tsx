@@ -1,9 +1,10 @@
 'use client';
 
-import { AlertOctagon, AlertTriangle, Bell, BellOff, Clock, Info } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, Bell, BellOff, BellRing, Clock, Info } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
+import { setMyAlertsOff } from '@/app/(app)/actions';
 import { ALERT_TYPE_LABEL, cn, formatDuration, formatPhone } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import type { Alert, Message } from '@/lib/types';
@@ -29,6 +30,8 @@ export type AlertConfig = {
   voiceSla?: boolean;
   /** frases, voz, velocidade e tom */
   voiceOptions?: VoiceOptions;
+  /** o usuário desligou os avisos para si (Meus alertas) */
+  userOff?: boolean;
 };
 
 const STORAGE_KEY = 'notify-messages';
@@ -135,7 +138,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
   });
 
   const push = (item: ScreenItem) => {
-    if (mutedHere()) return;
+    if (mutedHere() || configRef.current.userOff) return;
     setItems((prev) => [item, ...prev.filter((i) => i.key !== item.key)]);
     // com a voz falando: bipe curto e a fala; sem voz: o som do tipo do aviso
     // (mensagem recebida, informativo, atenção ou crítico)
@@ -212,6 +215,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         const a = payload.new as Alert;
         void inMyAlertScope(a.group_id).then((mine) => {
           if (!mine) return;
+          if (configRef.current.userOff) return;
           if (!configRef.current.alerts) {
             // alertas em tela desligados: aviso pequeno no canto, como antes
             const show = a.severity === 'critical' ? toast.error : a.severity === 'warning' ? toast.warning : toast.info;
@@ -497,6 +501,49 @@ export function NotifyToggle() {
       className="rounded-xl p-2 text-ink-2 hover:bg-surface-2 hover:text-ink"
     >
       <Icon className="h-5 w-5" />
+    </button>
+  );
+}
+
+/**
+ * Meus alertas (quem administra a plataforma): desliga os avisos em tela, voz e som só para si,
+ * em qualquer navegador e empresa. Os demais usuários continuam recebendo.
+ */
+export function MyAlertsToggle({ off, compact }: { off: boolean; compact?: boolean }) {
+  const router = useRouter();
+  const [value, setValue] = useState(off);
+  const [pending, start] = useTransition();
+  const toggle = () => {
+    const next = !value;
+    setValue(next);
+    start(async () => {
+      const res = await setMyAlertsOff(next);
+      if (!res.ok) {
+        setValue(!next);
+        return void toast.error(res.error);
+      }
+      toast(next ? 'Seus alertas foram desativados' : 'Seus alertas foram ativados', {
+        description: next ? 'Você não recebe avisos em tela, voz nem som. Os outros usuários continuam recebendo.' : undefined,
+        duration: 4000,
+      });
+      router.refresh();
+    });
+  };
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      disabled={pending}
+      aria-pressed={value}
+      title={value ? 'Seus alertas estão desativados. Clique para ativar.' : 'Desativar os alertas só para você'}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-xl text-sm font-medium transition disabled:opacity-60',
+        compact ? 'p-2' : 'px-3 py-1.5',
+        value ? 'bg-warning/15 text-warning-ink ring-1 ring-inset ring-warning/35 hover:bg-warning/25' : 'text-ink-2 hover:bg-surface-2 hover:text-ink',
+      )}
+    >
+      {value ? <BellOff className="h-4 w-4" /> : <BellRing className="h-4 w-4" />}
+      {!compact && (value ? 'Meus alertas: desativados' : 'Meus alertas: ativos')}
     </button>
   );
 }

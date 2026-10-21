@@ -135,7 +135,8 @@ begin
       where table_schema = 'public' and table_name = 'groups' and column_name = 'responsible_member_ids')
       and to_regprocedure('public.my_alert_groups()') is not null),
   (48, 'Grupo sem responsável avisa todos (0057)', coalesce(pg_get_functiondef('public.my_alert_groups()'::regprocedure) like '%cardinality(g.responsible_member_ids) = 0%', false)),
-  (49, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (49, 'Meus alertas (0058)', to_regprocedure('public.set_my_alerts_off(boolean)') is not null),
+  (50, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -144,7 +145,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -10473,6 +10474,28 @@ grant execute on function public.my_alert_groups() to authenticated;
 $mig0057$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0058_my_alerts_off.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0058', $mig0058$
+-- =====================================================================
+-- "Meus alertas": o usuário desliga os avisos só para ele (aviso em tela,
+-- voz e som), em qualquer navegador e em todas as empresas. Os alertas
+-- continuam sendo criados e avisados para os demais.
+-- =====================================================================
+
+alter table public.profiles
+  add column if not exists alerts_off boolean not null default false;
+
+create or replace function public.set_my_alerts_off(p_off boolean)
+returns void
+language sql security definer set search_path = public
+as $$
+  update public.profiles set alerts_off = coalesce(p_off, false) where id = auth.uid();
+$$;
+revoke all on function public.set_my_alerts_off(boolean) from public, anon;
+grant execute on function public.set_my_alerts_off(boolean) to authenticated;
+$mig0058$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -10556,6 +10579,7 @@ from (values
       where table_schema = 'public' and table_name = 'groups' and column_name = 'responsible_member_ids')
       and to_regprocedure('public.my_alert_groups()') is not null),
   (48, 'Grupo sem responsável avisa todos (0057)', coalesce(pg_get_functiondef('public.my_alert_groups()'::regprocedure) like '%cardinality(g.responsible_member_ids) = 0%', false)),
-  (49, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (49, 'Meus alertas (0058)', to_regprocedure('public.set_my_alerts_off(boolean)') is not null),
+  (50, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

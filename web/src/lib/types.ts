@@ -12,6 +12,8 @@ export type Profile = {
   company_id: string | null;
   /** administra a plataforma: cadastra empresas e entra em qualquer uma para dar suporte */
   platform_admin: boolean;
+  /** desligou os avisos só para si (0058) */
+  alerts_off?: boolean;
 };
 
 /** Empresa cliente (tela Empresas), com os números de uso. */

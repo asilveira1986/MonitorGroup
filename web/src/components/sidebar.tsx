@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { Logo } from '@/components/logo';
-import { NotifyToggle } from '@/components/message-notifier';
+import { MyAlertsToggle, NotifyToggle } from '@/components/message-notifier';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { cn } from '@/lib/format';
 import { ROLE_LABEL } from '@/lib/roles';
@@ -44,6 +44,7 @@ export function Sidebar({
   user,
   platformAdmin = false,
   company = null,
+  alertsOff,
 }: {
   counts: { pending: number; alerts: number; demands: number };
   /** itens do menu escondidos (ex.: funções desligadas nas configurações) */
@@ -53,6 +54,8 @@ export function Sidebar({
   platformAdmin?: boolean;
   /** empresa atual (mostrada no menu do celular) */
   company?: string | null;
+  /** Meus alertas (quem administra a plataforma): undefined = sem o botão */
+  alertsOff?: boolean;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -179,6 +182,7 @@ export function Sidebar({
                   </p>
                 </div>
                 <div className="flex items-center">
+                  {alertsOff !== undefined && <MyAlertsToggle off={alertsOff} compact />}
                   <NotifyToggle />
                   <ThemeToggle />
                 </div>

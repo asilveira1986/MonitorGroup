@@ -1,6 +1,6 @@
 import { LogOut } from 'lucide-react';
 import { CompanySwitcher } from '@/components/company-switcher';
-import { MessageNotifier, NotifyToggle } from '@/components/message-notifier';
+import { MessageNotifier, MyAlertsToggle, NotifyToggle } from '@/components/message-notifier';
 import { RealtimeListener } from '@/components/realtime-listener';
 import { Sidebar } from '@/components/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -58,6 +58,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         ]}
         user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role }}
         platformAdmin={profile.platform_admin}
+        alertsOff={profile.platform_admin ? Boolean(profile.alerts_off) : undefined}
         company={company?.name ?? null}
       />
       <RealtimeListener />
@@ -76,6 +77,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
             rate: settings?.msg_alert_voice_rate,
             pitch: settings?.msg_alert_voice_pitch,
           },
+          userOff: Boolean(profile.alerts_off),
         }}
       />
       <div className="transition-[padding] duration-200 lg:pl-64 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
@@ -85,6 +87,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
               <CompanySwitcher current={company} companies={companies ?? undefined} />
             </div>
           )}
+          {profile.platform_admin && <MyAlertsToggle off={Boolean(profile.alerts_off)} />}
           <NotifyToggle />
           <ThemeToggle />
           <div className="ml-2 flex items-center gap-3 rounded-xl px-2 py-1">

@@ -106,6 +106,15 @@ export async function setGroupSector(groupId: string, sectorId: string | null): 
   return fail(error);
 }
 
+/** Meus alertas: liga/desliga os avisos (tela, voz e som) só para o usuário logado. */
+export async function setMyAlertsOff(off: boolean): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('set_my_alerts_off', { p_off: off });
+  revalidatePath('/', 'layout');
+  return fail(error);
+}
+
 /** Responsáveis pelo grupo (somente admin): pessoas da equipe, ou nenhuma. */
 export async function setGroupResponsibles(groupId: string, memberIds: string[]): Promise<Result> {
   await requireAdmin();
