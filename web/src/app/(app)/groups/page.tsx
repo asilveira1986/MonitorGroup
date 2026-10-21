@@ -5,6 +5,7 @@ import { requireMenu } from '@/lib/auth';
 import { cn } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Group } from '@/lib/types';
+import { CompanyMuteControl } from '@/components/mute-control';
 import { GroupsTable } from './groups-table';
 import { RemovedGroups, type RemovedGroup } from './removed-groups';
 
@@ -56,13 +57,21 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
     groups = ((await query.limit(500)).data ?? []) as Group[];
   }
 
+  // grupos silenciados (Silenciar grupo)
+  const { data: muteRows } = await supabase.from('group_mutes').select('group_id, muted_until').gt('muted_until', new Date().toISOString());
+  const mutedIds = (muteRows ?? []).map((r) => r.group_id as string);
+
   // imagens dos grupos guardadas pelo worker (sem o script 0044, fica sem)
   const { data: photoRows } = await supabase.from('contact_avatars').select('jid').like('jid', '%@g.us').not('path', 'is', null);
   const groupPhotos = (photoRows ?? []).map((r) => r.jid as string);
 
   return (
     <>
-      <PageHeader title="Grupos" description="Todos os grupos do WhatsApp conectado. Escolha quais devem ser monitorados." />
+      <PageHeader
+        title="Grupos"
+        description="Todos os grupos do WhatsApp conectado. Escolha quais devem ser monitorados."
+        action={profile.platform_admin ? <CompanyMuteControl mutedCount={mutedIds.length} /> : undefined}
+      />
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <form className="relative w-full sm:w-80">
@@ -109,7 +118,7 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
             description="Os grupos aparecem automaticamente depois que o WhatsApp é conectado em Configurações > WhatsApp."
           />
         ) : (
-          <GroupsTable groups={groups} photos={groupPhotos} />
+          <GroupsTable groups={groups} photos={groupPhotos} muted={mutedIds} />
         )}
       </Card>
     </>

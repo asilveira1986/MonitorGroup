@@ -30,6 +30,8 @@ export default async function PanelPage() {
     team_members: { name: string } | null;
   };
   const infoOf = new Map(((groupSectors ?? []) as unknown as GroupInfo[]).map((g) => [g.id, g]));
+  const { data: muteRows } = await supabase.from('group_mutes').select('group_id').gt('muted_until', new Date().toISOString());
+  const mutedSet = new Set((muteRows ?? []).map((r) => r.group_id as string));
   const { data: photoRows } = await supabase.from('contact_avatars').select('jid').like('jid', '%@g.us').not('path', 'is', null);
   const withPhoto = new Set((photoRows ?? []).map((r) => r.jid as string));
   const groups = ((data ?? []) as PanelGroup[]).map((g) => ({
@@ -38,6 +40,7 @@ export default async function PanelPage() {
     responsible_id: infoOf.get(g.id)?.responsible_member_id ?? null,
     responsible_name: infoOf.get(g.id)?.team_members?.name ?? null,
     closed_at: infoOf.get(g.id)?.closed_at ?? null,
+    muted: mutedSet.has(g.id),
     photo_jid: withPhoto.has(infoOf.get(g.id)?.jid ?? '') ? (infoOf.get(g.id)?.jid ?? null) : null,
   }));
   // filtro por responsável: toda a equipe ativa + quem ainda é responsável por algum grupo

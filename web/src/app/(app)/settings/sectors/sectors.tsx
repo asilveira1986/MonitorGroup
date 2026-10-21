@@ -1,6 +1,6 @@
 'use client';
 
-import { BellRing, Building2, ClipboardList, MessageSquareReply, Plus, Save, Search, Trash2, Users } from 'lucide-react';
+import { BellOff, BellRing, Building2, ClipboardList, MessageSquareReply, Plus, Save, Search, Trash2, Users } from 'lucide-react';
 import { useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Badge, Button, Card, Input, Select, Textarea } from '@/components/ui';
@@ -12,7 +12,7 @@ export type SectorRow = SectorInput & { id: string };
 type Person = { id: string; name: string; email: string; admin: boolean; active: boolean };
 type GroupOption = { id: string; name: string; monitored: boolean; sectorId: string | null };
 
-const EMPTY: SectorInput = { name: '', description: '', can_reply: true, can_manage_demands: true, can_handle_alerts: true };
+const EMPTY: SectorInput = { name: '', description: '', can_reply: true, can_manage_demands: true, can_handle_alerts: true, can_mute: false };
 
 /** Permissões do setor (ver grupos e conversas é a base de todo setor). */
 function Permissions({
@@ -48,6 +48,14 @@ function Permissions({
         text="Reconhecer e resolver alertas dos grupos do setor."
         checked={value.can_handle_alerts}
         onChange={(v) => onChange({ ...value, can_handle_alerts: v })}
+        disabled={disabled}
+      />
+      <Row
+        icon={BellOff}
+        title="Silenciar grupos"
+        text="Silenciar os avisos (tela, voz, som e aviso dos alertas) dos grupos do setor por um tempo ou sempre. O grupo continua monitorado."
+        checked={Boolean(value.can_mute)}
+        onChange={(v) => onChange({ ...value, can_mute: v })}
         disabled={disabled}
       />
     </div>

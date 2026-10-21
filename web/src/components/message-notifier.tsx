@@ -113,6 +113,18 @@ const messageText = (type: string, body: string | null) =>
  * alguém fechar ou fecha sozinho depois de um tempo. Um aviso por vez; o mesmo grupo/assunto
  * atualiza o aviso anterior em vez de empilhar.
  */
+/** Grupo silenciado agora (Silenciar grupo): não abre aviso, voz nem som. */
+async function isGroupMuted(groupId: string | null | undefined): Promise<boolean> {
+  if (!groupId) return false;
+  const { data, error } = await createClient()
+    .from('group_mutes')
+    .select('group_id')
+    .eq('group_id', groupId)
+    .gt('muted_until', new Date().toISOString())
+    .maybeSingle();
+  return !error && Boolean(data);
+}
+
 export function MessageNotifier({ config }: { config: AlertConfig }) {
   const router = useRouter();
   const [items, setItems] = useState<ScreenItem[]>([]);
@@ -164,13 +176,11 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         if (m.from_team || m.ignored_as_last || !configRef.current.enabled) return;
         // a importação do histórico não gera aviso
         if (Date.now() - new Date(m.sent_at).getTime() > 10 * 60_000) return;
-        void createClient()
-          .from('groups')
-          .select('name, monitored')
-          .eq('id', m.group_id)
-          .maybeSingle()
-          .then(({ data: g }) => {
-            if (!g || !g.monitored) return;
+        void Promise.all([
+          createClient().from('groups').select('name, monitored').eq('id', m.group_id).maybeSingle(),
+          isGroupMuted(m.group_id),
+        ]).then(([{ data: g }, muted]) => {
+            if (!g || !g.monitored || muted) return;
             const v = configRef.current;
             pushRef.current({
               speech:
@@ -199,6 +209,8 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
       // alerta criado pelo sistema
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'alerts' }, (payload) => {
         const a = payload.new as Alert;
+        void isGroupMuted(a.group_id).then((muted) => {
+        if (muted) return;
         if (!configRef.current.alerts) {
           // alertas em tela desligados: aviso pequeno no canto, como antes
           const show = a.severity === 'critical' ? toast.error : a.severity === 'warning' ? toast.warning : toast.info;
@@ -241,6 +253,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         ]).then(([{ data: g }, { data: r }]) =>
           show((g as { name: string } | null)?.name ?? null, (r as { voice?: boolean } | null)?.voice !== false),
         );
+        });
       }),
   );
 
@@ -270,6 +283,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         if (seen.has(key)) continue;
         seen.add(key);
         if (first) continue;
+        if (await isGroupMuted(b.group_id)) continue;
         pushRef.current({
           speech:
             configRef.current.voiceSla !== false

@@ -71,6 +71,7 @@ from (values
       where table_schema = 'public' and table_name = 'team_members' and column_name = 'user_email')),
   (43, 'Log de atividades (0050)', to_regprocedure('public.platform_activity_log(timestamptz,timestamptz,uuid,text,text,integer,integer)') is not null),
   (44, 'Equipe reconhecida pelo LID (0051)', coalesce(pg_get_functiondef('public.recalc_company_groups(uuid)'::regprocedure) like '%gp.lid = m.sender_jid%', false)),
-  (45, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (45, 'Silenciar grupo (0052)', to_regclass('public.group_mutes') is not null and to_regprocedure('public.set_company_mute(timestamptz)') is not null),
+  (46, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

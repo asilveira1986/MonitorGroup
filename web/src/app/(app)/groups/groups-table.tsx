@@ -1,4 +1,4 @@
-import { Building2, Hourglass, UserCheck } from 'lucide-react';
+import { BellOff, Building2, Hourglass, UserCheck } from 'lucide-react';
 import Link from 'next/link';
 import { Avatar } from '@/components/avatar';
 import { Badge } from '@/components/ui';
@@ -41,8 +41,9 @@ function ResponsibleTag({ g }: { g: Group }) {
   );
 }
 
-export function GroupsTable({ groups, photos }: { groups: Group[]; photos?: string[] }) {
+export function GroupsTable({ groups, photos, muted }: { groups: Group[]; photos?: string[]; muted?: string[] }) {
   const withPhoto = new Set(photos ?? []);
+  const silenced = new Set(muted ?? []);
   return (
     <>
       {/* Celular: cartões */}
@@ -59,7 +60,10 @@ export function GroupsTable({ groups, photos }: { groups: Group[]; photos?: stri
               />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center justify-between gap-2">
-                  <span className="truncate font-medium">{g.name}</span>
+                  <span className="flex min-w-0 items-center gap-1 truncate font-medium">
+                    {g.name}
+                    {silenced.has(g.id) && <BellOff className="h-3.5 w-3.5 shrink-0 text-muted" aria-label="Silenciado" />}
+                  </span>
                   <span className="shrink-0 text-[11px] text-muted">{timeAgo(g.last_message_at)}</span>
                 </span>
                 <span className="mt-0.5 block truncate text-sm text-ink-2">{g.last_message_preview ?? '—'}</span>
@@ -104,7 +108,10 @@ export function GroupsTable({ groups, photos }: { groups: Group[]; photos?: stri
                     className="h-9 w-9 rounded-full bg-brand-soft text-xs text-brand-text"
                   />
                   <span className="min-w-0">
-                    <span className="block max-w-[240px] truncate font-medium">{g.name}</span>
+                    <span className="flex max-w-[260px] items-center gap-1 font-medium">
+                      <span className="truncate">{g.name}</span>
+                      {silenced.has(g.id) && <BellOff className="h-3.5 w-3.5 shrink-0 text-muted" aria-label="Silenciado" />}
+                    </span>
                     <span className="flex flex-wrap gap-x-3">
                       <SectorTag g={g} />
                       <ResponsibleTag g={g} />
