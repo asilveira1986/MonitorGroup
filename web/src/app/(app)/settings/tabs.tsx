@@ -11,6 +11,7 @@ const TABS = [
   { href: '/settings/users', label: 'Usuários' },
   { href: '/settings/team', label: 'Equipe' },
   { href: '/settings/quick-replies', label: 'Mensagens rápidas' },
+  { href: '/settings/demand-types', label: 'Tipos de demanda' },
   { href: '/settings/sectors', label: 'Setores', adminOnly: true },
   { href: '/settings/menus', label: 'Menus', adminOnly: true },
   { href: '/settings/indicators', label: 'Indicadores', adminOnly: true },

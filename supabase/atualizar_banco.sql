@@ -139,7 +139,8 @@ begin
   (50, 'Entrega pelo responsável e agenda (0059)', to_regprocedure('public.my_due_demands()') is not null
       and exists (select 1 from pg_trigger where tgname = 'demands_check_delivery')),
   (51, 'Compromissos na agenda (0060)', to_regclass('public.agenda_events') is not null),
-  (52, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (52, 'Tipos de demanda (0061)', to_regprocedure('public.rename_demand_type(text,text)') is not null),
+  (53, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -148,7 +149,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -10663,6 +10664,41 @@ grant execute on function public.my_due_demands() to authenticated;
 $mig0060$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0061_demand_types.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0061', $mig0061$
+-- =====================================================================
+-- Cadastro de tipos de demanda (Configurações › Tipos de demanda).
+--
+-- Os tipos continuam guardados nas categorias do indicador "Tipo de
+-- demanda" (o worker usa as palavras-chave para classificar a demanda).
+-- rename_demand_type(): ao renomear um tipo, as demandas da empresa que
+-- usavam o nome antigo passam para o novo.
+-- =====================================================================
+
+create or replace function public.rename_demand_type(p_old text, p_new text)
+returns int
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_n int;
+begin
+  if not public.is_admin() then
+    raise exception 'Somente administradores alteram os tipos de demanda' using errcode = '42501';
+  end if;
+  if coalesce(trim(p_old), '') = '' or coalesce(trim(p_new), '') = '' or trim(p_old) = trim(p_new) then
+    return 0;
+  end if;
+  update public.demands set type = trim(p_new), updated_at = now()
+   where company_id = public.current_company_id() and type = trim(p_old);
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+revoke all on function public.rename_demand_type(text, text) from public, anon;
+grant execute on function public.rename_demand_type(text, text) to authenticated;
+$mig0061$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -10750,6 +10786,7 @@ from (values
   (50, 'Entrega pelo responsável e agenda (0059)', to_regprocedure('public.my_due_demands()') is not null
       and exists (select 1 from pg_trigger where tgname = 'demands_check_delivery')),
   (51, 'Compromissos na agenda (0060)', to_regclass('public.agenda_events') is not null),
-  (52, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (52, 'Tipos de demanda (0061)', to_regprocedure('public.rename_demand_type(text,text)') is not null),
+  (53, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
