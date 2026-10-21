@@ -57,7 +57,7 @@ export default async function TeamPage() {
         {profile.role === 'admin' && (
           <p className="px-4 pt-2 text-xs text-ink-2 sm:px-5">
             <strong>Avisos só dos seus grupos</strong>: a pessoa recebe os avisos em tela e voz (no usuário com acesso dela) e
-            os avisos das regras por WhatsApp/e-mail apenas dos grupos em que é responsável. Os responsáveis são escolhidos na
+            os avisos das regras por WhatsApp/e-mail apenas dos grupos em que é responsável e dos grupos sem responsável. Os responsáveis são escolhidos na
             tela de cada grupo.
           </p>
         )}

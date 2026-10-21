@@ -79,7 +79,8 @@ CHECKS=$(cat <<'SQL'
   (47, 'Vários responsáveis por grupo (0056)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'groups' and column_name = 'responsible_member_ids')
       and to_regprocedure('public.my_alert_groups()') is not null),
-  (48, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (48, 'Grupo sem responsável avisa todos (0057)', coalesce(pg_get_functiondef('public.my_alert_groups()'::regprocedure) like '%cardinality(g.responsible_member_ids) = 0%', false)),
+  (49, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

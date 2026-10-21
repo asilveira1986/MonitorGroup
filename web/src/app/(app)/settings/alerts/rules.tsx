@@ -224,7 +224,7 @@ function RuleEditor({
               )}
               <p className="mt-3 text-xs text-muted">
                 Quem está marcado em Configurações › Equipe com &quot;Avisos só dos seus grupos&quot; recebe por aqui apenas os
-                alertas dos grupos em que é responsável.
+                alertas dos grupos em que é responsável (grupos sem responsável avisam todos).
               </p>
             </div>
 

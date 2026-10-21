@@ -134,7 +134,8 @@ begin
   (47, 'Vários responsáveis por grupo (0056)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'groups' and column_name = 'responsible_member_ids')
       and to_regprocedure('public.my_alert_groups()') is not null),
-  (48, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (48, 'Grupo sem responsável avisa todos (0057)', coalesce(pg_get_functiondef('public.my_alert_groups()'::regprocedure) like '%cardinality(g.responsible_member_ids) = 0%', false)),
+  (49, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -143,7 +144,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -10444,6 +10445,34 @@ notify pgrst, 'reload schema';
 $mig0056$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0057_alerts_unassigned_groups.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0057', $mig0057$
+-- =====================================================================
+-- Grupo sem responsável avisa todo mundo: quem está com "avisos só dos
+-- seus grupos" também recebe os avisos dos grupos que não têm responsável.
+-- (No WhatsApp/e-mail o worker faz a mesma conta.)
+-- =====================================================================
+
+create or replace function public.my_alert_groups()
+returns uuid[]
+language sql stable security definer set search_path = public
+as $$
+  select case when exists (
+           select 1 from public.team_members t join public.profiles p on lower(p.email) = lower(t.user_email)
+            where p.id = auth.uid() and t.company_id = public.current_company_id() and t.alerts_own_groups_only)
+    then coalesce((
+      select array_agg(g.id) from public.groups g
+       where g.company_id = public.current_company_id()
+         and (cardinality(g.responsible_member_ids) = 0
+              or exists (select 1 from public.team_members t join public.profiles p on lower(p.email) = lower(t.user_email)
+                          where p.id = auth.uid() and t.id = any(g.responsible_member_ids)))), '{}')
+    else null end
+$$;
+revoke all on function public.my_alert_groups() from public, anon;
+grant execute on function public.my_alert_groups() to authenticated;
+$mig0057$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -10526,6 +10555,7 @@ from (values
   (47, 'Vários responsáveis por grupo (0056)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'groups' and column_name = 'responsible_member_ids')
       and to_regprocedure('public.my_alert_groups()') is not null),
-  (48, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (48, 'Grupo sem responsável avisa todos (0057)', coalesce(pg_get_functiondef('public.my_alert_groups()'::regprocedure) like '%cardinality(g.responsible_member_ids) = 0%', false)),
+  (49, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

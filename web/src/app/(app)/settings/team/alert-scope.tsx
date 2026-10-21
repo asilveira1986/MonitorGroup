@@ -31,7 +31,7 @@ export function AlertScope({ member, groups }: { member: { id: string; name: str
         only ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2 hover:bg-surface-2',
         pending && 'opacity-60',
       )}
-      title="Avisos em tela, voz e os avisos das regras por WhatsApp/e-mail. Alertas sem grupo (ex.: WhatsApp desconectado) continuam chegando."
+      title="Avisos em tela, voz e os avisos das regras por WhatsApp/e-mail. Grupos sem responsável e alertas sem grupo (ex.: WhatsApp desconectado) continuam chegando."
     >
       <BellRing className="h-3.5 w-3.5" aria-hidden />
       <select

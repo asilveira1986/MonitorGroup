@@ -12,7 +12,8 @@ export type RecipientMember = {
  *  - os números e e-mails da regra;
  *  - com "avisar os responsáveis do grupo", também o telefone e o e-mail de acesso de cada responsável;
  *  - quem está com "avisos só dos seus grupos" (Configurações › Equipe) só recebe alerta de grupo
- *    em que é responsável. Alerta sem grupo (ex.: WhatsApp desconectado) vai para todos.
+ *    em que é responsável. Alerta sem grupo (ex.: WhatsApp desconectado) ou de grupo sem
+ *    responsável vai para todos.
  */
 export function alertRecipients(opts: {
   phones: string[];
@@ -36,7 +37,8 @@ export function alertRecipients(opts: {
     }
   }
 
-  if (groupId) {
+  // grupo sem responsável: avisa todo mundo
+  if (groupId && responsible.size > 0) {
     const restricted = members.filter((m) => m.alerts_own_groups_only && !responsible.has(m.id));
     phones = phones.filter((p) => !restricted.some((m) => m.phone && samePhone(p, digitsOnly(m.phone))));
     emails = emails.filter((e) => !restricted.some((m) => m.user_email?.trim().toLowerCase() === e));

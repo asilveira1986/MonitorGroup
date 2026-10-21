@@ -40,6 +40,12 @@ test('avisar os responsáveis do grupo: soma telefone e e-mail deles, sem repeti
   assert.deepEqual(r.emails, ['bia@x.com']);
 });
 
+test('grupo sem responsável avisa todos da regra', () => {
+  const r = alertRecipients({ ...base, phones: ['5511999990001', '5511999990003'], emails: ['ana@x.com'], groupId: 'g2', responsibleIds: [] });
+  assert.deepEqual(r.phones, ['5511999990001', '5511999990003']);
+  assert.deepEqual(r.emails, ['ana@x.com']);
+});
+
 test('alerta sem grupo vai para todos da regra', () => {
   const r = alertRecipients({ ...base, notifyResponsibles: true, phones: ['5511999990001'], emails: ['ana@x.com'], groupId: null });
   assert.deepEqual(r.phones, ['5511999990001']);
