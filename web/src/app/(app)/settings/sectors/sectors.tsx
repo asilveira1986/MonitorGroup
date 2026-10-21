@@ -52,8 +52,8 @@ function Permissions({
       />
       <Row
         icon={BellOff}
-        title="Silenciar grupos"
-        text="Silenciar os avisos (tela, voz, som e aviso dos alertas) dos grupos do setor por um tempo ou sempre. O grupo continua monitorado."
+        title="Silenciar alertas"
+        text="Silenciar os alertas (aviso em tela, voz, som e aviso por WhatsApp/e-mail) dos grupos do setor por um tempo ou sempre. O grupo continua monitorado."
         checked={Boolean(value.can_mute)}
         onChange={(v) => onChange({ ...value, can_mute: v })}
         disabled={disabled}

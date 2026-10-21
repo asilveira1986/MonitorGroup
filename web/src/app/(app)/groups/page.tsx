@@ -57,7 +57,7 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
     groups = ((await query.limit(500)).data ?? []) as Group[];
   }
 
-  // grupos silenciados (Silenciar grupo)
+  // grupos silenciados (Silenciar alertas)
   const { data: muteRows } = await supabase.from('group_mutes').select('group_id, muted_until').gt('muted_until', new Date().toISOString());
   const mutedIds = (muteRows ?? []).map((r) => r.group_id as string);
 

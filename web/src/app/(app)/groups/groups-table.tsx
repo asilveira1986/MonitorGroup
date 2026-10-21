@@ -62,7 +62,7 @@ export function GroupsTable({ groups, photos, muted }: { groups: Group[]; photos
                 <span className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-1 truncate font-medium">
                     {g.name}
-                    {silenced.has(g.id) && <BellOff className="h-3.5 w-3.5 shrink-0 text-muted" aria-label="Silenciado" />}
+                    {silenced.has(g.id) && <BellOff className="h-3.5 w-3.5 shrink-0 text-muted" aria-label="Alertas silenciados" />}
                   </span>
                   <span className="shrink-0 text-[11px] text-muted">{timeAgo(g.last_message_at)}</span>
                 </span>
@@ -110,7 +110,7 @@ export function GroupsTable({ groups, photos, muted }: { groups: Group[]; photos
                   <span className="min-w-0">
                     <span className="flex max-w-[260px] items-center gap-1 font-medium">
                       <span className="truncate">{g.name}</span>
-                      {silenced.has(g.id) && <BellOff className="h-3.5 w-3.5 shrink-0 text-muted" aria-label="Silenciado" />}
+                      {silenced.has(g.id) && <BellOff className="h-3.5 w-3.5 shrink-0 text-muted" aria-label="Alertas silenciados" />}
                     </span>
                     <span className="flex flex-wrap gap-x-3">
                       <SectorTag g={g} />

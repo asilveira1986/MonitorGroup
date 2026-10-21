@@ -113,7 +113,7 @@ const messageText = (type: string, body: string | null) =>
  * alguém fechar ou fecha sozinho depois de um tempo. Um aviso por vez; o mesmo grupo/assunto
  * atualiza o aviso anterior em vez de empilhar.
  */
-/** Grupo silenciado agora (Silenciar grupo): não abre aviso, voz nem som. */
+/** Grupo silenciado agora (Silenciar alertas): não abre aviso, voz nem som. */
 async function isGroupMuted(groupId: string | null | undefined): Promise<boolean> {
   if (!groupId) return false;
   const { data, error } = await createClient()

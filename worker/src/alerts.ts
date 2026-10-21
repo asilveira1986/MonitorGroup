@@ -68,7 +68,7 @@ async function hasRecentAlert(ruleId: string, target: { groupId?: string; instan
   return rows.length > 0;
 }
 
-/** Grupo silenciado agora (Silenciar grupo)? Sem o script 0052, nunca. */
+/** Grupo silenciado agora (Silenciar alertas)? Sem o script 0052, nunca. */
 async function isGroupMuted(groupId: string): Promise<boolean> {
   const { data, error } = await db
     .from('group_mutes')

@@ -61,7 +61,7 @@ function DurationMenu({ onPick, onClose }: { onPick: (hours: number | null) => v
 }
 
 /**
- * Silenciar o grupo: para os avisos (tela, voz, som e o aviso dos alertas por WhatsApp/e-mail) para
+ * Silenciar alertas do grupo: para os avisos (tela, voz, som e o aviso dos alertas por WhatsApp/e-mail) para
  * toda a empresa. O grupo continua monitorado normalmente.
  */
 export function MuteControl({ groupId, mutedUntil, canMute }: { groupId: string; mutedUntil: string | null; canMute: boolean }) {
@@ -74,8 +74,8 @@ export function MuteControl({ groupId, mutedUntil, canMute }: { groupId: string;
       setOpen(false);
       const res = await setGroupMute(groupId, until);
       if (!res.ok) return void toast.error(res.error);
-      toast.success(until ? 'Grupo silenciado' : 'Avisos do grupo reativados', {
-        description: until ? 'Mensagens e pendências continuam sendo acompanhadas; só os avisos param.' : undefined,
+      toast.success(until ? 'Alertas do grupo silenciados' : 'Alertas do grupo reativados', {
+        description: until ? 'O grupo continua monitorado (mensagens, pendências e lista de Alertas); só os avisos param.' : undefined,
       });
       router.refresh();
     });
@@ -83,7 +83,7 @@ export function MuteControl({ groupId, mutedUntil, canMute }: { groupId: string;
   if (!canMute) {
     return muted ? (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 text-xs text-ink-2 ring-1 ring-inset ring-line">
-        <BellOff className="h-3.5 w-3.5" /> Silenciado {muteLabel(mutedUntil)}
+        <BellOff className="h-3.5 w-3.5" /> Alertas silenciados {muteLabel(mutedUntil)}
       </span>
     ) : null;
   }
@@ -92,7 +92,7 @@ export function MuteControl({ groupId, mutedUntil, canMute }: { groupId: string;
     return (
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-2.5 py-1 text-xs font-medium text-warning-ink ring-1 ring-inset ring-warning/35">
-          <BellOff className="h-3.5 w-3.5" /> Silenciado {muteLabel(mutedUntil)}
+          <BellOff className="h-3.5 w-3.5" /> Alertas silenciados {muteLabel(mutedUntil)}
         </span>
         <button
           type="button"
@@ -100,7 +100,7 @@ export function MuteControl({ groupId, mutedUntil, canMute }: { groupId: string;
           onClick={() => run(null)}
           className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-brand-text hover:bg-brand-soft disabled:opacity-50"
         >
-          <Bell className="h-3.5 w-3.5" /> Reativar avisos
+          <Bell className="h-3.5 w-3.5" /> Reativar alertas
         </button>
       </div>
     );
@@ -116,14 +116,14 @@ export function MuteControl({ groupId, mutedUntil, canMute }: { groupId: string;
         aria-expanded={open}
         className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink disabled:opacity-50"
       >
-        <BellOff className="h-4 w-4" /> Silenciar grupo <ChevronDown className={cn('h-3.5 w-3.5 transition', open && 'rotate-180')} />
+        <BellOff className="h-4 w-4" /> Silenciar alertas <ChevronDown className={cn('h-3.5 w-3.5 transition', open && 'rotate-180')} />
       </button>
       {open && <DurationMenu onPick={(h) => run(untilFor(h))} onClose={() => setOpen(false)} />}
     </div>
   );
 }
 
-/** Quem administra a plataforma: silenciar ou reativar todos os grupos da empresa atual. */
+/** Quem administra a plataforma: silenciar ou reativar os alertas de todos os grupos da empresa atual. */
 export function CompanyMuteControl({ mutedCount }: { mutedCount: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -131,10 +131,10 @@ export function CompanyMuteControl({ mutedCount }: { mutedCount: number }) {
   const run = (until: string | null) =>
     start(async () => {
       setOpen(false);
-      if (!until && !confirm('Reativar os avisos de todos os grupos desta empresa?')) return;
+      if (!until && !confirm('Reativar os alertas de todos os grupos desta empresa?')) return;
       const res = await setCompanyMute(until);
       if (!res.ok) return void toast.error(res.error);
-      toast.success(until ? `${res.count} grupo(s) silenciado(s)` : `Avisos reativados em ${res.count} grupo(s)`);
+      toast.success(until ? `Alertas silenciados em ${res.count} grupo(s)` : `Alertas reativados em ${res.count} grupo(s)`);
       router.refresh();
     });
   return (
@@ -146,7 +146,7 @@ export function CompanyMuteControl({ mutedCount }: { mutedCount: number }) {
           onClick={() => run(null)}
           className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-brand-text hover:bg-brand-soft disabled:opacity-50"
         >
-          <Bell className="h-4 w-4" /> Reativar todos ({mutedCount})
+          <Bell className="h-4 w-4" /> Reativar alertas ({mutedCount})
         </button>
       )}
       <button
@@ -157,7 +157,7 @@ export function CompanyMuteControl({ mutedCount }: { mutedCount: number }) {
         aria-expanded={open}
         className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink disabled:opacity-50"
       >
-        <BellOff className="h-4 w-4" /> Silenciar todos <ChevronDown className={cn('h-3.5 w-3.5 transition', open && 'rotate-180')} />
+        <BellOff className="h-4 w-4" /> Silenciar alertas de todos <ChevronDown className={cn('h-3.5 w-3.5 transition', open && 'rotate-180')} />
       </button>
       {open && <DurationMenu onPick={(h) => run(untilFor(h))} onClose={() => setOpen(false)} />}
     </div>
