@@ -495,7 +495,6 @@ export type SectorInput = {
   can_reply: boolean;
   can_manage_demands: boolean;
   can_handle_alerts: boolean;
-  can_mute_alerts?: boolean;
 };
 
 const cleanSector = (v: SectorInput) => ({
@@ -504,7 +503,6 @@ const cleanSector = (v: SectorInput) => ({
   can_reply: Boolean(v.can_reply),
   can_manage_demands: Boolean(v.can_manage_demands),
   can_handle_alerts: Boolean(v.can_handle_alerts),
-  can_mute_alerts: Boolean(v.can_mute_alerts),
 });
 
 export async function createSector(values: SectorInput): Promise<Result> {

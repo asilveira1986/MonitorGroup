@@ -129,7 +129,8 @@ begin
   (44, 'Equipe reconhecida pelo LID (0051)', coalesce(pg_get_functiondef('public.recalc_company_groups(uuid)'::regprocedure) like '%gp.lid = m.sender_jid%', false)),
   (45, 'Silenciar grupo retirado (0053)', to_regclass('public.group_mutes') is null and not exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'sectors' and column_name = 'can_mute')),
-  (46, 'Silenciar alertas por tipo (0054)', to_regclass('public.alert_type_mutes') is not null and to_regprocedure('public.set_alert_type_mute(text,timestamptz)') is not null),
+  (46, 'Silenciar alertas retirado (0055)', to_regclass('public.alert_type_mutes') is null and not exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'sectors' and column_name = 'can_mute_alerts')),
   (47, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
@@ -139,7 +140,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -10179,6 +10180,21 @@ grant execute on function public.set_alert_type_mute(text, timestamptz) to authe
 $mig0054$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0055_remove_alert_type_mutes.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0055', $mig0055$
+-- =====================================================================
+-- Retira o "Silenciar alertas por tipo" (0054): os avisos de todos os
+-- tipos voltam ao normal. Apaga a tabela, as funções e a permissão
+-- "Silenciar alertas" dos setores.
+-- =====================================================================
+
+drop function if exists public.set_alert_type_mute(text, timestamptz);
+drop function if exists public.can_mute_alerts();
+drop table if exists public.alert_type_mutes;
+alter table public.sectors drop column if exists can_mute_alerts;
+$mig0055$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -10256,7 +10272,8 @@ from (values
   (44, 'Equipe reconhecida pelo LID (0051)', coalesce(pg_get_functiondef('public.recalc_company_groups(uuid)'::regprocedure) like '%gp.lid = m.sender_jid%', false)),
   (45, 'Silenciar grupo retirado (0053)', to_regclass('public.group_mutes') is null and not exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'sectors' and column_name = 'can_mute')),
-  (46, 'Silenciar alertas por tipo (0054)', to_regclass('public.alert_type_mutes') is not null and to_regprocedure('public.set_alert_type_mute(text,timestamptz)') is not null),
+  (46, 'Silenciar alertas retirado (0055)', to_regclass('public.alert_type_mutes') is null and not exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'sectors' and column_name = 'can_mute_alerts')),
   (47, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

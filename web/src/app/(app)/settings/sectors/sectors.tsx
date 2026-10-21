@@ -1,6 +1,6 @@
 'use client';
 
-import { BellOff, BellRing, Building2, ClipboardList, MessageSquareReply, Plus, Save, Search, Trash2, Users } from 'lucide-react';
+import { BellRing, Building2, ClipboardList, MessageSquareReply, Plus, Save, Search, Trash2, Users } from 'lucide-react';
 import { useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Badge, Button, Card, Input, Select, Textarea } from '@/components/ui';
@@ -12,7 +12,7 @@ export type SectorRow = SectorInput & { id: string };
 type Person = { id: string; name: string; email: string; admin: boolean; active: boolean };
 type GroupOption = { id: string; name: string; monitored: boolean; sectorId: string | null };
 
-const EMPTY: SectorInput = { name: '', description: '', can_reply: true, can_manage_demands: true, can_handle_alerts: true, can_mute_alerts: false };
+const EMPTY: SectorInput = { name: '', description: '', can_reply: true, can_manage_demands: true, can_handle_alerts: true };
 
 /** Permissões do setor (ver grupos e conversas é a base de todo setor). */
 function Permissions({
@@ -48,14 +48,6 @@ function Permissions({
         text="Reconhecer e resolver alertas dos grupos do setor."
         checked={value.can_handle_alerts}
         onChange={(v) => onChange({ ...value, can_handle_alerts: v })}
-        disabled={disabled}
-      />
-      <Row
-        icon={BellOff}
-        title="Silenciar alertas"
-        text="Silenciar os avisos de um tipo de alerta (nova mensagem, SLA excedido, cliente sem resposta...) para a empresa toda, por um tempo ou sempre, na tela Alertas. O monitoramento continua."
-        checked={Boolean(value.can_mute_alerts)}
-        onChange={(v) => onChange({ ...value, can_mute_alerts: v })}
         disabled={disabled}
       />
     </div>

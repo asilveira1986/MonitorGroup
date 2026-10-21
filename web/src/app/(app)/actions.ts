@@ -106,15 +106,6 @@ export async function setGroupSector(groupId: string, sectorId: string | null): 
   return fail(error);
 }
 
-/** Silenciar / reativar os avisos de um tipo de alerta (until null = reativar; 'infinity' = sempre). */
-export async function setAlertTypeMute(type: string, until: string | null): Promise<Result> {
-  await requireProfile();
-  const supabase = await createClient();
-  const { error } = await supabase.rpc('set_alert_type_mute', { p_type: type, p_until: until });
-  revalidatePath('/alerts');
-  return fail(error);
-}
-
 /** Responsável pelo grupo (somente admin): uma pessoa da equipe, ou nenhum. */
 export async function setGroupResponsible(groupId: string, memberId: string | null): Promise<Result> {
   await requireAdmin();
