@@ -8,7 +8,7 @@ import { MENU_ITEMS } from '@/lib/menu';
 import { normalizeShortcut, type QuickReply } from '@/lib/quick-replies';
 import { recalcCompanyGroups, type RecalcSummary } from '@/lib/recalc-groups';
 import { reapplyIgnoreRules, type ReapplySummary } from '@/lib/reapply-ignore';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
 
 type Result = { ok: true } | { ok: false; error: string };
 const result = (error: { message: string } | null | undefined): Result =>
@@ -345,6 +345,39 @@ export async function removeAllowedEmail(email: string): Promise<Result> {
   if (!error) await supabase.from('profiles').update({ active: false }).eq('email', email);
   revalidatePath('/settings/users');
   return result(error);
+}
+
+/**
+ * Quem administra a plataforma: exclui o usuário de vez (login, perfil e autorização do e-mail).
+ * O histórico fica (demandas, alertas e log guardam o nome); a pessoa da equipe ligada perde o acesso.
+ */
+export async function deleteUser(id: string): Promise<Result> {
+  const me = await requireProfile();
+  if (!me.platform_admin) return { ok: false, error: 'Somente quem administra a plataforma exclui usuários.' };
+  if (id === me.id) return { ok: false, error: 'Você não pode excluir o seu próprio usuário.' };
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { ok: false, error: 'Configure SUPABASE_SERVICE_ROLE_KEY no servidor para excluir usuários.' };
+  }
+  const admin = createAdminClient();
+  const { data: user } = await admin.from('profiles').select('id, email, full_name, company_id').eq('id', id).maybeSingle();
+  if (!user) return { ok: false, error: 'Usuário não encontrado.' };
+  await admin.from('allowed_emails').delete().eq('email', user.email);
+  await admin.from('team_members').update({ user_email: null }).ilike('user_email', user.email);
+  const { error } = await admin.auth.admin.deleteUser(id);
+  if (error) return { ok: false, error: friendlyDbError(error.message) };
+  await admin.from('activity_log').insert({
+    company_id: user.company_id ?? me.company_id,
+    user_id: me.id,
+    user_email: me.email,
+    user_name: me.full_name || me.email,
+    category: 'usuarios',
+    action: 'excluiu',
+    entity: 'profiles',
+    entity_id: id,
+    summary: `Excluiu o usuário ${user.full_name ? `${user.full_name} (${user.email})` : user.email}`,
+  });
+  revalidatePath('/settings/users');
+  return { ok: true };
 }
 
 export async function updateUser(id: string, values: { role?: 'admin' | 'agent' | 'viewer'; active?: boolean }): Promise<Result> {

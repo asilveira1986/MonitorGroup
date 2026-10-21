@@ -1,4 +1,4 @@
-import { ShieldCheck, UserRound } from 'lucide-react';
+import { ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { AdminNotice } from '@/components/admin-notice';
 import { ActionButton } from '@/components/action-button';
 import { Badge, Card, CardHeader, EmptyState } from '@/components/ui';
@@ -6,7 +6,7 @@ import { requireProfile } from '@/lib/auth';
 import { timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Profile } from '@/lib/types';
-import { removeAllowedEmail, updateUser } from '../actions';
+import { deleteUser, removeAllowedEmail, updateUser } from '../actions';
 import { NewUserForm } from './new-user-form';
 import { RoleSelect } from './role-select';
 import { ROLE_HINT, ROLE_LABEL } from '@/lib/roles';
@@ -86,6 +86,16 @@ export default async function UsersPage() {
                       ) : (
                         <ActionButton action={updateUser.bind(null, u.id, { active: true })} success="Acesso liberado">
                           Liberar acesso
+                        </ActionButton>
+                      )}
+                      {me.platform_admin && (
+                        <ActionButton
+                          variant="danger"
+                          action={deleteUser.bind(null, u.id)}
+                          confirm={`Excluir de vez o usuário ${u.email}?\n\nO login e o perfil são apagados e não dá para desfazer. O histórico (demandas, alertas e log) continua com o nome dele.`}
+                          success="Usuário excluído"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Excluir
                         </ActionButton>
                       )}
                     </>
