@@ -15,6 +15,30 @@ export const metadata: Metadata = { title: 'Monitor Group · Agenda' };
 type Row = Demand & { groups: { name: string } | null; team_members: { name: string } | null };
 /** uma linha da agenda: demanda (a entregar ou entregue) ou compromisso */
 type Entry = { kind: 'demand'; r: Row; done?: boolean } | { kind: 'event'; e: AgendaEvent };
+type View = 'dia' | 'semana' | 'mes';
+
+const VIEWS: { key: View; label: string }[] = [
+  { key: 'dia', label: 'Dia' },
+  { key: 'semana', label: 'Semana' },
+  { key: 'mes', label: 'Mês' },
+];
+const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const WEEKDAYS_LONG = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+/** "2026-10-21" no fuso da empresa */
+const dayKey = (iso: string, timeZone: string) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+const parts = (key: string) => key.split('-').map(Number) as [number, number, number];
+const addDays = (key: string, n: number) => {
+  const [y, m, d] = parts(key);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+};
+const weekday = (key: string) => {
+  const [y, m, d] = parts(key);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+};
+const ddmm = (key: string) => `${key.slice(8, 10)}/${key.slice(5, 7)}`;
 const entryTime = (x: Entry) =>
   x.kind === 'event'
     ? x.e.all_day
@@ -22,30 +46,10 @@ const entryTime = (x: Entry) =>
       : new Date(x.e.starts_at).getTime()
     : new Date((x.done ? x.r.delivered_at : x.r.promised_at) ?? 0).getTime();
 
-const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-
-/** "2026-10-21" no fuso da empresa */
-const dayKey = (iso: string, timeZone: string) =>
-  new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
-const addDays = (key: string, n: number) => {
-  const [y, m, d] = key.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
-};
-const dayTitle = (key: string, today: string) => {
-  const [y, m, d] = key.split('-').map(Number);
-  const wd = WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
-  const label = `${wd}, ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
-  if (key === today) return `Hoje · ${label}`;
-  if (key === addDays(today, 1)) return `Amanhã · ${label}`;
-  return label;
-};
-
 /**
- * Agenda: as demandas que a pessoa tem para entregar, dia a dia, pelo prazo prometido,
- * e os compromissos registrados à mão.
- * Cada usuário vê a própria (a pessoa da equipe ligada ao e-mail de acesso dele);
- * administradores escolhem qualquer pessoa da equipe.
+ * Agenda: as demandas que a pessoa tem para entregar (pelo prazo prometido) e os compromissos
+ * registrados à mão, por dia, semana ou mês. Cada usuário vê a própria (a pessoa da equipe ligada
+ * ao e-mail de acesso dele); administradores escolhem qualquer pessoa da equipe.
  */
 export default async function AgendaPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const profile = await requireMenu('/agenda');
@@ -71,19 +75,32 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const personName = ids.length === 1 ? (people.find((p) => p.id === ids[0])?.name ?? null) : null;
   const viewingOther = isAdmin && Boolean(wanted) && !myIds.includes(ids[0] ?? '');
 
-  const month = typeof sp.mes === 'string' && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : today.slice(0, 7);
-  const day = typeof sp.dia === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sp.dia) ? sp.dia : null;
-  const [my, mm] = month.split('-').map(Number);
-  const monthDays = new Date(Date.UTC(my, mm, 0)).getUTCDate();
-  const firstWeekday = new Date(Date.UTC(my, mm - 1, 1)).getUTCDay();
+  // visão e data de referência (links antigos: ?dia= e ?mes=)
+  const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const view: View =
+    sp.vista === 'dia' || sp.vista === 'semana' || sp.vista === 'mes' ? sp.vista : isDay(sp.dia) ? 'dia' : typeof sp.mes === 'string' ? 'mes' : 'semana';
+  const ref = isDay(sp.data) ? sp.data : isDay(sp.dia) ? sp.dia : typeof sp.mes === 'string' && /^\d{4}-\d{2}$/.test(sp.mes) ? `${sp.mes}-01` : today;
+  const [ry, rm] = parts(ref);
+
+  // período mostrado (mês: a grade vai de domingo a sábado)
+  const monthFirst = `${ref.slice(0, 7)}-01`;
+  const monthLast = new Date(Date.UTC(ry, rm, 0)).toISOString().slice(0, 10);
+  const range =
+    view === 'dia'
+      ? { start: ref, end: ref }
+      : view === 'semana'
+        ? { start: addDays(ref, -weekday(ref)), end: addDays(ref, 6 - weekday(ref)) }
+        : { start: addDays(monthFirst, -weekday(monthFirst)), end: addDays(monthLast, 6 - weekday(monthLast)) };
+  const days: string[] = [];
+  for (let k = range.start; k <= range.end; k = addDays(k, 1)) days.push(k);
 
   let open: Row[] = [];
   let delivered: Row[] = [];
   let events: AgendaEvent[] = [];
   if (ids.length) {
-    // entregues do mês mostrado e de hoje (um dia a mais por causa do fuso)
-    const [ty, tm, td] = today.split('-').map(Number);
-    const since = new Date(Math.min(Date.UTC(my, mm - 1, 1), Date.UTC(ty, tm - 1, td)) - 86_400_000).toISOString();
+    // o período e hoje (o resumo é sempre de hoje), com folga por causa do fuso
+    const from = addDays(range.start < today ? range.start : today, -1);
+    const until = addDays(range.end > today ? range.end : today, 2);
     const [o, d, ev] = await Promise.all([
       supabase
         .from('demands')
@@ -97,15 +114,17 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         .select('*, groups(name), team_members(name)')
         .in('assignee_id', ids)
         .eq('status', 'entregue')
-        .gte('delivered_at', since)
+        .gte('delivered_at', `${from}T00:00:00Z`)
+        .lt('delivered_at', `${until}T00:00:00Z`)
         .order('delivered_at', { ascending: false })
         .limit(1000),
-      // compromissos: do mês mostrado em diante (sem o script 0060, nenhum)
+      // compromissos do período (sem o script 0060, nenhum)
       supabase
         .from('agenda_events')
         .select('id, member_id, title, notes, starts_at, all_day, done_at')
         .in('member_id', ids)
-        .gte('starts_at', since)
+        .gte('starts_at', `${from}T00:00:00Z`)
+        .lt('starts_at', `${until}T00:00:00Z`)
         .order('starts_at')
         .limit(1000),
     ]);
@@ -114,54 +133,60 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     events = (ev.data ?? []) as AgendaEvent[];
   }
 
-  // por dia: a entregar (pelo prazo) e entregues (pelo dia da entrega)
-  const dueOn = new Map<string, Row[]>();
-  for (const r of open) if (r.promised_at) dueOn.set(dayKey(r.promised_at, timeZone), [...(dueOn.get(dayKey(r.promised_at, timeZone)) ?? []), r]);
-  const doneOn = new Map<string, Row[]>();
-  for (const r of delivered)
-    if (r.delivered_at) doneOn.set(dayKey(r.delivered_at, timeZone), [...(doneOn.get(dayKey(r.delivered_at, timeZone)) ?? []), r]);
-  const eventsOn = new Map<string, AgendaEvent[]>();
-  for (const e of events) eventsOn.set(dayKey(e.starts_at, timeZone), [...(eventsOn.get(dayKey(e.starts_at, timeZone)) ?? []), e]);
-  const late = open.filter((r) => r.promised_at && new Date(r.promised_at).getTime() < now);
+  const groupByDay = <T,>(rows: T[], when: (r: T) => string | null) => {
+    const map = new Map<string, T[]>();
+    for (const r of rows) {
+      const w = when(r);
+      if (!w) continue;
+      const k = dayKey(w, timeZone);
+      map.set(k, [...(map.get(k) ?? []), r]);
+    }
+    return map;
+  };
+  const dueOn = groupByDay(open, (r) => r.promised_at);
+  const doneOn = groupByDay(delivered, (r) => r.delivered_at);
+  const eventsOn = groupByDay(events, (e) => e.starts_at);
+  const isLate = (r: Row) => Boolean(r.promised_at && new Date(r.promised_at).getTime() < now);
+  const late = open.filter(isLate);
   const noDate = open.filter((r) => !r.promised_at);
-  const upcomingDays = [...new Set([...dueOn.keys(), ...eventsOn.keys()])].filter((k) => k >= today).sort();
-  const eventsToday = (eventsOn.get(today) ?? []).filter((e) => !e.done_at).length;
-  // entradas de um dia, na ordem do horário (dia todo primeiro)
-  const entriesOf = (key: string, opts: { onlyUpcoming?: boolean } = {}): Entry[] =>
+
+  /** tudo de um dia, na ordem do horário (dia todo primeiro) */
+  const entriesOf = (key: string): Entry[] =>
     [
-      ...(dueOn.get(key) ?? [])
-        .filter((r) => !opts.onlyUpcoming || new Date(r.promised_at!).getTime() >= now)
-        .map((r): Entry => ({ kind: 'demand', r })),
+      ...(dueOn.get(key) ?? []).map((r): Entry => ({ kind: 'demand', r })),
       ...(eventsOn.get(key) ?? []).map((e): Entry => ({ kind: 'event', e })),
+      ...(doneOn.get(key) ?? []).map((r): Entry => ({ kind: 'demand', r, done: true })),
     ].sort((a, b) => entryTime(a) - entryTime(b));
-  const demandEntries = (rows: Row[], done = false) => rows.map((r): Entry => ({ kind: 'demand', r, done }));
+  const demandEntries = (rows: Row[]) => rows.map((r): Entry => ({ kind: 'demand', r }));
 
   const href = (changes: Record<string, string | null>) => {
     const p = new URLSearchParams();
-    const cur: Record<string, string | null> = { pessoa: isAdmin ? wanted : null, mes: month === today.slice(0, 7) ? null : month, dia: day };
+    const cur: Record<string, string | null> = { pessoa: isAdmin ? wanted : null, vista: view, data: ref === today ? null : ref };
     for (const [k, v] of Object.entries({ ...cur, ...changes })) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/agenda?${s}` : '/agenda';
   };
-  const prevMonth = new Date(Date.UTC(my, mm - 2, 1)).toISOString().slice(0, 7);
-  const nextMonth = new Date(Date.UTC(my, mm, 1)).toISOString().slice(0, 7);
+  const step = (dir: -1 | 1) => {
+    if (view === 'dia') return addDays(ref, dir);
+    if (view === 'semana') return addDays(ref, 7 * dir);
+    return new Date(Date.UTC(ry, rm - 1 + dir, 1)).toISOString().slice(0, 10);
+  };
+  const periodLabel =
+    view === 'dia'
+      ? `${WEEKDAYS_LONG[weekday(ref)]}, ${parts(ref)[2]} de ${MONTHS[rm - 1]}${ref === today ? ' · hoje' : ''}`
+      : view === 'semana'
+        ? `${ddmm(range.start)} a ${ddmm(range.end)} de ${parts(range.end)[0]}`
+        : `${MONTHS[rm - 1]} de ${ry}`;
+  const isCurrent = view === 'dia' ? ref === today : view === 'semana' ? today >= range.start && today <= range.end : ref.slice(0, 7) === today.slice(0, 7);
   const canDeliver = (r: Row) => Boolean(r.assignee_id && myIds.includes(r.assignee_id));
 
-  const item = (r: Row, opts: { done?: boolean } = {}) => {
-    const overdue = !opts.done && r.promised_at && new Date(r.promised_at).getTime() < now;
+  // ---------- linhas completas (dia e listas)
+  const demandItem = (r: Row, done = false) => {
+    const overdue = !done && isLate(r);
     return (
-      <li key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
-        <span
-          className={cn(
-            'tabular w-12 shrink-0 text-xs font-semibold',
-            opts.done ? 'text-good-ink' : overdue ? 'text-critical-ink' : 'text-ink-2',
-          )}
-        >
-          {opts.done
-            ? r.delivered_at && formatTime(r.delivered_at, timeZone)
-            : r.promised_at
-              ? formatTime(r.promised_at, timeZone)
-              : '—'}
+      <li key={`${r.id}${done ? 'd' : ''}`} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
+        <span className={cn('tabular w-14 shrink-0 text-xs font-semibold', done ? 'text-good-ink' : overdue ? 'text-critical-ink' : 'text-ink-2')}>
+          {done ? r.delivered_at && formatTime(r.delivered_at, timeZone) : r.promised_at ? formatTime(r.promised_at, timeZone) : '—'}
         </span>
         <Link href={`/demands?id=${r.id}`} className="min-w-0 flex-1 basis-56 hover:underline">
           <p className="line-clamp-2 text-sm font-medium">
@@ -170,17 +195,17 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           <p className="truncate text-xs text-ink-2">
             {r.groups?.name ?? '—'}
             {overdue && <span className="ml-2 font-medium text-critical-ink">prazo vencido</span>}
+            {done && <span className="ml-2 font-medium text-good-ink">entregue</span>}
           </p>
         </Link>
         <DemandStatusBadge status={r.status} />
-        {!opts.done && canDeliver(r) && <DeliverButton id={r.id} number={r.number} />}
+        {!done && canDeliver(r) && <DeliverButton id={r.id} number={r.number} />}
       </li>
     );
   };
-
   const eventItem = (e: AgendaEvent) => (
     <li key={e.id} className={cn('flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5', e.done_at && 'opacity-60')}>
-      <span className="tabular w-12 shrink-0 text-xs font-semibold text-series-1">{e.all_day ? 'dia todo' : formatTime(e.starts_at, timeZone)}</span>
+      <span className="tabular w-14 shrink-0 text-xs font-semibold text-series-1">{e.all_day ? 'dia todo' : formatTime(e.starts_at, timeZone)}</span>
       <div className="min-w-0 flex-1 basis-56">
         <p className={cn('line-clamp-2 text-sm font-medium', e.done_at && 'line-through')}>
           <CalendarClock className="mr-1 inline h-3.5 w-3.5 text-series-1" aria-hidden />
@@ -192,30 +217,86 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       <EventActions event={e} personName={personName} timeZone={timeZone} />
     </li>
   );
-
-  const section = (title: React.ReactNode, entries: Entry[], opts: { tone?: 'critical' | 'good' } = {}) =>
+  const section = (key: string, title: React.ReactNode, entries: Entry[], tone?: 'critical') =>
     entries.length > 0 && (
-      <Card key={String(title)} className="overflow-hidden">
-        <h2
-          className={cn(
-            'flex items-center gap-2 border-b border-line px-4 py-2.5 text-sm font-semibold sm:px-5',
-            opts.tone === 'critical' && 'text-critical-ink',
-            opts.tone === 'good' && 'text-good-ink',
-          )}
-        >
+      <Card key={key} className="overflow-hidden">
+        <h2 className={cn('flex items-center gap-2 border-b border-line px-4 py-2.5 text-sm font-semibold sm:px-5', tone === 'critical' && 'text-critical-ink')}>
           {title} <span className="tabular rounded-full bg-surface-2 px-2 text-[11px] font-semibold text-ink-2">{entries.length}</span>
         </h2>
-        <ul className="divide-y divide-line">
-          {entries.map((x) => (x.kind === 'event' ? eventItem(x.e) : item(x.r, { done: x.done })))}
-        </ul>
+        <ul className="divide-y divide-line">{entries.map((x) => (x.kind === 'event' ? eventItem(x.e) : demandItem(x.r, x.done)))}</ul>
       </Card>
     );
 
+  // ---------- itens compactos (semana e mês)
+  const chip = (x: Entry) => {
+    if (x.kind === 'event') {
+      const e = x.e;
+      return (
+        <Link
+          key={e.id}
+          href={href({ vista: 'dia', data: dayKey(e.starts_at, timeZone) })}
+          title={`${e.all_day ? 'Dia todo' : formatTime(e.starts_at, timeZone)} · ${e.title}${e.notes ? ` · ${e.notes}` : ''}`}
+          className={cn(
+            'block truncate rounded-md border-l-2 border-series-1 bg-series-1/10 px-1.5 py-0.5 text-[11px] text-ink hover:bg-series-1/20',
+            e.done_at && 'line-through opacity-60',
+          )}
+        >
+          <span className="tabular font-semibold text-series-1">{e.all_day ? '' : `${formatTime(e.starts_at, timeZone)} `}</span>
+          {e.title}
+        </Link>
+      );
+    }
+    const r = x.r;
+    const done = Boolean(x.done);
+    const overdue = !done && isLate(r);
+    return (
+      <Link
+        key={`${r.id}${done ? 'd' : ''}`}
+        href={`/demands?id=${r.id}`}
+        title={`#${r.number} ${r.description} · ${r.groups?.name ?? ''}${done ? ' · entregue' : overdue ? ' · prazo vencido' : ''}`}
+        className={cn(
+          'block truncate rounded-md border-l-2 px-1.5 py-0.5 text-[11px] text-ink',
+          done
+            ? 'border-good bg-good/10 hover:bg-good/20'
+            : overdue
+              ? 'border-critical bg-critical/10 hover:bg-critical/20'
+              : 'border-warning bg-warning/15 hover:bg-warning/25',
+        )}
+      >
+        <span className={cn('tabular font-semibold', done ? 'text-good-ink' : overdue ? 'text-critical-ink' : 'text-warning-ink')}>
+          {done ? '✓ ' : r.promised_at ? `${formatTime(r.promised_at, timeZone)} ` : ''}
+        </span>
+        #{r.number} {r.description}
+      </Link>
+    );
+  };
+
+  const legend = (
+    <p className="flex flex-wrap gap-3 text-[11px] text-muted">
+      <span className="inline-flex items-center gap-1">
+        <span className="h-2 w-2 rounded-full bg-warning" /> demanda a entregar
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <span className="h-2 w-2 rounded-full bg-critical" /> atrasada
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <span className="h-2 w-2 rounded-full bg-series-1" /> compromisso
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <span className="h-2 w-2 rounded-full bg-good" /> entregue
+      </span>
+    </p>
+  );
+
+  const todayDue = (dueOn.get(today) ?? []).filter((r) => !isLate(r)).length;
+  const todayEvents = (eventsOn.get(today) ?? []).filter((e) => !e.done_at).length;
+  const dayEntries = view === 'dia' ? entriesOf(ref) : [];
+
   return (
-    <>
+    <div data-wide>
       <PageHeader
         title="Agenda"
-        description="As demandas para entregar em cada dia, pelo prazo prometido, e os seus compromissos. Só o responsável marca a entrega, pelo botão “Demanda entregue”."
+        description="As demandas para entregar (pelo prazo prometido) e os compromissos, por dia, semana ou mês. Só o responsável marca a entrega, pelo botão “Demanda entregue”."
         action={
           <div className="flex flex-wrap items-center gap-2">
             {isAdmin && (
@@ -226,7 +307,12 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
               />
             )}
             {ids.length > 0 && (
-              <NewEventButton memberId={ids[0]} personName={viewingOther ? personName : null} timeZone={timeZone} defaultDate={day ?? today} />
+              <NewEventButton
+                memberId={ids[0]}
+                personName={viewingOther ? personName : null}
+                timeZone={timeZone}
+                defaultDate={view === 'dia' || ref >= today ? ref : today}
+              />
             )}
           </div>
         }
@@ -245,177 +331,188 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           />
         </Card>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-          <div className="space-y-4">
-            <Card className="p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <Link href={href({ mes: prevMonth, dia: null })} className="rounded-lg p-1.5 text-ink-2 hover:bg-surface-2" aria-label="Mês anterior">
+        <div className="space-y-4">
+          {/* visão, período e resumo de hoje */}
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-xl border border-line bg-surface p-1" role="tablist" aria-label="Visão da agenda">
+                {VIEWS.map((v) => (
+                  <Link
+                    key={v.key}
+                    role="tab"
+                    aria-selected={view === v.key}
+                    href={href({ vista: v.key })}
+                    className={cn('rounded-lg px-3 py-1.5 text-xs font-medium', view === v.key ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink')}
+                  >
+                    {v.label}
+                  </Link>
+                ))}
+              </div>
+              <div className="inline-flex items-center rounded-xl border border-line bg-surface">
+                <Link href={href({ data: step(-1) })} className="rounded-l-xl p-2 text-ink-2 hover:bg-surface-2" aria-label="Anterior">
                   <ChevronLeft className="h-4 w-4" />
                 </Link>
-                <p className="text-sm font-semibold capitalize">
-                  {MONTHS[mm - 1]} {my}
-                </p>
-                <Link href={href({ mes: nextMonth, dia: null })} className="rounded-lg p-1.5 text-ink-2 hover:bg-surface-2" aria-label="Próximo mês">
+                <Link
+                  href={href({ data: null })}
+                  className={cn('border-x border-line px-3 py-1.5 text-xs font-medium', isCurrent ? 'text-muted' : 'text-ink hover:bg-surface-2')}
+                >
+                  Hoje
+                </Link>
+                <Link href={href({ data: step(1) })} className="rounded-r-xl p-2 text-ink-2 hover:bg-surface-2" aria-label="Próximo">
                   <ChevronRight className="h-4 w-4" />
                 </Link>
               </div>
-              <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-muted">
-                {WEEKDAYS.map((w) => (
-                  <span key={w}>{w}</span>
-                ))}
-              </div>
-              <div className="mt-1 grid grid-cols-7 gap-1">
-                {Array.from({ length: firstWeekday }, (_, i) => (
-                  <span key={`x${i}`} />
-                ))}
-                {Array.from({ length: monthDays }, (_, i) => {
-                  const key = `${month}-${String(i + 1).padStart(2, '0')}`;
-                  const due = dueOn.get(key)?.length ?? 0;
-                  const done = doneOn.get(key)?.length ?? 0;
-                  const evs = eventsOn.get(key)?.filter((e) => !e.done_at).length ?? 0;
-                  const past = key < today;
+              <h2 className="text-base font-semibold first-letter:uppercase">{periodLabel}</h2>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {personName && (
+                <span className="mr-1 text-ink-2">
+                  Agenda de <strong className="text-ink">{personName}</strong>
+                </span>
+              )}
+              <span className="rounded-full bg-critical/12 px-2.5 py-1 font-medium text-critical-ink">{late.length} atrasada(s)</span>
+              <span className="rounded-full bg-warning/15 px-2.5 py-1 font-medium text-warning-ink">{todayDue} para hoje</span>
+              <span className="rounded-full bg-series-1/12 px-2.5 py-1 font-medium text-series-1">{todayEvents} compromisso(s) hoje</span>
+              <span className="rounded-full bg-good/15 px-2.5 py-1 font-medium text-good-ink">{doneOn.get(today)?.length ?? 0} entregue(s) hoje</span>
+            </div>
+          </div>
+
+          {view === 'dia' &&
+            (dayEntries.length ? (
+              section(
+                'dia',
+                <>
+                  <CalendarDays className="h-4 w-4" /> {ref === today ? 'Hoje' : `${WEEKDAYS[weekday(ref)]}, ${ddmm(ref)}`}
+                </>,
+                dayEntries,
+              )
+            ) : (
+              <Card>
+                <EmptyState
+                  icon={<CalendarDays />}
+                  title="Nada neste dia"
+                  description="Nenhuma demanda ou compromisso neste dia. Use “Novo compromisso” para registrar um."
+                />
+              </Card>
+            ))}
+
+          {view === 'semana' && (
+            <Card className="overflow-hidden">
+              <div className="grid divide-y divide-line md:grid-cols-7 md:divide-x md:divide-y-0">
+                {days.map((k) => {
+                  const list = entriesOf(k);
                   return (
-                    <Link
-                      key={key}
-                      href={href({ dia: day === key ? null : key })}
-                      aria-label={`${i + 1}: ${due} a entregar, ${evs} compromisso(s), ${done} entregue(s)`}
-                      aria-current={day === key ? 'date' : undefined}
-                      className={cn(
-                        'flex aspect-square flex-col items-center justify-center rounded-lg text-xs transition hover:bg-surface-2',
-                        key === today && 'ring-1 ring-brand-line',
-                        day === key && 'bg-brand-soft font-semibold text-brand-text',
-                      )}
-                    >
-                      <span className="tabular">{i + 1}</span>
-                      <span className="mt-0.5 flex h-1.5 items-center gap-0.5">
-                        {due > 0 && (
-                          <span
-                            className={cn(
-                              'tabular rounded-full px-1 text-[9px] font-semibold leading-tight text-white',
-                              past ? 'bg-critical' : 'bg-warning text-black',
-                            )}
-                          >
-                            {due}
-                          </span>
+                    <div key={k} className={cn('min-w-0 p-2 md:min-h-[22rem]', k === today && 'bg-brand-soft/40')}>
+                      <Link
+                        href={href({ vista: 'dia', data: k })}
+                        className={cn(
+                          'mb-2 flex items-baseline justify-between rounded-lg px-1.5 py-1 text-xs hover:bg-surface-2',
+                          k === today ? 'font-semibold text-brand-text' : 'text-ink-2',
                         )}
-                        {evs > 0 && <span className="h-1.5 w-1.5 rounded-full bg-series-1" aria-hidden />}
-                        {done > 0 && <span className="h-1.5 w-1.5 rounded-full bg-good" aria-hidden />}
-                      </span>
-                    </Link>
+                      >
+                        <span>{WEEKDAYS[weekday(k)]}</span>
+                        <span className="tabular text-sm font-semibold">{ddmm(k)}</span>
+                      </Link>
+                      <div className="space-y-1">
+                        {list.map(chip)}
+                        {!list.length && <p className="px-1.5 text-[11px] text-muted md:hidden">Livre</p>}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
-              <p className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted">
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-warning" /> a entregar
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-critical" /> atrasada
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-series-1" /> compromisso
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-good" /> entregue
-                </span>
-              </p>
+              <div className="border-t border-line px-4 py-2">{legend}</div>
             </Card>
-            <Card className="grid grid-cols-4 divide-x divide-line text-center">
-              <div className="p-3">
-                <p className="tabular text-xl font-semibold text-critical-ink">{late.length}</p>
-                <p className="text-[11px] text-ink-2">atrasadas</p>
-              </div>
-              <div className="p-3">
-                <p className="tabular text-xl font-semibold">{dueOn.get(today)?.filter((r) => new Date(r.promised_at!).getTime() >= now).length ?? 0}</p>
-                <p className="text-[11px] text-ink-2">para hoje</p>
-              </div>
-              <div className="p-3">
-                <p className="tabular text-xl font-semibold text-series-1">{eventsToday}</p>
-                <p className="text-[11px] text-ink-2">compromissos hoje</p>
-              </div>
-              <div className="p-3">
-                <p className="tabular text-xl font-semibold text-good-ink">{doneOn.get(today)?.length ?? 0}</p>
-                <p className="text-[11px] text-ink-2">entregues hoje</p>
-              </div>
-            </Card>
-          </div>
+          )}
 
-          <div className="space-y-4">
-            {personName && (viewingOther || ids.length === 1) && (
-              <p className="text-sm text-ink-2">
-                Agenda de <strong className="text-ink">{personName}</strong>
-                {viewingOther && ' (somente o responsável marca a entrega)'}
-              </p>
-            )}
-            {day ? (
-              <>
-                {section(
-                  <>
-                    <CalendarDays className="h-4 w-4" /> {dayTitle(day, today)}
-                  </>,
-                  entriesOf(day),
-                  { tone: day < today ? 'critical' : undefined },
-                )}
-                {section(
-                  <>
-                    <CheckCircle2 className="h-4 w-4" /> {dayTitle(day, today)} · entregues
-                  </>,
-                  demandEntries(doneOn.get(day) ?? [], true),
-                  { tone: 'good' },
-                )}
-                {!dueOn.get(day)?.length && !doneOn.get(day)?.length && !eventsOn.get(day)?.length && (
-                  <Card>
-                    <EmptyState icon={<CalendarDays />} title="Nada neste dia" description="Nenhuma demanda ou compromisso neste dia. Use “Novo compromisso” para registrar um." />
-                  </Card>
-                )}
-                <Link href={href({ dia: null })} className="inline-block text-sm text-brand-text hover:underline">
-                  Ver a agenda completa
-                </Link>
-              </>
-            ) : (
-              <>
-                {section(
-                  <>
-                    <AlertTriangle className="h-4 w-4" /> Atrasadas
-                  </>,
-                  demandEntries(late),
-                  { tone: 'critical' },
-                )}
-                {upcomingDays.map((k) =>
-                  section(
-                    <>
-                      <CalendarDays className="h-4 w-4" /> {dayTitle(k, today)}
-                    </>,
-                    entriesOf(k, { onlyUpcoming: true }),
-                  ),
-                )}
-                {section(
-                  <>
-                    <Clock className="h-4 w-4" /> Sem prazo definido
-                  </>,
-                  demandEntries(noDate),
-                )}
-                {section(
-                  <>
-                    <CheckCircle2 className="h-4 w-4" /> Entregues hoje
-                  </>,
-                  demandEntries(doneOn.get(today) ?? [], true),
-                  { tone: 'good' },
-                )}
-                {!open.length && !doneOn.get(today)?.length && !upcomingDays.length && (
-                  <Card>
-                    <EmptyState
-                      icon={<CheckCircle2 />}
-                      title="Agenda livre"
-                      description="Quando uma demanda tiver este responsável, ela aparece aqui no dia do prazo prometido. Compromissos são registrados em “Novo compromisso”."
-                    />
-                  </Card>
-                )}
-              </>
-            )}
-          </div>
+          {view === 'mes' && (
+            <Card className="overflow-hidden">
+              <div className="grid grid-cols-7 border-b border-line text-center text-[11px] font-medium text-muted">
+                {WEEKDAYS.map((w) => (
+                  <span key={w} className="py-2">
+                    {w}
+                  </span>
+                ))}
+              </div>
+              <div className="grid grid-cols-7">
+                {days.map((k, i) => {
+                  const list = entriesOf(k);
+                  const inMonth = k >= monthFirst && k <= monthLast;
+                  const max = 3;
+                  return (
+                    <div
+                      key={k}
+                      className={cn(
+                        'min-h-20 min-w-0 border-line p-1 sm:min-h-28 sm:p-1.5',
+                        i % 7 !== 6 && 'border-r',
+                        i < days.length - 7 && 'border-b',
+                        !inMonth && 'bg-surface-2/50',
+                        k === today && 'bg-brand-soft/40',
+                      )}
+                    >
+                      <Link
+                        href={href({ vista: 'dia', data: k })}
+                        className={cn(
+                          'tabular mb-1 inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs hover:bg-surface-2',
+                          k === today ? 'bg-brand font-semibold text-brand-ink' : inMonth ? 'text-ink' : 'text-muted',
+                        )}
+                        aria-label={`${ddmm(k)}: ${list.length} item(ns)`}
+                      >
+                        {parts(k)[2]}
+                      </Link>
+                      {/* celular: só a quantidade; telas maiores: os itens */}
+                      {list.length > 0 && (
+                        <Link href={href({ vista: 'dia', data: k })} className="block sm:hidden">
+                          <span className="tabular rounded-full bg-surface-2 px-1.5 text-[10px] font-semibold text-ink-2">{list.length}</span>
+                        </Link>
+                      )}
+                      <div className="hidden space-y-0.5 sm:block">
+                        {list.slice(0, max).map(chip)}
+                        {list.length > max && (
+                          <Link href={href({ vista: 'dia', data: k })} className="block px-1.5 text-[11px] font-medium text-brand-text hover:underline">
+                            +{list.length - max} mais
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="border-t border-line px-4 py-2">{legend}</div>
+            </Card>
+          )}
+
+          {/* pendências fora do período: atrasadas e sem prazo */}
+          {(late.length > 0 || noDate.length > 0) && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {section(
+                'atrasadas',
+                <>
+                  <AlertTriangle className="h-4 w-4" /> Atrasadas
+                </>,
+                demandEntries(late),
+                'critical',
+              )}
+              {section(
+                'sem-prazo',
+                <>
+                  <Clock className="h-4 w-4" /> Sem prazo definido
+                </>,
+                demandEntries(noDate),
+              )}
+            </div>
+          )}
+          {!open.length && !events.length && !delivered.length && view !== 'dia' && (
+            <Card>
+              <EmptyState
+                icon={<CheckCircle2 />}
+                title="Agenda livre"
+                description="Quando uma demanda tiver este responsável, ela aparece aqui no dia do prazo prometido. Compromissos são registrados em “Novo compromisso”."
+              />
+            </Card>
+          )}
         </div>
       )}
-    </>
+    </div>
   );
 }
