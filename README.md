@@ -97,6 +97,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    57. `supabase/migrations/0057_alerts_unassigned_groups.sql`
    58. `supabase/migrations/0058_my_alerts_off.sql`
    59. `supabase/migrations/0059_demand_delivery_agenda.sql`
+   60. `supabase/migrations/0060_agenda_events.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

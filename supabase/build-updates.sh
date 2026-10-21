@@ -83,7 +83,8 @@ CHECKS=$(cat <<'SQL'
   (49, 'Meus alertas (0058)', to_regprocedure('public.set_my_alerts_off(boolean)') is not null),
   (50, 'Entrega pelo responsável e agenda (0059)', to_regprocedure('public.my_due_demands()') is not null
       and exists (select 1 from pg_trigger where tgname = 'demands_check_delivery')),
-  (51, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (51, 'Compromissos na agenda (0060)', to_regclass('public.agenda_events') is not null),
+  (52, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

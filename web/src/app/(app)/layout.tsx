@@ -34,6 +34,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   ]);
   const dueToday = Number((due as { hoje?: number } | null)?.hoje ?? 0);
   const dueLate = Number((due as { atrasadas?: number } | null)?.atrasadas ?? 0);
+  const dueEvents = Number((due as { compromissos?: number } | null)?.compromissos ?? 0);
 
   const initials = (profile.full_name || profile.email)
     .split(/[\s@.]+/)
@@ -45,7 +46,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   return (
     <div className="min-h-screen">
       <Sidebar
-        counts={{ pending: pending ?? 0, alerts: alerts ?? 0, demands: demands ?? 0, agenda: dueToday + dueLate }}
+        counts={{ pending: pending ?? 0, alerts: alerts ?? 0, demands: demands ?? 0, agenda: dueToday + dueLate + dueEvents }}
         // demandas desligadas nas configurações: o item some do menu
         // + os menus que a empresa ocultou para este usuário (Configurações › Menus)
         hidden={[

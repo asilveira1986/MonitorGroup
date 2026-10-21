@@ -262,7 +262,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
       }),
   );
 
-  // Agenda: aviso das demandas para entregar hoje (e atrasadas). Uma vez por dia neste navegador,
+  // Agenda: aviso das demandas para entregar hoje (e atrasadas) e dos compromissos do dia. Uma vez por dia neste navegador,
   // e de novo quando aumentam; confere a cada 10 min.
   useEffect(() => {
     let stop = false;
@@ -271,7 +271,8 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
       if (stop || error || !data || configRef.current.userOff || mutedHere()) return;
       const today = Number((data as { hoje?: number }).hoje ?? 0);
       const late = Number((data as { atrasadas?: number }).atrasadas ?? 0);
-      const total = today + late;
+      const events = Number((data as { compromissos?: number }).compromissos ?? 0);
+      const total = today + late + events;
       const storageKey = `due-notice:${new Date().toLocaleDateString('en-CA')}`;
       let shown = 0;
       try {
@@ -281,21 +282,31 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
       try {
         localStorage.setItem(storageKey, String(total));
       } catch {}
-      const parts = [today ? `${today} para entregar hoje` : null, late ? `${late} atrasada(s)` : null].filter(Boolean);
+      const parts = [
+        today ? `${today} demanda(s) para entregar hoje` : null,
+        late ? `${late} atrasada(s)` : null,
+        events ? `${events} compromisso(s) hoje` : null,
+      ].filter(Boolean);
       pushRef.current({
         key: 'agenda-hoje',
         tone: late ? 'critical' : 'warning',
-        heading: 'Demandas do dia',
+        heading: 'Agenda do dia',
         icon: CalendarDays,
         group: 'Sua agenda',
         who: parts.join(' · '),
-        text: 'Abra a agenda para ver o que entregar e marcar como entregue.',
+        text: 'Abra a agenda para ver as entregas e os compromissos do dia.',
         href: '/agenda',
         action: 'Abrir agenda',
         at: Date.now(),
         speech:
           configRef.current.voice !== false
-            ? `Você tem ${[today ? `${today} ${today === 1 ? 'demanda' : 'demandas'} para entregar hoje` : null, late ? `${late} ${late === 1 ? 'atrasada' : 'atrasadas'}` : null].filter(Boolean).join(' e ')}.`
+            ? `Você tem ${[
+                today ? `${today} ${today === 1 ? 'demanda' : 'demandas'} para entregar hoje` : null,
+                late ? `${late} ${late === 1 ? 'demanda atrasada' : 'demandas atrasadas'}` : null,
+                events ? `${events} ${events === 1 ? 'compromisso' : 'compromissos'} hoje` : null,
+              ]
+                .filter(Boolean)
+                .join(' e ')}.`
             : undefined,
       });
     };

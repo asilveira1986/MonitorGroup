@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, UserRound } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, UserRound } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DemandStatusBadge } from '@/components/demands/status';
@@ -8,10 +8,19 @@ import { cn, formatTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Demand } from '@/lib/types';
 import { DeliverButton, PersonSelect } from './agenda-controls';
+import { EventActions, NewEventButton, type AgendaEvent } from './event-controls';
 
 export const metadata: Metadata = { title: 'Monitor Group · Agenda' };
 
 type Row = Demand & { groups: { name: string } | null; team_members: { name: string } | null };
+/** uma linha da agenda: demanda (a entregar ou entregue) ou compromisso */
+type Entry = { kind: 'demand'; r: Row; done?: boolean } | { kind: 'event'; e: AgendaEvent };
+const entryTime = (x: Entry) =>
+  x.kind === 'event'
+    ? x.e.all_day
+      ? 0
+      : new Date(x.e.starts_at).getTime()
+    : new Date((x.done ? x.r.delivered_at : x.r.promised_at) ?? 0).getTime();
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -33,7 +42,8 @@ const dayTitle = (key: string, today: string) => {
 };
 
 /**
- * Agenda: as demandas que a pessoa tem para entregar, dia a dia, pelo prazo prometido.
+ * Agenda: as demandas que a pessoa tem para entregar, dia a dia, pelo prazo prometido,
+ * e os compromissos registrados à mão.
  * Cada usuário vê a própria (a pessoa da equipe ligada ao e-mail de acesso dele);
  * administradores escolhem qualquer pessoa da equipe.
  */
@@ -69,11 +79,12 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
 
   let open: Row[] = [];
   let delivered: Row[] = [];
+  let events: AgendaEvent[] = [];
   if (ids.length) {
     // entregues do mês mostrado e de hoje (um dia a mais por causa do fuso)
     const [ty, tm, td] = today.split('-').map(Number);
     const since = new Date(Math.min(Date.UTC(my, mm - 1, 1), Date.UTC(ty, tm - 1, td)) - 86_400_000).toISOString();
-    const [o, d] = await Promise.all([
+    const [o, d, ev] = await Promise.all([
       supabase
         .from('demands')
         .select('*, groups(name), team_members(name)')
@@ -89,9 +100,18 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         .gte('delivered_at', since)
         .order('delivered_at', { ascending: false })
         .limit(1000),
+      // compromissos: do mês mostrado em diante (sem o script 0060, nenhum)
+      supabase
+        .from('agenda_events')
+        .select('id, member_id, title, notes, starts_at, all_day, done_at')
+        .in('member_id', ids)
+        .gte('starts_at', since)
+        .order('starts_at')
+        .limit(1000),
     ]);
     open = (o.data ?? []) as Row[];
     delivered = (d.data ?? []) as Row[];
+    events = (ev.data ?? []) as AgendaEvent[];
   }
 
   // por dia: a entregar (pelo prazo) e entregues (pelo dia da entrega)
@@ -100,9 +120,21 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const doneOn = new Map<string, Row[]>();
   for (const r of delivered)
     if (r.delivered_at) doneOn.set(dayKey(r.delivered_at, timeZone), [...(doneOn.get(dayKey(r.delivered_at, timeZone)) ?? []), r]);
+  const eventsOn = new Map<string, AgendaEvent[]>();
+  for (const e of events) eventsOn.set(dayKey(e.starts_at, timeZone), [...(eventsOn.get(dayKey(e.starts_at, timeZone)) ?? []), e]);
   const late = open.filter((r) => r.promised_at && new Date(r.promised_at).getTime() < now);
   const noDate = open.filter((r) => !r.promised_at);
-  const upcomingDays = [...dueOn.keys()].filter((k) => k >= today).sort();
+  const upcomingDays = [...new Set([...dueOn.keys(), ...eventsOn.keys()])].filter((k) => k >= today).sort();
+  const eventsToday = (eventsOn.get(today) ?? []).filter((e) => !e.done_at).length;
+  // entradas de um dia, na ordem do horário (dia todo primeiro)
+  const entriesOf = (key: string, opts: { onlyUpcoming?: boolean } = {}): Entry[] =>
+    [
+      ...(dueOn.get(key) ?? [])
+        .filter((r) => !opts.onlyUpcoming || new Date(r.promised_at!).getTime() >= now)
+        .map((r): Entry => ({ kind: 'demand', r })),
+      ...(eventsOn.get(key) ?? []).map((e): Entry => ({ kind: 'event', e })),
+    ].sort((a, b) => entryTime(a) - entryTime(b));
+  const demandEntries = (rows: Row[], done = false) => rows.map((r): Entry => ({ kind: 'demand', r, done }));
 
   const href = (changes: Record<string, string | null>) => {
     const p = new URLSearchParams();
@@ -146,8 +178,23 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     );
   };
 
-  const section = (title: React.ReactNode, rows: Row[], opts: { done?: boolean; tone?: 'critical' | 'good' } = {}) =>
-    rows.length > 0 && (
+  const eventItem = (e: AgendaEvent) => (
+    <li key={e.id} className={cn('flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5', e.done_at && 'opacity-60')}>
+      <span className="tabular w-12 shrink-0 text-xs font-semibold text-series-1">{e.all_day ? 'dia todo' : formatTime(e.starts_at, timeZone)}</span>
+      <div className="min-w-0 flex-1 basis-56">
+        <p className={cn('line-clamp-2 text-sm font-medium', e.done_at && 'line-through')}>
+          <CalendarClock className="mr-1 inline h-3.5 w-3.5 text-series-1" aria-hidden />
+          {e.title}
+        </p>
+        <p className="line-clamp-2 text-xs text-ink-2">{e.notes || 'Compromisso'}</p>
+      </div>
+      {e.done_at && <span className="text-[11px] font-medium text-good-ink">concluído</span>}
+      <EventActions event={e} personName={personName} timeZone={timeZone} />
+    </li>
+  );
+
+  const section = (title: React.ReactNode, entries: Entry[], opts: { tone?: 'critical' | 'good' } = {}) =>
+    entries.length > 0 && (
       <Card key={String(title)} className="overflow-hidden">
         <h2
           className={cn(
@@ -156,9 +203,11 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
             opts.tone === 'good' && 'text-good-ink',
           )}
         >
-          {title} <span className="tabular rounded-full bg-surface-2 px-2 text-[11px] font-semibold text-ink-2">{rows.length}</span>
+          {title} <span className="tabular rounded-full bg-surface-2 px-2 text-[11px] font-semibold text-ink-2">{entries.length}</span>
         </h2>
-        <ul className="divide-y divide-line">{rows.map((r) => item(r, opts))}</ul>
+        <ul className="divide-y divide-line">
+          {entries.map((x) => (x.kind === 'event' ? eventItem(x.e) : item(x.r, { done: x.done })))}
+        </ul>
       </Card>
     );
 
@@ -166,15 +215,20 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     <>
       <PageHeader
         title="Agenda"
-        description="As demandas para entregar em cada dia, pelo prazo prometido. Só o responsável marca a entrega, pelo botão “Demanda entregue”."
+        description="As demandas para entregar em cada dia, pelo prazo prometido, e os seus compromissos. Só o responsável marca a entrega, pelo botão “Demanda entregue”."
         action={
-          isAdmin ? (
-            <PersonSelect
-              value={ids.length === 1 && (viewingOther || !myIds.length) ? ids[0] : ''}
-              mine={myIds.length > 0}
-              people={people.map((p) => ({ id: p.id, name: p.active ? p.name : `${p.name} (inativo)` }))}
-            />
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            {isAdmin && (
+              <PersonSelect
+                value={ids.length === 1 && (viewingOther || !myIds.length) ? ids[0] : ''}
+                mine={myIds.length > 0}
+                people={people.map((p) => ({ id: p.id, name: p.active ? p.name : `${p.name} (inativo)` }))}
+              />
+            )}
+            {ids.length > 0 && (
+              <NewEventButton memberId={ids[0]} personName={viewingOther ? personName : null} timeZone={timeZone} defaultDate={day ?? today} />
+            )}
+          </div>
         }
       />
 
@@ -218,12 +272,13 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                   const key = `${month}-${String(i + 1).padStart(2, '0')}`;
                   const due = dueOn.get(key)?.length ?? 0;
                   const done = doneOn.get(key)?.length ?? 0;
+                  const evs = eventsOn.get(key)?.filter((e) => !e.done_at).length ?? 0;
                   const past = key < today;
                   return (
                     <Link
                       key={key}
                       href={href({ dia: day === key ? null : key })}
-                      aria-label={`${i + 1}: ${due} a entregar, ${done} entregue(s)`}
+                      aria-label={`${i + 1}: ${due} a entregar, ${evs} compromisso(s), ${done} entregue(s)`}
                       aria-current={day === key ? 'date' : undefined}
                       className={cn(
                         'flex aspect-square flex-col items-center justify-center rounded-lg text-xs transition hover:bg-surface-2',
@@ -243,6 +298,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                             {due}
                           </span>
                         )}
+                        {evs > 0 && <span className="h-1.5 w-1.5 rounded-full bg-series-1" aria-hidden />}
                         {done > 0 && <span className="h-1.5 w-1.5 rounded-full bg-good" aria-hidden />}
                       </span>
                     </Link>
@@ -257,11 +313,14 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                   <span className="h-2 w-2 rounded-full bg-critical" /> atrasada
                 </span>
                 <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-series-1" /> compromisso
+                </span>
+                <span className="inline-flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-good" /> entregue
                 </span>
               </p>
             </Card>
-            <Card className="grid grid-cols-3 divide-x divide-line text-center">
+            <Card className="grid grid-cols-4 divide-x divide-line text-center">
               <div className="p-3">
                 <p className="tabular text-xl font-semibold text-critical-ink">{late.length}</p>
                 <p className="text-[11px] text-ink-2">atrasadas</p>
@@ -269,6 +328,10 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
               <div className="p-3">
                 <p className="tabular text-xl font-semibold">{dueOn.get(today)?.filter((r) => new Date(r.promised_at!).getTime() >= now).length ?? 0}</p>
                 <p className="text-[11px] text-ink-2">para hoje</p>
+              </div>
+              <div className="p-3">
+                <p className="tabular text-xl font-semibold text-series-1">{eventsToday}</p>
+                <p className="text-[11px] text-ink-2">compromissos hoje</p>
               </div>
               <div className="p-3">
                 <p className="tabular text-xl font-semibold text-good-ink">{doneOn.get(today)?.length ?? 0}</p>
@@ -288,21 +351,21 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
               <>
                 {section(
                   <>
-                    <CalendarDays className="h-4 w-4" /> {dayTitle(day, today)} · a entregar
+                    <CalendarDays className="h-4 w-4" /> {dayTitle(day, today)}
                   </>,
-                  dueOn.get(day) ?? [],
+                  entriesOf(day),
                   { tone: day < today ? 'critical' : undefined },
                 )}
                 {section(
                   <>
                     <CheckCircle2 className="h-4 w-4" /> {dayTitle(day, today)} · entregues
                   </>,
-                  doneOn.get(day) ?? [],
-                  { done: true, tone: 'good' },
+                  demandEntries(doneOn.get(day) ?? [], true),
+                  { tone: 'good' },
                 )}
-                {!dueOn.get(day)?.length && !doneOn.get(day)?.length && (
+                {!dueOn.get(day)?.length && !doneOn.get(day)?.length && !eventsOn.get(day)?.length && (
                   <Card>
-                    <EmptyState icon={<CalendarDays />} title="Nada neste dia" description="Nenhuma demanda com prazo ou entrega neste dia." />
+                    <EmptyState icon={<CalendarDays />} title="Nada neste dia" description="Nenhuma demanda ou compromisso neste dia. Use “Novo compromisso” para registrar um." />
                   </Card>
                 )}
                 <Link href={href({ dia: null })} className="inline-block text-sm text-brand-text hover:underline">
@@ -315,7 +378,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                   <>
                     <AlertTriangle className="h-4 w-4" /> Atrasadas
                   </>,
-                  late,
+                  demandEntries(late),
                   { tone: 'critical' },
                 )}
                 {upcomingDays.map((k) =>
@@ -323,28 +386,28 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                     <>
                       <CalendarDays className="h-4 w-4" /> {dayTitle(k, today)}
                     </>,
-                    (dueOn.get(k) ?? []).filter((r) => new Date(r.promised_at!).getTime() >= now),
+                    entriesOf(k, { onlyUpcoming: true }),
                   ),
                 )}
                 {section(
                   <>
                     <Clock className="h-4 w-4" /> Sem prazo definido
                   </>,
-                  noDate,
+                  demandEntries(noDate),
                 )}
                 {section(
                   <>
                     <CheckCircle2 className="h-4 w-4" /> Entregues hoje
                   </>,
-                  doneOn.get(today) ?? [],
-                  { done: true, tone: 'good' },
+                  demandEntries(doneOn.get(today) ?? [], true),
+                  { tone: 'good' },
                 )}
-                {!open.length && !doneOn.get(today)?.length && (
+                {!open.length && !doneOn.get(today)?.length && !upcomingDays.length && (
                   <Card>
                     <EmptyState
                       icon={<CheckCircle2 />}
-                      title="Nenhuma demanda para entregar"
-                      description="Quando uma demanda tiver este responsável, ela aparece aqui no dia do prazo prometido."
+                      title="Agenda livre"
+                      description="Quando uma demanda tiver este responsável, ela aparece aqui no dia do prazo prometido. Compromissos são registrados em “Novo compromisso”."
                     />
                   </Card>
                 )}
