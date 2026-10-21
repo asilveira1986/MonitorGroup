@@ -50,6 +50,9 @@ type Session = {
   outbox: Map<string, string>;
   /** respostas do painel que usaram a mensagem de fechamento (\fechamento) */
   closingOutbox: Set<string>;
+  /** LID -> telefone (jid) e nome já descobertos, para não consultar de novo */
+  lidPhones: Map<string, string | null>;
+  lidNames: Map<string, string>;
   /** fotos de perfil dos participantes e do grupo (uma de cada vez) */
   avatars: AvatarQueue;
 };
@@ -375,6 +378,8 @@ export class WhatsAppManager {
       history: null,
       outbox: new Map(),
       closingOutbox: new Set(),
+      lidPhones: new Map(),
+      lidNames: new Map(),
       avatars: null as unknown as AvatarQueue,
     };
     session.avatars = new AvatarQueue(companyId, () => (session.stopped ? null : session.sock));
@@ -824,10 +829,51 @@ export class WhatsAppManager {
   }
 
   /** Dados comuns de uma mensagem de grupo (remetente, equipe, horário). */
+  /**
+   * Telefone (como jid @s.whatsapp.net) de quem aparece só pelo LID: primeiro o próprio WhatsApp
+   * (relação LID → número guardada pela conexão), depois a lista de membros do grupo.
+   */
+  private async phoneJidForLid(session: Session, groupJid: string | null | undefined, jid: string | null): Promise<string | null> {
+    if (!jid || !jid.endsWith('@lid')) return null;
+    const known = session.lidPhones.get(jid);
+    if (known) return known;
+    let phoneJid: string | null = null;
+    try {
+      const pn = await (
+        session.sock as unknown as { signalRepository?: { lidMapping?: { getPNForLID(l: string): Promise<string | null> } } }
+      ).signalRepository?.lidMapping?.getPNForLID(jid);
+      if (pn) phoneJid = jidNormalizedUser(pn);
+    } catch {
+      /* sem a relação no aparelho */
+    }
+    if (!phoneJid && groupJid) {
+      const group = session.groupCache.get(groupJid);
+      if (group) {
+        const { data } = await db
+          .from('group_participants')
+          .select('phone, name')
+          .eq('group_id', group.id)
+          .or(`jid.eq.${jid},lid.eq.${jid}`)
+          .not('phone', 'is', null)
+          .limit(1)
+          .maybeSingle();
+        if (data?.phone) phoneJid = `${data.phone}@s.whatsapp.net`;
+        if (data?.name) session.lidNames.set(jid, data.name as string);
+      }
+    }
+    // só guarda o que achou: sem número, tenta de novo quando a lista de membros for atualizada
+    if (phoneJid) session.lidPhones.set(jid, phoneJid);
+    return phoneJid;
+  }
+
   private async describeMessage(session: Session, msg: WAMessage, content: { type: string; body: string | null }) {
     const fromMe = Boolean(msg.key.fromMe);
     const participant = fromMe ? jidNormalizedUser(session.sock.user?.id) : (msg.key.participant ?? null);
-    const participantAlt = (msg.key as { participantAlt?: string }).participantAlt ?? null;
+    // remetente só com LID (identificador interno, sem o número): descobre o telefone para
+    // reconhecer a equipe e mostrar nome/telefone na conversa
+    const participantAlt =
+      (msg.key as { participantAlt?: string }).participantAlt ??
+      (fromMe ? null : await this.phoneJidForLid(session, msg.key.remoteJid, participant));
     const member = fromMe ? null : await findTeamMember(session.companyId, participant, participantAlt);
     const settings = await getSettings(session.companyId);
     return {
@@ -838,7 +884,7 @@ export class WhatsAppManager {
       senderPhone: phoneFromJid(participant) ?? phoneFromJid(participantAlt),
       senderName: fromMe
         ? (session.outbox.get(msg.key.id ?? '') ?? session.sock.user?.name ?? 'Número conectado')
-        : (member?.name ?? msg.pushName ?? null),
+        : (member?.name ?? msg.pushName ?? session.lidNames.get(participant ?? '') ?? null),
       sentAtSeconds: toSeconds(msg.messageTimestamp),
       opensPending: !(
         settings.ignore_acknowledgements && isAcknowledgement(content.type, content.body, settings.ignore_phrases)

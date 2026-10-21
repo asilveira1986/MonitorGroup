@@ -88,6 +88,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    48. `supabase/migrations/0048_ignore_technical_messages.sql`
    49. `supabase/migrations/0049_files_and_team_users.sql`
    50. `supabase/migrations/0050_activity_log.sql`
+   51. `supabase/migrations/0051_lid_team_messages.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
