@@ -85,7 +85,8 @@ CHECKS=$(cat <<'SQL'
       and exists (select 1 from pg_trigger where tgname = 'demands_check_delivery')),
   (51, 'Compromissos na agenda (0060)', to_regclass('public.agenda_events') is not null),
   (52, 'Tipos de demanda (0061)', to_regprocedure('public.rename_demand_type(text,text)') is not null),
-  (53, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (53, 'Reações nas mensagens (0062)', to_regclass('public.message_reactions') is not null),
+  (54, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

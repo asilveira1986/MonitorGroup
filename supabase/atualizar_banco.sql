@@ -140,7 +140,8 @@ begin
       and exists (select 1 from pg_trigger where tgname = 'demands_check_delivery')),
   (51, 'Compromissos na agenda (0060)', to_regclass('public.agenda_events') is not null),
   (52, 'Tipos de demanda (0061)', to_regprocedure('public.rename_demand_type(text,text)') is not null),
-  (53, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (53, 'Reações nas mensagens (0062)', to_regclass('public.message_reactions') is not null),
+  (54, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -149,7 +150,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -10699,6 +10700,48 @@ grant execute on function public.rename_demand_type(text, text) to authenticated
 $mig0061$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0062_message_reactions.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0062', $mig0062$
+-- =====================================================================
+-- Reações nas mensagens (👍 ❤️ 😂 ...).
+--
+-- O worker guarda cada reação recebida no WhatsApp: uma por pessoa por
+-- mensagem (trocar o emoji substitui; tirar a reação apaga). Reação não é
+-- mensagem: não abre pendência, não conta no tempo de resposta e não gera
+-- aviso. Aparece na conversa, embaixo da mensagem.
+-- =====================================================================
+
+create table if not exists public.message_reactions (
+  id             uuid primary key default gen_random_uuid(),
+  company_id     uuid not null default public.default_company_id() references public.companies(id) on delete cascade,
+  group_id       uuid not null references public.groups(id) on delete cascade,
+  message_id     uuid not null references public.messages(id) on delete cascade,
+  reactor_jid    text not null,
+  reactor_phone  text,
+  reactor_name   text,
+  from_team      boolean not null default false,
+  team_member_id uuid references public.team_members(id) on delete set null,
+  emoji          text not null,
+  reacted_at     timestamptz not null default now(),
+  unique (message_id, reactor_jid)
+);
+create index if not exists message_reactions_group_idx on public.message_reactions (group_id, reacted_at desc);
+
+alter table public.message_reactions enable row level security;
+drop policy if exists message_reactions_read on public.message_reactions;
+create policy message_reactions_read on public.message_reactions for select
+  using (group_id in (select unnest(public.visible_group_ids())));
+grant select on public.message_reactions to authenticated;
+
+-- a conversa aberta atualiza sozinha (inclusive quando a reação é retirada)
+alter table public.message_reactions replica identity full;
+do $$
+begin
+  begin alter publication supabase_realtime add table public.message_reactions; exception when others then null; end;
+end $$;
+$mig0062$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -10787,6 +10830,7 @@ from (values
       and exists (select 1 from pg_trigger where tgname = 'demands_check_delivery')),
   (51, 'Compromissos na agenda (0060)', to_regclass('public.agenda_events') is not null),
   (52, 'Tipos de demanda (0061)', to_regprocedure('public.rename_demand_type(text,text)') is not null),
-  (53, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (53, 'Reações nas mensagens (0062)', to_regclass('public.message_reactions') is not null),
+  (54, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

@@ -65,6 +65,38 @@ function MediaSeen({ message, timeZone, viewed }: { message: Message; timeZone?:
   );
 }
 
+type Reaction = {
+  id: string;
+  message_id: string;
+  reactor_jid: string;
+  reactor_name: string | null;
+  reactor_phone: string | null;
+  from_team: boolean;
+  emoji: string;
+};
+
+/** Reações embaixo da mensagem, como no WhatsApp: um selo por emoji, com quem reagiu ao passar o mouse. */
+function Reactions({ list, alignEnd }: { list: Reaction[]; alignEnd: boolean }) {
+  const byEmoji = new Map<string, Reaction[]>();
+  for (const r of list) byEmoji.set(r.emoji, [...(byEmoji.get(r.emoji) ?? []), r]);
+  const who = (r: Reaction) => r.reactor_name || formatPhone(r.reactor_phone) || (r.from_team ? 'Equipe' : 'Cliente');
+  return (
+    <div className={cn('-mt-1.5 flex flex-wrap gap-1 px-2', alignEnd ? 'justify-end' : 'justify-start')} aria-label="Reações">
+      {[...byEmoji].map(([emoji, rs]) => (
+        <span
+          key={emoji}
+          title={rs.map(who).join(', ')}
+          className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-1.5 py-0.5 text-xs shadow-sm"
+        >
+          <span aria-hidden>{emoji}</span>
+          {rs.length > 1 && <span className="tabular text-[10px] font-semibold text-ink-2">{rs.length}</span>}
+          <span className="sr-only">{`${emoji} de ${rs.map(who).join(', ')}`}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /** Remove a assinatura "*Nome:*" das respostas do painel: o nome já aparece no balão. */
 function withoutSignature(body: string | null, senderName: string | null) {
   if (!body || !senderName) return body;
@@ -127,15 +159,62 @@ export function Conversation({
     return [...byId.values()].sort(newerFirst);
   }, [initial, older, patches]);
 
+  // reações (0062): carregadas para as mensagens na tela e atualizadas em tempo real
+  const [reactions, setReactions] = useState<Map<string, Reaction>>(new Map());
+  const loadedFor = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const ids = messages.map((m) => m.id).filter((id) => !loadedFor.current.has(id));
+    if (!ids.length) return;
+    for (const id of ids) loadedFor.current.add(id);
+    const supabase = createClient();
+    for (let i = 0; i < ids.length; i += 100) {
+      void supabase
+        .from('message_reactions')
+        .select('id, message_id, reactor_jid, reactor_name, reactor_phone, from_team, emoji')
+        .in('message_id', ids.slice(i, i + 100))
+        .then(({ data, error }) => {
+          if (error || !data?.length) return;
+          setReactions((prev) => {
+            const next = new Map(prev);
+            for (const r of data as Reaction[]) next.set(r.id, r);
+            return next;
+          });
+        });
+    }
+  }, [messages]);
+  const reactionsOf = useMemo(() => {
+    const map = new Map<string, Reaction[]>();
+    for (const r of reactions.values()) map.set(r.message_id, [...(map.get(r.message_id) ?? []), r]);
+    return map;
+  }, [reactions]);
+
   useRealtime(`conversation-${groupId}`, (channel) =>
-    channel.on(
-      'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId}` },
-      (payload) => {
-        const m = payload.new as Message;
-        setPatches((prev) => new Map(prev).set(m.id, m));
-      },
-    ),
+    channel
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId}` },
+        (payload) => {
+          const m = payload.new as Message;
+          setPatches((prev) => new Map(prev).set(m.id, m));
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'message_reactions', filter: `group_id=eq.${groupId}` },
+        (payload) => {
+          setReactions((prev) => {
+            const next = new Map(prev);
+            if (payload.eventType === 'DELETE') next.delete((payload.old as { id: string }).id);
+            else {
+              const r = payload.new as Reaction;
+              // trocou o emoji: a reação anterior da mesma pessoa sai
+              for (const [id, x] of next) if (x.message_id === r.message_id && x.reactor_jid === r.reactor_jid && id !== r.id) next.delete(id);
+              next.set(r.id, r);
+            }
+            return next;
+          });
+        },
+      ),
   );
 
   const markViewed = useCallback(
@@ -322,6 +401,7 @@ export function Conversation({
                   </div>
                 </div>
               </div>
+              {reactionsOf.get(m.id)?.length ? <Reactions list={reactionsOf.get(m.id)!} alignEnd={m.from_team} /> : null}
               {m.closes_conversation && (
                 <div className="my-3 flex items-center gap-2 text-[11px] text-good-ink" role="separator">
                   <span className="h-px flex-1 bg-good/30" />

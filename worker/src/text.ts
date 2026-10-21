@@ -60,6 +60,14 @@ export function extractContent(message: proto.IMessage | null | undefined): { ty
   return { type: TYPE_LABELS[type] ?? type.replace(/Message$/, ''), body: body || null };
 }
 
+/** Reação a uma mensagem: o id da mensagem reagida e o emoji ('' = reação retirada). */
+export function reactionOf(message: proto.IMessage | null | undefined): { targetId: string; emoji: string } | null {
+  const r = normalizeMessageContent(message)?.reactionMessage;
+  const targetId = r?.key?.id;
+  if (!r || !targetId) return null;
+  return { targetId, emoji: r.text ?? '' };
+}
+
 export const digitsOnly = (value: string | null | undefined) => (value ?? '').replace(/\D/g, '');
 
 /** "5511999998888@s.whatsapp.net" ou "5511999998888:12@s.whatsapp.net" -> "5511999998888" */

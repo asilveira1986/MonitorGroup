@@ -22,7 +22,7 @@ import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
 import { AvatarQueue } from './avatars.js';
 import { storeMessageMedia } from './media.js';
-import { extractContent, isAcknowledgement, isStickerOrEmoji, phoneFromJid, quotedMessageId } from './text.js';
+import { extractContent, isAcknowledgement, isStickerOrEmoji, phoneFromJid, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { selfReadIds } from './receipts.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
@@ -747,6 +747,8 @@ export class WhatsAppManager {
   private async handleMessage(session: Session, msg: WAMessage) {
     const jid = msg.key.remoteJid;
     if (!jid || !isJidGroup(jid) || !msg.message) return;
+    const reaction = reactionOf(msg.message);
+    if (reaction) return this.handleReaction(session, msg, reaction);
     const content = extractContent(msg.message);
     if (!content) return;
 
@@ -826,6 +828,45 @@ export class WhatsAppManager {
         opensPending,
       });
     }
+  }
+
+  /**
+   * Reação a uma mensagem (👍 ❤️ ...): uma por pessoa por mensagem. Trocar o emoji substitui,
+   * tirar a reação apaga. Não é mensagem: não mexe em pendência, tempos nem avisos.
+   */
+  private async handleReaction(session: Session, msg: WAMessage, reaction: { targetId: string; emoji: string }) {
+    const group = await this.getGroup(session, msg.key.remoteJid!);
+    if (!group.monitored || group.removed_at) return;
+    const { data: target } = await db
+      .from('messages')
+      .select('id')
+      .eq('group_id', group.id)
+      .eq('wa_message_id', reaction.targetId)
+      .maybeSingle();
+    if (!target) return; // mensagem que o sistema não tem (anterior ao monitoramento)
+    const d = await this.describeMessage(session, msg, { type: 'reaction', body: reaction.emoji });
+    const reactor = d.participant ?? (d.fromMe ? 'me' : null);
+    if (!reactor) return;
+    if (!reaction.emoji) {
+      await db.from('message_reactions').delete().eq('message_id', target.id).eq('reactor_jid', reactor);
+      return;
+    }
+    const { error } = await db.from('message_reactions').upsert(
+      {
+        company_id: session.companyId,
+        group_id: group.id,
+        message_id: target.id,
+        reactor_jid: reactor,
+        reactor_phone: d.senderPhone,
+        reactor_name: d.senderName,
+        from_team: d.fromTeam,
+        team_member_id: d.member?.id ?? null,
+        emoji: reaction.emoji,
+        reacted_at: new Date(d.sentAtSeconds * 1000).toISOString(),
+      },
+      { onConflict: 'message_id,reactor_jid' },
+    );
+    if (error) logger.warn({ err: error.message }, 'não foi possível guardar a reação');
   }
 
   /** Dados comuns de uma mensagem de grupo (remetente, equipe, horário). */

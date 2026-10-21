@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isWithinBusinessHours } from './business-hours.js';
-import { extractContent, findKeyword, isAcknowledgement, isStickerOrEmoji, phoneFromJid, samePhone } from './text.js';
+import { extractContent, findKeyword, isAcknowledgement, isStickerOrEmoji, phoneFromJid, reactionOf, samePhone } from './text.js';
 
 test('findKeyword ignora acentos e maiúsculas e respeita palavra inteira', () => {
   assert.equal(findKeyword('Isso é URGENTE!!', ['urgente']), 'urgente');
@@ -73,4 +73,11 @@ test('pacotes técnicos do WhatsApp não viram mensagem', () => {
     assert.equal(extractContent({ [key]: {} } as never), null, key);
   }
   assert.deepEqual(extractContent({ conversation: 'oi' }), { type: 'text', body: 'oi' });
+});
+
+test('reação: id da mensagem reagida e o emoji (vazio = retirada)', () => {
+  assert.deepEqual(reactionOf({ reactionMessage: { key: { id: 'ABC' }, text: '👍' } }), { targetId: 'ABC', emoji: '👍' });
+  assert.deepEqual(reactionOf({ reactionMessage: { key: { id: 'ABC' }, text: '' } }), { targetId: 'ABC', emoji: '' });
+  assert.equal(reactionOf({ conversation: 'oi' }), null);
+  assert.equal(reactionOf({ reactionMessage: { text: '👍' } }), null);
 });
