@@ -193,7 +193,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
             <span className="text-muted">#{r.number}</span> {r.description}
           </p>
           <p className="truncate text-xs text-ink-2">
-            {r.groups?.name ?? '—'}
+            {r.groups?.name ?? 'grupo de outro setor'}
             {overdue && <span className="ml-2 font-medium text-critical-ink">prazo vencido</span>}
             {done && <span className="ml-2 font-medium text-good-ink">entregue</span>}
           </p>

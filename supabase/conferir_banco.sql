@@ -85,6 +85,8 @@ from (values
   (51, 'Compromissos na agenda (0060)', to_regclass('public.agenda_events') is not null),
   (52, 'Tipos de demanda (0061)', to_regprocedure('public.rename_demand_type(text,text)') is not null),
   (53, 'Reações nas mensagens (0062)', to_regclass('public.message_reactions') is not null),
-  (54, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (54, 'Responsável vê as próprias demandas (0063)', exists (select 1 from pg_policies where tablename = 'demands' and policyname = 'demands_read'
+      and qual like '%my_team_member_ids%')),
+  (55, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

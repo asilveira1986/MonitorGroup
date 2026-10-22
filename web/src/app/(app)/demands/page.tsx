@@ -96,7 +96,7 @@ export default async function DemandsPage({ searchParams }: PageProps<'/demands'
       />
       <DemandsBoard
         rows={rows.map(
-          (d): DemandRow => ({ ...d, group_name: d.groups?.name ?? '—', assignee_name: d.team_members?.name ?? null }),
+          (d): DemandRow => ({ ...d, group_name: d.groups?.name ?? 'grupo de outro setor', assignee_name: d.team_members?.name ?? null }),
         )}
         groups={groups ?? []}
         members={members ?? []}

@@ -103,7 +103,8 @@ export function DemandDrawer({
             <h2 className="mt-0.5 break-words text-lg font-semibold">{demand.description}</h2>
             {locked && (
               <p className="mt-1 text-xs text-warning-ink">
-                Somente consulta: o setor deste grupo não tem permissão para gerenciar demandas.
+                Somente consulta: o setor deste grupo não tem permissão para gerenciar demandas
+                {canDeliver ? ' (como responsável, você ainda marca a entrega).' : '.'}
               </p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -201,8 +202,9 @@ export function DemandDrawer({
               {canDeliver ? (
                 <>
                   <p className="text-sm">Terminou? Marque a entrega para o cliente e para a sua agenda.</p>
+                  {/* o responsável entrega mesmo quando o setor do grupo não gerencia demandas */}
                   <Button
-                    disabled={pending || locked}
+                    disabled={pending}
                     onClick={() =>
                       confirm(`Confirmar a entrega da demanda #${demand.number}?`) &&
                       save({ status: 'entregue' }, 'Demanda entregue')
