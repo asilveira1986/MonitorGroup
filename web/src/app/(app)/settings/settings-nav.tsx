@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronDown } from 'lucide-react';
+import { Activity, Building2, Check, ChevronDown, Headset, MessageCircle, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -9,89 +9,90 @@ import { SETTINGS_NAV, type SettingsCheck } from '@/lib/settings-nav';
 
 export type NavStatus = Partial<Record<SettingsCheck, boolean>> & { whatsappState?: 'connected' | 'connecting' | 'disconnected' | null };
 
+const GROUP_ICON: Record<string, LucideIcon> = {
+  Organização: Building2,
+  Canais: MessageCircle,
+  Atendimento: Headset,
+  Monitoramento: Activity,
+};
+
 /**
- * Menu lateral das Configurações: grupos em letra pequena e os itens embaixo, com ✓ no que já foi
- * configurado e o status do WhatsApp. No celular vira uma lista que abre e fecha.
+ * Menu das Configurações em dois níveis: os grupos e, só no grupo aberto, os itens. Abre um grupo
+ * por vez (o da página atual vem aberto). A descrição de cada item aparece ao passar o mouse.
  */
 export function SettingsNav({ isAdmin, status }: { isAdmin: boolean; status: NavStatus }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
   const groups = SETTINGS_NAV.map((g) => ({ ...g, items: g.items.filter((i) => isAdmin || !i.adminOnly) })).filter((g) => g.items.length);
-  const current = groups.flatMap((g) => g.items).find((i) => i.href === pathname) ?? groups[0].items[0];
+  const activeGroup = groups.find((g) => g.items.some((i) => i.href === pathname))?.group ?? groups[0].group;
+  const [openGroup, setOpenGroup] = useState<string | null>(activeGroup);
+  const [lastActive, setLastActive] = useState(activeGroup);
+  // trocou de página por outro caminho (link, voltar): abre o grupo dela
+  if (activeGroup !== lastActive) {
+    setLastActive(activeGroup);
+    setOpenGroup(activeGroup);
+  }
 
   const wa = status.whatsappState;
   const waDot = (
     <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-semibold',
-        wa === 'connected' ? 'bg-good/15 text-good-ink' : wa === 'connecting' ? 'bg-warning/15 text-warning-ink' : 'bg-critical/12 text-critical-ink',
-      )}
-    >
-      <span className={cn('h-1.5 w-1.5 rounded-full', wa === 'connected' ? 'bg-good' : wa === 'connecting' ? 'bg-warning' : 'bg-critical')} />
-      {wa === 'connected' ? 'conectado' : wa === 'connecting' ? 'conectando' : 'desconectado'}
-    </span>
-  );
-
-  const list = (
-    <nav aria-label="Configurações" className="space-y-5">
-      {groups.map((g) => (
-        <div key={g.group}>
-          <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted">{g.group}</p>
-          <ul className="space-y-0.5">
-            {g.items.map((i) => {
-              const active = i.href === pathname;
-              const done = i.check && i.check !== 'whatsapp' && status[i.check];
-              return (
-                <li key={i.href}>
-                  <Link
-                    href={i.href}
-                    onClick={() => setOpen(false)}
-                    aria-current={active ? 'page' : undefined}
-                    className={cn(
-                      'block rounded-xl px-3 py-2 transition',
-                      active ? 'bg-brand-soft ring-1 ring-inset ring-brand-line' : 'hover:bg-surface-2',
-                    )}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span className={cn('flex-1 text-sm font-medium', active ? 'text-brand-text' : 'text-ink')}>{i.label}</span>
-                      {i.check === 'whatsapp' && waDot}
-                      {done && <Check className="h-3.5 w-3.5 shrink-0 text-good-ink" aria-label="configurado" />}
-                    </span>
-                    <span className="mt-0.5 block text-[11px] leading-snug text-ink-2">{i.description}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
-    </nav>
+      className={cn('h-2 w-2 shrink-0 rounded-full', wa === 'connected' ? 'bg-good' : wa === 'connecting' ? 'bg-warning' : 'bg-critical')}
+      title={wa === 'connected' ? 'WhatsApp conectado' : wa === 'connecting' ? 'WhatsApp conectando' : 'WhatsApp desconectado'}
+      aria-label={wa === 'connected' ? 'conectado' : wa === 'connecting' ? 'conectando' : 'desconectado'}
+    />
   );
 
   return (
-    <>
-      {/* celular: a seção atual, e a lista ao tocar */}
-      <div className="lg:hidden">
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          className="flex w-full items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3 text-left"
-        >
-          <span className="min-w-0 flex-1">
-            <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted">
-              {groups.find((g) => g.items.includes(current))?.group}
-            </span>
-            <span className="block text-sm font-semibold">{current.label}</span>
-          </span>
-          <ChevronDown className={cn('h-4 w-4 text-muted transition', open && 'rotate-180')} />
-        </button>
-        {open && <div className="mt-2 rounded-2xl border border-line bg-surface p-2">{list}</div>}
-      </div>
-      {/* telas grandes: menu fixo à esquerda */}
-      <aside className="hidden lg:block">
-        <div className="sticky top-24 rounded-2xl border border-line bg-surface p-2">{list}</div>
-      </aside>
-    </>
+    <nav aria-label="Configurações" className="lg:sticky lg:top-24 lg:self-start">
+      <ul className="space-y-1">
+        {groups.map((g) => {
+          const Icon = GROUP_ICON[g.group] ?? Building2;
+          const open = openGroup === g.group;
+          const hasActive = g.group === activeGroup;
+          return (
+            <li key={g.group}>
+              <button
+                type="button"
+                onClick={() => setOpenGroup(open ? null : g.group)}
+                aria-expanded={open}
+                className={cn(
+                  'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition hover:bg-surface-2',
+                  hasActive ? 'text-ink' : 'text-ink-2',
+                )}
+              >
+                <Icon className={cn('h-4 w-4 shrink-0', hasActive ? 'text-brand-text' : 'text-muted')} aria-hidden />
+                <span className="flex-1">{g.group}</span>
+                {!open && g.items.some((i) => i.check === 'whatsapp') && waDot}
+                <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted transition', open && 'rotate-180')} aria-hidden />
+              </button>
+              {open && (
+                <ul className="mb-2 ml-5 mt-0.5 space-y-0.5 border-l border-line pl-3">
+                  {g.items.map((i) => {
+                    const active = i.href === pathname;
+                    const done = i.check && i.check !== 'whatsapp' && status[i.check];
+                    return (
+                      <li key={i.href}>
+                        <Link
+                          href={i.href}
+                          title={i.description}
+                          aria-current={active ? 'page' : undefined}
+                          className={cn(
+                            'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm transition',
+                            active ? 'bg-brand-soft font-medium text-brand-text' : 'text-ink-2 hover:bg-surface-2 hover:text-ink',
+                          )}
+                        >
+                          <span className="flex-1 truncate">{i.label}</span>
+                          {i.check === 'whatsapp' && waDot}
+                          {done && <Check className="h-3.5 w-3.5 shrink-0 text-good-ink" aria-label="configurado" />}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }

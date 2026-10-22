@@ -1,6 +1,6 @@
 'use client';
 
-import { KeyRound, ShieldCheck, Wand2, X } from 'lucide-react';
+import { KeyRound, Wand2, X } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Field, Input, Select } from '@/components/ui';
@@ -25,29 +25,21 @@ export function GrantAccess({ member }: { member: { id: string; name: string; us
   const [password, setPassword] = useState('');
   const [pending, start] = useTransition();
 
-  if (member.user_email) {
-    return (
-      <span
-        className="inline-flex max-w-[14rem] items-center gap-1 truncate rounded-full bg-good/15 px-2 py-0.5 text-[11px] font-medium text-good-ink"
-        title={`Entra no sistema com ${member.user_email}`}
-      >
-        <ShieldCheck className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{member.user_email}</span>
-      </span>
-    );
-  }
+  // já tem acesso: o e-mail aparece na linha da pessoa
+  if (member.user_email) return null;
 
   return (
     <>
       <Button
         type="button"
         size="sm"
-        variant="secondary"
+        variant="ghost"
         onClick={() => {
           setPassword(randomPassword());
           setOpen(true);
         }}
       >
-        <KeyRound className="h-3.5 w-3.5" /> Dar acesso ao sistema
+        <KeyRound className="h-3.5 w-3.5" /> Dar acesso
       </Button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" role="dialog" aria-modal="true" aria-label={`Acesso de ${member.name}`}>

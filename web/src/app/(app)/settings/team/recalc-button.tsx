@@ -12,9 +12,10 @@ export function RecalcButton() {
   return (
     <Button
       type="button"
-      variant="secondary"
+      variant="ghost"
       size="sm"
       disabled={pending}
+      title="Passa as mensagens antigas dos atendentes para a equipe e tira de “aguardando resposta” os grupos já respondidos (também roda sozinho ao adicionar alguém)."
       onClick={() =>
         start(async () => {
           const res = await recalcGroups();
@@ -30,7 +31,7 @@ export function RecalcButton() {
       }
     >
       <RefreshCw className={pending ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-      {pending ? 'Recalculando…' : 'Recalcular grupos'}
+      {pending ? 'Recalculando…' : 'Recalcular'}
     </Button>
   );
 }

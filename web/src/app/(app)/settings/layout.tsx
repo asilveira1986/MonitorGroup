@@ -33,7 +33,7 @@ export default async function SettingsLayout({ children }: LayoutProps<'/setting
   return (
     <>
       <PageHeader title="Configurações" description="Organização, canais, atendimento e monitoramento." />
-      <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-6">
+      <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-6">
         <SettingsNav isAdmin={isAdmin} status={status} />
         <div className="min-w-0">{children}</div>
       </div>

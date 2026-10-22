@@ -1,12 +1,13 @@
 'use client';
 
+import { FormDialog } from '@/components/disclosure';
 import { ActionForm } from '@/components/form-action';
 import { Button, Field, Input, Select } from '@/components/ui';
 import { addAllowedEmail } from '../actions';
 
-export function NewUserForm() {
+export function NewUserForm({ onDone }: { onDone?: () => void }) {
   return (
-    <ActionForm action={addAllowedEmail} success="Usuário cadastrado" resetOnSuccess className="space-y-4">
+    <ActionForm action={addAllowedEmail} success="Usuário cadastrado" resetOnSuccess onDone={onDone} className="space-y-4">
       {(pending) => (
         <>
           <Field label="Nome">
@@ -31,5 +32,14 @@ export function NewUserForm() {
         </>
       )}
     </ActionForm>
+  );
+}
+
+/** "Novo acesso": o formulário abre só ao clicar. */
+export function NewUserDialog() {
+  return (
+    <FormDialog label="Novo acesso" title="Novo acesso ao painel" description="A pessoa entra com este e-mail e a senha inicial.">
+      {(close) => <NewUserForm onDone={close} />}
+    </FormDialog>
   );
 }

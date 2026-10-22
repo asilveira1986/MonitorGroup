@@ -1,12 +1,13 @@
 'use client';
 
+import { FormDialog } from '@/components/disclosure';
 import { ActionForm } from '@/components/form-action';
 import { Button, Field, Input } from '@/components/ui';
 import { addTeamMember } from '../actions';
 
-export function NewMemberForm() {
+export function NewMemberForm({ onDone }: { onDone?: () => void }) {
   return (
-    <ActionForm action={addTeamMember} success="Atendente adicionado" resetOnSuccess className="space-y-4">
+    <ActionForm action={addTeamMember} success="Atendente adicionado" resetOnSuccess onDone={onDone} className="space-y-4">
       {(pending) => (
         <>
           <Field label="Nome">
@@ -21,5 +22,18 @@ export function NewMemberForm() {
         </>
       )}
     </ActionForm>
+  );
+}
+
+/** "Adicionar atendente": o formulário abre só ao clicar. */
+export function NewMemberDialog() {
+  return (
+    <FormDialog
+      label="Adicionar atendente"
+      title="Adicionar atendente"
+      description="Quem responde nos grupos pelo próprio celular. As mensagens do número conectado já contam como equipe."
+    >
+      {(close) => <NewMemberForm onDone={close} />}
+    </FormDialog>
   );
 }
