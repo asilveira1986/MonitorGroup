@@ -1034,6 +1034,17 @@ export class WhatsAppManager {
     if (error) logger.warn({ err: error.message }, 'não foi possível guardar a mensagem privada');
     // imagem/áudio/arquivo: guarda para abrir no painel (em segundo plano)
     const r = ingested as { inserted?: boolean; message_id?: string; chat_id?: string } | null;
+    // resposta citando outra mensagem (0071)
+    const quotedWa = quotedMessageId(msg.message);
+    if (r?.inserted && r.message_id && r.chat_id && quotedWa) {
+      const { data: q } = await db
+        .from('private_messages')
+        .select('id')
+        .eq('chat_id', r.chat_id)
+        .eq('wa_message_id', quotedWa)
+        .maybeSingle();
+      if (q) await db.from('private_messages').update({ quoted_message_id: q.id }).eq('id', r.message_id);
+    }
     if (!fromHistory && r?.inserted && r.message_id && r.chat_id) {
       void storePrivateMedia({
         sock: session.sock,
@@ -1183,7 +1194,7 @@ export class WhatsAppManager {
         .update({ status: 'sending' })
         .eq('id', id)
         .eq('status', 'pending')
-        .select('id, body, created_by, private_chats!inner(id, jid)')
+        .select('id, body, created_by, message_type, media_path, media_mime, media_name, quoted_message_id, private_chats!inner(id, jid)')
         .maybeSingle();
       if (!row) continue;
       const chat = (row as unknown as { private_chats: { id: string; jid: string } }).private_chats;
@@ -1197,11 +1208,40 @@ export class WhatsAppManager {
         }
         const { data: who } = await db.from('profiles').select('full_name, email').eq('id', row.created_by ?? '').maybeSingle();
         session.outbox.set(waId, (who?.full_name as string) || (who?.email as string) || 'Painel');
-        await session.sock.sendMessage(to, { text: row.body as string }, { messageId: waId });
+        // resposta citando uma mensagem (0071)
+        let quoted: WAMessage | undefined;
+        if (row.quoted_message_id) {
+          const { data: q } = await db
+            .from('private_messages')
+            .select('wa_message_id, from_me, body')
+            .eq('id', row.quoted_message_id)
+            .maybeSingle();
+          if (q) quoted = { key: { remoteJid: to, id: q.wa_message_id as string, fromMe: Boolean(q.from_me) }, message: { conversation: (q.body as string) ?? '' } };
+        }
+        const type = (row.message_type as string) || 'text';
+        const caption = (row.body as string | null) ?? undefined;
+        if (row.media_path) {
+          // arquivo enviado pelo painel: está no Storage
+          const file = await db.storage.from('media').download(row.media_path as string);
+          if (file.error || !file.data) throw new Error('Arquivo não encontrado no Storage.');
+          const buffer = Buffer.from(await file.data.arrayBuffer());
+          const mimetype = (row.media_mime as string | null) ?? 'application/octet-stream';
+          const content =
+            type === 'image'
+              ? { image: buffer, caption, mimetype }
+              : type === 'video'
+                ? { video: buffer, caption, mimetype }
+                : type === 'audio'
+                  ? { audio: buffer, mimetype }
+                  : { document: buffer, mimetype, fileName: (row.media_name as string | null) ?? 'arquivo', caption };
+          await session.sock.sendMessage(to, content, { messageId: waId, quoted });
+        } else {
+          await session.sock.sendMessage(to, { text: row.body as string }, { messageId: waId, quoted });
+        }
         const now = new Date().toISOString();
         await db.from('private_outgoing').update({ status: 'sent', wa_message_id: waId, sent_at: now, error: null }).eq('id', id);
         // grava já (o eco do WhatsApp com o mesmo id é ignorado)
-        await db.rpc('ingest_private_message', {
+        const { data: ing } = await db.rpc('ingest_private_message', {
           p_instance_id: session.instanceId,
           p_jid: chat.jid,
           p_phone: phoneFromJid(to),
@@ -1209,11 +1249,22 @@ export class WhatsAppManager {
           p_wa_message_id: waId,
           p_from_me: true,
           p_sender_name: session.outbox.get(waId) ?? 'Painel',
-          p_message_type: 'text',
-          p_body: row.body,
+          p_message_type: type,
+          p_body: type === 'document' && !row.body ? row.media_name : row.body,
           p_sent_at: now,
           p_count_unread: false,
         });
+        // o arquivo enviado e a citação já ficam na mensagem gravada
+        const sentId = (ing as { message_id?: string } | null)?.message_id;
+        if (sentId && (row.media_path || row.quoted_message_id)) {
+          await db
+            .from('private_messages')
+            .update({
+              ...(row.media_path ? { media_path: row.media_path, media_mime: row.media_mime, media_status: 'stored' } : {}),
+              ...(row.quoted_message_id ? { quoted_message_id: row.quoted_message_id } : {}),
+            })
+            .eq('id', sentId);
+        }
         setTimeout(() => session.outbox.delete(waId), 10 * 60_000);
       } catch (err) {
         session.outbox.delete(waId);

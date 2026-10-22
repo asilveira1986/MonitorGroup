@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Loader2, MessageSquarePlus, Search, Send, UserRound, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Loader2, MessageSquarePlus, Paperclip, Search, Send, UserRound, X } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -8,7 +8,7 @@ import { Button, Card, Field, Input, Textarea } from '@/components/ui';
 import { cn, formatPhone, formatTime, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import { useRealtime } from '@/lib/use-realtime';
-import { markPrivateChatRead, sendPrivateMessage, startPrivateChat } from './actions';
+import { markPrivateChatRead, preparePrivateUpload, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
 import {
   PrivateEditor,
   PrivateMedia,
@@ -28,7 +28,7 @@ export type PrivateChat = {
   unread_count: number;
 };
 type PrivateMessage = PrivateMessageRow;
-type Outgoing = { id: string; chat_id: string; body: string; status: string; error: string | null; created_at: string; wa_message_id: string | null };
+type Outgoing = { id: string; chat_id: string; body: string | null; media_name?: string | null; status: string; error: string | null; created_at: string; wa_message_id: string | null };
 type Contact = { jid: string; phone: string | null; name: string | null; notify: string | null };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -165,6 +165,22 @@ function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: 
   );
 }
 
+/** Mensagem citada dentro do balão (resposta). */
+function Quoted({ target }: { target: PrivateMessage | undefined }) {
+  return (
+    <div className="mb-1.5 rounded-lg border-l-4 border-brand/70 bg-black/[0.04] px-2.5 py-1 text-xs dark:bg-white/[0.06]">
+      {target ? (
+        <>
+          <p className="font-semibold text-brand-text">{target.from_me ? 'Você' : target.sender_name || 'Contato'}</p>
+          <p className="line-clamp-2 text-ink-2">{target.deleted_at ? '🚫 Mensagem apagada' : target.body || TYPE_LABEL[target.message_type] || target.message_type}</p>
+        </>
+      ) : (
+        <p className="italic text-muted">Mensagem citada (mais antiga)</p>
+      )}
+    </div>
+  );
+}
+
 function StatusTicks({ status }: { status: number | null }) {
   if (!status || status < 2) return null;
   const Icon = status >= 3 ? CheckCheck : Check;
@@ -190,7 +206,7 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
       supabase.from('private_messages').select('*').eq('chat_id', chat.id).order('sent_at', { ascending: false }).limit(200),
       supabase
         .from('private_outgoing')
-        .select('id, chat_id, body, status, error, created_at, wa_message_id')
+        .select('id, chat_id, body, media_name, status, error, created_at, wa_message_id')
         .eq('chat_id', chat.id)
         .in('status', ['pending', 'sending', 'failed'])
         .order('created_at'),
@@ -248,19 +264,44 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
     return map;
   }, [reactions]);
 
+  const [file, setFile] = useState<File | null>(null);
+  const [replyTo, setReplyTo] = useState<PrivateMessage | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const pickFile = (f: File | null | undefined) => {
+    if (!f) return;
+    if (f.size > 50 * 1024 * 1024) return void toast.error('O arquivo passa de 50 MB.');
+    setFile(f);
+  };
   const send = () => {
     const body = text.trim();
-    if (!body) return;
+    if (!body && !file) return;
+    const sending = file;
+    const quotedId = replyTo?.id ?? null;
     setText('');
+    setFile(null);
+    setReplyTo(null);
     start(async () => {
-      const res = await sendPrivateMessage(chat.id, body);
+      let media: PrivateMediaInput | null = null;
+      if (sending) {
+        // o arquivo vai direto para o Storage (link de upload da conversa) e o worker envia
+        const mime = sending.type || 'application/octet-stream';
+        const prep = await preparePrivateUpload(chat.id, { name: sending.name, mime, size: sending.size });
+        if (!prep.ok) return void toast.error(prep.error);
+        const up = await createClient().storage.from('media').uploadToSignedUrl(prep.data!.path, prep.data!.token, sending, { contentType: mime });
+        if (up.error) return void toast.error('Não foi possível enviar o arquivo', { description: up.error.message });
+        const type = mime.startsWith('image/') && !mime.includes('svg') ? 'image' : mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'document';
+        media = { path: prep.data!.path, type, mime, name: sending.name, size: sending.size };
+      }
+      const res = await sendPrivateMessage(chat.id, body, { quotedId, media });
       if (!res.ok) {
         setText(body);
+        setFile(sending);
         toast.error(res.error);
       }
     });
   };
 
+  const byId = useMemo(() => new Map((messages ?? []).map((m) => [m.id, m])), [messages]);
   const sentIds = useMemo(() => new Set((messages ?? []).map((m) => m.wa_message_id)), [messages]);
   const queue = outgoing.filter((o) => !o.wa_message_id || !sentIds.has(o.wa_message_id));
   const dayFormat = useMemo(() => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone }), [timeZone]);
@@ -313,6 +354,7 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
                           message={m}
                           myReaction={(reactionsOf.get(m.id) ?? []).find((r) => r.from_me)?.emoji ?? null}
                           onEdit={() => setEditing(m.id)}
+                          onReply={() => setReplyTo(m)}
                         />
                       </span>
                     )}
@@ -338,6 +380,7 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
                       <PrivateEditor message={m} onClose={() => setEditing(null)} />
                     ) : (
                       <>
+                        {m.quoted_message_id && <Quoted target={byId.get(m.quoted_message_id)} />}
                         <PrivateMedia message={m} />
                         {/* documento guardado: o nome já aparece no cartão do arquivo */}
                         {!(m.message_type === 'document' && m.media_path) && (
@@ -368,7 +411,12 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
           {queue.map((o) => (
             <div key={o.id} className="flex justify-end">
               <div className={cn('max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm sm:max-w-[75%]', o.status === 'failed' ? 'bg-critical/10' : 'bg-brand-soft/70')}>
-                <p className="whitespace-pre-wrap break-words">{o.body}</p>
+                {o.media_name && (
+                  <p className="mb-1 flex items-center gap-1.5 text-xs text-ink-2">
+                    <Paperclip className="h-3.5 w-3.5" /> {o.media_name}
+                  </p>
+                )}
+                {o.body && <p className="whitespace-pre-wrap break-words">{o.body}</p>}
                 <p className={cn('mt-1 flex items-center justify-end gap-1 text-[11px]', o.status === 'failed' ? 'text-critical-ink' : 'text-muted')}>
                   {o.status === 'failed' ? (
                     <>
@@ -386,13 +434,57 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
         </div>
       </div>
 
+      {(replyTo || file) && (
+        <div className="space-y-1.5 border-t border-line bg-surface-2/50 px-3 pt-2">
+          {replyTo && (
+            <div className="flex items-start gap-2 rounded-lg border-l-4 border-brand bg-surface px-2.5 py-1.5 text-xs">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-brand-text">Respondendo {replyTo.from_me ? 'a você' : title}</p>
+                <p className="truncate text-ink-2">{replyTo.body || TYPE_LABEL[replyTo.message_type] || replyTo.message_type}</p>
+              </div>
+              <button type="button" onClick={() => setReplyTo(null)} className="text-muted hover:text-ink" aria-label="Cancelar resposta">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          {file && (
+            <div className="flex items-center gap-2 rounded-lg bg-surface px-2.5 py-1.5 text-xs">
+              <Paperclip className="h-4 w-4 shrink-0 text-muted" />
+              <span className="min-w-0 flex-1 truncate">
+                {file.name} <span className="text-muted">· {file.size >= 1048576 ? `${(file.size / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1024))} KB`}</span>
+              </span>
+              <span className="text-muted">{text.trim() ? 'com legenda' : 'escreva uma legenda (opcional)'}</span>
+              <button type="button" onClick={() => setFile(null)} className="text-muted hover:text-ink" aria-label="Tirar o arquivo">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       <form
         className="flex items-end gap-2 border-t border-line p-3"
         onSubmit={(e) => {
           e.preventDefault();
           send();
         }}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          pickFile(e.dataTransfer.files?.[0]);
+        }}
       >
+        <input
+          ref={fileInput}
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            pickFile(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
+        <Button type="button" variant="ghost" onClick={() => fileInput.current?.click()} aria-label="Anexar arquivo" title="Anexar imagem, vídeo, áudio ou documento (até 50 MB)">
+          <Paperclip className="h-4 w-4" />
+        </Button>
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -401,14 +493,23 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
               e.preventDefault();
               send();
             }
+            if (e.key === 'Escape') setReplyTo(null);
+          }}
+          onPaste={(e) => {
+            // colar uma imagem (print) anexa o arquivo
+            const f = [...(e.clipboardData?.files ?? [])][0];
+            if (f) {
+              e.preventDefault();
+              pickFile(f);
+            }
           }}
           rows={1}
           maxLength={4000}
-          placeholder="Mensagem"
+          placeholder={file ? 'Legenda (opcional)' : 'Mensagem'}
           aria-label="Mensagem"
           className="max-h-40 min-h-10 flex-1 resize-none"
         />
-        <Button type="submit" disabled={pending || !text.trim()} aria-label="Enviar">
+        <Button type="submit" disabled={pending || (!text.trim() && !file)} aria-label="Enviar">
           <Send className="h-4 w-4" />
         </Button>
       </form>

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requireProfile } from '@/lib/auth';
 import { friendlyDbError } from '@/lib/db-errors';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 const fail = (e: { message: string }) => ({ ok: false as const, error: friendlyDbError(e.message) });
@@ -22,12 +22,42 @@ export async function startPrivateChat(input: { jid?: string; phone?: string; na
   return { ok: true, data: { id: (data as { id: string }).id } };
 }
 
-/** Envia pelo número conectado (o worker confere se o número tem WhatsApp). */
-export async function sendPrivateMessage(chatId: string, body: string): Promise<Result> {
+export type PrivateMedia = { path: string; type: 'image' | 'video' | 'audio' | 'document'; mime: string; name: string; size: number };
+
+/** Envia pelo número conectado (o worker confere se o número tem WhatsApp): texto ou arquivo com legenda, citando ou não. */
+export async function sendPrivateMessage(
+  chatId: string,
+  body: string,
+  opts: { quotedId?: string | null; media?: PrivateMedia | null } = {},
+): Promise<Result> {
   await requireProfile();
   const supabase = await createClient();
-  const { error } = await supabase.rpc('send_private_message', { p_chat_id: chatId, p_body: body });
+  const { error } = await supabase.rpc('send_private_message', {
+    p_chat_id: chatId,
+    p_body: body,
+    p_quoted_message_id: opts.quotedId ?? null,
+    p_media: opts.media ?? null,
+  });
   return error ? fail(error) : { ok: true };
+}
+
+const MAX_BYTES = 50 * 1024 * 1024;
+
+/**
+ * Prepara o envio de um arquivo: confere a conversa (com a sessão do usuário) e devolve um link
+ * de upload direto para o Storage, na pasta da conversa (o arquivo não passa pelo servidor).
+ */
+export async function preparePrivateUpload(chatId: string, file: { name: string; mime: string; size: number }): Promise<Result<{ path: string; token: string }>> {
+  await requireProfile();
+  if (file.size > MAX_BYTES) return { ok: false, error: 'O arquivo passa de 50 MB.' };
+  const supabase = await createClient();
+  const { data: chat } = await supabase.from('private_chats').select('id, company_id').eq('id', chatId).maybeSingle();
+  if (!chat) return { ok: false, error: 'Conversa não encontrada.' };
+  const ext = (file.name.includes('.') ? file.name.split('.').pop()! : file.mime.split('/')[1] ?? 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) || 'bin';
+  const path = `${chat.company_id}/private/${chat.id}/out-${crypto.randomUUID()}.${ext}`;
+  const { data, error } = await createAdminClient().storage.from('media').createSignedUploadUrl(path);
+  if (error || !data) return { ok: false, error: error?.message ?? 'Não foi possível preparar o envio do arquivo.' };
+  return { ok: true, data: { path, token: data.token } };
 }
 
 /** Editar, apagar (para todos / para mim) ou reagir: o worker faz no WhatsApp. */

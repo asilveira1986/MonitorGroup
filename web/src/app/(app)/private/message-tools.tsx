@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, EyeOff, FileText, MoreVertical, Pencil, SmilePlus, Trash2 } from 'lucide-react';
+import { Download, EyeOff, FileText, MoreVertical, Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Lightbox } from '../groups/[id]/message-media';
@@ -25,6 +25,7 @@ export type PrivateMessageRow = {
   original_body?: string | null;
   deleted_at?: string | null;
   hidden_at?: string | null;
+  quoted_message_id?: string | null;
 };
 export type PrivateReaction = { id: string; message_id: string; reactor_jid: string; from_me: boolean; emoji: string };
 
@@ -117,7 +118,17 @@ export function PrivateReactions({ list, alignEnd }: { list: PrivateReaction[]; 
  * Menu "⋮" da mensagem: reagir, editar (até 15 min, só as do número conectado), apagar para mim
  * e apagar para todos (até 2 dias, só as do número conectado). O worker faz no WhatsApp.
  */
-export function PrivateMessageMenu({ message: m, myReaction, onEdit }: { message: PrivateMessageRow; myReaction: string | null; onEdit: () => void }) {
+export function PrivateMessageMenu({
+  message: m,
+  myReaction,
+  onEdit,
+  onReply,
+}: {
+  message: PrivateMessageRow;
+  myReaction: string | null;
+  onEdit: () => void;
+  onReply: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [up, setUp] = useState(false);
   const [limits, setLimits] = useState({ edit: false, del: false });
@@ -193,6 +204,19 @@ export function PrivateMessageMenu({ message: m, myReaction, onEdit }: { message
                 </button>
               ))}
             </div>
+          )}
+          {!m.deleted_at && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onReply();
+              }}
+              className={item}
+            >
+              <Reply className="h-3.5 w-3.5" /> Responder
+            </button>
           )}
           {m.from_me && (
             <button
