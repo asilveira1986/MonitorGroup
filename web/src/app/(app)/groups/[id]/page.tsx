@@ -114,7 +114,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
         <ArrowLeft className="h-4 w-4" /> {viewer || fromPanel ? 'Painel de grupos' : 'Grupos'}
       </Link>
 
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className="mb-6 flex flex-col gap-4">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <Avatar
             jid={g.jid}
@@ -153,8 +153,13 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
         </div>
         {/* perfil "somente ver painéis": sem os controles do grupo */}
         {!g.removed_at && !viewer && (
-          <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
-            <MonitorToggle groupId={g.id} monitored={g.monitored} label="Monitorar este grupo" />
+          <div className="grid gap-4 rounded-2xl border border-line bg-surface p-4 sm:grid-cols-2 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.4fr)_auto] lg:items-end lg:gap-6">
+            <div>
+              <p className="mb-1 text-xs font-medium text-ink-2">Monitoramento</p>
+              <div className="flex h-9 items-center">
+                <MonitorToggle groupId={g.id} monitored={g.monitored} label="Monitorar este grupo" />
+              </div>
+            </div>
             {profile.role === 'admin' && (
               <div>
                 <p className="mb-1 flex items-center gap-1 text-xs font-medium text-ink-2">
