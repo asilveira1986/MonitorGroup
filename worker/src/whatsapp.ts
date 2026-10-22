@@ -269,7 +269,7 @@ export class WhatsAppManager {
     }
   }
 
-  /** Editar / apagar para todos, pedidos no painel, executados pelo número conectado. */
+  /** Editar / apagar (para todos ou só para o número conectado), pedidos no painel. */
   private async processMessageActions(session: Session) {
     const { data, error } = await db
       .from('message_actions')
@@ -293,7 +293,7 @@ export class WhatsAppManager {
       try {
         const { data: m } = await db
           .from('messages')
-          .select('id, wa_message_id, body, original_body, from_me, groups!messages_group_id_fkey!inner(jid)')
+          .select('id, wa_message_id, body, original_body, from_me, sent_at, groups!messages_group_id_fkey!inner(jid)')
           .eq('id', row.message_id)
           .maybeSingle();
         const jid = (m as { groups?: { jid: string } } | null)?.groups?.jid;
@@ -309,6 +309,13 @@ export class WhatsAppManager {
             .from('messages')
             .update({ body: row.new_body, edited_at: now, original_body: m.original_body ?? m.body })
             .eq('id', m.id);
+        } else if (row.action === 'delete_me') {
+          // apaga só no número conectado (celular e aparelhos dele); o grupo continua vendo
+          await session.sock.chatModify(
+            { deleteForMe: { deleteMedia: false, key, timestamp: Math.floor(new Date(m.sent_at as string).getTime() / 1000) } },
+            jid,
+          );
+          await db.from('messages').update({ hidden_at: now }).eq('id', m.id);
         } else {
           await session.sock.sendMessage(jid, { delete: key });
           await db.from('messages').update({ deleted_at: now }).eq('id', m.id);

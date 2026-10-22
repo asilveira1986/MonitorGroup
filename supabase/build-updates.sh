@@ -91,7 +91,9 @@ CHECKS=$(cat <<'SQL'
   (55, 'Pacotes técnicos barrados no banco (0064)', exists (select 1 from pg_trigger where tgname = 'messages_skip_technical')),
   (56, 'Envio de mensagem sem erro de assignee_id (0065)', coalesce(pg_get_functiondef('public.guard_group_write()'::regprocedure) like '%só são lidos em gravações de demandas%', false)),
   (57, 'Editar e apagar mensagens (0066)', to_regprocedure('public.request_message_action(uuid,text,text)') is not null),
-  (58, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (58, 'Apagar para mim (0067)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'messages' and column_name = 'hidden_at')),
+  (59, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

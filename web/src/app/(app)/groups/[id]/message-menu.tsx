@@ -1,6 +1,6 @@
 'use client';
 
-import { MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { EyeOff, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { requestMessageAction } from '../../actions';
@@ -11,7 +11,8 @@ const EDIT_MS = 15 * 60_000;
 const DELETE_MS = 2 * 86_400_000;
 
 /**
- * Menu "⋮" de uma mensagem do número conectado: editar (até 15 min) e apagar para todos (até 2 dias),
+ * Menu "⋮" de uma mensagem do número conectado: editar (até 15 min), apagar para mim (só no número
+ * conectado, sem prazo) e apagar para todos (até 2 dias),
  * como no WhatsApp. O pedido vai para o worker, que faz no WhatsApp; a conversa atualiza sozinha.
  */
 export function MessageMenu({ message: m, onEdit }: { message: Message; onEdit: () => void }) {
@@ -32,9 +33,14 @@ export function MessageMenu({ message: m, onEdit }: { message: Message; onEdit: 
 
   // os limites são conferidos ao abrir o menu (o banco confere de novo)
   const [limits, setLimits] = useState({ edit: false, del: false });
+  // perto do fim da área da conversa, o menu abre para cima (senão fica cortado)
+  const [up, setUp] = useState(false);
   const toggle = () => {
+    const btn = ref.current?.getBoundingClientRect();
+    const area = ref.current?.closest('.overflow-y-auto')?.getBoundingClientRect();
+    setUp(Boolean(btn && btn.bottom + 140 > (area ? area.bottom : window.innerHeight)));
     const age = Date.now() - new Date(m.sent_at).getTime();
-    setLimits({ edit: m.message_type === 'text' && age < EDIT_MS, del: age < DELETE_MS });
+    setLimits({ edit: !m.deleted_at && m.message_type === 'text' && age < EDIT_MS, del: !m.deleted_at && age < DELETE_MS });
     setOpen((o) => !o);
   };
 
@@ -52,7 +58,7 @@ export function MessageMenu({ message: m, onEdit }: { message: Message; onEdit: 
         <MoreVertical className="h-3.5 w-3.5" />
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 top-full z-30 mt-1 w-52 overflow-hidden rounded-xl border border-line bg-surface py-1 text-sm shadow-lg">
+        <div role="menu" className={`absolute right-0 z-30 w-52 ${up ? 'bottom-full mb-1' : 'top-full mt-1'} overflow-hidden rounded-xl border border-line bg-surface py-1 text-sm shadow-lg`}>
           <button
             type="button"
             role="menuitem"
@@ -65,6 +71,22 @@ export function MessageMenu({ message: m, onEdit }: { message: Message; onEdit: 
             title={limits.edit ? undefined : 'O WhatsApp só permite editar mensagens de texto até 15 minutos depois do envio'}
           >
             <Pencil className="h-3.5 w-3.5" /> Editar
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              if (!confirm('Apagar esta mensagem só para o número conectado?\n\nEla some do celular conectado e desta conversa; quem está no grupo continua vendo.')) return;
+              start(async () => {
+                const res = await requestMessageAction(m.id, 'delete_me');
+                if (!res.ok) return void toast.error(res.error);
+                toast.success('Apagando para mim…', { description: 'Some da conversa quando o WhatsApp confirmar.' });
+              });
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-2"
+          >
+            <EyeOff className="h-3.5 w-3.5" /> Apagar para mim
           </button>
           <button
             type="button"

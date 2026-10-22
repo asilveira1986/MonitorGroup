@@ -183,7 +183,7 @@ export function Conversation({
       const m = byId.get(id);
       if (m) byId.set(id, { ...m, ...p });
     }
-    return [...byId.values()].filter((m) => !TECHNICAL_TYPES.has(m.message_type)).sort(newerFirst);
+    return [...byId.values()].filter((m) => !TECHNICAL_TYPES.has(m.message_type) && !m.hidden_at).sort(newerFirst);
   }, [initial, older, patches]);
 
   // reações (0062): carregadas para as mensagens na tela e atualizadas em tempo real
@@ -432,7 +432,7 @@ export function Conversation({
                         <Reply className="h-3 w-3" /> responder
                       </button>
                     )}
-                    {reply.enabled && m.from_me && !m.deleted_at && editing !== m.id && (
+                    {reply.enabled && m.from_me && editing !== m.id && (
                       <MessageMenu message={m} onEdit={() => setEditing(m.id)} />
                     )}
                   </div>

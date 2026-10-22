@@ -99,6 +99,8 @@ export type Message = {
   original_body?: string | null;
   /** apagada para todos; o texto continua guardado (0066) */
   deleted_at?: string | null;
+  /** apagada para mim (só no número conectado): some da conversa do painel (0067) */
+  hidden_at?: string | null;
   id: string;
   group_id: string;
   wa_message_id: string;
