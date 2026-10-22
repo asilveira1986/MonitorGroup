@@ -94,6 +94,11 @@ export type Group = {
 };
 
 export type Message = {
+  /** editada (no painel ou no WhatsApp) e o texto antes da 1ª edição (0066) */
+  edited_at?: string | null;
+  original_body?: string | null;
+  /** apagada para todos; o texto continua guardado (0066) */
+  deleted_at?: string | null;
   id: string;
   group_id: string;
   wa_message_id: string;

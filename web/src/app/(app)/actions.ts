@@ -115,6 +115,14 @@ export async function setMyAlertsOff(off: boolean): Promise<Result> {
   return fail(error);
 }
 
+/** Editar (novo texto) ou apagar para todos uma mensagem do número conectado: o worker faz no WhatsApp. */
+export async function requestMessageAction(messageId: string, action: 'edit' | 'delete', body?: string): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('request_message_action', { p_message_id: messageId, p_action: action, p_body: body ?? null });
+  return fail(error);
+}
+
 /** Responsáveis pelo grupo (somente admin): pessoas da equipe, ou nenhuma. */
 export async function setGroupResponsibles(groupId: string, memberIds: string[]): Promise<Result> {
   await requireAdmin();

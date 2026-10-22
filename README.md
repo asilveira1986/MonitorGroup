@@ -103,6 +103,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    63. `supabase/migrations/0063_demands_for_assignee.sql`
    64. `supabase/migrations/0064_block_technical_messages.sql`
    65. `supabase/migrations/0065_fix_group_write_guard.sql`
+   66. `supabase/migrations/0066_edit_delete_messages.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

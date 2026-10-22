@@ -68,6 +68,21 @@ export function reactionOf(message: proto.IMessage | null | undefined): { target
   return { targetId, emoji: r.text ?? '' };
 }
 
+/**
+ * Mensagem editada ou apagada no WhatsApp (protocolMessage): o id da mensagem alterada e o novo
+ * texto (edição). REVOKE = 0 (apagar para todos), MESSAGE_EDIT = 14.
+ */
+export function messageChangeOf(
+  message: proto.IMessage | null | undefined,
+): { kind: 'delete'; targetId: string } | { kind: 'edit'; targetId: string; body: string | null } | null {
+  const p = normalizeMessageContent(message)?.protocolMessage;
+  const targetId = p?.key?.id;
+  if (!p || !targetId) return null;
+  if (p.type === 0) return { kind: 'delete', targetId };
+  if (p.type === 14) return { kind: 'edit', targetId, body: extractContent(p.editedMessage)?.body ?? null };
+  return null;
+}
+
 export const digitsOnly = (value: string | null | undefined) => (value ?? '').replace(/\D/g, '');
 
 /** "5511999998888@s.whatsapp.net" ou "5511999998888:12@s.whatsapp.net" -> "5511999998888" */

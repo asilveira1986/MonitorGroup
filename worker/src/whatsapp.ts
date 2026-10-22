@@ -22,7 +22,7 @@ import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
 import { AvatarQueue } from './avatars.js';
 import { storeMessageMedia } from './media.js';
-import { extractContent, isAcknowledgement, isStickerOrEmoji, phoneFromJid, quotedMessageId, reactionOf } from './text.js';
+import { extractContent, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { selfReadIds } from './receipts.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
@@ -264,6 +264,59 @@ export class WhatsAppManager {
           .select('id, group_id, text_to_send, quoted_message_id, sender_name, closes_conversation')
           .maybeSingle();
         if (claimed) await this.sendOutgoing(session, me, claimed as OutgoingRow);
+      }
+      await this.processMessageActions(session);
+    }
+  }
+
+  /** Editar / apagar para todos, pedidos no painel, executados pelo número conectado. */
+  private async processMessageActions(session: Session) {
+    const { data, error } = await db
+      .from('message_actions')
+      .select('id')
+      .eq('instance_id', session.instanceId)
+      .eq('status', 'pending')
+      .order('created_at')
+      .limit(10);
+    if (error) return; // sem o script 0066
+    for (const { id } of (data ?? []) as { id: string }[]) {
+      const { data: row } = await db
+        .from('message_actions')
+        .update({ status: 'sending' })
+        .eq('id', id)
+        .eq('status', 'pending')
+        .select('id, action, new_body, message_id')
+        .maybeSingle();
+      if (!row) continue;
+      const fail = (msg: string) =>
+        db.from('message_actions').update({ status: 'failed', error: msg, done_at: new Date().toISOString() }).eq('id', id);
+      try {
+        const { data: m } = await db
+          .from('messages')
+          .select('id, wa_message_id, body, original_body, from_me, groups!messages_group_id_fkey!inner(jid)')
+          .eq('id', row.message_id)
+          .maybeSingle();
+        const jid = (m as { groups?: { jid: string } } | null)?.groups?.jid;
+        if (!m || !jid || !m.from_me) {
+          await fail('Mensagem não encontrada ou não enviada pelo número conectado.');
+          continue;
+        }
+        const key = { remoteJid: jid, id: m.wa_message_id as string, fromMe: true };
+        const now = new Date().toISOString();
+        if (row.action === 'edit') {
+          await session.sock.sendMessage(jid, { text: row.new_body as string, edit: key });
+          await db
+            .from('messages')
+            .update({ body: row.new_body, edited_at: now, original_body: m.original_body ?? m.body })
+            .eq('id', m.id);
+        } else {
+          await session.sock.sendMessage(jid, { delete: key });
+          await db.from('messages').update({ deleted_at: now }).eq('id', m.id);
+        }
+        await db.from('message_actions').update({ status: 'done', error: null, done_at: now }).eq('id', id);
+      } catch (err) {
+        logger.warn({ err, id }, 'falha ao editar/apagar mensagem no WhatsApp');
+        await fail(err instanceof Error ? err.message : String(err));
       }
     }
   }
@@ -749,6 +802,8 @@ export class WhatsAppManager {
     if (!jid || !isJidGroup(jid) || !msg.message) return;
     const reaction = reactionOf(msg.message);
     if (reaction) return this.handleReaction(session, msg, reaction);
+    const change = messageChangeOf(msg.message);
+    if (change) return this.applyMessageChange(session, jid, change);
     const content = extractContent(msg.message);
     if (!content) return;
 
@@ -867,6 +922,29 @@ export class WhatsAppManager {
       { onConflict: 'message_id,reactor_jid' },
     );
     if (error) logger.warn({ err: error.message }, 'não foi possível guardar a reação');
+  }
+
+  /** Mensagem editada ou apagada no WhatsApp (por qualquer pessoa): atualiza a conversa. */
+  private async applyMessageChange(
+    session: Session,
+    jid: string,
+    change: { kind: 'delete'; targetId: string } | { kind: 'edit'; targetId: string; body: string | null },
+  ) {
+    const group = await this.getGroup(session, jid);
+    const { data: target } = await db
+      .from('messages')
+      .select('id, body, original_body')
+      .eq('group_id', group.id)
+      .eq('wa_message_id', change.targetId)
+      .maybeSingle();
+    if (!target) return;
+    const now = new Date().toISOString();
+    const patch =
+      change.kind === 'delete'
+        ? { deleted_at: now }
+        : { body: change.body, edited_at: now, original_body: target.original_body ?? target.body };
+    const { error } = await db.from('messages').update(patch).eq('id', target.id);
+    if (error) logger.warn({ err: error.message }, 'não foi possível registrar a edição/exclusão da mensagem');
   }
 
   /** Dados comuns de uma mensagem de grupo (remetente, equipe, horário). */

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isWithinBusinessHours } from './business-hours.js';
-import { extractContent, findKeyword, isAcknowledgement, isStickerOrEmoji, phoneFromJid, reactionOf, samePhone } from './text.js';
+import { extractContent, findKeyword, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, reactionOf, samePhone } from './text.js';
 
 test('findKeyword ignora acentos e maiúsculas e respeita palavra inteira', () => {
   assert.equal(findKeyword('Isso é URGENTE!!', ['urgente']), 'urgente');
@@ -80,4 +80,14 @@ test('reação: id da mensagem reagida e o emoji (vazio = retirada)', () => {
   assert.deepEqual(reactionOf({ reactionMessage: { key: { id: 'ABC' }, text: '' } }), { targetId: 'ABC', emoji: '' });
   assert.equal(reactionOf({ conversation: 'oi' }), null);
   assert.equal(reactionOf({ reactionMessage: { text: '👍' } }), null);
+});
+
+test('mensagem apagada ou editada no WhatsApp', () => {
+  assert.deepEqual(messageChangeOf({ protocolMessage: { type: 0, key: { id: 'M1' } } }), { kind: 'delete', targetId: 'M1' });
+  assert.deepEqual(
+    messageChangeOf({ protocolMessage: { type: 14, key: { id: 'M2' }, editedMessage: { conversation: 'texto novo' } } }),
+    { kind: 'edit', targetId: 'M2', body: 'texto novo' },
+  );
+  assert.equal(messageChangeOf({ protocolMessage: { type: 3, key: { id: 'M3' } } }), null);
+  assert.equal(messageChangeOf({ conversation: 'oi' }), null);
 });

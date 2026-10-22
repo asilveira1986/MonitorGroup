@@ -15,6 +15,7 @@ import { DemandForm } from '@/components/demands/demand-form';
 import { MarkTeamButton } from '../group-controls';
 import { PAGE_SIZE } from './constants';
 import { MessageMedia } from './message-media';
+import { MessageEditor, MessageMenu } from './message-menu';
 import { useRealtime } from '@/lib/use-realtime';
 
 
@@ -167,6 +168,8 @@ export function Conversation({
   const [viewed, setViewed] = useState<Set<string>>(new Set());
   const [demandFrom, setDemandFrom] = useState<Message | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [showDeleted, setShowDeleted] = useState<Set<string>>(new Set());
   const [hasMore, setHasMore] = useState(initial.length >= PAGE_SIZE);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -220,6 +223,17 @@ export function Conversation({
         (payload) => {
           const m = payload.new as Message;
           setPatches((prev) => new Map(prev).set(m.id, m));
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'message_actions', filter: `group_id=eq.${groupId}` },
+        (payload) => {
+          const a = payload.new as { status: string; action: string; error: string | null };
+          if (a.status === 'failed')
+            toast.error(a.action === 'edit' ? 'Não foi possível editar no WhatsApp' : 'Não foi possível apagar no WhatsApp', {
+              description: a.error ?? undefined,
+            });
         },
       )
       .on(
@@ -409,7 +423,7 @@ export function Conversation({
                         </button>
                       )
                     )}
-                    {reply.enabled && (
+                    {reply.enabled && !m.deleted_at && (
                       <button
                         onClick={() => setReplyTo(m)}
                         className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] text-muted hover:bg-surface-2 hover:text-brand-text"
@@ -418,14 +432,44 @@ export function Conversation({
                         <Reply className="h-3 w-3" /> responder
                       </button>
                     )}
-                  </div>
-                  <MessageMedia message={m} onViewed={() => markViewed(m)} />
-                  <p className="whitespace-pre-wrap break-words text-ink">
-                    {m.message_type !== 'text' && !m.media_path && (
-                      <span className="text-ink-2">{TYPE_LABEL[m.message_type] ?? m.message_type} </span>
+                    {reply.enabled && m.from_me && !m.deleted_at && editing !== m.id && (
+                      <MessageMenu message={m} onEdit={() => setEditing(m.id)} />
                     )}
-                    {withMentions(withoutSignature(m.body, m.from_me ? m.sender_name : null) ?? '', mentionName)}
-                  </p>
+                  </div>
+                  {m.deleted_at ? (
+                    <div className="text-ink-2">
+                      <p className="italic">🚫 Mensagem apagada</p>
+                      {showDeleted.has(m.id) ? (
+                        <p className="mt-1 whitespace-pre-wrap break-words rounded-lg bg-surface-2 px-2 py-1 text-xs text-ink-2">
+                          {withoutSignature(m.body, m.from_me ? m.sender_name : null) || (TYPE_LABEL[m.message_type] ?? m.message_type)}
+                        </p>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowDeleted((prev) => new Set(prev).add(m.id))}
+                          className="mt-0.5 text-[11px] text-muted underline-offset-2 hover:text-ink hover:underline"
+                        >
+                          ver o que foi apagado
+                        </button>
+                      )}
+                    </div>
+                  ) : editing === m.id ? (
+                    <MessageEditor
+                      message={m}
+                      initial={withoutSignature(m.body, m.sender_name) ?? ''}
+                      onClose={() => setEditing(null)}
+                    />
+                  ) : (
+                    <>
+                      <MessageMedia message={m} onViewed={() => markViewed(m)} />
+                      <p className="whitespace-pre-wrap break-words text-ink">
+                        {m.message_type !== 'text' && !m.media_path && (
+                          <span className="text-ink-2">{TYPE_LABEL[m.message_type] ?? m.message_type} </span>
+                        )}
+                        {withMentions(withoutSignature(m.body, m.from_me ? m.sender_name : null) ?? '', mentionName)}
+                      </p>
+                    </>
+                  )}
                   <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-muted">
                     {m.closes_conversation && (
                       <Badge tone="good" className="py-0 text-[10px]">
@@ -437,6 +481,14 @@ export function Conversation({
                       <Badge tone={m.response_time_seconds <= slaSeconds ? 'good' : 'critical'} className="py-0 text-[10px]">
                         respondeu em {formatDuration(m.response_time_seconds)}
                       </Badge>
+                    )}
+                    {m.edited_at && !m.deleted_at && (
+                      <span
+                        className="italic"
+                        title={m.original_body ? `Antes: ${withoutSignature(m.original_body, m.sender_name)}` : 'Mensagem editada'}
+                      >
+                        editada
+                      </span>
                     )}
                     <span className="tabular">{formatTime(m.sent_at, timeZone)}</span>
                   </div>
