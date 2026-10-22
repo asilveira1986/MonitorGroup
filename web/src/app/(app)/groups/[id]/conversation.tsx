@@ -30,6 +30,11 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 const MEDIA_TYPES = new Set(['image', 'video', 'audio', 'document']);
+/** pacotes técnicos do WhatsApp (ex.: "secretEncrypted"): nunca aparecem na conversa (o banco também barra, 0064) */
+const TECHNICAL_TYPES = new Set([
+  'secretEncrypted', 'encEventResponse', 'encComment', 'encReaction', 'pollResultSnapshot', 'placeholder',
+  'statusMention', 'protocol', 'reaction', 'senderKeyDistribution', 'messageContextInfo', 'pollUpdate', 'keepInChat', 'pinInChat',
+]);
 const SEEN_VIA: Record<string, string> = { whatsapp: 'no WhatsApp', painel: 'baixa no painel', resposta: 'equipe respondeu' };
 
 /** Situação de um arquivo do cliente: visto (no celular ou com baixa no painel) ou botão para dar baixa. */
@@ -156,7 +161,7 @@ export function Conversation({
       const m = byId.get(id);
       if (m) byId.set(id, { ...m, ...p });
     }
-    return [...byId.values()].sort(newerFirst);
+    return [...byId.values()].filter((m) => !TECHNICAL_TYPES.has(m.message_type)).sort(newerFirst);
   }, [initial, older, patches]);
 
   // reações (0062): carregadas para as mensagens na tela e atualizadas em tempo real

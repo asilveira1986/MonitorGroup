@@ -143,7 +143,8 @@ begin
   (53, 'Reações nas mensagens (0062)', to_regclass('public.message_reactions') is not null),
   (54, 'Responsável vê as próprias demandas (0063)', exists (select 1 from pg_policies where tablename = 'demands' and policyname = 'demands_read'
       and qual like '%my_team_member_ids%')),
-  (55, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (55, 'Pacotes técnicos barrados no banco (0064)', exists (select 1 from pg_trigger where tgname = 'messages_skip_technical')),
+  (56, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -152,7 +153,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -10817,6 +10818,66 @@ $$;
 $mig0063$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0064_block_technical_messages.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0064', $mig0064$
+-- =====================================================================
+-- "secretEncrypted" e outros pacotes técnicos do WhatsApp: barrados no banco.
+--
+-- O worker atualizado já ignora esses pacotes (0048), mas um worker em
+-- versão antiga (ou a importação do histórico) ainda podia gravá-los: eles
+-- apareciam na conversa como "secretEncrypted" e contavam como mensagem do
+-- cliente. Agora o próprio banco descarta esses tipos ao gravar (qualquer
+-- versão do worker) e apaga os que já entraram, recalculando os grupos.
+-- =====================================================================
+
+create or replace function public.is_technical_message_type(p_type text)
+returns boolean
+language sql immutable
+as $$
+  select p_type in (
+    'secretEncrypted', 'encEventResponse', 'encComment', 'encReaction', 'pollResultSnapshot',
+    'placeholder', 'statusMention', 'protocol', 'reaction', 'senderKeyDistribution',
+    'messageContextInfo', 'pollUpdate', 'keepInChat', 'pinInChat'
+  )
+$$;
+
+-- descarta ao gravar (ingest_message devolve "não inserida"; o histórico pula a linha)
+create or replace function public.skip_technical_message()
+returns trigger
+language plpgsql
+as $$
+begin
+  if public.is_technical_message_type(new.message_type) then
+    return null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists messages_skip_technical on public.messages;
+create trigger messages_skip_technical before insert on public.messages
+  for each row execute function public.skip_technical_message();
+
+-- apaga os que já entraram e recalcula as empresas afetadas (pendência só diminui)
+do $$
+declare
+  v_company uuid;
+  v_n int;
+begin
+  create temp table _tech_groups on commit drop as
+    select distinct m.group_id from public.messages m where public.is_technical_message_type(m.message_type);
+  delete from public.messages where public.is_technical_message_type(message_type);
+  get diagnostics v_n = row_count;
+  raise notice 'Mensagens técnicas apagadas: %', v_n;
+  for v_company in
+    select distinct g.company_id from public.groups g join _tech_groups t on t.group_id = g.id
+  loop
+    perform public.recalc_company_groups(v_company);
+  end loop;
+end $$;
+$mig0064$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -10908,6 +10969,7 @@ from (values
   (53, 'Reações nas mensagens (0062)', to_regclass('public.message_reactions') is not null),
   (54, 'Responsável vê as próprias demandas (0063)', exists (select 1 from pg_policies where tablename = 'demands' and policyname = 'demands_read'
       and qual like '%my_team_member_ids%')),
-  (55, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (55, 'Pacotes técnicos barrados no banco (0064)', exists (select 1 from pg_trigger where tgname = 'messages_skip_technical')),
+  (56, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
