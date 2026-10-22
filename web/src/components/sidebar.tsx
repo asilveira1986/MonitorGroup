@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Building2, CalendarDays, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
+import { Bell, Building2, CalendarDays, MessageCircle, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -17,6 +17,8 @@ const NAV = [
   { href: '/demands', label: 'Demandas', icon: ClipboardList, badgeKey: 'demands' as const },
   { href: '/agenda', label: 'Agenda', icon: CalendarDays, badgeKey: 'agenda' as const },
   { href: '/groups', label: 'Grupos', icon: MessagesSquare },
+  // conversas privadas (0069): só quem administra a plataforma, na empresa com o módulo ligado
+  { href: '/private', label: 'Conversas privadas', icon: MessageCircle, badgeKey: 'private' as const },
   { href: '/alerts', label: 'Alertas', icon: Bell, badgeKey: 'alerts' as const },
   { href: '/reports', label: 'Relatórios', icon: FileBarChart },
   { href: '/settings', label: 'Configurações', icon: Settings },
@@ -48,7 +50,7 @@ export function Sidebar({
   alertsOff,
 }: {
   /** agenda: demandas do usuário para entregar hoje + atrasadas */
-  counts: { pending: number; alerts: number; demands: number; agenda?: number };
+  counts: { pending: number; alerts: number; demands: number; agenda?: number; private?: number };
   /** itens do menu escondidos (ex.: funções desligadas nas configurações) */
   hidden?: string[];
   user: { name: string; role: string };
@@ -98,7 +100,7 @@ export function Sidebar({
               <span
                 className={cn(
                   'absolute right-2.5 top-1.5 hidden h-2 w-2 rounded-full ring-2 ring-surface [[data-sidebar=collapsed]_aside_&]:block',
-                  badgeKey === 'alerts' || badgeKey === 'agenda' ? 'bg-critical' : badgeKey === 'demands' ? 'bg-ink-2' : 'bg-warning',
+                  badgeKey === 'alerts' || badgeKey === 'agenda' ? 'bg-critical' : badgeKey === 'private' ? 'bg-good' : badgeKey === 'demands' ? 'bg-ink-2' : 'bg-warning',
                 )}
                 aria-hidden
               />
@@ -110,6 +112,8 @@ export function Sidebar({
                   'tabular rounded-full px-2 py-0.5 text-[11px] font-semibold',
                   badgeKey === 'alerts' || badgeKey === 'agenda'
                     ? 'bg-critical text-white'
+                    : badgeKey === 'private'
+                      ? 'bg-good text-white'
                     : badgeKey === 'demands'
                       ? 'bg-surface-2 text-ink-2 ring-1 ring-line'
                       : 'bg-warning text-black',

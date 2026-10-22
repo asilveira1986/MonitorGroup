@@ -16,8 +16,17 @@ export const metadata: Metadata = { title: 'Monitor Group · Empresas' };
 export default async function PlatformPage() {
   const me = await requirePlatformAdmin();
   const supabase = await createClient();
-  const { data } = await supabase.rpc('platform_companies');
+  const [{ data }, { data: flags }] = await Promise.all([
+    supabase.rpc('platform_companies'),
+    // conversas privadas por empresa (sem o script 0069, a chave não aparece)
+    supabase.from('companies').select('id, private_chats_enabled'),
+  ]);
   const companies = (data ?? []) as Company[];
+  const privateOf = new Map(
+    ((flags ?? []) as { id: string; private_chats_enabled?: boolean }[])
+      .filter((f) => typeof f.private_chats_enabled === 'boolean')
+      .map((f) => [f.id, Boolean(f.private_chats_enabled)]),
+  );
   const active = companies.filter((c) => c.active).length;
 
   return (
@@ -42,7 +51,7 @@ export default async function PlatformPage() {
               <EmptyState icon={<Building2 />} title="Nenhuma empresa" description="Cadastre a primeira empresa ao lado." />
             </Card>
           ) : (
-            companies.map((c) => <CompanyCard key={c.id} company={c} current={c.id === me.company_id} />)
+            companies.map((c) => <CompanyCard key={c.id} company={c} current={c.id === me.company_id} privateChats={privateOf.get(c.id)} />)
           )}
         </div>
       </div>

@@ -14,7 +14,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const [{ count: pending }, { count: alerts }, { count: demands }, { data: settings }, company, { data: companies }, { data: due }] = await Promise.all([
+  const [{ count: pending }, { count: alerts }, { count: demands }, { data: settings }, company, { data: companies }, { data: due }, { data: privateOk }] = await Promise.all([
     supabase.from('pending_queue').select('id', { count: 'exact', head: true }),
     supabase.from('alerts').select('id', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', ['aberta', 'em_andamento']),
@@ -31,7 +31,15 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
       : Promise.resolve({ data: null }),
     // agenda: demandas do usuário para entregar hoje e atrasadas (sem o script 0059, nada)
     supabase.rpc('my_due_demands'),
+    // conversas privadas (0069): só quem administra a plataforma, com o módulo ligado na empresa
+    profile.platform_admin ? supabase.rpc('can_use_private_chats') : Promise.resolve({ data: false }),
   ]);
+  const privateUnread = privateOk
+    ? ((await supabase.from('private_chats').select('unread_count').gt('unread_count', 0)).data ?? []).reduce(
+        (n, c) => n + Number((c as { unread_count: number }).unread_count),
+        0,
+      )
+    : 0;
   const dueToday = Number((due as { hoje?: number } | null)?.hoje ?? 0);
   const dueLate = Number((due as { atrasadas?: number } | null)?.atrasadas ?? 0);
   const dueEvents = Number((due as { compromissos?: number } | null)?.compromissos ?? 0);
@@ -46,11 +54,12 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   return (
     <div className="min-h-screen">
       <Sidebar
-        counts={{ pending: pending ?? 0, alerts: alerts ?? 0, demands: demands ?? 0, agenda: dueToday + dueLate + dueEvents }}
+        counts={{ pending: pending ?? 0, alerts: alerts ?? 0, demands: demands ?? 0, agenda: dueToday + dueLate + dueEvents, private: privateUnread }}
         // demandas desligadas nas configurações: o item some do menu
         // + os menus que a empresa ocultou para este usuário (Configurações › Menus)
         hidden={[
           ...(demandsEnabled(settings) ? [] : ['/demands', '/agenda']),
+          ...(privateOk ? [] : ['/private']),
           ...MENU_ITEMS.filter(
             (i) =>
               !canSeeMenu(

@@ -5,10 +5,10 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { ActionButton } from '@/components/action-button';
 import { ActionForm } from '@/components/form-action';
-import { Badge, Button, Card, Field, Input, Textarea } from '@/components/ui';
+import { Badge, Button, Card, Field, Input, Textarea, Toggle } from '@/components/ui';
 import { cn, formatNumber } from '@/lib/format';
 import type { Company } from '@/lib/types';
-import { addCompanyAdmin, createCompany, saveCompany, switchCompany, updateCompany } from './actions';
+import { addCompanyAdmin, createCompany, saveCompany, setCompanyPrivateChats, switchCompany, updateCompany } from './actions';
 
 /** Campos da empresa (cadastro e edição). */
 function CompanyFields({ company }: { company?: Company }) {
@@ -91,7 +91,7 @@ function Usage({ icon: Icon, label, value, max }: { icon: typeof Users; label: s
   );
 }
 
-export function CompanyCard({ company: c, current }: { company: Company; current: boolean }) {
+export function CompanyCard({ company: c, current, privateChats }: { company: Company; current: boolean; privateChats?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
   const [entering, start] = useTransition();
@@ -169,6 +169,7 @@ export function CompanyCard({ company: c, current }: { company: Company; current
           {c.last_message_at && ` · última mensagem ${new Date(c.last_message_at).toLocaleDateString('pt-BR')}`}
         </span>
       </div>
+      {privateChats !== undefined && <PrivateChatsToggle companyId={c.id} enabled={privateChats} />}
       {c.notes && <p className="mt-2 rounded-lg bg-surface-2/60 px-3 py-2 text-xs text-ink-2">{c.notes}</p>}
 
       {adding && (
@@ -216,5 +217,35 @@ export function CompanyCard({ company: c, current }: { company: Company; current
         </ActionForm>
       )}
     </Card>
+  );
+}
+
+/** Conversas privadas da empresa (0069): desligado, o worker não grava nada do privado. */
+function PrivateChatsToggle({ companyId, enabled }: { companyId: string; enabled: boolean }) {
+  const [on, setOn] = useState(enabled);
+  const [pending, start] = useTransition();
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-line px-3 py-2">
+      <Toggle
+        checked={on}
+        disabled={pending}
+        onChange={(v) => {
+          setOn(v);
+          start(async () => {
+            const res = await setCompanyPrivateChats(companyId, v);
+            if (!res.ok) {
+              setOn(!v);
+              return void toast.error(res.error);
+            }
+            toast.success(v ? 'Conversas privadas ligadas' : 'Conversas privadas desligadas');
+          });
+        }}
+        label={<span className="text-sm font-medium">Conversas privadas</span>}
+      />
+      <span className="text-xs text-ink-2">
+        Recebe e envia mensagens no privado e guarda os contatos do WhatsApp. Desligado, nada do privado é gravado. Por enquanto, só quem
+        administra a plataforma usa.
+      </span>
+    </div>
   );
 }

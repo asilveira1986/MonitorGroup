@@ -1,0 +1,469 @@
+'use client';
+
+import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Loader2, MessageSquarePlus, Search, Send, UserRound, X } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { toast } from 'sonner';
+import { Button, Card, Field, Input, Textarea } from '@/components/ui';
+import { cn, formatPhone, formatTime, timeAgo } from '@/lib/format';
+import { createClient } from '@/lib/supabase/client';
+import { useRealtime } from '@/lib/use-realtime';
+import { markPrivateChatRead, sendPrivateMessage, startPrivateChat } from './actions';
+
+export type PrivateChat = {
+  id: string;
+  jid: string;
+  phone: string | null;
+  name: string | null;
+  last_message_at: string | null;
+  last_message_preview: string | null;
+  unread_count: number;
+};
+type PrivateMessage = {
+  id: string;
+  chat_id: string;
+  wa_message_id: string;
+  from_me: boolean;
+  sender_name: string | null;
+  message_type: string;
+  body: string | null;
+  sent_at: string;
+  wa_status: number | null;
+};
+type Outgoing = { id: string; chat_id: string; body: string; status: string; error: string | null; created_at: string; wa_message_id: string | null };
+type Contact = { jid: string; phone: string | null; name: string | null; notify: string | null };
+
+const TYPE_LABEL: Record<string, string> = {
+  image: '📷 Imagem',
+  video: '🎬 Vídeo',
+  audio: '🎤 Áudio',
+  document: '📄 Documento',
+  sticker: '🙂 Figurinha',
+  contact: '👤 Contato',
+  location: '📍 Localização',
+  poll: '📊 Enquete',
+};
+
+const chatTitle = (c: Pick<PrivateChat, 'name' | 'phone' | 'jid'>) =>
+  c.name || formatPhone(c.phone) || (c.jid.endsWith('@lid') ? 'Contato (sem número)' : c.jid.split('@')[0]);
+const initials = (s: string) =>
+  s
+    .split(/\s+/)
+    .filter((w) => /\p{L}/u.test(w[0] ?? ''))
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('') || '#';
+
+/** Nova conversa: um contato do WhatsApp (busca) ou um número digitado. */
+function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string) => void }) {
+  const [q, setQ] = useState('');
+  const [contacts, setContacts] = useState<Contact[] | null>(null);
+  const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
+  const [pending, start] = useTransition();
+
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [onClose]);
+
+  // busca nos contatos sincronizados do WhatsApp (nome salvo, nome no WhatsApp ou número)
+  useEffect(() => {
+    const term = q.trim();
+    const timer = setTimeout(() => {
+      let query = createClient().from('wa_contacts').select('jid, phone, name, notify').order('name', { nullsFirst: false }).limit(50);
+      if (term) {
+        const digits = term.replace(/\D/g, '');
+        query = query.or(
+          [`name.ilike.%${term}%`, `notify.ilike.%${term}%`, digits.length >= 3 ? `phone.ilike.%${digits}%` : null].filter(Boolean).join(','),
+        );
+      }
+      void query.then(({ data }) => setContacts((data ?? []) as Contact[]));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [q]);
+
+  const open = (input: { jid?: string; phone?: string; name?: string }) =>
+    start(async () => {
+      const res = await startPrivateChat(input);
+      if (!res.ok) return void toast.error(res.error);
+      onOpen(res.data!.id);
+      onClose();
+    });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Nova conversa">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative flex max-h-[85vh] w-full max-w-md flex-col rounded-t-2xl bg-surface shadow-2xl sm:rounded-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-line p-4">
+          <div>
+            <h2 className="text-base font-semibold">Nova conversa</h2>
+            <p className="text-xs text-ink-2">Escolha um contato ou digite um número.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-muted hover:text-ink" aria-label="Fechar">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <form
+          className="grid gap-2 border-b border-line p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+          onSubmit={(e) => {
+            e.preventDefault();
+            open({ phone, name });
+          }}
+        >
+          <Field label="Número (com DDD)">
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="51 99999-8888" required />
+          </Field>
+          <Field label="Nome (opcional)">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Como aparece aqui" />
+          </Field>
+          <Button disabled={pending || phone.replace(/\D/g, '').length < 10}>Abrir</Button>
+        </form>
+        <div className="p-4 pb-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar contato" className="pl-9" aria-label="Buscar contato" autoFocus />
+          </div>
+        </div>
+        <ul className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+          {contacts === null && (
+            <li className="flex items-center gap-2 px-3 py-3 text-sm text-muted">
+              <Loader2 className="h-4 w-4 animate-spin" /> Carregando contatos…
+            </li>
+          )}
+          {contacts?.length === 0 && (
+            <li className="px-3 py-3 text-sm text-muted">
+              Nenhum contato encontrado. Os contatos aparecem conforme o WhatsApp conectado sincroniza a agenda.
+            </li>
+          )}
+          {contacts?.map((c) => {
+            const title = c.name || c.notify || formatPhone(c.phone) || 'Contato';
+            return (
+              <li key={c.jid}>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => open({ jid: c.jid, name: c.name ?? c.notify ?? undefined })}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-surface-2 disabled:opacity-60"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
+                    {initials(title)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{title}</span>
+                    <span className="block truncate text-xs text-muted">
+                      {c.phone ? formatPhone(c.phone) : 'sem número'}
+                      {c.name && c.notify && c.notify !== c.name ? ` · ${c.notify}` : ''}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function StatusTicks({ status }: { status: number | null }) {
+  if (!status || status < 2) return null;
+  const Icon = status >= 3 ? CheckCheck : Check;
+  return <Icon className={cn('h-3.5 w-3.5', status >= 4 ? 'text-sky-500' : 'text-muted')} aria-label={status >= 4 ? 'lida' : status >= 3 ? 'entregue' : 'enviada'} />;
+}
+
+/** Conversa aberta: mensagens (tempo real), fila de envio e o campo para responder. */
+function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: string; onBack: () => void }) {
+  const [messages, setMessages] = useState<PrivateMessage[] | null>(null);
+  const [outgoing, setOutgoing] = useState<Outgoing[]>([]);
+  const [text, setText] = useState('');
+  const [pending, start] = useTransition();
+  const loadedFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (loadedFor.current === chat.id) return;
+    loadedFor.current = chat.id;
+    const supabase = createClient();
+    void Promise.all([
+      supabase.from('private_messages').select('*').eq('chat_id', chat.id).order('sent_at', { ascending: false }).limit(200),
+      supabase
+        .from('private_outgoing')
+        .select('id, chat_id, body, status, error, created_at, wa_message_id')
+        .eq('chat_id', chat.id)
+        .in('status', ['pending', 'sending', 'failed'])
+        .order('created_at'),
+    ]).then(([m, o]) => {
+      setMessages(((m.data ?? []) as PrivateMessage[]).reverse());
+      setOutgoing((o.data ?? []) as Outgoing[]);
+    });
+    void markPrivateChatRead(chat.id);
+  }, [chat.id]);
+
+  useRealtime(`private-chat-${chat.id}`, (channel) =>
+    channel
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'private_messages', filter: `chat_id=eq.${chat.id}` }, (payload) => {
+        const m = payload.new as PrivateMessage;
+        if (!m?.id) return;
+        setMessages((prev) => {
+          const list = prev ?? [];
+          const i = list.findIndex((x) => x.id === m.id);
+          const next = i >= 0 ? list.map((x) => (x.id === m.id ? m : x)) : [...list, m];
+          return next.sort((a, b) => (a.sent_at < b.sent_at ? -1 : 1));
+        });
+        if (!m.from_me) void markPrivateChatRead(chat.id);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'private_outgoing', filter: `chat_id=eq.${chat.id}` }, (payload) => {
+        const o = payload.new as Outgoing;
+        if (!o?.id) return;
+        setOutgoing((prev) => {
+          const rest = prev.filter((x) => x.id !== o.id);
+          return o.status === 'sent' ? rest : [...rest, o];
+        });
+        if (o.status === 'failed') toast.error('Mensagem não enviada', { description: o.error ?? undefined });
+      }),
+  );
+
+  const send = () => {
+    const body = text.trim();
+    if (!body) return;
+    setText('');
+    start(async () => {
+      const res = await sendPrivateMessage(chat.id, body);
+      if (!res.ok) {
+        setText(body);
+        toast.error(res.error);
+      }
+    });
+  };
+
+  const sentIds = useMemo(() => new Set((messages ?? []).map((m) => m.wa_message_id)), [messages]);
+  const queue = outgoing.filter((o) => !o.wa_message_id || !sentIds.has(o.wa_message_id));
+  const dayFormat = useMemo(() => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone }), [timeZone]);
+  const title = chatTitle(chat);
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-center gap-3 border-b border-line px-4 py-3">
+        <button type="button" onClick={onBack} className="rounded-lg p-1 text-ink-2 hover:bg-surface-2 md:hidden" aria-label="Voltar para a lista">
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-sm font-semibold text-brand-text">
+          {initials(title)}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate font-semibold">{title}</p>
+          <p className="truncate text-xs text-muted">{chat.phone ? formatPhone(chat.phone) : 'número não informado pelo WhatsApp'}</p>
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-surface-2/40 p-3 sm:p-5">
+        <div className="space-y-2">
+          {messages === null ? (
+            <p className="flex items-center justify-center gap-2 py-6 text-sm text-muted">
+              <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
+            </p>
+          ) : messages.length === 0 && queue.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted">Nenhuma mensagem ainda. Escreva abaixo para iniciar a conversa.</p>
+          ) : null}
+          {(messages ?? []).map((m, i, all) => {
+            const day = dayFormat.format(new Date(m.sent_at));
+            const showDay = i === 0 || day !== dayFormat.format(new Date(all[i - 1].sent_at));
+            return (
+              <div key={m.id}>
+                {showDay && (
+                  <div className="my-3 flex justify-center">
+                    <span className="rounded-full bg-surface px-3 py-1 text-[11px] text-muted shadow-sm">{day}</span>
+                  </div>
+                )}
+                <div className={cn('flex', m.from_me ? 'justify-end' : 'justify-start')}>
+                  <div
+                    className={cn(
+                      'max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-sm sm:max-w-[75%]',
+                      m.from_me ? 'rounded-br-md bg-brand-soft' : 'rounded-bl-md border border-line bg-surface',
+                    )}
+                  >
+                    {m.from_me && m.sender_name && <p className="mb-0.5 text-[11px] font-semibold text-brand-text">{m.sender_name}</p>}
+                    <p className="whitespace-pre-wrap break-words">
+                      {m.message_type !== 'text' && <span className="text-ink-2">{TYPE_LABEL[m.message_type] ?? m.message_type} </span>}
+                      {m.body}
+                    </p>
+                    <p className="mt-1 flex items-center justify-end gap-1 text-[11px] text-muted">
+                      <span className="tabular">{formatTime(m.sent_at, timeZone)}</span>
+                      {m.from_me && <StatusTicks status={m.wa_status} />}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {queue.map((o) => (
+            <div key={o.id} className="flex justify-end">
+              <div className={cn('max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm sm:max-w-[75%]', o.status === 'failed' ? 'bg-critical/10' : 'bg-brand-soft/70')}>
+                <p className="whitespace-pre-wrap break-words">{o.body}</p>
+                <p className={cn('mt-1 flex items-center justify-end gap-1 text-[11px]', o.status === 'failed' ? 'text-critical-ink' : 'text-muted')}>
+                  {o.status === 'failed' ? (
+                    <>
+                      <AlertCircle className="h-3.5 w-3.5" /> {o.error ?? 'não enviada'}
+                    </>
+                  ) : (
+                    <>
+                      <Clock className="h-3.5 w-3.5" /> enviando…
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <form
+        className="flex items-end gap-2 border-t border-line p-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          send();
+        }}
+      >
+        <Textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+          }}
+          rows={1}
+          maxLength={4000}
+          placeholder="Mensagem"
+          aria-label="Mensagem"
+          className="max-h-40 min-h-10 flex-1 resize-none"
+        />
+        <Button type="submit" disabled={pending || !text.trim()} aria-label="Enviar">
+          <Send className="h-4 w-4" />
+        </Button>
+      </form>
+    </div>
+  );
+}
+
+/**
+ * Caixa de entrada das conversas privadas: lista à esquerda (busca, não lidas, nova conversa) e a
+ * conversa aberta à direita. No celular, uma coisa por vez.
+ */
+export function PrivateInbox({ initialChats, selectedId, timeZone }: { initialChats: PrivateChat[]; selectedId: string | null; timeZone: string }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [chats, setChats] = useState(initialChats);
+  const [selected, setSelected] = useState<string | null>(selectedId);
+  const [q, setQ] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [lastInitial, setLastInitial] = useState(initialChats);
+  if (initialChats !== lastInitial) {
+    // a página recarregou (nova conversa criada): usa a lista nova
+    setLastInitial(initialChats);
+    setChats(initialChats);
+  }
+
+  useRealtime('private-chats', (channel) =>
+    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'private_chats' }, (payload) => {
+      const c = payload.new as PrivateChat;
+      if (!c?.id) return;
+      setChats((prev) => [c, ...prev.filter((x) => x.id !== c.id)]);
+    }),
+  );
+
+  const choose = useCallback(
+    (id: string | null) => {
+      setSelected(id);
+      if (id) setChats((prev) => prev.map((c) => (c.id === id ? { ...c, unread_count: 0 } : c)));
+      router.replace(id ? `${pathname}?c=${id}` : pathname, { scroll: false });
+    },
+    [pathname, router],
+  );
+
+  const term = q.trim().toLowerCase();
+  const digits = term.replace(/\D/g, '');
+  const list = [...chats]
+    .filter((c) => !term || chatTitle(c).toLowerCase().includes(term) || (digits.length >= 3 && (c.phone ?? '').includes(digits)))
+    .sort((a, b) => ((b.last_message_at ?? '') > (a.last_message_at ?? '') ? 1 : -1));
+  const current = chats.find((c) => c.id === selected) ?? null;
+
+  return (
+    <Card className="grid h-[calc(100vh-14rem)] min-h-[32rem] overflow-hidden md:grid-cols-[20rem_minmax(0,1fr)]">
+      <div className={cn('flex min-h-0 flex-col border-line md:border-r', current && 'hidden md:flex')}>
+        <div className="flex items-center gap-2 border-b border-line p-3">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar conversa" className="pl-9" aria-label="Buscar conversa" />
+          </div>
+          <Button type="button" size="sm" onClick={() => setCreating(true)} aria-label="Nova conversa" title="Nova conversa">
+            <MessageSquarePlus className="h-4 w-4" />
+          </Button>
+        </div>
+        <ul className="min-h-0 flex-1 overflow-y-auto">
+          {list.length === 0 && (
+            <li className="p-6 text-center text-sm text-muted">
+              {term ? 'Nenhuma conversa encontrada.' : 'Nenhuma conversa ainda. As mensagens no privado aparecem aqui; use o botão + para iniciar uma.'}
+            </li>
+          )}
+          {list.map((c) => {
+            const title = chatTitle(c);
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => choose(c.id)}
+                  className={cn('flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-surface-2', c.id === selected && 'bg-brand-soft/60')}
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
+                    {initials(title)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-2">
+                      <span className={cn('min-w-0 flex-1 truncate text-sm', c.unread_count ? 'font-semibold' : 'font-medium')}>{title}</span>
+                      {c.last_message_at && (
+                        <span className="shrink-0 text-[11px] text-muted" suppressHydrationWarning>
+                          {timeAgo(c.last_message_at)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-xs text-ink-2">{c.last_message_preview ?? 'sem mensagens'}</span>
+                      {c.unread_count > 0 && (
+                        <span className="tabular shrink-0 rounded-full bg-good px-1.5 text-[10px] font-semibold text-white">{c.unread_count}</span>
+                      )}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      <div className={cn('min-h-0', !current && 'hidden md:block')}>
+        {current ? (
+          <ChatView key={current.id} chat={current} timeZone={timeZone} onBack={() => choose(null)} />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted">
+            <UserRound className="h-10 w-10" />
+            Escolha uma conversa ou inicie uma nova.
+            <Button type="button" size="sm" variant="secondary" onClick={() => setCreating(true)}>
+              <MessageSquarePlus className="h-4 w-4" /> Nova conversa
+            </Button>
+          </div>
+        )}
+      </div>
+      {creating && (
+        <NewChatDialog
+          onClose={() => setCreating(false)}
+          onOpen={(id) => {
+            router.refresh();
+            choose(id);
+          }}
+        />
+      )}
+    </Card>
+  );
+}

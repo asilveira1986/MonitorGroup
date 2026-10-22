@@ -24,6 +24,7 @@ import { AvatarQueue } from './avatars.js';
 import { storeMessageMedia } from './media.js';
 import { extractContent, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
+import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
 import { selfReadIds } from './receipts.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
 
@@ -266,6 +267,7 @@ export class WhatsAppManager {
         if (claimed) await this.sendOutgoing(session, me, claimed as OutgoingRow);
       }
       await this.processMessageActions(session);
+      await this.processPrivateOutbox(session, me);
     }
   }
 
@@ -569,7 +571,8 @@ export class WhatsAppManager {
     });
 
     // histórico enviado pelo WhatsApp após o pareamento
-    sock.ev.on('messaging-history.set', ({ messages }) => {
+    sock.ev.on('messaging-history.set', ({ messages, contacts }) => {
+      if (contacts?.length) void saveContacts(instanceId, session.companyId, contacts).catch((err) => log.warn({ err }, 'contatos'));
       if (messages.length) this.enqueueHistory(session, messages);
     });
 
@@ -621,7 +624,18 @@ export class WhatsAppManager {
     // tiques das mensagens do número conectado: status geral (✓ / ✓✓ / lida) ...
     sock.ev.on('messages.update', (updates) => {
       for (const { key, update } of updates) {
-        if (!key.fromMe || !key.id || !key.remoteJid || !isJidGroup(key.remoteJid) || typeof update.status !== 'number') continue;
+        if (!key.fromMe || !key.id || !key.remoteJid || typeof update.status !== 'number') continue;
+        if (isPrivateJid(key.remoteJid)) {
+          void db
+            .from('private_messages')
+            .update({ wa_status: update.status })
+            .eq('company_id', session.companyId)
+            .eq('wa_message_id', key.id)
+            .or(`wa_status.is.null,wa_status.lt.${update.status}`)
+            .then(({ error }) => error && log.warn({ err: error.message }, 'status da mensagem privada'));
+          continue;
+        }
+        if (!isJidGroup(key.remoteJid)) continue;
         void this.saveWaStatus(session, key.remoteJid, key.id, update.status).catch((err) =>
           log.warn({ err }, 'falha ao gravar o status da mensagem'),
         );
@@ -639,6 +653,13 @@ export class WhatsAppManager {
 
     // conversa do grupo apagada no celular
     // foto de perfil (contato ou grupo) mudou: busca de novo
+    // contatos do celular (conversas privadas, 0069)
+    sock.ev.on('contacts.upsert', (contacts) => {
+      void saveContacts(instanceId, session.companyId, contacts).catch((err) => log.warn({ err }, 'contatos'));
+    });
+    sock.ev.on('contacts.update', (updates) => {
+      void saveContacts(instanceId, session.companyId, updates).catch((err) => log.warn({ err }, 'contatos'));
+    });
     sock.ev.on('contacts.update', (updates) => {
       const changed = updates.filter((u) => u.id && 'imgUrl' in u).map((u) => u.id!);
       if (changed.length) session.avatars.add(changed, true);
@@ -825,7 +846,11 @@ export class WhatsAppManager {
 
   private async handleMessage(session: Session, msg: WAMessage) {
     const jid = msg.key.remoteJid;
-    if (!jid || !isJidGroup(jid) || !msg.message) return;
+    if (!jid || !msg.message) return;
+    if (!isJidGroup(jid)) {
+      if (isPrivateJid(jid)) await this.handlePrivateMessage(session, msg, false);
+      return;
+    }
     const reaction = reactionOf(msg.message);
     if (reaction) return this.handleReaction(session, msg, reaction);
     const change = messageChangeOf(msg.message);
@@ -973,6 +998,95 @@ export class WhatsAppManager {
     if (error) logger.warn({ err: error.message }, 'não foi possível registrar a edição/exclusão da mensagem');
   }
 
+  /**
+   * Conversa privada (0069): grava a mensagem e a conversa, se o módulo estiver ligado na empresa.
+   * Não entra em pendências, SLA, alertas nem indicadores.
+   */
+  private async handlePrivateMessage(session: Session, msg: WAMessage, fromHistory: boolean) {
+    if (!(await privateEnabled(session.companyId))) return;
+    const content = extractContent(msg.message);
+    if (!content || !msg.key.id) return;
+    const jid = jidNormalizedUser(msg.key.remoteJid!);
+    const fromMe = Boolean(msg.key.fromMe);
+    // conversa só com o LID (identificador interno): descobre o telefone
+    const alt = (msg.key as { remoteJidAlt?: string }).remoteJidAlt;
+    const phoneJid = jid.endsWith('@lid') ? (alt ? jidNormalizedUser(alt) : await this.phoneJidForLid(session, null, jid)) : jid;
+    const saved = await contactName(session.instanceId, jid);
+    const { error } = await db.rpc('ingest_private_message', {
+      p_instance_id: session.instanceId,
+      p_jid: jid,
+      p_phone: phoneFromJid(phoneJid),
+      p_name: saved ?? (fromMe ? null : msg.pushName ?? null),
+      p_wa_message_id: msg.key.id,
+      p_from_me: fromMe,
+      p_sender_name: fromMe ? (session.outbox.get(msg.key.id) ?? session.sock.user?.name ?? 'Número conectado') : (msg.pushName ?? saved),
+      p_message_type: content.type,
+      p_body: content.body,
+      p_sent_at: new Date(toSeconds(msg.messageTimestamp) * 1000).toISOString(),
+      p_count_unread: !fromHistory,
+    });
+    if (error) logger.warn({ err: error.message }, 'não foi possível guardar a mensagem privada');
+  }
+
+  /** Respostas privadas escritas no painel (0069): confere se o número tem WhatsApp e envia. */
+  private async processPrivateOutbox(session: Session, me: string) {
+    const { data, error } = await db
+      .from('private_outgoing')
+      .select('id')
+      .eq('instance_id', session.instanceId)
+      .eq('status', 'pending')
+      .order('created_at')
+      .limit(10);
+    if (error) return; // sem o script 0069
+    for (const { id } of (data ?? []) as { id: string }[]) {
+      const { data: row } = await db
+        .from('private_outgoing')
+        .update({ status: 'sending' })
+        .eq('id', id)
+        .eq('status', 'pending')
+        .select('id, body, created_by, private_chats!inner(id, jid)')
+        .maybeSingle();
+      if (!row) continue;
+      const chat = (row as unknown as { private_chats: { id: string; jid: string } }).private_chats;
+      const waId = generateMessageIDV2(me);
+      try {
+        let to = chat.jid;
+        if (to.endsWith('@s.whatsapp.net')) {
+          const [found] = (await session.sock.onWhatsApp(to.split('@')[0])) ?? [];
+          if (!found?.exists) throw new Error('Este número não tem WhatsApp.');
+          to = jidNormalizedUser(found.jid);
+        }
+        const { data: who } = await db.from('profiles').select('full_name, email').eq('id', row.created_by ?? '').maybeSingle();
+        session.outbox.set(waId, (who?.full_name as string) || (who?.email as string) || 'Painel');
+        await session.sock.sendMessage(to, { text: row.body as string }, { messageId: waId });
+        const now = new Date().toISOString();
+        await db.from('private_outgoing').update({ status: 'sent', wa_message_id: waId, sent_at: now, error: null }).eq('id', id);
+        // grava já (o eco do WhatsApp com o mesmo id é ignorado)
+        await db.rpc('ingest_private_message', {
+          p_instance_id: session.instanceId,
+          p_jid: chat.jid,
+          p_phone: phoneFromJid(to),
+          p_name: null,
+          p_wa_message_id: waId,
+          p_from_me: true,
+          p_sender_name: session.outbox.get(waId) ?? 'Painel',
+          p_message_type: 'text',
+          p_body: row.body,
+          p_sent_at: now,
+          p_count_unread: false,
+        });
+        setTimeout(() => session.outbox.delete(waId), 10 * 60_000);
+      } catch (err) {
+        session.outbox.delete(waId);
+        logger.warn({ err, id }, 'falha ao enviar mensagem privada');
+        await db
+          .from('private_outgoing')
+          .update({ status: 'failed', error: err instanceof Error ? err.message : String(err) })
+          .eq('id', id);
+      }
+    }
+  }
+
   /** Mensagem do número conectado neste grupo, pelo id do WhatsApp. */
   private async ownMessageId(session: Session, groupJid: string, waId: string): Promise<{ id: string; groupId: string } | null> {
     const group = await this.getGroup(session, groupJid);
@@ -1116,6 +1230,13 @@ export class WhatsAppManager {
     const settings = await getSettings(session.companyId);
     if (settings.history_import_days <= 0 || session.stopped) return;
     const cutoff = Date.now() / 1000 - settings.history_import_days * 86400;
+
+    // conversas privadas do período (0069; só com o módulo ligado na empresa)
+    const privates = messages.filter((m) => isPrivateJid(m.key.remoteJid) && m.message && toSeconds(m.messageTimestamp) >= cutoff);
+    if (privates.length && (await privateEnabled(session.companyId))) {
+      for (const m of privates) await this.handlePrivateMessage(session, m, true);
+      logger.info({ messages: privates.length }, 'histórico das conversas privadas importado');
+    }
 
     // só grupos já sincronizados, monitorados e ativos (não cria grupos de que o número já saiu)
     await session.groupsReady;

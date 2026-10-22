@@ -62,6 +62,15 @@ export async function updateCompany(id: string, changes: Record<string, unknown>
   return error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };
 }
 
+/** Liga/desliga as conversas privadas (0069) de uma empresa. */
+export async function setCompanyPrivateChats(id: string, enabled: boolean): Promise<Result> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('set_company_private_chats', { p_company_id: id, p_enabled: enabled });
+  revalidatePath('/', 'layout');
+  return error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };
+}
+
 export async function saveCompany(id: string, form: FormData): Promise<Result> {
   return updateCompany(id, {
     name: text(form, 'name'),
