@@ -148,7 +148,8 @@ begin
   (57, 'Editar e apagar mensagens (0066)', to_regprocedure('public.request_message_action(uuid,text,text)') is not null),
   (58, 'Apagar para mim (0067)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'messages' and column_name = 'hidden_at')),
-  (59, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (59, 'Entregue e lida (0068)', to_regclass('public.message_receipts') is not null),
+  (60, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -157,7 +158,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -11192,6 +11193,44 @@ grant execute on function public.request_message_action(uuid, text, text) to aut
 $mig0067$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0068_message_receipts.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0068', $mig0068$
+-- =====================================================================
+-- Confirmação de entrega e leitura (os "tiques" do WhatsApp).
+--
+-- Para as mensagens enviadas pelo número conectado, o worker grava:
+--  * messages.wa_status: 1 pendente, 2 enviada (✓), 3 entregue, 4 lida,
+--    5 reproduzida (áudio) — o status geral que o WhatsApp informa;
+--  * message_receipts: quem recebeu e quem leu, pessoa a pessoa.
+-- Na conversa: ✓ enviada, ✓✓ cinza entregue a todos, ✓✓ azul lida por
+-- todos, com "lida por X de N" e os nomes ao passar o mouse.
+-- =====================================================================
+
+alter table public.messages add column if not exists wa_status smallint;
+
+create table if not exists public.message_receipts (
+  message_id   uuid not null references public.messages(id) on delete cascade,
+  company_id   uuid not null default public.default_company_id() references public.companies(id) on delete cascade,
+  group_id     uuid not null references public.groups(id) on delete cascade,
+  user_jid     text not null,
+  delivered_at timestamptz,
+  read_at      timestamptz,
+  primary key (message_id, user_jid)
+);
+create index if not exists message_receipts_group_idx on public.message_receipts (group_id);
+
+alter table public.message_receipts enable row level security;
+drop policy if exists message_receipts_read on public.message_receipts;
+create policy message_receipts_read on public.message_receipts for select
+  using (group_id in (select unnest(public.visible_group_ids())));
+grant select on public.message_receipts to authenticated;
+do $$
+begin
+  begin alter publication supabase_realtime add table public.message_receipts; exception when others then null; end;
+end $$;
+$mig0068$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -11288,6 +11327,7 @@ from (values
   (57, 'Editar e apagar mensagens (0066)', to_regprocedure('public.request_message_action(uuid,text,text)') is not null),
   (58, 'Apagar para mim (0067)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'messages' and column_name = 'hidden_at')),
-  (59, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (59, 'Entregue e lida (0068)', to_regclass('public.message_receipts') is not null),
+  (60, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

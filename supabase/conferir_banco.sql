@@ -92,6 +92,7 @@ from (values
   (57, 'Editar e apagar mensagens (0066)', to_regprocedure('public.request_message_action(uuid,text,text)') is not null),
   (58, 'Apagar para mim (0067)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'messages' and column_name = 'hidden_at')),
-  (59, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (59, 'Entregue e lida (0068)', to_regclass('public.message_receipts') is not null),
+  (60, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

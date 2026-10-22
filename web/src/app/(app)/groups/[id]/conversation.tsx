@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCheck, Clock, Loader2, Lock, Reply } from 'lucide-react';
+import { Check, CheckCheck, Clock, Loader2, Lock, Reply } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { markMediaSeen } from '../../actions';
@@ -68,6 +68,37 @@ function MediaSeen({ message, timeZone, viewed }: { message: Message; timeZone?:
     >
       <CheckCheck className="h-3 w-3" aria-hidden /> dar baixa
     </button>
+  );
+}
+
+type Receipt = { message_id: string; user_jid: string; delivered_at: string | null; read_at: string | null };
+
+/**
+ * Tiques do WhatsApp numa mensagem do número conectado: ✓ enviada, ✓✓ entregue a todos,
+ * ✓✓ azul lida por todos. Ao passar o mouse: quantos receberam e leram, e quem leu.
+ */
+function Ticks({ status, receipts, recipients, nameOf }: { status: number | null | undefined; receipts: Receipt[]; recipients: number; nameOf: (jid: string) => string }) {
+  const read = receipts.filter((r) => r.read_at);
+  const delivered = receipts.filter((r) => r.delivered_at || r.read_at);
+  const total = Math.max(1, recipients);
+  const allRead = read.length >= total || (status ?? 0) >= 4;
+  const allDelivered = allRead || delivered.length >= total || (status ?? 0) >= 3;
+  const sent = allDelivered || (status ?? 0) >= 2 || receipts.length > 0;
+  if (!sent) return null;
+  const names = read.slice(0, 12).map((r) => nameOf(r.user_jid));
+  const title = [
+    allRead ? 'Lida por todos' : allDelivered ? 'Entregue a todos' : 'Enviada',
+    receipts.length ? `entregue a ${Math.min(delivered.length, total)} de ${total} · lida por ${Math.min(read.length, total)} de ${total}` : null,
+    names.length ? `Leram: ${names.join(', ')}${read.length > names.length ? ` e mais ${read.length - names.length}` : ''}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const Icon = allDelivered ? CheckCheck : Check;
+  return (
+    <span title={title} aria-label={title} className={cn('inline-flex items-center gap-0.5', allRead ? 'text-sky-500' : 'text-muted')}>
+      <Icon className="h-3.5 w-3.5" />
+      {!allRead && read.length > 0 && <span className="tabular text-[10px] text-sky-600">{read.length}</span>}
+    </span>
   );
 }
 
@@ -147,7 +178,10 @@ export function Conversation({
   reply,
   outgoing,
   contacts,
+  participantsCount = 0,
 }: {
+  /** participantes do grupo (a conta dos tiques: entregue/lida por todos, menos o número conectado) */
+  participantsCount?: number;
   /** participantes do grupo: completa nome e telefone de quem só veio com um dos dois (ou com LID) */
   contacts?: { jid: string; lid?: string | null; phone: string | null; name: string | null }[];
   reply: ReplyConfig;
@@ -188,12 +222,33 @@ export function Conversation({
 
   // reações (0062): carregadas para as mensagens na tela e atualizadas em tempo real
   const [reactions, setReactions] = useState<Map<string, Reaction>>(new Map());
+  const [receipts, setReceipts] = useState<Map<string, Receipt>>(new Map());
+  const receiptsOf = useMemo(() => {
+    const map = new Map<string, Receipt[]>();
+    for (const r of receipts.values()) map.set(r.message_id, [...(map.get(r.message_id) ?? []), r]);
+    return map;
+  }, [receipts]);
   const loadedFor = useRef<Set<string>>(new Set());
   useEffect(() => {
     const ids = messages.map((m) => m.id).filter((id) => !loadedFor.current.has(id));
     if (!ids.length) return;
     for (const id of ids) loadedFor.current.add(id);
     const supabase = createClient();
+    const mine = messages.filter((m) => m.from_me && ids.includes(m.id)).map((m) => m.id);
+    for (let i = 0; i < mine.length; i += 100) {
+      void supabase
+        .from('message_receipts')
+        .select('message_id, user_jid, delivered_at, read_at')
+        .in('message_id', mine.slice(i, i + 100))
+        .then(({ data, error }) => {
+          if (error || !data?.length) return;
+          setReceipts((prev) => {
+            const next = new Map(prev);
+            for (const r of data as Receipt[]) next.set(`${r.message_id}|${r.user_jid}`, r);
+            return next;
+          });
+        });
+    }
     for (let i = 0; i < ids.length; i += 100) {
       void supabase
         .from('message_reactions')
@@ -223,6 +278,15 @@ export function Conversation({
         (payload) => {
           const m = payload.new as Message;
           setPatches((prev) => new Map(prev).set(m.id, m));
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'message_receipts', filter: `group_id=eq.${groupId}` },
+        (payload) => {
+          const r = payload.new as Receipt;
+          if (!r?.message_id) return;
+          setReceipts((prev) => new Map(prev).set(`${r.message_id}|${r.user_jid}`, r));
         },
       )
       .on(
@@ -315,6 +379,14 @@ export function Conversation({
     }
     return map;
   }, [contacts]);
+  // nome de quem leu (tiques): membros do grupo por jid ou LID
+  const receiptName = useCallback(
+    (jid: string) => {
+      const p = people.get(jid);
+      return p?.name || formatPhone(p?.phone ?? null) || formatPhone(jid.split('@')[0]) || 'membro';
+    },
+    [people],
+  );
   // nome de quem foi mencionado: membros do grupo e remetentes desta conversa (por LID, jid ou telefone)
   const mentionName = useMemo(() => {
     const senders = new Map<string, string>();
@@ -491,6 +563,14 @@ export function Conversation({
                       </span>
                     )}
                     <span className="tabular">{formatTime(m.sent_at, timeZone)}</span>
+                    {m.from_me && !m.deleted_at && (
+                      <Ticks
+                        status={m.wa_status}
+                        receipts={receiptsOf.get(m.id) ?? []}
+                        recipients={participantsCount - 1}
+                        nameOf={receiptName}
+                      />
+                    )}
                   </div>
                 </div>
               </div>

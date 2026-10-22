@@ -101,6 +101,8 @@ export type Message = {
   deleted_at?: string | null;
   /** apagada para mim (só no número conectado): some da conversa do painel (0067) */
   hidden_at?: string | null;
+  /** tiques do WhatsApp nas mensagens do número conectado: 2 enviada, 3 entregue, 4 lida, 5 ouvida (0068) */
+  wa_status?: number | null;
   id: string;
   group_id: string;
   wa_message_id: string;

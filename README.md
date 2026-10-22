@@ -105,6 +105,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    65. `supabase/migrations/0065_fix_group_write_guard.sql`
    66. `supabase/migrations/0066_edit_delete_messages.sql`
    67. `supabase/migrations/0067_delete_for_me.sql`
+   68. `supabase/migrations/0068_message_receipts.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

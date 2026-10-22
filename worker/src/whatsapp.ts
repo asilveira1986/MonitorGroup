@@ -618,6 +618,25 @@ export class WhatsAppManager {
         .then(({ error }) => error && log.warn({ err: error.message }, 'falha ao marcar leitura'));
     });
 
+    // tiques das mensagens do número conectado: status geral (✓ / ✓✓ / lida) ...
+    sock.ev.on('messages.update', (updates) => {
+      for (const { key, update } of updates) {
+        if (!key.fromMe || !key.id || !key.remoteJid || !isJidGroup(key.remoteJid) || typeof update.status !== 'number') continue;
+        void this.saveWaStatus(session, key.remoteJid, key.id, update.status).catch((err) =>
+          log.warn({ err }, 'falha ao gravar o status da mensagem'),
+        );
+      }
+    });
+    // ... e quem recebeu / leu, pessoa a pessoa
+    sock.ev.on('message-receipt.update', (list) => {
+      for (const { key, receipt } of list) {
+        if (!key.fromMe || !key.id || !key.remoteJid || !isJidGroup(key.remoteJid) || !receipt.userJid) continue;
+        void this.saveReceipt(session, key.remoteJid, key.id, receipt).catch((err) =>
+          log.warn({ err }, 'falha ao gravar a confirmação de leitura'),
+        );
+      }
+    });
+
     // conversa do grupo apagada no celular
     // foto de perfil (contato ou grupo) mudou: busca de novo
     sock.ev.on('contacts.update', (updates) => {
@@ -952,6 +971,44 @@ export class WhatsAppManager {
         : { body: change.body, edited_at: now, original_body: target.original_body ?? target.body };
     const { error } = await db.from('messages').update(patch).eq('id', target.id);
     if (error) logger.warn({ err: error.message }, 'não foi possível registrar a edição/exclusão da mensagem');
+  }
+
+  /** Mensagem do número conectado neste grupo, pelo id do WhatsApp. */
+  private async ownMessageId(session: Session, groupJid: string, waId: string): Promise<{ id: string; groupId: string } | null> {
+    const group = await this.getGroup(session, groupJid);
+    const { data } = await db.from('messages').select('id').eq('group_id', group.id).eq('wa_message_id', waId).maybeSingle();
+    return data ? { id: data.id as string, groupId: group.id } : null;
+  }
+
+  /** Status geral da mensagem (2 enviada, 3 entregue, 4 lida, 5 reproduzida): só avança. */
+  private async saveWaStatus(session: Session, groupJid: string, waId: string, status: number) {
+    const target = await this.ownMessageId(session, groupJid, waId);
+    if (!target) return;
+    await db.from('messages').update({ wa_status: status }).eq('id', target.id).or(`wa_status.is.null,wa_status.lt.${status}`);
+  }
+
+  /** Confirmação de uma pessoa: entregue e/ou lida (ouvida conta como lida). */
+  private async saveReceipt(
+    session: Session,
+    groupJid: string,
+    waId: string,
+    receipt: { userJid?: string | null; receiptTimestamp?: unknown; readTimestamp?: unknown; playedTimestamp?: unknown },
+  ) {
+    const target = await this.ownMessageId(session, groupJid, waId);
+    if (!target || !receipt.userJid || this.isMe(session, receipt.userJid)) return;
+    const iso = (t: unknown) => (toSeconds(t) > 0 ? new Date(toSeconds(t) * 1000).toISOString() : null);
+    const read = iso(receipt.readTimestamp) ?? iso(receipt.playedTimestamp);
+    const row: Record<string, unknown> = {
+      message_id: target.id,
+      company_id: session.companyId,
+      group_id: target.groupId,
+      user_jid: jidNormalizedUser(receipt.userJid),
+    };
+    const delivered = iso(receipt.receiptTimestamp) ?? read;
+    if (delivered) row.delivered_at = delivered;
+    if (read) row.read_at = read;
+    const { error } = await db.from('message_receipts').upsert(row, { onConflict: 'message_id,user_jid' });
+    if (error) logger.warn({ err: error.message }, 'falha ao gravar a confirmação');
   }
 
   /** Dados comuns de uma mensagem de grupo (remetente, equipe, horário). */
