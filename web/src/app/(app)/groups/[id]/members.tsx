@@ -1,6 +1,7 @@
 'use client';
 
 import { Crown, Headset, Search, ShieldCheck, Smartphone, Users } from 'lucide-react';
+import { CallPrivateButton } from '../../private/call-private';
 import { useState } from 'react';
 import { Badge, Card, CardHeader } from '@/components/ui';
 import { Avatar } from '@/components/avatar';
@@ -32,7 +33,7 @@ const initials = (name: string) =>
  * Membros do grupo (lista do próprio WhatsApp, atualizada pelo worker quando alguém entra ou sai):
  * nome, telefone, admin do grupo, se é da equipe e a atividade dos últimos 30 dias.
  */
-export function GroupMembers({ members, total }: { members: GroupMember[]; total: number }) {
+export function GroupMembers({ members, total, canPrivate = false }: { members: GroupMember[]; total: number; canPrivate?: boolean }) {
   const [query, setQuery] = useState('');
   const q = query.trim().toLowerCase();
   const digits = q.replace(/\D/g, '');
@@ -101,6 +102,7 @@ export function GroupMembers({ members, total }: { members: GroupMember[]; total
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-0.5">
+                    {canPrivate && !m.is_me && <CallPrivateButton jid={m.jid} phone={m.phone} name={m.name} />}
                     {m.team && (
                       <Badge tone="brand">
                         <Headset className="h-3 w-3" /> Equipe

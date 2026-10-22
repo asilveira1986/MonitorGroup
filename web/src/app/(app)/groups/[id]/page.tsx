@@ -44,7 +44,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
   const recentlySent = minutesAgo(5);
-  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }, { data: closingCfg }, { data: groupPhoto }] = await Promise.all([
+  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }, { data: closingCfg }, { data: groupPhoto }, { data: canPrivate }] = await Promise.all([
     supabase.from('team_members').select('id, name, active').order('name'),
     supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
     // respostas do painel que ainda não voltaram pelo WhatsApp
@@ -65,6 +65,8 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     supabase.from('app_settings').select('closing_shortcut').maybeSingle(),
     // imagem do grupo (guardada pelo worker)
     supabase.from('contact_avatars').select('path').eq('jid', group?.jid ?? '').maybeSingle(),
+    // "Chamar no privado" (0069): só quem administra a plataforma, com o módulo ligado
+    profile.platform_admin ? supabase.rpc('can_use_private_chats') : Promise.resolve({ data: false }),
   ]);
   const categories = (typeInd?.params as { categories?: { name: string }[] } | undefined)?.categories;
   if (!group) notFound();
@@ -245,7 +247,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             </Card>
           ))}
           <div id="membros" className="col-span-2 scroll-mt-20 lg:col-span-1">
-            <GroupMembers members={(groupMembers ?? []) as GroupMember[]} total={g.participants_count} />
+            <GroupMembers members={(groupMembers ?? []) as GroupMember[]} total={g.participants_count} canPrivate={Boolean(canPrivate)} />
           </div>
         </div>
 
@@ -257,6 +259,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
           <Conversation
             groupId={g.id}
             participantsCount={g.participants_count}
+            canPrivate={Boolean(canPrivate)}
             contacts={(groupMembers ?? []) as { jid: string; lid?: string | null; phone: string | null; name: string | null }[]}
             initial={(msgs ?? []) as Message[]}
             timeZone={tz}

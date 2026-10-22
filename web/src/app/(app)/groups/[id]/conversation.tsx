@@ -16,6 +16,7 @@ import { MarkTeamButton } from '../group-controls';
 import { PAGE_SIZE } from './constants';
 import { MessageMedia } from './message-media';
 import { MessageEditor, MessageMenu } from './message-menu';
+import { CallPrivateButton } from '../../private/call-private';
 import { useRealtime } from '@/lib/use-realtime';
 
 
@@ -179,7 +180,10 @@ export function Conversation({
   outgoing,
   contacts,
   participantsCount = 0,
+  canPrivate = false,
 }: {
+  /** "Chamar no privado" ao lado de quem enviou (conversas privadas liberadas) */
+  canPrivate?: boolean;
   /** participantes do grupo (a conta dos tiques: entregue/lida por todos, menos o número conectado) */
   participantsCount?: number;
   /** participantes do grupo: completa nome e telefone de quem só veio com um dos dois (ou com LID) */
@@ -473,6 +477,9 @@ export function Conversation({
                       >
                         {formatPhone(phone)}
                       </button>
+                    )}
+                    {canPrivate && !m.from_me && (m.sender_jid || phone) && (
+                      <CallPrivateButton jid={m.sender_jid} phone={phone} name={name} compact />
                     )}
                     {!m.from_team && m.sender_jid && (
                       <MarkTeamButton jid={m.sender_jid} name={name ?? ''} phone={phone} />
