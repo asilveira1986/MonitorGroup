@@ -43,8 +43,8 @@ export default async function TeamPage() {
 
       <Card className="lg:col-span-2">
         <CardHeader
-          title="Equipe"
-          description={`${members.length} atendente(s)`}
+          title="Atendentes"
+          description={`${members.length} atendente(s): quem responde nos grupos pelo WhatsApp. O login no painel fica em Acessos ao painel.`}
           action={profile.role === 'admin' ? <RecalcButton /> : undefined}
         />
         {profile.role === 'admin' && (

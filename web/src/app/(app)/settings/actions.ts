@@ -259,7 +259,7 @@ export async function deleteQuickReply(id: string): Promise<Result> {
   return result(error);
 }
 
-/** Botão "Recalcular grupos" (Configurações › Equipe). */
+/** Botão "Recalcular grupos" (Configurações › Atendentes). */
 export async function recalcGroups(): Promise<Result & { summary?: RecalcSummary }> {
   await requireAdmin();
   const supabase = await createClient();
@@ -479,7 +479,7 @@ export async function removeHoliday(day: string): Promise<Result> {
   return result(error);
 }
 
-/** Horário comercial editado a partir do indicador (mesmo cadastro de Configurações › Geral). */
+/** Horário comercial editado a partir do indicador (mesmo cadastro de Configurações › Empresa). */
 export async function saveBusinessHours(values: { days: number[]; start: string; end: string }): Promise<Result> {
   await requireAdmin();
   if (!/^\d{2}:\d{2}/.test(values.start) || !/^\d{2}:\d{2}/.test(values.end)) {

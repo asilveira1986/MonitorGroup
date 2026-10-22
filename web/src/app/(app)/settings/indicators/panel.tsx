@@ -12,7 +12,7 @@ export type BusinessHours = { days: number[]; start: string; end: string; holida
 
 const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-/** Editor do horário comercial (grava em Configurações › Geral, fonte única). */
+/** Editor do horário comercial (grava em Configurações › Empresa, fonte única). */
 function BusinessHoursEditor({ initial }: { initial: BusinessHours }) {
   const [days, setDays] = useState(initial.days);
   const [start, setStart] = useState(initial.start.slice(0, 5));

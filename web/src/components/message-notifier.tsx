@@ -12,7 +12,7 @@ import { playAlertSound, type AlertSound } from '@/lib/sounds';
 import { useRealtime } from '@/lib/use-realtime';
 import { renderTemplate, sampleValues, speak, spokenDuration, templateFor, type VoiceOptions } from '@/lib/voice';
 
-/** Configuração dos alertas em tela (Configurações › Geral), igual para todos. */
+/** Configuração dos alertas em tela (Configurações › Avisos), igual para todos. */
 export type AlertConfig = {
   /** mostra o aviso de nova mensagem */
   enabled: boolean;
@@ -22,7 +22,7 @@ export type AlertConfig = {
   autoClose: number;
   /** toca o bipe */
   sound: boolean;
-  /** fala o aviso em voz alta (português) — Configurações › Regras de alerta */
+  /** fala o aviso em voz alta (português) — Configurações › Avisos */
   voice?: boolean;
   /** voz: fala as mensagens novas */
   voiceMessages?: boolean;
@@ -107,7 +107,7 @@ const messageText = (type: string, body: string | null) =>
   type === 'text' ? body : `${TYPE_LABEL[type] ?? type}${body ? ` ${body}` : ''}`;
 
 /**
- * Quem recebe avisos só dos grupos em que é responsável (Configurações › Equipe): os grupos dele
+ * Quem recebe avisos só dos grupos em que é responsável (Configurações › Atendentes): os grupos dele
  * e os grupos sem responsável. null = todos os grupos. Lido no máximo a cada 30 s.
  */
 let scopeCache: { at: number; groups: Set<string> | null } | null = null;
@@ -125,7 +125,7 @@ async function inMyAlertScope(groupId: string | null | undefined): Promise<boole
  *  - NOVA MENSAGEM: cliente escreveu (grupo, quem enviou e a mensagem);
  *  - SLA EXCEDIDO: a mensagem do cliente passou do tempo de resposta do grupo;
  *  - alertas do sistema (cliente sem resposta, palavra-chave, desconexão...).
- * Toca um bipe e faz o título da aba piscar. Conforme Configurações › Geral, fica na tela até
+ * Toca um bipe e faz o título da aba piscar. Conforme Configurações › Avisos, fica na tela até
  * alguém fechar ou fecha sozinho depois de um tempo. Um aviso por vez; o mesmo grupo/assunto
  * atualiza o aviso anterior em vez de empilhar.
  */

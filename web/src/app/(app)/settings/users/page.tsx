@@ -27,7 +27,7 @@ export default async function UsersPage() {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <Card className="lg:col-span-1">
-        <CardHeader title="Cadastrar usuário" description="Somente e-mails cadastrados conseguem entrar." />
+        <CardHeader title="Novo acesso" description="Quem entra no painel com e-mail e senha. Somente e-mails cadastrados conseguem entrar." />
         <div className="p-5">
           <NewUserForm />
         </div>
@@ -35,7 +35,10 @@ export default async function UsersPage() {
 
       <div className="space-y-4 lg:col-span-2">
         <Card>
-          <CardHeader title="Usuários" description={`${users.length} usuário(s)`} />
+          <CardHeader
+            title="Acessos ao painel"
+            description={`${users.length} usuário(s) com login. Quem responde nos grupos pelo WhatsApp fica em Atendentes; para a pessoa ter agenda e entregar demandas, ligue o acesso dela lá (Dar acesso ao sistema).`}
+          />
           <div className="p-2">
             {users.map((u) => (
               <div key={u.id} className="flex flex-col gap-3 rounded-xl px-3 py-3 hover:bg-surface-2 sm:flex-row sm:items-center">

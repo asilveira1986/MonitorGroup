@@ -110,7 +110,7 @@ export const REMOVED_REASON_LABEL: Record<string, string> = {
   not_participant: 'O número não participa mais do grupo',
 };
 
-/** Demandas ligadas = pelo menos uma forma de criar demanda está ativa (Configurações › Geral › Demandas). */
+/** Demandas ligadas = pelo menos uma forma de criar demanda está ativa (Configurações › Demandas). */
 export function demandsEnabled(
   s:
     | {

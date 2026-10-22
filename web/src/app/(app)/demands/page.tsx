@@ -69,13 +69,13 @@ export default async function DemandsPage({ searchParams }: PageProps<'/demands'
             title="Demandas desligadas"
             description={
               profile.role === 'admin'
-                ? 'Todas as formas de criar demanda estão desligadas. Para voltar a usar, ligue ao menos uma em Configurações › Geral › Demandas. O histórico continua guardado.'
+                ? 'Todas as formas de criar demanda estão desligadas. Para voltar a usar, ligue ao menos uma em Configurações › Demandas. O histórico continua guardado.'
                 : 'Esta função foi desligada por um administrador. O histórico continua guardado.'
             }
             action={
               profile.role === 'admin' && (
                 <Link
-                  href="/settings"
+                  href="/settings/demand-types"
                   className="inline-flex h-10 items-center rounded-xl bg-brand px-4 text-sm font-medium text-brand-ink hover:opacity-90"
                 >
                   Abrir configurações

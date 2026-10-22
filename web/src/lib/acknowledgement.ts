@@ -1,7 +1,7 @@
 /**
  * Mensagens a ignorar: agradecimentos e confirmações do cliente ("ok", "obrigado", 👍) que não
  * pedem resposta. Além da lista padrão, cada empresa cadastra as próprias frases
- * (Configurações › Geral › Mensagens a ignorar), ex.: "obrigado pelo retorno, doutora".
+ * (Configurações › Respostas e mensagens › Mensagens a ignorar), ex.: "obrigado pelo retorno, doutora".
  *
  * Uma frase cadastrada vale quando a mensagem é ela (sem diferenciar acentos, maiúsculas e
  * pontuação) ou ela com sobras que também são de agradecimento/emoji ("Obrigado pelo retorno

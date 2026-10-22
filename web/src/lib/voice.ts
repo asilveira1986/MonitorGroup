@@ -1,7 +1,7 @@
 /**
  * Aviso por voz (Web Speech API, no próprio navegador, sem custo).
  * Cada aviso tem uma frase com itens entre chaves, trocados na hora pelos dados do aviso:
- * "Nova mensagem no grupo {grupo}, de {remetente}." Configurável em Configurações › Regras de alerta.
+ * "Nova mensagem no grupo {grupo}, de {remetente}." Configurável em Configurações › Avisos (tela e voz).
  */
 
 export type VoiceEvent = 'message' | 'sla' | 'alert';

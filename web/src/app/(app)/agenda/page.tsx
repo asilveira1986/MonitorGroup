@@ -325,8 +325,8 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
             title="Sua agenda ainda não está ligada à equipe"
             description={
               isAdmin
-                ? 'Escolha uma pessoa da equipe acima para ver a agenda dela. Para ter a sua, um administrador liga o seu e-mail a uma pessoa em Configurações › Equipe › Dar acesso ao sistema.'
-                : 'Peça a um administrador para ligar o seu e-mail a uma pessoa da equipe (Configurações › Equipe › Dar acesso ao sistema). Depois disso, as demandas em que você é o responsável aparecem aqui.'
+                ? 'Escolha uma pessoa da equipe acima para ver a agenda dela. Para ter a sua, um administrador liga o seu e-mail a uma pessoa em Configurações › Atendentes › Dar acesso ao sistema.'
+                : 'Peça a um administrador para ligar o seu e-mail a uma pessoa da equipe (Configurações › Atendentes › Dar acesso ao sistema). Depois disso, as demandas em que você é o responsável aparecem aqui.'
             }
           />
         </Card>

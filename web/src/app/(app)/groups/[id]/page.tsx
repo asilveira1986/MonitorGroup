@@ -91,7 +91,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     ? 'Seu perfil é somente para ver os painéis.'
     : !settings?.reply_enabled
     ? profile.role === 'admin'
-      ? 'Responder pelo sistema está desligado. Ative em Configurações › Geral.'
+      ? 'Responder pelo sistema está desligado. Ative em Configurações › Respostas e mensagens.'
       : null
     : !canReplyRole
       ? 'Só administradores podem responder pelo sistema.'
@@ -173,7 +173,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
                   <p className="mt-1 text-[11px] text-muted">
                     Cadastre as pessoas em{' '}
                     <Link href="/settings/team" className="underline">
-                      Configurações › Equipe
+                      Configurações › Atendentes
                     </Link>
                     .
                   </p>
