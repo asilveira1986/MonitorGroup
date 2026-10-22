@@ -95,7 +95,8 @@ CHECKS=$(cat <<'SQL'
       where table_schema = 'public' and table_name = 'messages' and column_name = 'hidden_at')),
   (59, 'Entregue e lida (0068)', to_regclass('public.message_receipts') is not null),
   (60, 'Conversas privadas (0069)', to_regclass('public.private_chats') is not null and to_regprocedure('public.send_private_message(uuid,text)') is not null),
-  (61, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (61, 'Conversas privadas: arquivos, reações, editar e apagar (0070)', to_regprocedure('public.request_private_action(uuid,text,text,text)') is not null),
+  (62, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

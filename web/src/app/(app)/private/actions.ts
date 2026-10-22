@@ -30,6 +30,23 @@ export async function sendPrivateMessage(chatId: string, body: string): Promise<
   return error ? fail(error) : { ok: true };
 }
 
+/** Editar, apagar (para todos / para mim) ou reagir: o worker faz no WhatsApp. */
+export async function requestPrivateAction(
+  messageId: string,
+  action: 'edit' | 'delete' | 'delete_me' | 'react',
+  extra?: { body?: string; emoji?: string },
+): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('request_private_action', {
+    p_message_id: messageId,
+    p_action: action,
+    p_body: extra?.body ?? null,
+    p_emoji: extra?.emoji ?? null,
+  });
+  return error ? fail(error) : { ok: true };
+}
+
 export async function markPrivateChatRead(chatId: string): Promise<Result> {
   await requireProfile();
   const supabase = await createClient();

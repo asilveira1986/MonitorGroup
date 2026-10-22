@@ -21,7 +21,7 @@ import { isClosingMessage } from './closing.js';
 import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
 import { AvatarQueue } from './avatars.js';
-import { storeMessageMedia } from './media.js';
+import { storeMessageMedia, storePrivateMedia } from './media.js';
 import { extractContent, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
@@ -268,6 +268,7 @@ export class WhatsAppManager {
       }
       await this.processMessageActions(session);
       await this.processPrivateOutbox(session, me);
+      await this.processPrivateActions(session);
     }
   }
 
@@ -1004,15 +1005,20 @@ export class WhatsAppManager {
    */
   private async handlePrivateMessage(session: Session, msg: WAMessage, fromHistory: boolean) {
     if (!(await privateEnabled(session.companyId))) return;
+    const jid = jidNormalizedUser(msg.key.remoteJid!);
+    // reação e edição/exclusão feitas no WhatsApp (0070)
+    const reaction = reactionOf(msg.message);
+    if (reaction) return this.applyPrivateReaction(session, jid, msg, reaction);
+    const change = messageChangeOf(msg.message);
+    if (change) return this.applyPrivateChange(session, jid, change);
     const content = extractContent(msg.message);
     if (!content || !msg.key.id) return;
-    const jid = jidNormalizedUser(msg.key.remoteJid!);
     const fromMe = Boolean(msg.key.fromMe);
     // conversa só com o LID (identificador interno): descobre o telefone
     const alt = (msg.key as { remoteJidAlt?: string }).remoteJidAlt;
     const phoneJid = jid.endsWith('@lid') ? (alt ? jidNormalizedUser(alt) : await this.phoneJidForLid(session, null, jid)) : jid;
     const saved = await contactName(session.instanceId, jid);
-    const { error } = await db.rpc('ingest_private_message', {
+    const { data: ingested, error } = await db.rpc('ingest_private_message', {
       p_instance_id: session.instanceId,
       p_jid: jid,
       p_phone: phoneFromJid(phoneJid),
@@ -1026,6 +1032,139 @@ export class WhatsAppManager {
       p_count_unread: !fromHistory,
     });
     if (error) logger.warn({ err: error.message }, 'não foi possível guardar a mensagem privada');
+    // imagem/áudio/arquivo: guarda para abrir no painel (em segundo plano)
+    const r = ingested as { inserted?: boolean; message_id?: string; chat_id?: string } | null;
+    if (!fromHistory && r?.inserted && r.message_id && r.chat_id) {
+      void storePrivateMedia({
+        sock: session.sock,
+        msg,
+        companyId: session.companyId,
+        chatId: r.chat_id,
+        messageId: r.message_id,
+        type: content.type,
+      }).catch((err) => logger.warn({ err }, 'falha ao guardar o arquivo da conversa privada'));
+    }
+  }
+
+  /** Mensagem privada desta conexão pelo id do WhatsApp (com a conversa). */
+  private async privateTarget(session: Session, jid: string, waId: string) {
+    const { data } = await db
+      .from('private_messages')
+      .select('id, chat_id, body, original_body, private_chats!inner(instance_id, jid)')
+      .eq('wa_message_id', waId)
+      .eq('private_chats.instance_id', session.instanceId)
+      .eq('private_chats.jid', jid)
+      .maybeSingle();
+    return data as { id: string; chat_id: string; body: string | null; original_body: string | null } | null;
+  }
+
+  /** Reação recebida (ou retirada) numa conversa privada. */
+  private async applyPrivateReaction(session: Session, jid: string, msg: WAMessage, reaction: { targetId: string; emoji: string }) {
+    const target = await this.privateTarget(session, jid, reaction.targetId);
+    if (!target) return;
+    const fromMe = Boolean(msg.key.fromMe);
+    const reactor = fromMe ? 'me' : jid;
+    if (!reaction.emoji) {
+      await db.from('private_reactions').delete().eq('message_id', target.id).eq('reactor_jid', reactor);
+      return;
+    }
+    await db.from('private_reactions').upsert(
+      {
+        message_id: target.id,
+        chat_id: target.chat_id,
+        company_id: session.companyId,
+        reactor_jid: reactor,
+        from_me: fromMe,
+        emoji: reaction.emoji,
+        reacted_at: new Date(toSeconds(msg.messageTimestamp) * 1000).toISOString(),
+      },
+      { onConflict: 'message_id,reactor_jid' },
+    );
+  }
+
+  /** Mensagem privada editada ou apagada no WhatsApp. */
+  private async applyPrivateChange(
+    session: Session,
+    jid: string,
+    change: { kind: 'delete'; targetId: string } | { kind: 'edit'; targetId: string; body: string | null },
+  ) {
+    const target = await this.privateTarget(session, jid, change.targetId);
+    if (!target) return;
+    const now = new Date().toISOString();
+    await db
+      .from('private_messages')
+      .update(
+        change.kind === 'delete'
+          ? { deleted_at: now }
+          : { body: change.body, edited_at: now, original_body: target.original_body ?? target.body },
+      )
+      .eq('id', target.id);
+    await db.rpc('refresh_private_chat_preview', { p_chat_id: target.chat_id });
+  }
+
+  /** Editar, apagar e reagir nas conversas privadas, pedidos no painel (0070). */
+  private async processPrivateActions(session: Session) {
+    const { data, error } = await db
+      .from('private_actions')
+      .select('id')
+      .eq('instance_id', session.instanceId)
+      .eq('status', 'pending')
+      .order('created_at')
+      .limit(10);
+    if (error) return; // sem o script 0070
+    for (const { id } of (data ?? []) as { id: string }[]) {
+      const { data: row } = await db
+        .from('private_actions')
+        .update({ status: 'sending' })
+        .eq('id', id)
+        .eq('status', 'pending')
+        .select('id, action, new_body, emoji, message_id')
+        .maybeSingle();
+      if (!row) continue;
+      try {
+        const { data: m } = await db
+          .from('private_messages')
+          .select('id, chat_id, wa_message_id, from_me, body, original_body, sent_at, private_chats!inner(jid)')
+          .eq('id', row.message_id)
+          .maybeSingle();
+        const jid = (m as { private_chats?: { jid: string } } | null)?.private_chats?.jid;
+        if (!m || !jid) throw new Error('Mensagem não encontrada.');
+        const key = { remoteJid: jid, id: m.wa_message_id as string, fromMe: Boolean(m.from_me) };
+        const now = new Date().toISOString();
+        if (row.action === 'edit') {
+          await session.sock.sendMessage(jid, { text: row.new_body as string, edit: key });
+          await db.from('private_messages').update({ body: row.new_body, edited_at: now, original_body: m.original_body ?? m.body }).eq('id', m.id);
+        } else if (row.action === 'delete') {
+          await session.sock.sendMessage(jid, { delete: key });
+          await db.from('private_messages').update({ deleted_at: now }).eq('id', m.id);
+        } else if (row.action === 'delete_me') {
+          await session.sock.chatModify(
+            { deleteForMe: { deleteMedia: true, key, timestamp: Math.floor(new Date(m.sent_at as string).getTime() / 1000) } },
+            jid,
+          );
+          await db.from('private_messages').update({ hidden_at: now }).eq('id', m.id);
+        } else {
+          const emoji = (row.emoji as string | null) ?? '';
+          await session.sock.sendMessage(jid, { react: { text: emoji, key } });
+          if (emoji) {
+            await db.from('private_reactions').upsert(
+              { message_id: m.id, chat_id: m.chat_id, company_id: session.companyId, reactor_jid: 'me', from_me: true, emoji, reacted_at: now },
+              { onConflict: 'message_id,reactor_jid' },
+            );
+          } else {
+            await db.from('private_reactions').delete().eq('message_id', m.id).eq('reactor_jid', 'me');
+          }
+        }
+        if (row.action !== 'react') await db.rpc('refresh_private_chat_preview', { p_chat_id: m.chat_id });
+        await db.from('private_actions').update({ status: 'done', error: null, done_at: now }).eq('id', id);
+      } catch (err) {
+        logger.warn({ err, id }, 'falha na ação da conversa privada');
+        await db
+          .from('private_actions')
+          .update({ status: 'failed', error: err instanceof Error ? err.message : String(err), done_at: new Date().toISOString() })
+          .eq('id', id);
+      }
+    }
   }
 
   /** Respostas privadas escritas no painel (0069): confere se o número tem WhatsApp e envia. */

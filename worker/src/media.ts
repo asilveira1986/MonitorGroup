@@ -24,7 +24,27 @@ export async function storeMessageMedia(opts: {
   messageId: string;
   type: string;
 }) {
-  const { sock, msg, companyId, groupId, messageId, type } = opts;
+  return storeMedia(opts, 'messages', `${opts.companyId}/${opts.groupId}`);
+}
+
+/** O mesmo para as conversas privadas (0070): pasta <empresa>/private/<conversa>. */
+export async function storePrivateMedia(opts: {
+  sock: WASocket;
+  msg: WAMessage;
+  companyId: string;
+  chatId: string;
+  messageId: string;
+  type: string;
+}) {
+  return storeMedia(opts, 'private_messages', `${opts.companyId}/private/${opts.chatId}`);
+}
+
+async function storeMedia(
+  opts: { sock: WASocket; msg: WAMessage; companyId: string; messageId: string; type: string },
+  table: 'messages' | 'private_messages',
+  folder: string,
+) {
+  const { sock, msg, companyId, messageId, type } = opts;
   if (!(MEDIA_TYPES as readonly string[]).includes(type)) return;
   const settings = await getSettings(companyId);
   if (settings.media_store_enabled === false) return;
@@ -32,7 +52,7 @@ export async function storeMessageMedia(opts: {
   if (!types.includes(type)) return;
 
   const info = mediaInfo(msg);
-  const mark = (patch: Record<string, unknown>) => db.from('messages').update(patch).eq('id', messageId);
+  const mark = (patch: Record<string, unknown>) => db.from(table).update(patch).eq('id', messageId);
 
   if (info?.size && info.size > MEDIA_MAX_BYTES) {
     await mark({ media_status: 'too_large', media_size: info.size, media_mime: info.mime });
@@ -51,7 +71,7 @@ export async function storeMessageMedia(opts: {
       return;
     }
     const mime = (info?.mime || FALLBACK_MIME[type] || 'application/octet-stream').split(';')[0].trim();
-    const path = `${companyId}/${groupId}/${messageId}.${mediaExtension(mime, info?.fileName)}`;
+    const path = `${folder}/${messageId}.${mediaExtension(mime, info?.fileName)}`;
     const { error } = await db.storage.from(MEDIA_BUCKET).upload(path, buffer, { contentType: mime, upsert: true });
     if (error) throw new Error(error.message);
     await mark({ media_path: path, media_mime: mime, media_size: buffer.length, media_status: 'stored' });
@@ -88,6 +108,26 @@ export async function cleanupExpiredMedia() {
           .update({ media_path: null, media_status: 'expired' })
           .in('id', rows.map((r) => r.id));
         logger.info({ companyId, files: rows.length }, 'arquivos antigos apagados pelo prazo');
+        if (rows.length < CLEANUP_BATCH) break;
+      }
+      // conversas privadas (0070): mesmo prazo
+      for (let round = 0; round < 50; round++) {
+        const { data, error } = await db
+          .from('private_messages')
+          .select('id, media_path')
+          .eq('company_id', companyId)
+          .not('media_path', 'is', null)
+          .lt('sent_at', cutoff)
+          .limit(CLEANUP_BATCH);
+        if (error) break; // sem o script 0070
+        const rows = (data ?? []) as { id: string; media_path: string }[];
+        if (!rows.length) break;
+        const removed = await db.storage.from(MEDIA_BUCKET).remove(rows.map((r) => r.media_path));
+        if (removed.error) throw new Error(removed.error.message);
+        await db
+          .from('private_messages')
+          .update({ media_path: null, media_status: 'expired' })
+          .in('id', rows.map((r) => r.id));
         if (rows.length < CLEANUP_BATCH) break;
       }
     }

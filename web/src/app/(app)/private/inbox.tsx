@@ -9,6 +9,14 @@ import { cn, formatPhone, formatTime, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import { useRealtime } from '@/lib/use-realtime';
 import { markPrivateChatRead, sendPrivateMessage, startPrivateChat } from './actions';
+import {
+  PrivateEditor,
+  PrivateMedia,
+  PrivateMessageMenu,
+  PrivateReactions,
+  type PrivateMessageRow,
+  type PrivateReaction,
+} from './message-tools';
 
 export type PrivateChat = {
   id: string;
@@ -19,17 +27,7 @@ export type PrivateChat = {
   last_message_preview: string | null;
   unread_count: number;
 };
-type PrivateMessage = {
-  id: string;
-  chat_id: string;
-  wa_message_id: string;
-  from_me: boolean;
-  sender_name: string | null;
-  message_type: string;
-  body: string | null;
-  sent_at: string;
-  wa_status: number | null;
-};
+type PrivateMessage = PrivateMessageRow;
 type Outgoing = { id: string; chat_id: string; body: string; status: string; error: string | null; created_at: string; wa_message_id: string | null };
 type Contact = { jid: string; phone: string | null; name: string | null; notify: string | null };
 
@@ -180,6 +178,9 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
   const [text, setText] = useState('');
   const [pending, start] = useTransition();
   const loadedFor = useRef<string | null>(null);
+  const [reactions, setReactions] = useState<Map<string, PrivateReaction>>(new Map());
+  const [editing, setEditing] = useState<string | null>(null);
+  const [showDeleted, setShowDeleted] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (loadedFor.current === chat.id) return;
@@ -193,9 +194,11 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
         .eq('chat_id', chat.id)
         .in('status', ['pending', 'sending', 'failed'])
         .order('created_at'),
-    ]).then(([m, o]) => {
+      supabase.from('private_reactions').select('id, message_id, reactor_jid, from_me, emoji').eq('chat_id', chat.id),
+    ]).then(([m, o, r]) => {
       setMessages(((m.data ?? []) as PrivateMessage[]).reverse());
       setOutgoing((o.data ?? []) as Outgoing[]);
+      setReactions(new Map(((r.data ?? []) as PrivateReaction[]).map((x) => [x.id, x])));
     });
     void markPrivateChatRead(chat.id);
   }, [chat.id]);
@@ -221,8 +224,29 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
           return o.status === 'sent' ? rest : [...rest, o];
         });
         if (o.status === 'failed') toast.error('Mensagem não enviada', { description: o.error ?? undefined });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'private_reactions', filter: `chat_id=eq.${chat.id}` }, (payload) => {
+        setReactions((prev) => {
+          const next = new Map(prev);
+          if (payload.eventType === 'DELETE') next.delete((payload.old as { id: string }).id);
+          else {
+            const r = payload.new as PrivateReaction;
+            for (const [id, x] of next) if (x.message_id === r.message_id && x.reactor_jid === r.reactor_jid && id !== r.id) next.delete(id);
+            next.set(r.id, r);
+          }
+          return next;
+        });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'private_actions', filter: `chat_id=eq.${chat.id}` }, (payload) => {
+        const a = payload.new as { status: string; error: string | null };
+        if (a.status === 'failed') toast.error('Não foi possível fazer no WhatsApp', { description: a.error ?? undefined });
       }),
   );
+  const reactionsOf = useMemo(() => {
+    const map = new Map<string, PrivateReaction[]>();
+    for (const r of reactions.values()) map.set(r.message_id, [...(map.get(r.message_id) ?? []), r]);
+    return map;
+  }, [reactions]);
 
   const send = () => {
     const body = text.trim();
@@ -266,7 +290,7 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
           ) : messages.length === 0 && queue.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted">Nenhuma mensagem ainda. Escreva abaixo para iniciar a conversa.</p>
           ) : null}
-          {(messages ?? []).map((m, i, all) => {
+          {(messages ?? []).filter((m) => !m.hidden_at).map((m, i, all) => {
             const day = dayFormat.format(new Date(m.sent_at));
             const showDay = i === 0 || day !== dayFormat.format(new Date(all[i - 1].sent_at));
             return (
@@ -279,21 +303,65 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
                 <div className={cn('flex', m.from_me ? 'justify-end' : 'justify-start')}>
                   <div
                     className={cn(
-                      'max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-sm sm:max-w-[75%]',
+                      'relative max-w-[85%] rounded-2xl py-2 pl-3.5 pr-7 text-sm shadow-sm sm:max-w-[75%]',
                       m.from_me ? 'rounded-br-md bg-brand-soft' : 'rounded-bl-md border border-line bg-surface',
                     )}
                   >
+                    {editing !== m.id && (
+                      <span className="absolute right-1.5 top-1.5">
+                        <PrivateMessageMenu
+                          message={m}
+                          myReaction={(reactionsOf.get(m.id) ?? []).find((r) => r.from_me)?.emoji ?? null}
+                          onEdit={() => setEditing(m.id)}
+                        />
+                      </span>
+                    )}
                     {m.from_me && m.sender_name && <p className="mb-0.5 text-[11px] font-semibold text-brand-text">{m.sender_name}</p>}
-                    <p className="whitespace-pre-wrap break-words">
-                      {m.message_type !== 'text' && <span className="text-ink-2">{TYPE_LABEL[m.message_type] ?? m.message_type} </span>}
-                      {m.body}
-                    </p>
+                    {m.deleted_at ? (
+                      <div className="text-ink-2">
+                        <p className="italic">🚫 Mensagem apagada</p>
+                        {showDeleted.has(m.id) ? (
+                          <p className="mt-1 whitespace-pre-wrap break-words rounded-lg bg-surface-2 px-2 py-1 text-xs">
+                            {m.body || (TYPE_LABEL[m.message_type] ?? m.message_type)}
+                          </p>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setShowDeleted((prev) => new Set(prev).add(m.id))}
+                            className="mt-0.5 text-[11px] text-muted underline-offset-2 hover:text-ink hover:underline"
+                          >
+                            ver o que foi apagado
+                          </button>
+                        )}
+                      </div>
+                    ) : editing === m.id ? (
+                      <PrivateEditor message={m} onClose={() => setEditing(null)} />
+                    ) : (
+                      <>
+                        <PrivateMedia message={m} />
+                        {/* documento guardado: o nome já aparece no cartão do arquivo */}
+                        {!(m.message_type === 'document' && m.media_path) && (
+                        <p className="whitespace-pre-wrap break-words">
+                          {m.message_type !== 'text' && !m.media_path && (
+                            <span className="text-ink-2">{TYPE_LABEL[m.message_type] ?? m.message_type} </span>
+                          )}
+                          {m.body}
+                        </p>
+                        )}
+                      </>
+                    )}
                     <p className="mt-1 flex items-center justify-end gap-1 text-[11px] text-muted">
+                      {m.edited_at && !m.deleted_at && (
+                        <span className="italic" title={m.original_body ? `Antes: ${m.original_body}` : 'Mensagem editada'}>
+                          editada
+                        </span>
+                      )}
                       <span className="tabular">{formatTime(m.sent_at, timeZone)}</span>
-                      {m.from_me && <StatusTicks status={m.wa_status} />}
+                      {m.from_me && !m.deleted_at && <StatusTicks status={m.wa_status} />}
                     </p>
                   </div>
                 </div>
+                <PrivateReactions list={reactionsOf.get(m.id) ?? []} alignEnd={m.from_me} />
               </div>
             );
           })}

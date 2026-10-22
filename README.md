@@ -107,6 +107,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    67. `supabase/migrations/0067_delete_for_me.sql`
    68. `supabase/migrations/0068_message_receipts.sql`
    69. `supabase/migrations/0069_private_chats.sql`
+   70. `supabase/migrations/0070_private_chats_tools.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
