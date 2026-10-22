@@ -109,6 +109,25 @@ function withoutSignature(body: string | null, senderName: string | null) {
   return body.startsWith(prefix) ? body.slice(prefix.length) : body;
 }
 
+/**
+ * Menções (@pessoa): o WhatsApp manda o número ou o identificador interno (LID) de quem foi marcado,
+ * ex.: "@121839833624806". Troca pelo nome do membro, como no celular; sem o nome, mostra o telefone.
+ */
+function withMentions(text: string, nameOf: (digits: string) => string | null) {
+  const parts = text.split(/(@\d{8,20})\b/g);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    if (i % 2 === 0) return part;
+    const digits = part.slice(1);
+    const name = nameOf(digits);
+    return (
+      <span key={i} className="font-medium text-series-1" title={name ? `Menção a ${name}` : 'Menção a um membro do grupo'}>
+        @{name ?? 'membro do grupo'}
+      </span>
+    );
+  });
+}
+
 /** Mais recente primeiro; empate no horário resolvido pelo id (cursor estável). */
 const newerFirst = (a: Message, b: Message) =>
   a.sent_at === b.sent_at ? (a.id < b.id ? 1 : -1) : a.sent_at < b.sent_at ? 1 : -1;
@@ -282,6 +301,23 @@ export function Conversation({
     }
     return map;
   }, [contacts]);
+  // nome de quem foi mencionado: membros do grupo e remetentes desta conversa (por LID, jid ou telefone)
+  const mentionName = useMemo(() => {
+    const senders = new Map<string, string>();
+    for (const m of messages) {
+      if (!m.sender_name) continue;
+      if (m.sender_jid) senders.set(m.sender_jid.split('@')[0].split(':')[0], m.sender_name);
+      if (m.sender_phone) senders.set(m.sender_phone, m.sender_name);
+    }
+    return (digits: string) => {
+      const p = people.get(`${digits}@lid`) ?? people.get(`${digits}@s.whatsapp.net`) ?? people.get(`tel:${digits}`);
+      if (p?.name) return p.name;
+      if (senders.get(digits)) return senders.get(digits)!;
+      if (p?.phone) return formatPhone(p.phone);
+      // número de telefone (55 + DDD): mostra formatado
+      return /^55\d{10,11}$/.test(digits) ? formatPhone(digits) : null;
+    };
+  }, [messages, people]);
 
   return (
     <div>
@@ -388,7 +424,7 @@ export function Conversation({
                     {m.message_type !== 'text' && !m.media_path && (
                       <span className="text-ink-2">{TYPE_LABEL[m.message_type] ?? m.message_type} </span>
                     )}
-                    {withoutSignature(m.body, m.from_me ? m.sender_name : null)}
+                    {withMentions(withoutSignature(m.body, m.from_me ? m.sender_name : null) ?? '', mentionName)}
                   </p>
                   <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-muted">
                     {m.closes_conversation && (
