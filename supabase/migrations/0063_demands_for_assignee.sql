@@ -45,14 +45,16 @@ begin
 
   -- o responsável marca a própria demanda como entregue, mesmo fora do setor (0063);
   -- só a entrega: responsável, prazo, descrição e tipo continuam iguais
-  if tg_table_name = 'demands' and tg_op = 'UPDATE'
-     and new.status = 'entregue' and old.status is distinct from 'entregue'
-     and new.assignee_id is not distinct from old.assignee_id
-     and new.promised_at is not distinct from old.promised_at
-     and new.description is not distinct from old.description
-     and new.type is not distinct from old.type
-     and new.assignee_id = any(public.my_team_member_ids()) then
-    return new;
+  -- (os campos da demanda só são lidos em gravações de demandas: as outras tabelas não os têm)
+  if tg_table_name = 'demands' and tg_op = 'UPDATE' then
+    if new.status = 'entregue' and old.status is distinct from 'entregue'
+       and new.assignee_id is not distinct from old.assignee_id
+       and new.promised_at is not distinct from old.promised_at
+       and new.description is not distinct from old.description
+       and new.type is not distinct from old.type
+       and new.assignee_id = any(public.my_team_member_ids()) then
+      return new;
+    end if;
   end if;
 
   if not public.has_group_permission(v_group, v_perm) then

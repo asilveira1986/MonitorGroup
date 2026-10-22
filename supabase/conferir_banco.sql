@@ -88,6 +88,7 @@ from (values
   (54, 'Responsável vê as próprias demandas (0063)', exists (select 1 from pg_policies where tablename = 'demands' and policyname = 'demands_read'
       and qual like '%my_team_member_ids%')),
   (55, 'Pacotes técnicos barrados no banco (0064)', exists (select 1 from pg_trigger where tgname = 'messages_skip_technical')),
-  (56, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (56, 'Envio de mensagem sem erro de assignee_id (0065)', coalesce(pg_get_functiondef('public.guard_group_write()'::regprocedure) like '%só são lidos em gravações de demandas%', false)),
+  (57, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

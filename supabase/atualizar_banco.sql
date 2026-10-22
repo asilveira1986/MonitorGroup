@@ -144,7 +144,8 @@ begin
   (54, 'Responsável vê as próprias demandas (0063)', exists (select 1 from pg_policies where tablename = 'demands' and policyname = 'demands_read'
       and qual like '%my_team_member_ids%')),
   (55, 'Pacotes técnicos barrados no banco (0064)', exists (select 1 from pg_trigger where tgname = 'messages_skip_technical')),
-  (56, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (56, 'Envio de mensagem sem erro de assignee_id (0065)', coalesce(pg_get_functiondef('public.guard_group_write()'::regprocedure) like '%só são lidos em gravações de demandas%', false)),
+  (57, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -153,7 +154,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -10794,14 +10795,16 @@ begin
 
   -- o responsável marca a própria demanda como entregue, mesmo fora do setor (0063);
   -- só a entrega: responsável, prazo, descrição e tipo continuam iguais
-  if tg_table_name = 'demands' and tg_op = 'UPDATE'
-     and new.status = 'entregue' and old.status is distinct from 'entregue'
-     and new.assignee_id is not distinct from old.assignee_id
-     and new.promised_at is not distinct from old.promised_at
-     and new.description is not distinct from old.description
-     and new.type is not distinct from old.type
-     and new.assignee_id = any(public.my_team_member_ids()) then
-    return new;
+  -- (os campos da demanda só são lidos em gravações de demandas: as outras tabelas não os têm)
+  if tg_table_name = 'demands' and tg_op = 'UPDATE' then
+    if new.status = 'entregue' and old.status is distinct from 'entregue'
+       and new.assignee_id is not distinct from old.assignee_id
+       and new.promised_at is not distinct from old.promised_at
+       and new.description is not distinct from old.description
+       and new.type is not distinct from old.type
+       and new.assignee_id = any(public.my_team_member_ids()) then
+      return new;
+    end if;
   end if;
 
   if not public.has_group_permission(v_group, v_perm) then
@@ -10876,6 +10879,74 @@ begin
   end loop;
 end $$;
 $mig0064$);
+commit;
+
+-- >>>>>>>>>>>>>>>>>>>> 0065_fix_group_write_guard.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0065', $mig0065$
+-- =====================================================================
+-- Corrige o erro 'record "new" has no field "assignee_id"' ao enviar
+-- mensagem pelo painel (e em outras gravações dos grupos).
+--
+-- O 0063 passou a deixar o responsável marcar a entrega da demanda, mas a
+-- regra lia os campos da demanda em qualquer tabela protegida (mensagens
+-- enviadas, alertas...), que não os têm. Agora só lê em demandas.
+-- =====================================================================
+
+create or replace function public.guard_group_write()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_group uuid;
+  v_perm  text := tg_argv[0];
+begin
+  if not public.acting_user() then
+    return coalesce(new, old);  -- worker / chave de serviço
+  end if;
+
+  if not public.can_write() then
+    raise exception 'Seu perfil é somente para ver os painéis.' using errcode = '42501';
+  end if;
+
+  if tg_table_name = 'groups' then
+    -- só administradores mudam o setor do grupo
+    if tg_op = 'UPDATE' and new.sector_id is distinct from old.sector_id and not public.is_admin() then
+      raise exception 'Só administradores mudam o setor de um grupo.' using errcode = '42501';
+    end if;
+    v_group := coalesce(new.id, old.id);
+  else
+    v_group := coalesce(new.group_id, old.group_id);
+  end if;
+
+  -- alerta sem grupo: qualquer usuário que pode alterar dados trata
+  if v_group is null then
+    return coalesce(new, old);
+  end if;
+
+  -- o responsável marca a própria demanda como entregue, mesmo fora do setor (0063);
+  -- só a entrega: responsável, prazo, descrição e tipo continuam iguais
+  -- (os campos da demanda só são lidos em gravações de demandas: as outras tabelas não os têm)
+  if tg_table_name = 'demands' and tg_op = 'UPDATE' then
+    if new.status = 'entregue' and old.status is distinct from 'entregue'
+       and new.assignee_id is not distinct from old.assignee_id
+       and new.promised_at is not distinct from old.promised_at
+       and new.description is not distinct from old.description
+       and new.type is not distinct from old.type
+       and new.assignee_id = any(public.my_team_member_ids()) then
+      return new;
+    end if;
+  end if;
+
+  if not public.has_group_permission(v_group, v_perm) then
+    raise exception '%', case v_perm
+      when 'reply' then 'Seu setor não tem permissão para responder neste grupo.'
+      when 'demands' then 'Seu setor não tem permissão para gerenciar demandas deste grupo.'
+      when 'alerts' then 'Seu setor não tem permissão para tratar alertas deste grupo.'
+      else 'Este grupo não pertence ao seu setor.' end
+      using errcode = '42501';
+  end if;
+  return coalesce(new, old);
+end;
+$$;
+$mig0065$);
 commit;
 
 notify pgrst, 'reload schema';
@@ -10970,6 +11041,7 @@ from (values
   (54, 'Responsável vê as próprias demandas (0063)', exists (select 1 from pg_policies where tablename = 'demands' and policyname = 'demands_read'
       and qual like '%my_team_member_ids%')),
   (55, 'Pacotes técnicos barrados no banco (0064)', exists (select 1 from pg_trigger where tgname = 'messages_skip_technical')),
-  (56, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (56, 'Envio de mensagem sem erro de assignee_id (0065)', coalesce(pg_get_functiondef('public.guard_group_write()'::regprocedure) like '%só são lidos em gravações de demandas%', false)),
+  (57, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
