@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Building2, Check, ChevronDown, Headset, MessageCircle, type LucideIcon } from 'lucide-react';
+import { Activity, Building2, Check, Headset, MessageCircle, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -17,8 +17,8 @@ const GROUP_ICON: Record<string, LucideIcon> = {
 };
 
 /**
- * Menu das Configurações em dois níveis: os grupos e, só no grupo aberto, os itens. Abre um grupo
- * por vez (o da página atual vem aberto). A descrição de cada item aparece ao passar o mouse.
+ * Menu das Configurações em dois níveis, na horizontal: os grupos numa linha e, embaixo, os itens
+ * só do grupo clicado (o da página atual vem escolhido). A descrição aparece ao passar o mouse.
  */
 export function SettingsNav({ isAdmin, status }: { isAdmin: boolean; status: NavStatus }) {
   const pathname = usePathname();
@@ -41,54 +41,56 @@ export function SettingsNav({ isAdmin, status }: { isAdmin: boolean; status: Nav
     />
   );
 
+  const shown = groups.find((g) => g.group === openGroup) ?? groups.find((g) => g.group === activeGroup)!;
+
   return (
-    <nav aria-label="Configurações" className="lg:sticky lg:top-24 lg:self-start">
-      <ul className="space-y-1">
+    <nav aria-label="Configurações" className="space-y-2">
+      {/* 1º nível: os grupos */}
+      <div className="flex gap-1 overflow-x-auto border-b border-line" role="tablist" aria-label="Grupos das configurações">
         {groups.map((g) => {
           const Icon = GROUP_ICON[g.group] ?? Building2;
-          const open = openGroup === g.group;
-          const hasActive = g.group === activeGroup;
+          const selected = shown.group === g.group;
           return (
-            <li key={g.group}>
-              <button
-                type="button"
-                onClick={() => setOpenGroup(open ? null : g.group)}
-                aria-expanded={open}
+            <button
+              key={g.group}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setOpenGroup(g.group)}
+              className={cn(
+                '-mb-px flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition',
+                selected ? 'border-brand-line text-ink' : 'border-transparent text-ink-2 hover:text-ink',
+              )}
+            >
+              <Icon className={cn('h-4 w-4', selected ? 'text-brand-text' : 'text-muted')} aria-hidden />
+              {g.group}
+              {g.items.some((i) => i.check === 'whatsapp') && waDot}
+            </button>
+          );
+        })}
+      </div>
+      {/* 2º nível: os itens do grupo escolhido */}
+      <ul className="flex flex-wrap gap-1.5">
+        {shown.items.map((i) => {
+          const active = i.href === pathname;
+          const done = i.check && i.check !== 'whatsapp' && status[i.check];
+          return (
+            <li key={i.href}>
+              <Link
+                href={i.href}
+                title={i.description}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition hover:bg-surface-2',
-                  hasActive ? 'text-ink' : 'text-ink-2',
+                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition',
+                  active
+                    ? 'border-brand-line bg-brand-soft font-medium text-brand-text'
+                    : 'border-line bg-surface text-ink-2 hover:border-brand-line hover:text-ink',
                 )}
               >
-                <Icon className={cn('h-4 w-4 shrink-0', hasActive ? 'text-brand-text' : 'text-muted')} aria-hidden />
-                <span className="flex-1">{g.group}</span>
-                {!open && g.items.some((i) => i.check === 'whatsapp') && waDot}
-                <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted transition', open && 'rotate-180')} aria-hidden />
-              </button>
-              {open && (
-                <ul className="mb-2 ml-5 mt-0.5 space-y-0.5 border-l border-line pl-3">
-                  {g.items.map((i) => {
-                    const active = i.href === pathname;
-                    const done = i.check && i.check !== 'whatsapp' && status[i.check];
-                    return (
-                      <li key={i.href}>
-                        <Link
-                          href={i.href}
-                          title={i.description}
-                          aria-current={active ? 'page' : undefined}
-                          className={cn(
-                            'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm transition',
-                            active ? 'bg-brand-soft font-medium text-brand-text' : 'text-ink-2 hover:bg-surface-2 hover:text-ink',
-                          )}
-                        >
-                          <span className="flex-1 truncate">{i.label}</span>
-                          {i.check === 'whatsapp' && waDot}
-                          {done && <Check className="h-3.5 w-3.5 shrink-0 text-good-ink" aria-label="configurado" />}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+                {i.label}
+                {i.check === 'whatsapp' && waDot}
+                {done && <Check className="h-3.5 w-3.5 text-good-ink" aria-label="configurado" />}
+              </Link>
             </li>
           );
         })}

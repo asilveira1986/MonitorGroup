@@ -34,6 +34,7 @@ export function GrantAccess({ member }: { member: { id: string; name: string; us
         type="button"
         size="sm"
         variant="ghost"
+        className="whitespace-nowrap"
         onClick={() => {
           setPassword(randomPassword());
           setOpen(true);
