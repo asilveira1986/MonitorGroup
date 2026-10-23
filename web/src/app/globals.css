@@ -157,6 +157,20 @@
   --font-mono: var(--font-jetbrains), ui-monospace, Menlo, monospace;
 }
 
+/* base da fonte: 14px (o padrão do navegador é 16px). Os tamanhos e espaços do Tailwind são em rem
+   e acompanham a base; os fixos em px (text-[11px] etc.) não mudam */
+html {
+  font-size: 14px;
+}
+/* celular: campos com 16px, senão o iPhone dá zoom ao tocar para digitar */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 body {
   /* fundo com brilho suave da marca (verde-sinal no alto à direita, azul à esquerda) */
   background:
