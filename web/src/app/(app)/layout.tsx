@@ -1,4 +1,3 @@
-import { CompanySwitcher } from '@/components/company-switcher';
 import { MessageNotifier } from '@/components/message-notifier';
 import { RealtimeListener } from '@/components/realtime-listener';
 import { Sidebar } from '@/components/sidebar';
@@ -75,6 +74,16 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         alertsOff={profile.platform_admin ? Boolean(profile.alerts_off) : undefined}
         company={company?.name ?? null}
         companyLogo={companyLogo}
+        companyId={company?.id ?? null}
+        companies={profile.platform_admin ? (companies ?? undefined) : undefined}
+        me={{
+          id: profile.id,
+          name: profile.full_name || profile.email.split('@')[0],
+          email: profile.email,
+          phone: profile.phone ?? null,
+          initials,
+          photoSrc: profile.photo_path ? `/profile-photo/${profile.id}` : null,
+        }}
       />
       <RealtimeListener />
       <MessageNotifier
@@ -96,13 +105,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         }}
       />
       <div className="transition-[padding] duration-200 lg:pl-56 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
-        {/* topo: só a troca de empresa de quem administra a plataforma (usuário, avisos, tema e sair ficam
-            no rodapé do menu lateral, com a empresa logada) */}
-        {profile.platform_admin && company && (
-          <header className="brand-hairline sticky top-0 z-20 hidden items-center gap-2 bg-surface/70 px-8 py-3 backdrop-blur-md lg:flex">
-            <CompanySwitcher current={company} companies={companies ?? undefined} />
-          </header>
-        )}
+
         <main className="mx-auto max-w-7xl px-4 pb-10 pt-5 sm:px-8 sm:py-8 has-[[data-wide]]:max-w-none">{children}</main>
       </div>
     </div>

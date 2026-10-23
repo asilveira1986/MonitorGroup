@@ -14,6 +14,9 @@ export type Profile = {
   platform_admin: boolean;
   /** desligou os avisos só para si (0058) */
   alerts_off?: boolean;
+  /** Meu perfil (0085) */
+  phone?: string | null;
+  photo_path?: string | null;
 };
 
 /** Empresa cliente (tela Empresas), com os números de uso. */

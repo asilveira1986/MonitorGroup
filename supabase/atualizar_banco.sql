@@ -166,7 +166,8 @@ begin
   (73, 'Log do quem enviou? (0082)', exists (select 1 from pg_proc where proname = 'set_message_sender' and prosrc like '%activity_log%')),
   (74, 'Logo da empresa e foto dos atendentes (0083)', to_regprocedure('public.set_company_logo(text)') is not null),
   (75, 'Revisão só dos grupos que mudaram (0084)', to_regprocedure('public.recalc_company_senders(uuid)') is not null),
-  (76, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (76, 'Meu perfil (0085)', to_regprocedure('public.update_my_profile(text,text)') is not null),
+  (77, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -175,7 +176,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -13239,6 +13240,64 @@ grant execute on function public.recalc_company_senders(uuid) to service_role;
 $mig0084$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0085_my_profile.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0085', $mig0085$
+-- =====================================================================
+-- Meu perfil: cada usuário edita o próprio nome, telefone e foto pelo
+-- menu lateral (onde aparece o nome dele). A foto fica no bucket privado
+-- "media" (users/<id>/...) e abre por link temporário.
+-- =====================================================================
+
+alter table public.profiles
+  add column if not exists phone text,
+  add column if not exists photo_path text;
+
+create or replace function public.update_my_profile(p_full_name text, p_phone text default null)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_name text := nullif(btrim(coalesce(p_full_name, '')), '');
+  v_phone text := nullif(regexp_replace(coalesce(p_phone, ''), '\D', '', 'g'), '');
+begin
+  if auth.uid() is null then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  if v_name is null then
+    raise exception 'Informe o seu nome.';
+  end if;
+  if length(v_name) > 120 then
+    raise exception 'O nome passa de 120 caracteres.';
+  end if;
+  if v_phone is not null and length(v_phone) not between 10 and 15 then
+    raise exception 'Informe o telefone com DDD.';
+  end if;
+  update public.profiles set full_name = v_name, phone = v_phone where id = auth.uid();
+end;
+$$;
+revoke all on function public.update_my_profile(text, text) from public, anon;
+grant execute on function public.update_my_profile(text, text) to authenticated;
+
+-- foto do próprio perfil (p_path null = tirar)
+create or replace function public.set_my_photo(p_path text)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  if p_path is not null and p_path not like 'users/' || auth.uid()::text || '/%' then
+    raise exception 'Arquivo inválido.';
+  end if;
+  update public.profiles set photo_path = p_path where id = auth.uid();
+end;
+$$;
+revoke all on function public.set_my_photo(text) from public, anon;
+grant execute on function public.set_my_photo(text) to authenticated;
+$mig0085$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -13353,6 +13412,7 @@ from (values
   (73, 'Log do quem enviou? (0082)', exists (select 1 from pg_proc where proname = 'set_message_sender' and prosrc like '%activity_log%')),
   (74, 'Logo da empresa e foto dos atendentes (0083)', to_regprocedure('public.set_company_logo(text)') is not null),
   (75, 'Revisão só dos grupos que mudaram (0084)', to_regprocedure('public.recalc_company_senders(uuid)') is not null),
-  (76, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (76, 'Meu perfil (0085)', to_regprocedure('public.update_my_profile(text,text)') is not null),
+  (77, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

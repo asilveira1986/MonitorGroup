@@ -1,9 +1,12 @@
 'use client';
 
-import { Bell, Building2, CalendarDays, MessageCircle, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
+import { Bell, Building2, CalendarDays, ChevronDown, MessageCircle, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
+import { toast } from 'sonner';
+import { switchCompany } from '@/app/(app)/platform/actions';
+import { ProfileDialog, type MyProfile } from '@/components/profile-dialog';
 import { Logo } from '@/components/logo';
 import { MyAlertsToggle, NotifyToggle } from '@/components/message-notifier';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -49,7 +52,15 @@ export function Sidebar({
   company = null,
   alertsOff,
   companyLogo = false,
+  me,
+  companies,
+  companyId,
 }: {
+  /** Meu perfil (0085): o bloco do usuário abre a edição */
+  me?: MyProfile;
+  /** quem administra a plataforma: troca de empresa pela empresa no rodapé do menu */
+  companies?: { id: string; name: string; active: boolean }[];
+  companyId?: string | null;
   /** a empresa tem logo (Configurações › Empresa, 0083): aparece no menu ao lado do nome */
   companyLogo?: boolean;
   /** agenda: demandas do usuário para entregar hoje + atrasadas */
@@ -67,44 +78,88 @@ export function Sidebar({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  // rodapé do menu: empresa logada (com o logo), usuário, avisos, tema e sair (recolhido: só os ícones)
+  const [switching, startSwitch] = useTransition();
+  const canSwitch = platformAdmin && Boolean(companies?.length) && Boolean(companyId);
+  const companyIcon = companyLogo ? (
+    // eslint-disable-next-line @next/next/no-img-element -- logo privado por link temporário
+    <img src="/company-logo" alt={company ?? ''} className="h-7 w-7 shrink-0 rounded-lg bg-white object-contain p-0.5" />
+  ) : (
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-ink-2">
+      <Building2 className="h-3.5 w-3.5" />
+    </span>
+  );
+  const avatar = me?.photoSrc || user.avatarUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element -- foto privada por link temporário
+    <img src={me?.photoSrc || user.avatarUrl || ''} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+  ) : (
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-[#8fc41a] text-[10px] font-bold text-brand-ink">
+      {user.initials || user.name.slice(0, 2).toUpperCase()}
+    </span>
+  );
+  const row = 'flex w-full items-center gap-2 rounded-xl px-1.5 py-1 text-left [[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:px-0';
+
+  // rodapé do menu: empresa logada (quem administra a plataforma troca por aqui), usuário (abre
+  // Meu perfil), avisos, tema e sair. Recolhido: só os ícones. Não encolhe: a lista acima rola.
   const footer = (
-    <div className="mt-3 space-y-2 border-t border-line pt-3">
-      {company && (
-        <div className="flex items-center gap-2 px-1.5 [[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:px-0" title={company}>
-          {companyLogo ? (
-            // eslint-disable-next-line @next/next/no-img-element -- logo privado por link temporário
-            <img src="/company-logo" alt={company} className="h-8 w-8 shrink-0 rounded-lg bg-white object-contain p-0.5" />
-          ) : (
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-ink-2">
-              <Building2 className="h-4 w-4" />
-            </span>
-          )}
-          <p className={cn('min-w-0 flex-1 truncate text-[calc(0.75rem-1px)] font-semibold leading-tight text-ink', COLLAPSED_HIDE)}>{company}</p>
+    <div className="mt-2 shrink-0 space-y-1 border-t border-line pt-2">
+      {company &&
+        (canSwitch ? (
+          <label className={cn(row, 'relative cursor-pointer hover:bg-white/[0.06]', switching && 'opacity-60')} title="Trocar de empresa">
+            {companyIcon}
+            <span className={cn('min-w-0 flex-1 truncate text-[calc(0.75rem-1px)] font-semibold leading-tight text-ink', COLLAPSED_HIDE)}>{company}</span>
+            <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-muted', COLLAPSED_HIDE)} aria-hidden />
+            <select
+              value={companyId ?? ''}
+              disabled={switching}
+              aria-label="Trocar de empresa"
+              onChange={(e) => {
+                const id = e.target.value;
+                startSwitch(async () => {
+                  const res = await switchCompany(id);
+                  if (res && !res.ok) toast.error(res.error);
+                });
+              }}
+              className="absolute inset-0 cursor-pointer opacity-0"
+            >
+              {companies!.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.active ? '' : ' (suspensa)'}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <div className={row} title={company}>
+            {companyIcon}
+            <p className={cn('min-w-0 flex-1 truncate text-[calc(0.75rem-1px)] font-semibold leading-tight text-ink', COLLAPSED_HIDE)}>{company}</p>
+          </div>
+        ))}
+      {me ? (
+        <ProfileDialog me={me} className={cn(row, 'hover:bg-white/[0.06]')}>
+          {avatar}
+          <span className={cn('min-w-0 flex-1', COLLAPSED_HIDE)}>
+            <span className="block truncate text-[calc(0.875rem-1px)] font-medium leading-tight text-ink">{user.name}</span>
+            <span className="block truncate text-[10px] leading-tight text-muted">{ROLE_LABEL[user.role as keyof typeof ROLE_LABEL] ?? 'Atendente'} · meu perfil</span>
+          </span>
+        </ProfileDialog>
+      ) : (
+        <div className={row} title={user.name}>
+          {avatar}
+          <div className={cn('min-w-0 flex-1', COLLAPSED_HIDE)}>
+            <p className="truncate text-[calc(0.875rem-1px)] font-medium leading-tight text-ink">{user.name}</p>
+            <p className="truncate text-[10px] leading-tight text-muted">{ROLE_LABEL[user.role as keyof typeof ROLE_LABEL] ?? 'Atendente'}</p>
+          </div>
         </div>
       )}
-      <div className="flex items-center gap-2 px-1.5 [[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:px-0" title={user.name}>
-        {user.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full" />
-        ) : (
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-[#8fc41a] text-[11px] font-bold text-brand-ink">
-            {user.initials || user.name.slice(0, 2).toUpperCase()}
-          </span>
-        )}
-        <div className={cn('min-w-0 flex-1', COLLAPSED_HIDE)}>
-          <p className="truncate text-[calc(0.875rem-1px)] font-medium leading-tight text-ink">{user.name}</p>
-          <p className="truncate text-[10px] leading-tight text-muted">{ROLE_LABEL[user.role as keyof typeof ROLE_LABEL] ?? 'Atendente'}</p>
-        </div>
-      </div>
-      <div className="flex items-center justify-between gap-1 px-1 [[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:px-0">
-        <div className={cn('flex items-center', COLLAPSED_HIDE)}>
+      <div className="flex items-center justify-between gap-1 px-0.5 [[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:px-0">
+        <div className={cn('flex items-center [&_button]:p-1.5 [&_svg]:h-4 [&_svg]:w-4', COLLAPSED_HIDE)}>
           {alertsOff !== undefined && <MyAlertsToggle off={alertsOff} compact />}
           <NotifyToggle />
           <ThemeToggle />
         </div>
         <form action="/auth/signout" method="post">
-          <button className="flex items-center gap-1.5 rounded-xl p-2 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink" title="Sair" aria-label="Sair">
+          <button className="flex items-center rounded-xl p-1.5 text-ink-2 hover:bg-surface-2 hover:text-ink" title="Sair" aria-label="Sair">
             <LogOut className="h-4 w-4" />
           </button>
         </form>
@@ -199,7 +254,7 @@ export function Sidebar({
             <Logo compact />
           </span>
         </div>
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">{nav}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{nav}</div>
         {footer}
       </aside>
 
@@ -233,7 +288,7 @@ export function Sidebar({
                 <X className="h-6 w-6" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto">{nav}</div>
+            <div className="min-h-0 flex-1 overflow-y-auto">{nav}</div>
             {footer}
           </div>
         </div>
