@@ -198,7 +198,8 @@ export function Sidebar({
             )}
           >
             <Icon className="h-4 w-4 shrink-0 [[data-sidebar=collapsed]_aside_&]:h-5 [[data-sidebar=collapsed]_aside_&]:w-5" />
-            <span className={cn('flex-1 whitespace-nowrap', COLLAPSED_HIDE)}>{label}</span>
+            {/* o nome encolhe (com …) e o número continua inteiro à direita */}
+            <span className={cn('min-w-0 flex-1 truncate', COLLAPSED_HIDE)}>{label}</span>
             {/* recolhido: só um ponto sobre o ícone indicando que há itens */}
             {count > 0 && (
               <span
@@ -213,7 +214,7 @@ export function Sidebar({
               <span
                 className={cn(
                   COLLAPSED_HIDE,
-                  'tabular rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                  'tabular shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none',
                   badgeKey === 'alerts' || badgeKey === 'agenda'
                     ? 'bg-critical text-white'
                     : badgeKey === 'private'
