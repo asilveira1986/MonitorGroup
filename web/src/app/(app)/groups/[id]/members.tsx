@@ -87,12 +87,12 @@ export function GroupMembers({ members, total, canPrivate = false }: { members: 
                     }
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1 truncate text-sm font-medium">
+                    <p className="flex items-center gap-1 truncate text-[13px] font-medium leading-snug">
                       <span className="truncate">{label}</span>
                       {m.role === 'superadmin' && <Crown className="h-3.5 w-3.5 shrink-0 text-warning-ink" aria-label="Criador do grupo" />}
                       {m.role === 'admin' && <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-brand-text" aria-label="Admin do grupo" />}
                     </p>
-                    <p className="truncate text-[11px] text-muted" suppressHydrationWarning>
+                    <p className="truncate text-[10.5px] text-muted" suppressHydrationWarning>
                       {m.phone && (m.name || m.is_me) ? `${formatPhone(m.phone)} · ` : ''}
                       {m.messages_30d
                         ? `${m.messages_30d} msg em 30 dias · última ${timeAgo(m.last_message_at)}`
@@ -104,9 +104,9 @@ export function GroupMembers({ members, total, canPrivate = false }: { members: 
                   <div className="flex shrink-0 flex-col items-end gap-0.5">
                     {canPrivate && !m.is_me && <CallPrivateButton jid={m.jid} phone={m.phone} name={m.name} />}
                     {m.team && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-brand-text" title="Da equipe (cadastro de atendentes)">
-                        <Headset className="h-2.5 w-2.5" aria-hidden /> equipe
-                      </span>
+                      <Headset className="h-3 w-3 text-brand-text" aria-label="Da equipe (cadastro de atendentes)">
+                        <title>Da equipe (cadastro de atendentes)</title>
+                      </Headset>
                     )}
                     {m.role !== 'member' && !m.team && (
                       <span className="text-[10px] text-muted">{m.role === 'superadmin' ? 'criador' : 'admin'}</span>
