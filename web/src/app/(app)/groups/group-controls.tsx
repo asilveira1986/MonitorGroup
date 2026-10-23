@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Button, Input, Select, Toggle } from '@/components/ui';
 import { cn } from '@/lib/format';
 import { useRealtime } from '@/lib/use-realtime';
-import { markSenderAsTeam, setGroupMonitored, setGroupResponsibles, setGroupSector, setGroupSla } from '../actions';
+import { markSenderAsTeam, setMessageSender, setGroupMonitored, setGroupResponsibles, setGroupSector, setGroupSla } from '../actions';
 
 /** Setor do grupo (somente admin): define quem vê e age sobre o grupo. */
 export function SectorSelect({
@@ -258,6 +258,63 @@ export function MarkTeamButton({ jid, name, phone }: { jid: string; name: string
     >
       é da equipe?
     </button>
+  );
+}
+
+/**
+ * Mensagem que o WhatsApp mandou sem remetente: "quem enviou?" deixa escolher o atendente
+ * (ou o cliente). Vale só para esta mensagem; o grupo é recalculado.
+ */
+export function MessageSenderPicker({
+  messageId,
+  members,
+  current,
+}: {
+  messageId: string;
+  members: { id: string; name: string }[];
+  current: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, start] = useTransition();
+  const router = useRouter();
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-[11px] text-muted underline-offset-2 hover:text-brand-text hover:underline"
+        title="O WhatsApp não informou quem mandou esta mensagem: indique se foi alguém da equipe"
+      >
+        quem enviou?
+      </button>
+    );
+  }
+  return (
+    <select
+      autoFocus
+      disabled={pending}
+      defaultValue={current ?? ''}
+      onBlur={() => !pending && setOpen(false)}
+      onChange={(e) => {
+        const id = e.target.value || null;
+        start(async () => {
+          const res = await setMessageSender(messageId, id);
+          if (!res.ok) toast.error(res.error);
+          else toast.success(id ? 'Mensagem marcada como da equipe' : 'Mensagem marcada como do cliente');
+          setOpen(false);
+          router.refresh();
+        });
+      }}
+      className="h-6 rounded-md border border-line bg-surface px-1 text-[11px] text-ink"
+      aria-label="Quem enviou esta mensagem"
+    >
+      <option value="">Cliente</option>
+      {members.map((m) => (
+        <option key={m.id} value={m.id}>
+          {m.name} (equipe)
+        </option>
+      ))}
+    </select>
   );
 }
 

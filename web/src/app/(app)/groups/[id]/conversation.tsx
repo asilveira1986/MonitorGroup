@@ -12,7 +12,7 @@ import { Composer, OutgoingBubble, type ReplyConfig } from './composer';
 import Link from 'next/link';
 import { ClipboardList } from 'lucide-react';
 import { DemandForm } from '@/components/demands/demand-form';
-import { MarkTeamButton } from '../group-controls';
+import { MarkTeamButton, MessageSenderPicker } from '../group-controls';
 import { PAGE_SIZE } from './constants';
 import { MessageMedia } from './message-media';
 import { MessageEditor, MessageMenu } from './message-menu';
@@ -444,7 +444,9 @@ export function Conversation({
             (m.sender_jid ? people.get(m.sender_jid) : undefined) ?? (m.sender_phone ? people.get(`tel:${m.sender_phone}`) : undefined);
           const phone = m.sender_phone || who?.phone || null;
           const name = m.sender_name || who?.name || null;
-          const sender = name || formatPhone(phone) || (m.from_me ? 'Número conectado' : 'Cliente');
+          // o WhatsApp não informou o remetente (0078): dá para indicar à mão quem foi
+          const unknownSender = !m.from_me && !m.sender_jid && !phone;
+          const sender = name || formatPhone(phone) || (m.from_me ? 'Número conectado' : unknownSender ? 'Remetente não identificado' : 'Cliente');
           // cliente: nome e telefone juntos (o telefone só some quando já é o próprio nome)
           const showPhone = !m.from_me && phone && name && name.replace(/\D/g, '') !== phone;
           return (
@@ -483,6 +485,9 @@ export function Conversation({
                     )}
                     {!m.from_team && m.sender_jid && (
                       <MarkTeamButton jid={m.sender_jid} name={name ?? ''} phone={phone} />
+                    )}
+                    {unknownSender && demands.members.length > 0 && (
+                      <MessageSenderPicker messageId={m.id} members={demands.members} current={m.team_member_id ?? null} />
                     )}
                     {m.demand_id ? (
                       <Link

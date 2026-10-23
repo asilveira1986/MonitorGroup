@@ -64,6 +64,8 @@ type HistoryImport = {
   queue: Promise<void>;
   imported: number;
   touchedGroups: Set<string>;
+  /** mensagens antigas que ganharam o remetente nesta importação (0078) */
+  sendersFilled?: number;
   liveSince: string;
   finishTimer: ReturnType<typeof setTimeout> | null;
 };
@@ -1443,11 +1445,19 @@ export class WhatsAppManager {
 
   private async describeMessage(session: Session, msg: WAMessage, content: { type: string; body: string | null }) {
     const fromMe = Boolean(msg.key.fromMe);
-    const participant = fromMe ? jidNormalizedUser(session.sock.user?.id) : (msg.key.participant ?? null);
+    // o remetente costuma vir em key.participant; mensagens reenviadas depois de falha na decodificação
+    // e parte do histórico o trazem só em msg.participant ou em key.participantAlt (0078)
+    const keyAlt = (msg.key as { participantAlt?: string }).participantAlt ?? null;
+    const participant = fromMe
+      ? jidNormalizedUser(session.sock.user?.id)
+      : (msg.key.participant || msg.participant || keyAlt || null);
+    if (!fromMe && !participant && msg.key.remoteJid?.endsWith('@g.us')) {
+      logger.warn({ id: msg.key.id, group: msg.key.remoteJid }, 'mensagem de grupo sem remetente');
+    }
     // remetente só com LID (identificador interno, sem o número): descobre o telefone para
     // reconhecer a equipe e mostrar nome/telefone na conversa
     const participantAlt =
-      (msg.key as { participantAlt?: string }).participantAlt ??
+      (keyAlt && keyAlt !== participant ? keyAlt : null) ??
       (fromMe ? null : await this.phoneJidForLid(session, msg.key.remoteJid, participant));
     const member = fromMe ? null : await findTeamMember(session.companyId, participant, participantAlt);
     const settings = await getSettings(session.companyId);
@@ -1582,6 +1592,17 @@ export class WhatsAppManager {
       for (const r of inserted) h.touchedGroups.add(r.group_id);
       h.imported += inserted.length;
     }
+    // mensagens já gravadas sem remetente: completa com o que veio agora (0078)
+    const senders = rows
+      .filter((r) => r.sender_jid && !r.from_me)
+      .map((r) => ({ group_id: r.group_id, wa_message_id: r.wa_message_id, jid: r.sender_jid, phone: r.sender_phone, name: r.sender_name }));
+    if (senders.length) {
+      const { data: filled, error } = await db.rpc('fill_message_senders', { p_rows: senders });
+      if (!error && (filled as number) > 0) {
+        h.sendersFilled = (h.sendersFilled ?? 0) + (filled as number);
+        logger.info({ filled }, 'remetentes completados em mensagens antigas');
+      }
+    }
     await this.updateInstance(session.instanceId, { history_imported: h.imported });
     logger.info({ instanceId: session.instanceId, total: h.imported }, 'histórico importado (parcial)');
   }
@@ -1591,6 +1612,11 @@ export class WhatsAppManager {
     const h = session.history;
     if (!h) return;
     session.history = null;
+    if (h.sendersFilled) {
+      // remetentes completados: revisa quem é cliente e quem é da equipe (0076)
+      const { error } = await db.rpc('recalc_company_groups', { p_company_id: session.companyId });
+      if (error) logger.warn({ err: error.message }, 'não foi possível revisar as mensagens');
+    }
     if (h.imported === 0) return;
 
     for (const groupId of h.touchedGroups) {

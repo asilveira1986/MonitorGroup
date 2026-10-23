@@ -38,6 +38,15 @@ export async function setGroupSla(groupId: string, slaMinutes: number | null): P
   return fail(error);
 }
 
+/** Mensagem sem remetente: marca à mão como de um atendente (ou do cliente, com null) e refaz o grupo (0078). */
+export async function setMessageSender(messageId: string, teamMemberId: string | null): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('set_message_sender', { p_message_id: messageId, p_team_member_id: teamMemberId });
+  revalidatePath('/', 'layout');
+  return fail(error);
+}
+
 export async function markSenderAsTeam(senderJid: string, name: string, phone: string | null): Promise<Result> {
   const profile = await requireProfile();
   const supabase = await createClient();
