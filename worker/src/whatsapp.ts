@@ -9,6 +9,7 @@ import makeWASocket, {
   isJidGroup,
   jidNormalizedUser,
   makeCacheableSignalKeyStore,
+  proto,
   type BinaryNode,
   type GroupMetadata,
   type GroupParticipant,
@@ -35,8 +36,12 @@ const MAX_QR_ATTEMPTS = 6; // ~2 minutos esperando a leitura do QR code
 const OUTBOX_EXPIRE_MS = 10 * 60_000;
 const POLL_MS = 3_000;
 const HEARTBEAT_MS = 60_000;
+// mensagens sem remetente: pede ao celular o reenvio (sob demanda) de tempos em tempos
+const RECOVER_SENDERS_MS = 6 * 60 * 60_000;
 
 type Session = {
+  /** revisão cliente × equipe agendada depois de completar remetentes (0081) */
+  recalcTimer?: ReturnType<typeof setTimeout> | null;
   instanceId: string;
   /** empresa dona desta conexão (multiempresa) */
   companyId: string;
@@ -173,6 +178,9 @@ export class WhatsAppManager {
 
     setInterval(() => void this.poll(), POLL_MS);
     setInterval(() => void this.heartbeat(), HEARTBEAT_MS);
+    setInterval(() => {
+      for (const s of this.sessions.values()) void this.recoverUnknownSenders(s);
+    }, RECOVER_SENDERS_MS);
   }
 
   status() {
@@ -595,9 +603,15 @@ export class WhatsAppManager {
     });
 
     // histórico enviado pelo WhatsApp após o pareamento
-    sock.ev.on('messaging-history.set', ({ messages, contacts }) => {
+    sock.ev.on('messaging-history.set', ({ messages, contacts, syncType }) => {
       if (contacts?.length) void saveContacts(instanceId, session.companyId, contacts).catch((err) => log.warn({ err }, 'contatos'));
-      if (messages.length) this.enqueueHistory(session, messages);
+      if (!messages.length) return;
+      // resposta ao pedido de mensagens sem remetente (0081): só completa quem enviou
+      if (syncType === proto.HistorySync.HistorySyncType.ON_DEMAND) {
+        void this.fillSendersFromHistory(session, messages).catch((err) => log.warn({ err }, 'falha ao completar remetentes'));
+        return;
+      }
+      this.enqueueHistory(session, messages);
     });
 
     sock.ev.on('groups.upsert', (groups) => {
@@ -770,6 +784,8 @@ export class WhatsAppManager {
         if (!groups[jid]) await this.markRemoved(session, jid, 'not_participant');
       }
       logger.info({ instanceId: session.instanceId, total: Object.keys(groups).length }, 'grupos sincronizados');
+      // mensagens sem remetente: pede ao celular o reenvio delas, com quem enviou (0081)
+      setTimeout(() => void this.recoverUnknownSenders(session), 90_000);
       // membros atualizados (telefone e LID de cada um): cruza com o cadastro de atendentes e marca
       // como da equipe as mensagens antigas que eram deles (0076), sem segurar a conexão
       void db
@@ -1001,6 +1017,96 @@ export class WhatsAppManager {
     });
     if (error) logger.warn({ err: error.message }, 'não foi possível identificar o remetente pela citação');
     else logger.info({ messageId: target.id, team: me || Boolean(member) }, 'remetente identificado pela citação');
+  }
+
+  /**
+   * Mensagens gravadas sem remetente (o WhatsApp não informou): pede ao celular conectado o reenvio
+   * das mensagens ao redor delas (histórico sob demanda, sem novo QR code). A resposta chega pelo
+   * messaging-history.set (ON_DEMAND) e completa quem enviou (fillSendersFromHistory).
+   */
+  private async recoverUnknownSenders(session: Session) {
+    if (session.stopped || !session.sock.user) return;
+    const log = logger.child({ instanceId: session.instanceId });
+    const { data, error } = await db
+      .from('messages')
+      .select('id, group_id, sent_at, groups!messages_group_id_fkey!inner(jid, instance_id)')
+      .eq('groups.instance_id', session.instanceId)
+      .is('sender_jid', null)
+      .eq('from_me', false)
+      .order('sent_at', { ascending: false })
+      .limit(500);
+    if (error || !data?.length) return;
+    const unknown = data as unknown as { id: string; group_id: string; sent_at: string; groups: { jid: string } }[];
+    const covered = new Set<string>();
+    let requests = 0;
+    for (const u of unknown) {
+      if (covered.has(u.id) || requests >= 40 || session.stopped) continue;
+      // âncora: a primeira mensagem depois dela com remetente conhecido (o pedido traz as anteriores)
+      const { data: anchor } = await db
+        .from('messages')
+        .select('wa_message_id, from_me, sender_jid, sent_at')
+        .eq('group_id', u.group_id)
+        .gt('sent_at', u.sent_at)
+        .or('sender_jid.not.is.null,from_me.eq.true')
+        .order('sent_at')
+        .limit(1)
+        .maybeSingle();
+      if (!anchor) continue; // é a última do grupo: fica para a citação ou o "quem enviou?"
+      const { data: before } = await db
+        .from('messages')
+        .select('id')
+        .eq('group_id', u.group_id)
+        .lt('sent_at', anchor.sent_at)
+        .order('sent_at', { ascending: false })
+        .limit(50);
+      for (const b of (before ?? []) as { id: string }[]) covered.add(b.id);
+      try {
+        await session.sock.fetchMessageHistory(
+          50,
+          { remoteJid: u.groups.jid, id: anchor.wa_message_id as string, fromMe: Boolean(anchor.from_me), participant: (anchor.sender_jid as string | null) ?? undefined },
+          new Date(anchor.sent_at as string).getTime(),
+        );
+        requests++;
+      } catch (err) {
+        log.warn({ err }, 'o WhatsApp recusou o pedido de mensagens antigas');
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    if (requests) log.info({ requests, unknown: unknown.length }, 'pedido o reenvio das mensagens sem remetente');
+  }
+
+  /** Histórico sob demanda (0081): completa o remetente das mensagens já gravadas sem ele. */
+  private async fillSendersFromHistory(session: Session, messages: WAMessage[]) {
+    const groups = (check(
+      await db.from('groups').select('id, jid').eq('instance_id', session.instanceId),
+      'groups for senders',
+    ) ?? []) as { id: string; jid: string }[];
+    const groupByJid = new Map(groups.map((g) => [g.jid, g.id]));
+    const rows: Record<string, unknown>[] = [];
+    for (const msg of messages) {
+      const groupId = msg.key.remoteJid ? groupByJid.get(msg.key.remoteJid) : undefined;
+      if (!groupId || !msg.key.id || msg.key.fromMe || !msg.message) continue;
+      const content = extractContent(msg.message);
+      if (!content) continue;
+      const d = await this.describeMessage(session, msg, content);
+      if (d.participant) {
+        rows.push({ group_id: groupId, wa_message_id: msg.key.id, jid: d.participant, phone: d.senderPhone, name: d.senderName });
+      }
+      if (quotedAuthor(msg.message)) await this.identifyByQuote(session, groupId, msg).catch(() => {});
+    }
+    if (!rows.length) return;
+    const { data: filled, error } = await db.rpc('fill_message_senders', { p_rows: rows });
+    if (error || !(filled as number)) return;
+    logger.info({ filled }, 'remetentes completados pelo reenvio do WhatsApp');
+    // revisa cliente × equipe uma vez, depois que as respostas pararem de chegar
+    if (session.recalcTimer) clearTimeout(session.recalcTimer);
+    session.recalcTimer = setTimeout(() => {
+      session.recalcTimer = null;
+      void db.rpc('recalc_company_groups', { p_company_id: session.companyId }).then(({ error: e }) => {
+        if (e) logger.warn({ err: e.message }, 'não foi possível revisar as mensagens');
+      });
+    }, 30_000);
   }
 
   /**
