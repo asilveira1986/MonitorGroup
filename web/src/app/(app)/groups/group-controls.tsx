@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { Check, ChevronDown, X } from 'lucide-react';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Input, Select, Toggle } from '@/components/ui';
 import { cn } from '@/lib/format';
@@ -318,21 +318,38 @@ export function MessageSenderPicker({
   );
 }
 
-/** Atualiza a conversa quando chega mensagem nova no grupo. */
+/**
+ * Atualiza os números e a fila da tela do grupo quando chega mensagem ou muda uma resposta do
+ * painel. A mensagem nova já aparece na conversa na hora (tempo real); aqui a tela é recarregada
+ * no máximo a cada poucos segundos, juntando várias mensagens numa atualização só.
+ */
 export function LiveMessages({ groupId }: { groupId: string }) {
   const router = useRouter();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const schedule = useCallback(
+    (ms: number) => {
+      if (timer.current) return;
+      timer.current = setTimeout(() => {
+        timer.current = null;
+        if (document.visibilityState === 'visible') router.refresh();
+      }, ms);
+    },
+    [router],
+  );
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
   useRealtime(`group-${groupId}`, (channel) =>
     channel
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId}` },
-        () => router.refresh(),
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId}` }, () =>
+        schedule(4000),
       )
       // respostas do painel: na fila, enviando, enviada ou com falha
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'outgoing_messages', filter: `group_id=eq.${groupId}` },
-        () => router.refresh(),
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'outgoing_messages', filter: `group_id=eq.${groupId}` }, () =>
+        schedule(700),
       ),
   );
   return null;

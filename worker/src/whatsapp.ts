@@ -40,6 +40,11 @@ const HEARTBEAT_MS = 60_000;
 const RECOVER_SENDERS_MS = 6 * 60 * 60_000;
 
 type Session = {
+  /**
+   * avisos e demandas das mensagens (regras de alerta, notificações, classificação por IA): em
+   * fila própria, na ordem, sem segurar a gravação da próxima mensagem
+   */
+  sideQueue?: Promise<void>;
   /** revisão cliente × equipe agendada depois de completar remetentes (0081) */
   recalcTimer?: ReturnType<typeof setTimeout> | null;
   instanceId: string;
@@ -60,6 +65,8 @@ type Session = {
   closingOutbox: Set<string>;
   /** LID -> telefone (jid) e nome já descobertos, para não consultar de novo */
   lidPhones: Map<string, string | null>;
+  /** LIDs sem número conhecido: não procura de novo no banco antes de alguns minutos */
+  lidMisses?: Map<string, number>;
   lidNames: Map<string, string>;
   /** fotos de perfil dos participantes e do grupo (uma de cada vez) */
   avatars: AvatarQueue;
@@ -99,6 +106,25 @@ type OutgoingRow = {
   media_mime?: string | null;
   voice?: boolean;
 };
+
+/**
+ * Revisão cliente × equipe só dos grupos que mudaram (0084); sem o script, a completa (0076).
+ * Uma por empresa de cada vez: pedidos seguidos (várias conexões, contatos, remetentes) se juntam.
+ */
+const recalcRunning = new Map<string, Promise<{ data: unknown; error: { message: string } | null }>>();
+function recalcSenders(companyId: string) {
+  const running = recalcRunning.get(companyId);
+  if (running) return running;
+  const run = (async () => {
+    const r = await db.rpc('recalc_company_senders', { p_company_id: companyId });
+    if (r.error && /recalc_company_senders/.test(r.error.message)) {
+      return await db.rpc('recalc_company_groups', { p_company_id: companyId });
+    }
+    return r;
+  })().finally(() => recalcRunning.delete(companyId));
+  recalcRunning.set(companyId, run);
+  return run;
+}
 
 const baileysLogger = logger.child({ module: 'baileys' });
 baileysLogger.level = process.env.BAILEYS_LOG_LEVEL ?? 'warn';
@@ -788,8 +814,7 @@ export class WhatsAppManager {
       setTimeout(() => void this.recoverUnknownSenders(session), 90_000);
       // membros atualizados (telefone e LID de cada um): cruza com o cadastro de atendentes e marca
       // como da equipe as mensagens antigas que eram deles (0076), sem segurar a conexão
-      void db
-        .rpc('recalc_company_groups', { p_company_id: session.companyId })
+      void recalcSenders(session.companyId)
         .then(({ data, error }) =>
           error ? logger.warn({ err: error.message }, 'não foi possível revisar as mensagens') : logger.info({ recalc: data }, 'mensagens revisadas: cliente × equipe'),
         );
@@ -957,33 +982,34 @@ export class WhatsAppManager {
       }).catch((err) => logger.warn({ err }, 'falha ao guardar o arquivo da mensagem'));
     }
 
-    if (result.inserted && !fromTeam && !result.stale && !result.ignored && result.message_id) {
-      await onClientMessage(
-        session.companyId,
-        { id: group.id, name: group.name },
-        { id: result.message_id, body: content.body, senderName },
-      );
+    // avisos (regras de alerta) e demandas (comandos, prazos, classificação por IA) podem demorar
+    // (WhatsApp, e-mail, IA): vão para a fila própria da conexão, sem atrasar a próxima mensagem
+    const messageId = result.message_id;
+    if (result.inserted && !result.stale && messageId) {
+      session.sideQueue = (session.sideQueue ?? Promise.resolve())
+        .then(async () => {
+          if (!fromTeam && !result.ignored) {
+            await onClientMessage(session.companyId, { id: group.id, name: group.name }, { id: messageId, body: content.body, senderName });
+          }
+          await processDemandSignals({
+            companyId: session.companyId,
+            groupId: group.id,
+            groupName: group.name,
+            messageId,
+            quotedWaId: quotedMessageId(msg.message),
+            body: content.body,
+            messageType: content.type,
+            fromTeam,
+            senderName,
+            teamMemberId: member?.id ?? null,
+            opensPending,
+          });
+        })
+        .catch((err) => logger.error({ err, id: messageId }, 'falha nos avisos/demandas da mensagem'));
     }
 
     // resposta citando uma mensagem gravada sem remetente: a citação diz quem a escreveu (0080)
     void this.identifyByQuote(session, group.id, msg).catch((err) => logger.warn({ err }, 'falha ao identificar pela citação'));
-
-    // demandas: comandos, cobranças, confirmações, prazos e classificação
-    if (result.inserted && !result.stale && result.message_id) {
-      await processDemandSignals({
-        companyId: session.companyId,
-        groupId: group.id,
-        groupName: group.name,
-        messageId: result.message_id,
-        quotedWaId: quotedMessageId(msg.message),
-        body: content.body,
-        messageType: content.type,
-        fromTeam,
-        senderName,
-        teamMemberId: member?.id ?? null,
-        opensPending,
-      });
-    }
   }
 
   /**
@@ -1103,7 +1129,7 @@ export class WhatsAppManager {
     if (session.recalcTimer) clearTimeout(session.recalcTimer);
     session.recalcTimer = setTimeout(() => {
       session.recalcTimer = null;
-      void db.rpc('recalc_company_groups', { p_company_id: session.companyId }).then(({ error: e }) => {
+      void recalcSenders(session.companyId).then(({ error: e }) => {
         if (e) logger.warn({ err: e.message }, 'não foi possível revisar as mensagens');
       });
     }, 30_000);
@@ -1495,7 +1521,7 @@ export class WhatsAppManager {
       });
       log.info({ contacts: count, groupMembers: people.size }, 'contatos sincronizados sob demanda');
       // com os números dos LIDs em mãos, revisa de novo quem é cliente e quem é da equipe (0076)
-      const { data: recalc, error: recalcError } = await db.rpc('recalc_company_groups', { p_company_id: session.companyId });
+      const { data: recalc, error: recalcError } = await recalcSenders(session.companyId);
       if (recalcError) log.warn({ err: recalcError.message }, 'não foi possível revisar as mensagens');
       else log.info({ recalc }, 'mensagens revisadas: cliente × equipe');
     } catch (err) {
@@ -1551,6 +1577,9 @@ export class WhatsAppManager {
     if (!jid || !jid.endsWith('@lid')) return null;
     const known = session.lidPhones.get(jid);
     if (known) return known;
+    // sem número da última vez: só o próprio WhatsApp (em memória) por alguns minutos, sem ir ao banco
+    const missAt = session.lidMisses?.get(jid);
+    const recentMiss = Boolean(missAt && Date.now() - missAt < 5 * 60_000);
     let phoneJid: string | null = null;
     try {
       const pn = await (
@@ -1560,7 +1589,7 @@ export class WhatsAppManager {
     } catch {
       /* sem a relação no aparelho */
     }
-    if (!phoneJid && groupJid) {
+    if (!phoneJid && groupJid && !recentMiss) {
       const group = session.groupCache.get(groupJid);
       if (group) {
         const { data } = await db
@@ -1575,7 +1604,7 @@ export class WhatsAppManager {
         if (data?.name) session.lidNames.set(jid, data.name as string);
       }
     }
-    if (!phoneJid) {
+    if (!phoneJid && !recentMiss) {
       // contatos do WhatsApp (0069/0073): a agenda e os membros de todos os grupos guardam o LID com o número
       const { data } = await db
         .from('wa_contacts')
@@ -1588,7 +1617,12 @@ export class WhatsAppManager {
       if (data?.phone) phoneJid = `${data.phone}@s.whatsapp.net`;
     }
     // só guarda o que achou: sem número, tenta de novo quando a lista de membros for atualizada
-    if (phoneJid) session.lidPhones.set(jid, phoneJid);
+    if (phoneJid) {
+      session.lidPhones.set(jid, phoneJid);
+      session.lidMisses?.delete(jid);
+    } else {
+      (session.lidMisses ??= new Map()).set(jid, Date.now());
+    }
     return phoneJid;
   }
 
@@ -1768,7 +1802,7 @@ export class WhatsAppManager {
     session.history = null;
     if (h.sendersFilled) {
       // remetentes completados: revisa quem é cliente e quem é da equipe (0076)
-      const { error } = await db.rpc('recalc_company_groups', { p_company_id: session.companyId });
+      const { error } = await recalcSenders(session.companyId);
       if (error) logger.warn({ err: error.message }, 'não foi possível revisar as mensagens');
     }
     if (h.imported === 0) return;

@@ -110,7 +110,8 @@ CHECKS=$(cat <<'SQL'
   (72, 'Remetente pelos membros do grupo (0081)', exists (select 1 from pg_proc where proname = 'recalc_company_groups' and prosrc like '%0081%')),
   (73, 'Log do quem enviou? (0082)', exists (select 1 from pg_proc where proname = 'set_message_sender' and prosrc like '%activity_log%')),
   (74, 'Logo da empresa e foto dos atendentes (0083)', to_regprocedure('public.set_company_logo(text)') is not null),
-  (75, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (75, 'Revisão só dos grupos que mudaram (0084)', to_regprocedure('public.recalc_company_senders(uuid)') is not null),
+  (76, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

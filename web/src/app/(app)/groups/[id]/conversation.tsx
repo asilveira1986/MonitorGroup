@@ -202,6 +202,8 @@ export function Conversation({
   const [older, setOlder] = useState<Message[]>([]);
   // atualizações das mensagens já na tela (ex.: o arquivo da imagem/áudio terminou de ser guardado)
   const [patches, setPatches] = useState<Map<string, Message>>(new Map());
+  // mensagens novas chegando em tempo real: aparecem na hora, sem esperar a tela recarregar
+  const [arrived, setArrived] = useState<Map<string, Message>>(new Map());
   // arquivos abertos/tocados agora: contam como vistos
   const [viewed, setViewed] = useState<Set<string>>(new Set());
   const [demandFrom, setDemandFrom] = useState<Message | null>(null);
@@ -216,13 +218,13 @@ export function Conversation({
   // junta as mensagens recentes (atualizadas em tempo real) com as antigas já carregadas
   const messages = useMemo(() => {
     const byId = new Map<string, Message>();
-    for (const m of [...initial, ...older]) byId.set(m.id, m);
+    for (const m of [...arrived.values(), ...initial, ...older]) byId.set(m.id, m);
     for (const [id, p] of patches) {
       const m = byId.get(id);
       if (m) byId.set(id, { ...m, ...p });
     }
     return [...byId.values()].filter((m) => !TECHNICAL_TYPES.has(m.message_type) && !m.hidden_at).sort(newerFirst);
-  }, [initial, older, patches]);
+  }, [initial, older, patches, arrived]);
 
   // reações (0062): carregadas para as mensagens na tela e atualizadas em tempo real
   const [reactions, setReactions] = useState<Map<string, Reaction>>(new Map());
@@ -276,6 +278,14 @@ export function Conversation({
 
   useRealtime(`conversation-${groupId}`, (channel) =>
     channel
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId}` },
+        (payload) => {
+          const m = payload.new as Message;
+          if (m?.id) setArrived((prev) => new Map(prev).set(m.id, m));
+        },
+      )
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId}` },
