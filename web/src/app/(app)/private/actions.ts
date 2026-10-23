@@ -77,6 +77,15 @@ export async function requestPrivateAction(
   return error ? fail(error) : { ok: true };
 }
 
+/** "Sincronizar contatos": o worker pede a agenda ao WhatsApp e junta os membros dos grupos. */
+export async function requestContactsSync(): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('request_contacts_sync');
+  revalidatePath('/private');
+  return error ? fail(error) : { ok: true };
+}
+
 export async function markPrivateChatRead(chatId: string): Promise<Result> {
   await requireProfile();
   const supabase = await createClient();

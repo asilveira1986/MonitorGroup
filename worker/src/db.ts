@@ -11,7 +11,7 @@ export type InstanceRow = {
   name: string;
   phone: string | null;
   status: 'disconnected' | 'connecting' | 'qr' | 'connected';
-  requested_action: 'connect' | 'logout' | 'reimport' | null;
+  requested_action: 'connect' | 'logout' | 'reimport' | 'sync_contacts' | null;
   connected_at: string | null;
 };
 

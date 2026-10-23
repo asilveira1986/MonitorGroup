@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { ContactsSync } from './contacts-sync';
 import { PrivateInbox, type PrivateChat } from './inbox';
 
 export const metadata: Metadata = { title: 'Monitor Group · Conversas privadas' };
@@ -22,6 +23,18 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
     supabase.from('app_settings').select('timezone').maybeSingle(),
     supabase.from('whatsapp_instances').select('status').eq('status', 'connected').limit(1).maybeSingle(),
   ]);
+  // situação dos contatos (0072) e quantos estão guardados
+  const [{ data: conns }, { count: contacts }] = await Promise.all([
+    supabase.from('whatsapp_instances').select('contacts_sync_status, contacts_synced_at').eq('company_id', profile.company_id ?? ''),
+    supabase.from('wa_contacts').select('jid', { count: 'exact', head: true }),
+  ]);
+  // todas as conexões da empresa: sincronizando se alguma estiver; a sincronização mais recente
+  const rows = (conns ?? []) as { contacts_sync_status: string | null; contacts_synced_at: string | null }[];
+  const latest = [...rows].sort((x, y) => ((y.contacts_synced_at ?? '') > (x.contacts_synced_at ?? '') ? 1 : -1))[0];
+  const sync = {
+    contacts_sync_status: rows.some((r) => r.contacts_sync_status === 'syncing') ? 'syncing' : (latest?.contacts_sync_status ?? null),
+    contacts_synced_at: latest?.contacts_synced_at ?? null,
+  };
   const sp = await searchParams;
 
   return (
@@ -45,6 +58,11 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
               <MessageCircle className="h-4 w-4" /> O WhatsApp desta empresa está desconectado: as mensagens novas chegam quando ele reconectar.
             </p>
           )}
+          <ContactsSync
+            status={sync.contacts_sync_status}
+            syncedAt={sync.contacts_synced_at}
+            count={contacts ?? 0}
+          />
           <PrivateInbox
             initialChats={(chats ?? []) as PrivateChat[]}
             selectedId={typeof sp.c === 'string' ? sp.c : null}

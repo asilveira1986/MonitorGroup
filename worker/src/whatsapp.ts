@@ -1,5 +1,6 @@
 import { Boom } from '@hapi/boom';
 import makeWASocket, {
+  ALL_WA_PATCH_NAMES,
   Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
@@ -208,6 +209,11 @@ export class WhatsAppManager {
         } else if (row.requested_action === 'logout') {
           await this.updateInstance(row.id, { requested_action: null });
           await this.logout(row.id);
+        } else if (row.requested_action === 'sync_contacts') {
+          await this.updateInstance(row.id, { requested_action: null });
+          const session = this.sessions.get(row.id);
+          if (session?.sock.user) void this.syncContacts(session);
+          else await this.updateInstance(row.id, { contacts_sync_status: 'failed' });
         } else if (row.requested_action === 'reimport') {
           // o WhatsApp só envia o histórico no pareamento: desconecta e gera novo QR code
           await this.updateInstance(row.id, {
@@ -1274,6 +1280,52 @@ export class WhatsAppManager {
           .update({ status: 'failed', error: err instanceof Error ? err.message : String(err) })
           .eq('id', id);
       }
+    }
+  }
+
+  /**
+   * "Sincronizar contatos" (0072): pede ao WhatsApp o reenvio completo dos dados sincronizados
+   * (a agenda chega pelos eventos contacts.upsert, com os nomes salvos) e completa com os membros
+   * de todos os grupos do número (nome que usam no WhatsApp, telefone e LID).
+   */
+  private async syncContacts(session: Session) {
+    const log = logger.child({ instanceId: session.instanceId });
+    try {
+      if (!(await privateEnabled(session.companyId))) throw new Error('conversas privadas desligadas na empresa');
+      try {
+        await session.sock.resyncAppState(ALL_WA_PATCH_NAMES, true);
+      } catch (err) {
+        log.warn({ err }, 'o WhatsApp não reenviou a agenda (segue com os membros dos grupos)');
+      }
+      // membros de todos os grupos do número: telefone, LID e o nome conhecido
+      const groups = await session.sock.groupFetchAllParticipating();
+      const { data: known } = await db
+        .from('group_participants')
+        .select('jid, name, groups!inner(instance_id)')
+        .eq('groups.instance_id', session.instanceId)
+        .not('name', 'is', null);
+      const nameOf = new Map(((known ?? []) as { jid: string; name: string }[]).map((r) => [r.jid, r.name]));
+      const people = new Map<string, { id: string; lid?: string; phoneNumber?: string; notify?: string }>();
+      for (const g of Object.values(groups)) {
+        for (const p of g.participants ?? []) {
+          if (this.isMe(session, p.id)) continue;
+          const notify = p.notify ?? nameOf.get(p.id) ?? undefined;
+          people.set(p.id, { id: p.id, lid: p.lid ?? undefined, phoneNumber: p.phoneNumber ?? undefined, notify });
+        }
+      }
+      await saveContacts(session.instanceId, session.companyId, [...people.values()]);
+      // dá um tempo para a agenda reenviada terminar de chegar e conta
+      await new Promise((r) => setTimeout(r, 5000));
+      const { count } = await db.from('wa_contacts').select('jid', { count: 'exact', head: true }).eq('instance_id', session.instanceId);
+      await this.updateInstance(session.instanceId, {
+        contacts_sync_status: 'done',
+        contacts_synced_at: new Date().toISOString(),
+        contacts_count: count ?? 0,
+      });
+      log.info({ contacts: count, groupMembers: people.size }, 'contatos sincronizados sob demanda');
+    } catch (err) {
+      log.warn({ err }, 'falha ao sincronizar os contatos');
+      await this.updateInstance(session.instanceId, { contacts_sync_status: 'failed' }).catch(() => {});
     }
   }
 

@@ -47,7 +47,7 @@ export type Instance = {
   status: 'disconnected' | 'connecting' | 'qr' | 'connected';
   qr_code: string | null;
   qr_updated_at: string | null;
-  requested_action: 'connect' | 'logout' | 'reimport' | null;
+  requested_action: 'connect' | 'logout' | 'reimport' | 'sync_contacts' | null;
   history_status: 'idle' | 'importing' | 'done';
   history_imported: number;
   history_started_at: string | null;

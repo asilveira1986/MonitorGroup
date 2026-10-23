@@ -152,7 +152,8 @@ begin
   (60, 'Conversas privadas (0069)', to_regclass('public.private_chats') is not null and to_regprocedure('public.start_private_chat(text,text,text)') is not null),
   (61, 'Conversas privadas: arquivos, reações, editar e apagar (0070)', to_regprocedure('public.request_private_action(uuid,text,text,text)') is not null),
   (62, 'Conversas privadas: enviar arquivos e citar (0071)', to_regprocedure('public.send_private_message(uuid,text,uuid,jsonb)') is not null),
-  (63, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (63, 'Sincronizar contatos (0072)', to_regprocedure('public.request_contacts_sync()') is not null),
+  (64, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -161,7 +162,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -11754,6 +11755,54 @@ grant execute on function public.send_private_message(uuid, text, uuid, jsonb) t
 $mig0071$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0072_contacts_sync.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0072', $mig0072$
+-- =====================================================================
+-- Sincronizar os contatos do WhatsApp conectado sob demanda.
+--
+-- Botão "Sincronizar contatos" (Conversas privadas): o worker pede ao
+-- WhatsApp o reenvio completo dos dados sincronizados (onde vem a agenda
+-- com os nomes salvos) e completa com os membros de todos os grupos do
+-- número. A situação fica na conexão (contacts_sync_status / _synced_at /
+-- contacts_count).
+-- =====================================================================
+
+alter table public.whatsapp_instances drop constraint if exists whatsapp_instances_requested_action_check;
+alter table public.whatsapp_instances add constraint whatsapp_instances_requested_action_check
+  check (requested_action in ('connect', 'logout', 'reimport', 'sync_contacts'));
+
+alter table public.whatsapp_instances
+  add column if not exists contacts_sync_status text check (contacts_sync_status in ('syncing', 'done', 'failed')),
+  add column if not exists contacts_synced_at timestamptz,
+  add column if not exists contacts_count int;
+
+create or replace function public.request_contacts_sync()
+returns int
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_n int;
+begin
+  if not public.can_use_private_chats() then
+    raise exception 'As conversas privadas não estão liberadas para você nesta empresa.' using errcode = '42501';
+  end if;
+  update public.whatsapp_instances
+     set requested_action = 'sync_contacts', contacts_sync_status = 'syncing'
+   where company_id = public.current_company_id() and status = 'connected'
+     and requested_action is null;
+  get diagnostics v_n = row_count;
+  if v_n = 0 and not exists (select 1 from public.whatsapp_instances
+                              where company_id = public.current_company_id() and status = 'connected') then
+    raise exception 'Nenhum WhatsApp conectado nesta empresa.';
+  end if;
+  return v_n;
+end;
+$$;
+revoke all on function public.request_contacts_sync() from public, anon;
+grant execute on function public.request_contacts_sync() to authenticated;
+$mig0072$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -11854,6 +11903,7 @@ from (values
   (60, 'Conversas privadas (0069)', to_regclass('public.private_chats') is not null and to_regprocedure('public.start_private_chat(text,text,text)') is not null),
   (61, 'Conversas privadas: arquivos, reações, editar e apagar (0070)', to_regprocedure('public.request_private_action(uuid,text,text,text)') is not null),
   (62, 'Conversas privadas: enviar arquivos e citar (0071)', to_regprocedure('public.send_private_message(uuid,text,uuid,jsonb)') is not null),
-  (63, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (63, 'Sincronizar contatos (0072)', to_regprocedure('public.request_contacts_sync()') is not null),
+  (64, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
