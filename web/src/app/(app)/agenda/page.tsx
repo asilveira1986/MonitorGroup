@@ -62,7 +62,16 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     supabase.from('team_members').select('id, name, active').order('name'),
     supabase.from('app_settings').select('timezone').maybeSingle(),
   ]);
-  const myIds = Array.isArray(myIdsRaw) ? (myIdsRaw as string[]) : [];
+  // a própria agenda: a pessoa da equipe ligada ao e-mail de acesso; sem a ligação, a de mesmo nome
+  const norm = (v: string | null | undefined) =>
+    (v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const linked = Array.isArray(myIdsRaw) ? (myIdsRaw as string[]) : [];
+  const myName = norm(profile.full_name);
+  const myIds = linked.length
+    ? linked
+    : myName
+      ? (team ?? []).filter((t) => t.active && norm(t.name) === myName).map((t) => t.id as string)
+      : [];
   const timeZone = settings?.timezone ?? 'America/Sao_Paulo';
   const nowIso = new Date().toISOString();
   const now = new Date(nowIso).getTime();
@@ -292,44 +301,36 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const todayEvents = (eventsOn.get(today) ?? []).filter((e) => !e.done_at).length;
   const dayEntries = view === 'dia' ? entriesOf(ref) : [];
 
+  const personSelect = isAdmin && (
+    <PersonSelect
+      value={ids.length === 1 && (viewingOther || !myIds.length) ? ids[0] : ''}
+      mine={myIds.length > 0}
+      people={people.map((p) => ({ id: p.id, name: p.active ? p.name : `${p.name} (inativo)` }))}
+    />
+  );
+
   return (
     <div data-wide>
       <PageHeader
         title="Agenda"
         description="As demandas para entregar (pelo prazo prometido) e os compromissos, por dia, semana ou mês. Só o responsável marca a entrega, pelo botão “Demanda entregue”."
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            {isAdmin && (
-              <PersonSelect
-                value={ids.length === 1 && (viewingOther || !myIds.length) ? ids[0] : ''}
-                mine={myIds.length > 0}
-                people={people.map((p) => ({ id: p.id, name: p.active ? p.name : `${p.name} (inativo)` }))}
-              />
-            )}
-            {ids.length > 0 && (
-              <NewEventButton
-                memberId={ids[0]}
-                personName={viewingOther ? personName : null}
-                timeZone={timeZone}
-                defaultDate={view === 'dia' || ref >= today ? ref : today}
-              />
-            )}
-          </div>
-        }
       />
 
       {!ids.length ? (
-        <Card>
-          <EmptyState
-            icon={<UserRound />}
-            title="Sua agenda ainda não está ligada à equipe"
-            description={
-              isAdmin
-                ? 'Escolha uma pessoa da equipe acima para ver a agenda dela. Para ter a sua, um administrador liga o seu e-mail a uma pessoa em Configurações › Atendentes › Dar acesso ao sistema.'
-                : 'Peça a um administrador para ligar o seu e-mail a uma pessoa da equipe (Configurações › Atendentes › Dar acesso ao sistema). Depois disso, as demandas em que você é o responsável aparecem aqui.'
-            }
-          />
-        </Card>
+        <div className="space-y-4">
+          {personSelect}
+          <Card>
+            <EmptyState
+              icon={<UserRound />}
+              title="Sua agenda ainda não está ligada à equipe"
+              description={
+                isAdmin
+                  ? 'Escolha uma pessoa da equipe acima para ver a agenda dela. Para ter a sua, um administrador liga o seu e-mail a uma pessoa em Configurações › Atendentes › Dar acesso ao sistema.'
+                  : 'Peça a um administrador para ligar o seu e-mail a uma pessoa da equipe (Configurações › Atendentes › Dar acesso ao sistema). Depois disso, as demandas em que você é o responsável aparecem aqui.'
+              }
+            />
+          </Card>
+        </div>
       ) : (
         <div className="space-y-4">
           {/* visão, período e resumo de hoje */}
@@ -363,6 +364,16 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                 </Link>
               </div>
               <h2 className="text-base font-semibold first-letter:uppercase">{periodLabel}</h2>
+              {/* responsável e novo compromisso: na mesma linha, à direita */}
+              <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+                {personSelect}
+                <NewEventButton
+                  memberId={ids[0]}
+                  personName={viewingOther ? personName : null}
+                  timeZone={timeZone}
+                  defaultDate={view === 'dia' || ref >= today ? ref : today}
+                />
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
               {personName && (
