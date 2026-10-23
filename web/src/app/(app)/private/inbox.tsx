@@ -364,7 +364,7 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-surface-2/40 p-3 sm:p-5">
+      <div className="chat-wallpaper flex min-h-0 flex-1 flex-col-reverse overflow-y-auto p-3 sm:p-5">
         <div className="space-y-2">
           {messages === null ? (
             <p className="flex items-center justify-center gap-2 py-6 text-sm text-muted">

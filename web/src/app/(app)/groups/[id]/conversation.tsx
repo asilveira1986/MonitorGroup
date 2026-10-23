@@ -423,7 +423,7 @@ export function Conversation({
   return (
     <div>
     {/* flex-col-reverse mantém a rolagem ancorada nas mensagens mais recentes */}
-    <div ref={scrollRef} className="flex max-h-[65vh] flex-col-reverse overflow-y-auto p-3 sm:max-h-[640px] sm:p-5">
+    <div ref={scrollRef} className="chat-wallpaper flex max-h-[65vh] flex-col-reverse overflow-y-auto p-3 sm:max-h-[640px] sm:p-5">
       <div className="space-y-2">
         <div ref={sentinelRef} className="flex justify-center py-1">
           {hasMore ? (
