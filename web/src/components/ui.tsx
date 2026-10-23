@@ -51,7 +51,7 @@ export function PageHeader({
       <div className="flex min-w-0 gap-3">
         <span className="title-accent mt-1 w-1.5 shrink-0 self-stretch rounded-full" aria-hidden />
         <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight text-ink sm:text-[1.7rem]">{title}</h1>
+          <h1 className="text-[calc(1.25rem-2px)] font-bold tracking-tight text-ink sm:text-[calc(1.7rem-4px)]">{title}</h1>
           {description && <p className="mt-1 max-w-4xl text-sm text-ink-2">{description}</p>}
         </div>
       </div>

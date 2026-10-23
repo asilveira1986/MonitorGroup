@@ -34,6 +34,9 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     // conversas privadas (0069): só quem administra a plataforma, com o módulo ligado na empresa
     profile.platform_admin ? supabase.rpc('can_use_private_chats') : Promise.resolve({ data: false }),
   ]);
+  // logo da empresa (0083; sem o script, a coluna não existe e fica sem logo)
+  const { data: logoRow } = await supabase.from('companies').select('logo_path').eq('id', company?.id ?? '').maybeSingle();
+  const companyLogo = Boolean((logoRow as { logo_path?: string | null } | null)?.logo_path);
   const privateUnread = privateOk
     ? ((await supabase.from('private_chats').select('unread_count').gt('unread_count', 0)).data ?? []).reduce(
         (n, c) => n + Number((c as { unread_count: number }).unread_count),
@@ -74,6 +77,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         platformAdmin={profile.platform_admin}
         alertsOff={profile.platform_admin ? Boolean(profile.alerts_off) : undefined}
         company={company?.name ?? null}
+        companyLogo={companyLogo}
       />
       <RealtimeListener />
       <MessageNotifier
@@ -94,7 +98,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
           userOff: Boolean(profile.alerts_off),
         }}
       />
-      <div className="transition-[padding] duration-200 lg:pl-64 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
+      <div className="transition-[padding] duration-200 lg:pl-56 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
         <header className="brand-hairline sticky top-0 z-20 hidden items-center justify-end gap-2 bg-surface/70 px-8 py-3 backdrop-blur-md lg:flex">
           {company && (
             <div className="mr-auto">

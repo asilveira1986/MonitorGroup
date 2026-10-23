@@ -145,6 +145,8 @@ export type TeamMember = {
   jid: string | null;
   active: boolean;
   created_at: string;
+  /** foto enviada no cadastro (0083) */
+  photo_path?: string | null;
 };
 
 export type AlertType =

@@ -5,7 +5,8 @@ import { formatPhone } from '@/lib/format';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { TeamMember } from '@/lib/types';
-import { removeTeamMember } from '../actions';
+import { ImageUpload } from '@/components/image-upload';
+import { prepareImageUpload, removeTeamMember, saveTeamPhoto } from '../actions';
 import { NewMemberDialog } from './new-member-form';
 import { AlertScope } from './alert-scope';
 import { GrantAccess } from './grant-access';
@@ -42,9 +43,22 @@ export default async function TeamPage() {
         <ul className="divide-y divide-line border-t border-line">
           {members.map((m) => (
             <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
-                {m.name.slice(0, 2).toUpperCase()}
-              </span>
+              {/* foto do atendente (0083): clicar troca */}
+              <ImageUpload
+                compact
+                round
+                size="h-9 w-9"
+                label={`Foto de ${m.name}`}
+                src={m.photo_path ? `/team-photo/${m.id}` : null}
+                prepare={prepareImageUpload.bind(null, 'team')}
+                save={saveTeamPhoto.bind(null, m.id)}
+                disabled={profile.role === 'viewer'}
+                fallback={
+                  <span className="flex h-full w-full items-center justify-center bg-brand-soft text-xs font-semibold text-brand-text">
+                    {m.name.slice(0, 2).toUpperCase()}
+                  </span>
+                }
+              />
               <div className="min-w-0 flex-1 basis-48">
                 <p className="truncate text-sm font-medium">{m.name}</p>
                 <p className="truncate text-xs text-muted">
@@ -63,6 +77,9 @@ export default async function TeamPage() {
                 <RowMenu
                   label={`Ações de ${m.name}`}
                   actions={[
+                    ...(m.photo_path
+                      ? [{ label: 'Tirar a foto', action: saveTeamPhoto.bind(null, m.id, null), success: 'Foto retirada' }]
+                      : []),
                     {
                       label: 'Remover da equipe',
                       danger: true,

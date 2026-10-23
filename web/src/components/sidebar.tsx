@@ -48,7 +48,10 @@ export function Sidebar({
   platformAdmin = false,
   company = null,
   alertsOff,
+  companyLogo = false,
 }: {
+  /** a empresa tem logo (Configurações › Empresa, 0083): aparece no menu ao lado do nome */
+  companyLogo?: boolean;
   /** agenda: demandas do usuário para entregar hoje + atrasadas */
   counts: { pending: number; alerts: number; demands: number; agenda?: number; private?: number };
   /** itens do menu escondidos (ex.: funções desligadas nas configurações) */
@@ -64,8 +67,20 @@ export function Sidebar({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
+  // logo da empresa ao lado do nome (recolhido: só o logo)
+  const companyBadge = companyLogo && (
+    <div
+      className="mt-3 flex items-center gap-2 rounded-xl bg-white/[0.04] px-2 py-1.5 [[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:bg-transparent [[data-sidebar=collapsed]_aside_&]:px-0"
+      title={company ?? undefined}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- logo privado por link temporário */}
+      <img src="/company-logo" alt={company ?? 'Logo da empresa'} className="h-7 w-7 shrink-0 rounded-lg bg-white object-contain p-0.5" />
+      {company && <span className={cn('min-w-0 truncate text-xs font-semibold text-ink', COLLAPSED_HIDE)}>{company}</span>}
+    </div>
+  );
+
   const nav = (
-    <nav className="space-y-1">
+    <nav className="space-y-0.5">
       {[
         ...NAV,
         ...(platformAdmin
@@ -87,7 +102,7 @@ export function Sidebar({
             onClick={() => setOpen(false)}
             title={label}
             className={cn(
-              'relative flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition lg:py-2',
+              'relative flex items-center gap-2.5 rounded-xl px-2.5 py-3 text-sm font-medium transition lg:py-1.5',
               '[[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:px-0',
               // ativo: placa azul-escura da marca, texto claro e ícone em verde-limão
               active ? 'nav-active font-semibold' : 'text-ink-2 hover:bg-white/[0.06] hover:text-ink',
@@ -130,7 +145,7 @@ export function Sidebar({
 
   return (
     <>
-      <aside className="theme-deep sidebar-glow fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface px-4 py-5 transition-[width] duration-200 lg:flex [[data-sidebar=collapsed]_&]:w-[4.5rem] [[data-sidebar=collapsed]_&]:px-3">
+      <aside className="theme-deep sidebar-glow fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-line bg-surface px-3 py-4 transition-[width] duration-200 lg:flex [[data-sidebar=collapsed]_&]:w-[4.5rem] [[data-sidebar=collapsed]_&]:px-3">
         {/* recolher/expandir: discreto, no canto superior direito (vira uma aba na borda quando recolhido) */}
         <button
           type="button"
@@ -142,20 +157,27 @@ export function Sidebar({
           <ChevronsLeft className="h-4 w-4 [[data-sidebar=collapsed]_&]:hidden" />
           <ChevronsRight className="hidden h-4 w-4 [[data-sidebar=collapsed]_&]:block" />
         </button>
-        <div className="mb-8 px-2 [[data-sidebar=collapsed]_&]:px-0">
+        <div className="mb-5 px-1.5 [[data-sidebar=collapsed]_&]:px-0">
           <span className="[[data-sidebar=collapsed]_&]:hidden">
             <Logo />
           </span>
           <span className="hidden justify-center [[data-sidebar=collapsed]_&]:flex">
             <Logo compact />
           </span>
+          {companyBadge}
         </div>
         <div className="flex-1 overflow-y-auto overflow-x-hidden">{nav}</div>
       </aside>
 
       {/* Mobile */}
       <div data-print-hide className="theme-deep sticky top-0 z-30 flex items-center justify-between border-b border-line bg-surface px-4 py-3 lg:hidden">
-        <Logo />
+        <span className="flex min-w-0 items-center gap-3">
+          <Logo />
+          {companyLogo && (
+            // eslint-disable-next-line @next/next/no-img-element -- logo privado por link temporário
+            <img src="/company-logo" alt={company ?? 'Logo da empresa'} className="h-7 w-7 shrink-0 rounded-lg bg-white object-contain p-0.5" />
+          )}
+        </span>
         <button
           onClick={() => setOpen(true)}
           className="relative rounded-lg p-2.5 text-ink-2 hover:bg-surface-2"

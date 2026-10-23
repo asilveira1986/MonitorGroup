@@ -164,7 +164,8 @@ begin
   (71, 'Remetente pela citação (0080)', to_regprocedure('public.identify_message_sender(uuid,text,text,text,uuid,boolean)') is not null),
   (72, 'Remetente pelos membros do grupo (0081)', exists (select 1 from pg_proc where proname = 'recalc_company_groups' and prosrc like '%0081%')),
   (73, 'Log do quem enviou? (0082)', exists (select 1 from pg_proc where proname = 'set_message_sender' and prosrc like '%activity_log%')),
-  (74, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (74, 'Logo da empresa e foto dos atendentes (0083)', to_regprocedure('public.set_company_logo(text)') is not null),
+  (75, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -173,7 +174,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -12979,6 +12980,66 @@ grant execute on function public.set_message_sender(uuid, uuid) to authenticated
 $mig0082$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0083_logo_and_team_photo.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0083', $mig0083$
+-- =====================================================================
+-- Logo da empresa e foto dos atendentes.
+--
+--  * companies.logo_path: logo enviado em Configurações › Empresa; aparece
+--    no menu lateral, ao lado do nome da empresa.
+--  * team_members.photo_path: foto enviada no cadastro do atendente.
+-- As imagens ficam no bucket privado "media" (<empresa>/branding/... e
+-- <empresa>/team/...) e abrem por link temporário.
+-- =====================================================================
+
+alter table public.companies add column if not exists logo_path text;
+alter table public.team_members add column if not exists photo_path text;
+
+-- logo da empresa atual (p_path null = tirar); só administradores da empresa
+create or replace function public.set_company_logo(p_path text)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_company uuid := public.current_company_id();
+begin
+  if not (public.is_admin() or public.is_platform_admin()) then
+    raise exception 'Só administradores mudam o logo da empresa.' using errcode = '42501';
+  end if;
+  if p_path is not null and p_path not like v_company::text || '/branding/%' then
+    raise exception 'Arquivo inválido.';
+  end if;
+  update public.companies set logo_path = p_path where id = v_company;
+end;
+$$;
+revoke all on function public.set_company_logo(text) from public, anon;
+grant execute on function public.set_company_logo(text) to authenticated;
+
+-- foto do atendente (p_path null = tirar)
+create or replace function public.set_team_member_photo(p_member_id uuid, p_path text)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_company uuid := public.current_company_id();
+begin
+  if not public.can_write() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.team_members where id = p_member_id and company_id = v_company) then
+    raise exception 'Atendente não encontrado.';
+  end if;
+  if p_path is not null and p_path not like v_company::text || '/team/%' then
+    raise exception 'Arquivo inválido.';
+  end if;
+  update public.team_members set photo_path = p_path where id = p_member_id;
+end;
+$$;
+revoke all on function public.set_team_member_photo(uuid, text) from public, anon;
+grant execute on function public.set_team_member_photo(uuid, text) to authenticated;
+$mig0083$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -13091,6 +13152,7 @@ from (values
   (71, 'Remetente pela citação (0080)', to_regprocedure('public.identify_message_sender(uuid,text,text,text,uuid,boolean)') is not null),
   (72, 'Remetente pelos membros do grupo (0081)', exists (select 1 from pg_proc where proname = 'recalc_company_groups' and prosrc like '%0081%')),
   (73, 'Log do quem enviou? (0082)', exists (select 1 from pg_proc where proname = 'set_message_sender' and prosrc like '%activity_log%')),
-  (74, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (74, 'Logo da empresa e foto dos atendentes (0083)', to_regprocedure('public.set_company_logo(text)') is not null),
+  (75, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
