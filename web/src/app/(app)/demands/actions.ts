@@ -107,18 +107,37 @@ export async function saveDemandSettings(values: {
   return result(error);
 }
 
-/** Aviso ao cliente ao registrar a demanda (0091): liga/desliga e o texto (vazio = o padrão). */
-export async function saveDemandNotice(values: { enabled: boolean; template: string }): Promise<Result> {
+/** Avisos ao cliente (0091 registro, 0092 conclusão): liga/desliga e o texto (vazio = o padrão). */
+export async function saveDemandNotice(values: { kind?: 'created' | 'done'; enabled: boolean; template: string }): Promise<Result> {
   const admin = await requireAdmin();
   const supabase = await createClient();
+  const done = values.kind === 'done';
   const { error } = await supabase
     .from('app_settings')
     .update({
-      demand_notify_client: values.enabled,
-      demand_notify_template: values.template.trim() || null,
+      [done ? 'demand_done_notify' : 'demand_notify_client']: values.enabled,
+      [done ? 'demand_done_template' : 'demand_notify_template']: values.template.trim() || null,
       updated_at: new Date().toISOString(),
     })
     .eq('company_id', admin.company_id);
   revalidatePath('/settings/demand-types');
+  return result(error);
+}
+
+/**
+ * "Demanda entregue" com observação opcional (0092): a observação vai no aviso de conclusão ao
+ * cliente. Sem o script, só marca a entrega.
+ */
+export async function deliverDemand(id: string, note: string): Promise<Result> {
+  const profile = await requireProfile();
+  const supabase = await createClient();
+  const actor = profile.full_name || profile.email;
+  const { error } = await supabase.rpc('deliver_demand', { p_id: id, p_note: note.trim() || null, p_actor: actor });
+  if (error && /deliver_demand/.test(error.message)) {
+    const r = await supabase.rpc('update_demand', { p_id: id, p_changes: { status: 'entregue' }, p_actor: actor });
+    revalidatePath('/', 'layout');
+    return result(r.error);
+  }
+  revalidatePath('/', 'layout');
   return result(error);
 }

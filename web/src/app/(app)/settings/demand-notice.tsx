@@ -6,15 +6,36 @@ import { toast } from 'sonner';
 import { Button, Card, CardHeader, Textarea, Toggle } from '@/components/ui';
 import { saveDemandNotice } from '../demands/actions';
 
-export const DEFAULT_DEMAND_NOTICE =
-  '📋 *Demanda registrada* (nº {numero})\n{demanda}\n\n📅 *Previsão de entrega:* {prazo}\n👤 *Responsável:* {responsavel}';
+const KINDS = {
+  created: {
+    title: 'Aviso ao cliente: demanda registrada',
+    description:
+      'Ao registrar uma demanda (pelo painel, comando, palavra-chave, compromisso ou IA), o sistema manda no grupo a demanda e a data de entrega, pelo número conectado.',
+    template: '📋 *Demanda registrada* (nº {numero})\n{demanda}\n\n📅 *Previsão de entrega:* {prazo}\n👤 *Responsável:* {responsavel}',
+    vars: ['numero', 'demanda', 'tipo', 'responsavel', 'prazo', 'grupo'],
+    hint: '{prazo} é a data de entrega, ou “a definir”.',
+  },
+  done: {
+    title: 'Aviso ao cliente: demanda concluída',
+    description:
+      'Ao marcar “Demanda entregue” (ou #entregue no WhatsApp), o sistema avisa o cliente no grupo, com a observação escrita na entrega, se houver.',
+    template:
+      '✅ *Demanda concluída* (nº {numero})\n{demanda}\n\n📅 *Entregue em:* {entregue_em}\n👤 *Responsável:* {responsavel}{observacao}',
+    vars: ['numero', 'demanda', 'tipo', 'responsavel', 'entregue_em', 'observacao', 'grupo'],
+    hint: '{observacao} vira “📝 Observação: …” quando a entrega tiver observação (e some quando não tiver).',
+  },
+} as const;
 
-const SAMPLE = {
+export const DEFAULT_DEMAND_NOTICE = KINDS.created.template;
+
+const SAMPLE: Record<string, string> = {
   numero: '128',
   demanda: 'Enviar a segunda via do boleto de outubro',
   tipo: 'Financeiro',
   responsavel: 'Ana Souza',
   prazo: '28/10/2026 às 18:00',
+  entregue_em: '27/10/2026 às 16:40',
+  observacao: '\n\n📝 *Observação:* Boleto enviado para o e-mail do financeiro, vencimento dia 05.',
   grupo: 'Cliente Exemplo',
 };
 
@@ -22,16 +43,28 @@ const SAMPLE = {
  * Aviso ao cliente ao registrar uma demanda (0091): o sistema manda no grupo a demanda e a data de
  * entrega, respondendo a mensagem que a originou. Texto com variáveis e prévia.
  */
-export function DemandNotice({ enabled, template, disabled }: { enabled: boolean; template: string | null; disabled: boolean }) {
+export function DemandNotice({
+  kind = 'created',
+  enabled,
+  template,
+  disabled,
+}: {
+  kind?: keyof typeof KINDS;
+  enabled: boolean;
+  template: string | null;
+  disabled: boolean;
+}) {
+  const k = KINDS[kind];
+  const DEFAULT = k.template as string;
   const [on, setOn] = useState(enabled);
-  const [text, setText] = useState(template || DEFAULT_DEMAND_NOTICE);
+  const [text, setText] = useState(template || DEFAULT);
   const [pending, start] = useTransition();
   const preview = Object.entries(SAMPLE).reduce((t, [k, v]) => t.replaceAll(`{${k}}`, v), text);
   return (
     <Card>
       <CardHeader
-        title="Aviso ao cliente"
-        description="Ao registrar uma demanda (pelo painel, comando, palavra-chave, compromisso ou IA), o sistema manda no grupo a demanda e a data de entrega, pelo número conectado."
+        title={k.title}
+        description={k.description}
         action={<Toggle checked={on} onChange={setOn} disabled={disabled || pending} />}
       />
       <div className="grid gap-4 p-5 md:grid-cols-2">
@@ -45,8 +78,11 @@ export function DemandNotice({ enabled, template, disabled }: { enabled: boolean
             className="font-mono text-xs"
           />
           <p className="mt-1.5 text-[11px] text-muted">
-            Variáveis: <code>{'{numero}'}</code> <code>{'{demanda}'}</code> <code>{'{tipo}'}</code> <code>{'{responsavel}'}</code>{' '}
-            <code>{'{prazo}'}</code> (data de entrega, ou “a definir”) <code>{'{grupo}'}</code>. *texto* fica em negrito no WhatsApp.
+            Variáveis:{' '}
+            {k.vars.map((v) => (
+              <code key={v} className="mr-1">{`{${v}}`}</code>
+            ))}
+            . {k.hint} *texto* fica em negrito no WhatsApp.
           </p>
         </div>
         <div>
@@ -68,7 +104,7 @@ export function DemandNotice({ enabled, template, disabled }: { enabled: boolean
               disabled={pending}
               onClick={() =>
                 start(async () => {
-                  const res = await saveDemandNotice({ enabled: on, template: text === DEFAULT_DEMAND_NOTICE ? '' : text });
+                  const res = await saveDemandNotice({ kind, enabled: on, template: text === DEFAULT ? '' : text });
                   if (res.ok) toast.success(on ? 'Aviso ao cliente salvo' : 'Aviso ao cliente desligado');
                   else toast.error(res.error);
                 })
@@ -76,8 +112,8 @@ export function DemandNotice({ enabled, template, disabled }: { enabled: boolean
             >
               <Save className="h-3.5 w-3.5" /> Salvar
             </Button>
-            {text !== DEFAULT_DEMAND_NOTICE && (
-              <Button size="sm" variant="ghost" disabled={pending || !on} onClick={() => setText(DEFAULT_DEMAND_NOTICE)}>
+            {text !== DEFAULT && (
+              <Button size="sm" variant="ghost" disabled={pending || !on} onClick={() => setText(DEFAULT)}>
                 Voltar ao texto padrão
               </Button>
             )}

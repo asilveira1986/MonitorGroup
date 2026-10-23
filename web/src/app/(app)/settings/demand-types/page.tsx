@@ -35,6 +35,14 @@ export default async function DemandTypesPage() {
           disabled={!isAdmin}
         />
       )}
+      {settings && (
+        <DemandNotice
+          kind="done"
+          enabled={(settings as AppSettings).demand_done_notify ?? true}
+          template={(settings as AppSettings).demand_done_template ?? null}
+          disabled={!isAdmin}
+        />
+      )}
       {settings && <DemandSettings settings={settings as AppSettings} disabled={!isAdmin} />}
     </div>
   );

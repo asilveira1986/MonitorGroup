@@ -1,10 +1,11 @@
 'use client';
 
-import { CheckCircle2, ExternalLink, Loader2, MessageSquareWarning, PackageCheck, X } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Loader2, MessageSquareWarning, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { registerFollowup, updateDemand } from '@/app/(app)/demands/actions';
+import { DeliverButton } from '@/components/demands/deliver-button';
 import { Button, Field, Input, Select, Toggle } from '@/components/ui';
 import { DEMAND_SOURCE_LABEL, DEMAND_STATUS_LABEL, formatDateTime, formatDuration } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
@@ -203,15 +204,7 @@ export function DemandDrawer({
                 <>
                   <p className="text-sm">Terminou? Marque a entrega para o cliente e para a sua agenda.</p>
                   {/* o responsável entrega mesmo quando o setor do grupo não gerencia demandas */}
-                  <Button
-                    disabled={pending}
-                    onClick={() =>
-                      confirm(`Confirmar a entrega da demanda #${demand.number}?`) &&
-                      save({ status: 'entregue' }, 'Demanda entregue')
-                    }
-                  >
-                    <PackageCheck className="h-4 w-4" /> Demanda entregue
-                  </Button>
+                  <DeliverButton id={demand.id} number={demand.number} />
                 </>
               ) : demand.assignee_id ? (
                 <p>
@@ -243,6 +236,12 @@ export function DemandDrawer({
             </div>
           </dl>
 
+          {demand.status === 'entregue' && demand.delivery_note && (
+            <p className="rounded-xl border border-good/30 bg-good/10 px-3 py-2 text-sm text-ink">
+              <span className="block text-[11px] font-semibold uppercase tracking-wide text-good-ink">Observação da entrega</span>
+              <span className="whitespace-pre-wrap">{demand.delivery_note}</span>
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-3">
             {demand.status === 'entregue' && (
               <Toggle

@@ -242,6 +242,9 @@ export type AppSettings = {
   /** aviso ao cliente ao registrar a demanda (0091) */
   demand_notify_client?: boolean;
   demand_notify_template?: string | null;
+  /** aviso ao cliente na conclusão (0092) */
+  demand_done_notify?: boolean;
+  demand_done_template?: string | null;
   demand_commitment_keywords: string[];
   demand_commitment_verbs?: string[];
   reply_enabled: boolean;
@@ -362,6 +365,8 @@ export type Demand = {
   source: 'manual' | 'keyword' | 'ai' | 'commitment';
   created_at: string;
   updated_at: string;
+  /** observação escrita na entrega (0092), enviada ao cliente */
+  delivery_note?: string | null;
 };
 
 export type DemandEvent = {
