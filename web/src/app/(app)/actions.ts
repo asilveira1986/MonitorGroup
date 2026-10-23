@@ -5,7 +5,7 @@ import { requireAdmin, requireProfile } from '@/lib/auth';
 import type { DetailsData } from '@/lib/indicators';
 import { friendlyDbError } from '@/lib/db-errors';
 import { recalcCompanyGroups } from '@/lib/recalc-groups';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
 
 type Result = { ok: true } | { ok: false; error: string };
 const fail = (error: { message: string } | null): Result =>
@@ -165,11 +165,14 @@ export async function getIndicatorDetails(
 // ---------------------------------------------------------------------
 // Responder pelo painel (a fila é enviada pelo worker)
 // ---------------------------------------------------------------------
+export type GroupAudio = { path: string; mime: string; size: number; voice: boolean };
+
 export async function sendGroupMessage(
   groupId: string,
   body: string,
   quotedMessageId: string | null,
   closes = false,
+  media: GroupAudio | null = null,
 ): Promise<Result> {
   await requireProfile();
   const supabase = await createClient();
@@ -179,8 +182,30 @@ export async function sendGroupMessage(
     p_quoted_message_id: quotedMessageId,
     // resposta com \fechamento: encerra a conversa do grupo
     p_closes: closes,
+    // áudio gravado no painel (0074); sem ele, o banco antigo segue aceitando o texto
+    ...(media ? { p_media: media } : {}),
   });
   return fail(error);
+}
+
+/**
+ * Prepara o envio de um áudio no grupo: confere o grupo (com a sessão do usuário) e devolve um link
+ * de upload direto para o Storage, na pasta do grupo. Quem pode responder confere o banco ao enviar.
+ */
+export async function prepareGroupAudioUpload(
+  groupId: string,
+  file: { ext: string; size: number },
+): Promise<{ ok: true; data: { path: string; token: string } } | { ok: false; error: string }> {
+  await requireProfile();
+  if (file.size > 16 * 1024 * 1024) return { ok: false, error: 'O áudio passa de 16 MB.' };
+  const supabase = await createClient();
+  const { data: group } = await supabase.from('groups').select('id, company_id').eq('id', groupId).maybeSingle();
+  if (!group) return { ok: false, error: 'Grupo não encontrado.' };
+  const ext = file.ext.replace(/[^a-z0-9]/g, '').slice(0, 5) || 'webm';
+  const path = `${group.company_id}/${group.id}/out-${crypto.randomUUID()}.${ext}`;
+  const { data, error } = await createAdminClient().storage.from('media').createSignedUploadUrl(path);
+  if (error || !data) return { ok: false, error: error?.message ?? 'Não foi possível preparar o envio do áudio.' };
+  return { ok: true, data: { path, token: data.token } };
 }
 
 export async function retryGroupMessage(id: string): Promise<Result> {

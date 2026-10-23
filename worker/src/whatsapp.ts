@@ -27,6 +27,7 @@ import { extractContent, isAcknowledgement, isStickerOrEmoji, messageChangeOf, p
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
 import { selfReadIds } from './receipts.js';
+import { audioContent } from './audio.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
 
 const MAX_QR_ATTEMPTS = 6; // ~2 minutos esperando a leitura do QR code
@@ -85,6 +86,11 @@ type OutgoingRow = {
   quoted_message_id: string | null;
   sender_name: string;
   closes_conversation?: boolean;
+  // áudio gravado no painel (0074)
+  message_type?: string;
+  media_path?: string | null;
+  media_mime?: string | null;
+  voice?: boolean;
 };
 
 const baileysLogger = logger.child({ module: 'baileys' });
@@ -268,7 +274,8 @@ export class WhatsAppManager {
           .update({ status: 'sending' })
           .eq('id', id)
           .eq('status', 'pending')
-          .select('id, group_id, text_to_send, quoted_message_id, sender_name, closes_conversation')
+          // "*": sem o script 0074 as colunas do áudio não existem
+          .select('*')
           .maybeSingle();
         if (claimed) await this.sendOutgoing(session, me, claimed as OutgoingRow);
       }
@@ -361,7 +368,15 @@ export class WhatsAppManager {
       // registrado antes do envio: a mensagem volta pelo messages.upsert com o nome de quem respondeu
       session.outbox.set(waId, row.sender_name);
       if (row.closes_conversation) session.closingOutbox.add(waId);
-      await session.sock.sendMessage(group.jid, { text: row.text_to_send }, { messageId: waId, quoted });
+      if (row.media_path) {
+        // áudio gravado no painel (0074): está no Storage
+        const file = await db.storage.from('media').download(row.media_path);
+        if (file.error || !file.data) throw new Error('Áudio não encontrado no Storage.');
+        const content = await audioContent(Buffer.from(await file.data.arrayBuffer()), row.media_mime ?? 'audio/ogg', Boolean(row.voice));
+        await session.sock.sendMessage(group.jid, content, { messageId: waId, quoted });
+      } else {
+        await session.sock.sendMessage(group.jid, { text: row.text_to_send }, { messageId: waId, quoted });
+      }
       await db
         .from('outgoing_messages')
         .update({ status: 'sent', wa_message_id: waId, sent_at: new Date().toISOString(), error: null })
@@ -1200,7 +1215,7 @@ export class WhatsAppManager {
         .update({ status: 'sending' })
         .eq('id', id)
         .eq('status', 'pending')
-        .select('id, body, created_by, message_type, media_path, media_mime, media_name, quoted_message_id, private_chats!inner(id, jid)')
+        .select('*, private_chats!inner(id, jid)')
         .maybeSingle();
       if (!row) continue;
       const chat = (row as unknown as { private_chats: { id: string; jid: string } }).private_chats;
@@ -1238,7 +1253,7 @@ export class WhatsAppManager {
               : type === 'video'
                 ? { video: buffer, caption, mimetype }
                 : type === 'audio'
-                  ? { audio: buffer, mimetype }
+                  ? await audioContent(buffer, mimetype, Boolean(row.voice))
                   : { document: buffer, mimetype, fileName: (row.media_name as string | null) ?? 'arquivo', caption };
           await session.sock.sendMessage(to, content, { messageId: waId, quoted });
         } else {

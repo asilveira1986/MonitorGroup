@@ -22,7 +22,15 @@ export async function startPrivateChat(input: { jid?: string; phone?: string; na
   return { ok: true, data: { id: (data as { id: string }).id } };
 }
 
-export type PrivateMedia = { path: string; type: 'image' | 'video' | 'audio' | 'document'; mime: string; name: string; size: number };
+export type PrivateMedia = {
+  path: string;
+  type: 'image' | 'video' | 'audio' | 'document';
+  mime: string;
+  name: string;
+  size: number;
+  /** áudio gravado no painel: vai como mensagem de voz (0074) */
+  voice?: boolean;
+};
 
 /** Envia pelo número conectado (o worker confere se o número tem WhatsApp): texto ou arquivo com legenda, citando ou não. */
 export async function sendPrivateMessage(

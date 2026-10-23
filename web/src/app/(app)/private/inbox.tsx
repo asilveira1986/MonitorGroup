@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Loader2, MessageSquarePlus, Paperclip, Search, Send, UserRound, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Loader2, MessageSquarePlus, Mic, Paperclip, Search, Send, UserRound, X } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -8,6 +8,7 @@ import { Button, Card, Field, Input, Textarea } from '@/components/ui';
 import { cn, formatPhone, formatTime, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import { useRealtime } from '@/lib/use-realtime';
+import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
 import { markPrivateChatRead, preparePrivateUpload, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
 import {
   PrivateEditor,
@@ -28,7 +29,7 @@ export type PrivateChat = {
   unread_count: number;
 };
 type PrivateMessage = PrivateMessageRow;
-type Outgoing = { id: string; chat_id: string; body: string | null; media_name?: string | null; status: string; error: string | null; created_at: string; wa_message_id: string | null };
+type Outgoing = { id: string; chat_id: string; body: string | null; media_name?: string | null; message_type?: string; status: string; error: string | null; created_at: string; wa_message_id: string | null };
 type Contact = { jid: string; phone: string | null; name: string | null; notify: string | null };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -221,7 +222,7 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
       supabase.from('private_messages').select('*').eq('chat_id', chat.id).order('sent_at', { ascending: false }).limit(200),
       supabase
         .from('private_outgoing')
-        .select('id, chat_id, body, media_name, status, error, created_at, wa_message_id')
+        .select('id, chat_id, body, media_name, message_type, status, error, created_at, wa_message_id')
         .eq('chat_id', chat.id)
         .in('status', ['pending', 'sending', 'failed'])
         .order('created_at'),
@@ -280,6 +281,7 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
   }, [reactions]);
 
   const [file, setFile] = useState<File | null>(null);
+  const [recording, setRecording] = useState(false);
   const [replyTo, setReplyTo] = useState<PrivateMessage | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const pickFile = (f: File | null | undefined) => {
@@ -314,6 +316,31 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
         toast.error(res.error);
       }
     });
+  };
+
+  // áudio gravado: sobe para o Storage e vai como mensagem de voz
+  const sendVoice = async (clip: VoiceClip) => {
+    const name = `audio.${clip.ext}`;
+    const prep = await preparePrivateUpload(chat.id, { name, mime: clip.mime, size: clip.blob.size });
+    if (!prep.ok) {
+      toast.error(prep.error);
+      return false;
+    }
+    const up = await createClient().storage.from('media').uploadToSignedUrl(prep.data!.path, prep.data!.token, clip.blob, { contentType: clip.mime });
+    if (up.error) {
+      toast.error('Não foi possível enviar o áudio', { description: up.error.message });
+      return false;
+    }
+    const res = await sendPrivateMessage(chat.id, '', {
+      quotedId: replyTo?.id ?? null,
+      media: { path: prep.data!.path, type: 'audio', mime: clip.mime, name, size: clip.blob.size, voice: true },
+    });
+    if (!res.ok) {
+      toast.error(res.error);
+      return false;
+    }
+    setReplyTo(null);
+    return true;
   };
 
   const byId = useMemo(() => new Map((messages ?? []).map((m) => [m.id, m])), [messages]);
@@ -426,10 +453,16 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
           {queue.map((o) => (
             <div key={o.id} className="flex justify-end">
               <div className={cn('max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm sm:max-w-[75%]', o.status === 'failed' ? 'bg-critical/10' : 'bg-brand-soft/70')}>
-                {o.media_name && (
+                {o.message_type === 'audio' ? (
                   <p className="mb-1 flex items-center gap-1.5 text-xs text-ink-2">
-                    <Paperclip className="h-3.5 w-3.5" /> {o.media_name}
+                    <Mic className="h-3.5 w-3.5" /> Áudio
                   </p>
+                ) : (
+                  o.media_name && (
+                    <p className="mb-1 flex items-center gap-1.5 text-xs text-ink-2">
+                      <Paperclip className="h-3.5 w-3.5" /> {o.media_name}
+                    </p>
+                  )
                 )}
                 {o.body && <p className="whitespace-pre-wrap break-words">{o.body}</p>}
                 <p className={cn('mt-1 flex items-center justify-end gap-1 text-[11px]', o.status === 'failed' ? 'text-critical-ink' : 'text-muted')}>
@@ -497,36 +530,45 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
             e.target.value = '';
           }}
         />
-        <Button type="button" variant="ghost" onClick={() => fileInput.current?.click()} aria-label="Anexar arquivo" title="Anexar imagem, vídeo, áudio ou documento (até 50 MB)">
-          <Paperclip className="h-4 w-4" />
-        </Button>
-        <Textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-            if (e.key === 'Escape') setReplyTo(null);
-          }}
-          onPaste={(e) => {
-            // colar uma imagem (print) anexa o arquivo
-            const f = [...(e.clipboardData?.files ?? [])][0];
-            if (f) {
-              e.preventDefault();
-              pickFile(f);
-            }
-          }}
-          rows={1}
-          maxLength={4000}
-          placeholder={file ? 'Legenda (opcional)' : 'Mensagem'}
-          aria-label="Mensagem"
-          className="max-h-40 min-h-10 flex-1 resize-none"
-        />
-        <Button type="submit" disabled={pending || (!text.trim() && !file)} aria-label="Enviar">
-          <Send className="h-4 w-4" />
-        </Button>
+        {!recording && (
+          <>
+            <Button type="button" variant="ghost" onClick={() => fileInput.current?.click()} aria-label="Anexar arquivo" title="Anexar imagem, vídeo, áudio ou documento (até 50 MB)">
+              <Paperclip className="h-4 w-4" />
+            </Button>
+            <Textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+                if (e.key === 'Escape') setReplyTo(null);
+              }}
+              onPaste={(e) => {
+                // colar uma imagem (print) anexa o arquivo
+                const f = [...(e.clipboardData?.files ?? [])][0];
+                if (f) {
+                  e.preventDefault();
+                  pickFile(f);
+                }
+              }}
+              rows={1}
+              maxLength={4000}
+              placeholder={file ? 'Legenda (opcional)' : 'Mensagem'}
+              aria-label="Mensagem"
+              className="max-h-40 min-h-10 flex-1 resize-none"
+            />
+          </>
+        )}
+        {/* sem texto nem arquivo, o botão é o microfone (como no WhatsApp) */}
+        {recording || (!text.trim() && !file) ? (
+          <VoiceRecorder onSend={sendVoice} onActiveChange={setRecording} disabled={pending} />
+        ) : (
+          <Button type="submit" disabled={pending} aria-label="Enviar">
+            <Send className="h-4 w-4" />
+          </Button>
+        )}
       </form>
     </div>
   );

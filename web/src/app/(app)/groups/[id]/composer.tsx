@@ -1,13 +1,15 @@
 'use client';
 
-import { AlertCircle, Check, CheckCircle2, Clock, Loader2, Lock, RotateCcw, SendHorizontal, Trash2, X, Zap } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Clock, Loader2, Lock, Mic, RotateCcw, SendHorizontal, Trash2, X, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
+import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
 import { cn, formatPhone } from '@/lib/format';
+import { createClient } from '@/lib/supabase/client';
 import { findShortcutTrigger, greeting, matchQuickReplies, renderQuickReply, type QuickReply } from '@/lib/quick-replies';
 import type { Message, OutgoingMessage } from '@/lib/types';
-import { discardGroupMessage, retryGroupMessage, sendGroupMessage } from '../../actions';
+import { discardGroupMessage, prepareGroupAudioUpload, retryGroupMessage, sendGroupMessage } from '../../actions';
 
 export type ReplyConfig = {
   enabled: boolean;
@@ -47,6 +49,7 @@ export function Composer({
   const [active, setActive] = useState(0);
   // a resposta usou a mensagem de fechamento: ao enviar, a conversa do grupo é encerrada
   const [closing, setClosing] = useState(false);
+  const [recording, setRecording] = useState(false);
   const closingShortcut = config.closingShortcut || 'fechamento';
   const quick = useMemo(() => config.quickReplies ?? [], [config.quickReplies]);
   const options = useMemo(() => (trigger ? matchQuickReplies(quick, trigger.query) : []), [quick, trigger]);
@@ -124,6 +127,28 @@ export function Composer({
     });
   };
 
+  // áudio gravado: sobe para o Storage (pasta do grupo) e o worker envia como mensagem de voz
+  const sendVoice = async (clip: VoiceClip) => {
+    const prep = await prepareGroupAudioUpload(groupId, { ext: clip.ext, size: clip.blob.size });
+    if (!prep.ok) {
+      toast.error(prep.error);
+      return false;
+    }
+    const up = await createClient().storage.from('media').uploadToSignedUrl(prep.data.path, prep.data.token, clip.blob, { contentType: clip.mime });
+    if (up.error) {
+      toast.error('Não foi possível enviar o áudio', { description: up.error.message });
+      return false;
+    }
+    const res = await sendGroupMessage(groupId, '', replyTo?.id ?? null, false, { path: prep.data.path, mime: clip.mime, size: clip.blob.size, voice: true });
+    if (!res.ok) {
+      toast.error(res.error);
+      return false;
+    }
+    onClearReply();
+    router.refresh();
+    return true;
+  };
+
   return (
     <div className="border-t border-line p-3 sm:px-5">
       {replyTo && (
@@ -193,72 +218,81 @@ export function Composer({
             )}
           </div>
         )}
-        <textarea
-          ref={ref}
-          value={text}
-          onChange={(e) => {
-            const value = e.target.value.slice(0, MAX);
-            setText(value);
-            if (!value.trim()) setClosing(false);
-            detect(value, e.target.selectionStart ?? value.length);
-          }}
-          onSelect={(e) => detect(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
-          onBlur={() => setTrigger(null)}
-          onKeyDown={(e) => {
-            if (open) {
-              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (options.length) setActive((a) => (a + (e.key === 'ArrowDown' ? 1 : options.length - 1)) % options.length);
-                return;
-              }
-              if ((e.key === 'Enter' || e.key === 'Tab') && options.length) {
-                e.preventDefault();
-                insertQuick(options[Math.min(active, options.length - 1)]);
-                return;
-              }
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                setTrigger(null);
-                return;
-              }
-            }
-            // Enter envia; Shift+Enter quebra a linha
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          rows={Math.min(6, Math.max(1, text.split('\n').length))}
-          placeholder="Mensagem para o grupo…"
-          aria-label="Mensagem para o grupo"
-          disabled={pending}
-          className="max-h-40 min-h-11 w-full resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-base text-ink outline-none transition placeholder:text-muted focus:border-brand-line focus:ring-2 focus:ring-brand-soft sm:text-sm"
-        />
-        {quick.length > 0 && (
+        {!recording && (
+          <>
+            <textarea
+              ref={ref}
+              value={text}
+              onChange={(e) => {
+                const value = e.target.value.slice(0, MAX);
+                setText(value);
+                if (!value.trim()) setClosing(false);
+                detect(value, e.target.selectionStart ?? value.length);
+              }}
+              onSelect={(e) => detect(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
+              onBlur={() => setTrigger(null)}
+              onKeyDown={(e) => {
+                if (open) {
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (options.length) setActive((a) => (a + (e.key === 'ArrowDown' ? 1 : options.length - 1)) % options.length);
+                    return;
+                  }
+                  if ((e.key === 'Enter' || e.key === 'Tab') && options.length) {
+                    e.preventDefault();
+                    insertQuick(options[Math.min(active, options.length - 1)]);
+                    return;
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setTrigger(null);
+                    return;
+                  }
+                }
+                // Enter envia; Shift+Enter quebra a linha
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              rows={Math.min(6, Math.max(1, text.split('\n').length))}
+              placeholder="Mensagem para o grupo…"
+              aria-label="Mensagem para o grupo"
+              disabled={pending}
+              className="max-h-40 min-h-11 w-full resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-base text-ink outline-none transition placeholder:text-muted focus:border-brand-line focus:ring-2 focus:ring-brand-soft sm:text-sm"
+            />
+            {quick.length > 0 && (
+              <button
+                type="button"
+                onClick={openList}
+                disabled={pending}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line text-ink-2 transition hover:border-brand-line hover:text-brand-text disabled:opacity-40"
+                aria-label="Mensagens rápidas"
+                title="Mensagens rápidas (digite \ e o atalho)"
+              >
+                <Zap className="h-5 w-5" />
+              </button>
+            )}
+          </>
+        )}
+        {/* sem texto, o botão é o microfone (como no WhatsApp) */}
+        {recording || !text.trim() ? (
+          <VoiceRecorder onSend={sendVoice} onActiveChange={setRecording} disabled={pending} />
+        ) : (
           <button
-            type="button"
-            onClick={openList}
-            disabled={pending}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line text-ink-2 transition hover:border-brand-line hover:text-brand-text disabled:opacity-40"
-            aria-label="Mensagens rápidas"
-            title="Mensagens rápidas (digite \ e o atalho)"
+            onClick={send}
+            disabled={pending || !text.trim()}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-ink transition hover:opacity-90 disabled:opacity-40"
+            aria-label="Enviar"
+            title="Enviar (Enter)"
           >
-            <Zap className="h-5 w-5" />
+            {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <SendHorizontal className="h-5 w-5" />}
           </button>
         )}
-        <button
-          onClick={send}
-          disabled={pending || !text.trim()}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-ink transition hover:opacity-90 disabled:opacity-40"
-          aria-label="Enviar"
-          title="Enviar (Enter)"
-        >
-          {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <SendHorizontal className="h-5 w-5" />}
-        </button>
       </div>
       <p className="mt-1.5 text-[11px] text-muted">
         Sai pelo número conectado e aparece também no celular
-        {config.signName ? ` · assinada como *${config.userName}:*` : ''} · Enter envia, Shift+Enter quebra a linha
+        {config.signName ? ` · assinada como *${config.userName}:*` : ''} · Enter envia, Shift+Enter quebra a linha · 🎤 grava um áudio
         {quick.length > 0 ? ' · \\ + atalho insere uma mensagem rápida' : ''}
       </p>
     </div>
@@ -298,7 +332,13 @@ export function OutgoingBubble({ item, quoted }: { item: OutgoingMessage; quoted
             {quoted.body ?? `[${quoted.message_type}]`}
           </p>
         )}
-        <p className="whitespace-pre-wrap break-words text-ink">{item.body}</p>
+        {item.message_type === 'audio' ? (
+          <p className="flex items-center gap-1.5 text-ink-2">
+            <Mic className="h-4 w-4" /> Áudio
+          </p>
+        ) : (
+          <p className="whitespace-pre-wrap break-words text-ink">{item.body}</p>
+        )}
         <div className={cn('mt-1 flex items-center justify-end gap-1 text-[11px]', s.cls)}>
           <s.icon className={cn('h-3 w-3', item.status === 'sending' && 'animate-spin')} aria-hidden />
           {s.label}

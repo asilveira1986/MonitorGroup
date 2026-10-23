@@ -266,6 +266,8 @@ export type OutgoingMessage = {
   created_by: string | null;
   created_at: string;
   sent_at: string | null;
+  /** áudio gravado no painel (0074) */
+  message_type?: string;
 };
 
 export type PendingItem = {
