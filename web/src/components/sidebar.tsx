@@ -56,10 +56,10 @@ export function Sidebar({
   counts: { pending: number; alerts: number; demands: number; agenda?: number; private?: number };
   /** itens do menu escondidos (ex.: funções desligadas nas configurações) */
   hidden?: string[];
-  user: { name: string; role: string };
+  user: { name: string; role: string; initials?: string; avatarUrl?: string | null };
   /** administra a plataforma: mostra o item Empresas */
   platformAdmin?: boolean;
-  /** empresa atual (mostrada no menu do celular) */
+  /** empresa atual (no rodapé do menu) */
   company?: string | null;
   /** Meus alertas (quem administra a plataforma): undefined = sem o botão */
   alertsOff?: boolean;
@@ -67,15 +67,51 @@ export function Sidebar({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  // logo da empresa ao lado do nome (recolhido: só o logo)
-  const companyBadge = companyLogo && (
-    <div
-      className="mt-3 flex items-center gap-2 rounded-xl bg-white/[0.04] px-2 py-1.5 [[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:bg-transparent [[data-sidebar=collapsed]_aside_&]:px-0"
-      title={company ?? undefined}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element -- logo privado por link temporário */}
-      <img src="/company-logo" alt={company ?? 'Logo da empresa'} className="h-7 w-7 shrink-0 rounded-lg bg-white object-contain p-0.5" />
-      {company && <span className={cn('min-w-0 truncate text-xs font-semibold text-ink', COLLAPSED_HIDE)}>{company}</span>}
+  // rodapé do menu: empresa logada (com o logo), usuário, avisos, tema e sair (recolhido: só os ícones)
+  const footer = (
+    <div className="mt-3 space-y-2 border-t border-line pt-3">
+      {company && (
+        <div className="flex items-center gap-2 px-1.5 [[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:px-0" title={company}>
+          {companyLogo ? (
+            // eslint-disable-next-line @next/next/no-img-element -- logo privado por link temporário
+            <img src="/company-logo" alt={company} className="h-8 w-8 shrink-0 rounded-lg bg-white object-contain p-0.5" />
+          ) : (
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-ink-2">
+              <Building2 className="h-4 w-4" />
+            </span>
+          )}
+          <div className={cn('min-w-0', COLLAPSED_HIDE)}>
+            <p className="text-[10px] uppercase tracking-wide text-muted">Empresa</p>
+            <p className="truncate text-xs font-semibold text-ink">{company}</p>
+          </div>
+        </div>
+      )}
+      <div className="flex items-center gap-2 px-1.5 [[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:px-0" title={user.name}>
+        {user.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={user.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full" />
+        ) : (
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-[#8fc41a] text-[11px] font-bold text-brand-ink">
+            {user.initials || user.name.slice(0, 2).toUpperCase()}
+          </span>
+        )}
+        <div className={cn('min-w-0 flex-1', COLLAPSED_HIDE)}>
+          <p className="truncate text-sm font-medium text-ink">{user.name}</p>
+          <p className="truncate text-[11px] text-muted">{ROLE_LABEL[user.role as keyof typeof ROLE_LABEL] ?? 'Atendente'}</p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-1 px-0.5 [[data-sidebar=collapsed]_aside_&]:justify-center">
+        <div className={cn('flex items-center', COLLAPSED_HIDE)}>
+          {alertsOff !== undefined && <MyAlertsToggle off={alertsOff} compact />}
+          <NotifyToggle />
+          <ThemeToggle />
+        </div>
+        <form action="/auth/signout" method="post">
+          <button className="flex items-center gap-1.5 rounded-xl p-2 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink" title="Sair" aria-label="Sair">
+            <LogOut className="h-4 w-4" />
+          </button>
+        </form>
+      </div>
     </div>
   );
 
@@ -165,9 +201,9 @@ export function Sidebar({
           <span className="hidden justify-center [[data-sidebar=collapsed]_&]:flex">
             <Logo compact />
           </span>
-          {companyBadge}
         </div>
         <div className="flex-1 overflow-y-auto overflow-x-hidden">{nav}</div>
+        {footer}
       </aside>
 
       {/* Mobile */}
@@ -201,27 +237,7 @@ export function Sidebar({
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">{nav}</div>
-            <div className="mt-4 border-t border-line pt-4">
-              <div className="flex items-center justify-between px-2">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{user.name}</p>
-                  <p className="text-xs text-muted">
-                    {ROLE_LABEL[user.role as keyof typeof ROLE_LABEL] ?? 'Atendente'}
-                    {company && ` · ${company}`}
-                  </p>
-                </div>
-                <div className="flex items-center">
-                  {alertsOff !== undefined && <MyAlertsToggle off={alertsOff} compact />}
-                  <NotifyToggle />
-                  <ThemeToggle />
-                </div>
-              </div>
-              <form action="/auth/signout" method="post" className="mt-3">
-                <button className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-ink-2 hover:bg-surface-2">
-                  <LogOut className="h-4 w-4" /> Sair
-                </button>
-              </form>
-            </div>
+            {footer}
           </div>
         </div>
       )}

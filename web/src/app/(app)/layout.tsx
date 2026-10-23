@@ -1,13 +1,10 @@
-import { LogOut } from 'lucide-react';
 import { CompanySwitcher } from '@/components/company-switcher';
-import { MessageNotifier, MyAlertsToggle, NotifyToggle } from '@/components/message-notifier';
+import { MessageNotifier } from '@/components/message-notifier';
 import { RealtimeListener } from '@/components/realtime-listener';
 import { Sidebar } from '@/components/sidebar';
-import { ThemeToggle } from '@/components/theme-toggle';
 import { currentCompany, requireProfile } from '@/lib/auth';
 import { demandsEnabled } from '@/lib/format';
 import { canSeeMenu, MENU_ITEMS } from '@/lib/menu';
-import { ROLE_LABEL } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 
 export default async function AppLayout({ children }: LayoutProps<'/'>) {
@@ -73,7 +70,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
               ),
           ).map((i) => i.href),
         ]}
-        user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role }}
+        user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role, initials, avatarUrl: profile.avatar_url }}
         platformAdmin={profile.platform_admin}
         alertsOff={profile.platform_admin ? Boolean(profile.alerts_off) : undefined}
         company={company?.name ?? null}
@@ -99,35 +96,13 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         }}
       />
       <div className="transition-[padding] duration-200 lg:pl-56 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
-        <header className="brand-hairline sticky top-0 z-20 hidden items-center justify-end gap-2 bg-surface/70 px-8 py-3 backdrop-blur-md lg:flex">
-          {company && (
-            <div className="mr-auto">
-              <CompanySwitcher current={company} companies={companies ?? undefined} />
-            </div>
-          )}
-          {profile.platform_admin && <MyAlertsToggle off={Boolean(profile.alerts_off)} />}
-          <NotifyToggle />
-          <ThemeToggle />
-          <div className="ml-2 flex items-center gap-3 rounded-xl px-2 py-1">
-            {profile.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={profile.avatar_url} alt="" className="h-8 w-8 rounded-full" />
-            ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand to-[#8fc41a] text-xs font-bold text-brand-ink shadow-[0_4px_12px_-4px_rgba(150,200,20,0.8)]">
-                {initials}
-              </div>
-            )}
-            <div className="leading-tight">
-              <p className="text-sm font-medium">{profile.full_name || profile.email.split('@')[0]}</p>
-              <p className="text-[11px] text-muted">{ROLE_LABEL[profile.role]}</p>
-            </div>
-          </div>
-          <form action="/auth/signout" method="post">
-            <button className="rounded-xl p-2 text-ink-2 hover:bg-surface-2 hover:text-ink" title="Sair" aria-label="Sair">
-              <LogOut className="h-5 w-5" />
-            </button>
-          </form>
-        </header>
+        {/* topo: só a troca de empresa de quem administra a plataforma (usuário, avisos, tema e sair ficam
+            no rodapé do menu lateral, com a empresa logada) */}
+        {profile.platform_admin && company && (
+          <header className="brand-hairline sticky top-0 z-20 hidden items-center gap-2 bg-surface/70 px-8 py-3 backdrop-blur-md lg:flex">
+            <CompanySwitcher current={company} companies={companies ?? undefined} />
+          </header>
+        )}
         <main className="mx-auto max-w-7xl px-4 pb-10 pt-5 sm:px-8 sm:py-8 has-[[data-wide]]:max-w-none">{children}</main>
       </div>
     </div>
