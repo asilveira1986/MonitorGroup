@@ -383,6 +383,7 @@ export function Conversation({
     }
     return map;
   }, [contacts]);
+  const teamNames = useMemo(() => new Map(demands.members.map((t) => [t.id, t.name])), [demands.members]);
   // nome de quem leu (tiques): membros do grupo por jid ou LID
   const receiptName = useCallback(
     (jid: string) => {
@@ -443,7 +444,9 @@ export function Conversation({
           const who =
             (m.sender_jid ? people.get(m.sender_jid) : undefined) ?? (m.sender_phone ? people.get(`tel:${m.sender_phone}`) : undefined);
           const phone = m.sender_phone || who?.phone || null;
-          const name = m.sender_name || who?.name || null;
+          // da equipe: o nome do cadastro de atendentes; senão o do WhatsApp ou da lista de membros
+          const teamName = m.from_team && m.team_member_id ? teamNames.get(m.team_member_id) : undefined;
+          const name = teamName || m.sender_name || who?.name || null;
           // o WhatsApp não informou o remetente (0078): dá para indicar à mão quem foi
           const unknownSender = !m.from_me && !m.sender_jid && !phone;
           const sender = name || formatPhone(phone) || (m.from_me ? 'Número conectado' : unknownSender ? 'Remetente não identificado' : 'Cliente');

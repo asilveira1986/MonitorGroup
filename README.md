@@ -116,6 +116,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    76. `supabase/migrations/0076_reclassify_senders.sql`
    77. `supabase/migrations/0077_lid_phone_mapping.sql`
    78. `supabase/migrations/0078_message_sender_fix.sql`
+   79. `supabase/migrations/0079_members_team_names.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

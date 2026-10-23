@@ -770,6 +770,13 @@ export class WhatsAppManager {
         if (!groups[jid]) await this.markRemoved(session, jid, 'not_participant');
       }
       logger.info({ instanceId: session.instanceId, total: Object.keys(groups).length }, 'grupos sincronizados');
+      // membros atualizados (telefone e LID de cada um): cruza com o cadastro de atendentes e marca
+      // como da equipe as mensagens antigas que eram deles (0076), sem segurar a conexão
+      void db
+        .rpc('recalc_company_groups', { p_company_id: session.companyId })
+        .then(({ data, error }) =>
+          error ? logger.warn({ err: error.message }, 'não foi possível revisar as mensagens') : logger.info({ recalc: data }, 'mensagens revisadas: cliente × equipe'),
+        );
     } catch (err) {
       logger.error({ err }, 'falha ao sincronizar grupos');
     }
