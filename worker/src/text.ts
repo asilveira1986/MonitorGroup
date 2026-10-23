@@ -117,7 +117,7 @@ export function samePhone(a: string, b: string): boolean {
   return strip9(a) === strip9(b);
 }
 
-export { isAcknowledgement, isStickerOrEmoji } from './acknowledgement.js';
+export { isAcknowledgement, isStickerOrEmoji, isThanksAfterTeam } from './acknowledgement.js';
 
 /** Mensagem citada e quem a escreveu (a citação traz o autor da mensagem original). */
 export function quotedAuthor(message: proto.IMessage | null | undefined): { id: string; participant: string } | null {

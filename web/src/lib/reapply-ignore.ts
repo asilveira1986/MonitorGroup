@@ -1,4 +1,4 @@
-import { isAcknowledgement, isStickerOrEmoji } from '@/lib/acknowledgement';
+import { isAcknowledgement, isStickerOrEmoji, isThanksAfterTeam } from '@/lib/acknowledgement';
 import { recalcCompanyGroups, type RecalcSummary } from '@/lib/recalc-groups';
 import { createAdminClient } from '@/lib/supabase/server';
 
@@ -37,7 +37,10 @@ export async function reapplyIgnoreRules(companyId: string, rules: Rules): Promi
     const rows = (data ?? []) as unknown as Row[];
     for (const m of rows) {
       const ignored = rules.stickers && isStickerOrEmoji(m.message_type, m.body);
-      const opens = !ignored && !(rules.acknowledgements && isAcknowledgement(m.message_type, m.body, rules.phrases));
+      // agradecimento logo depois da equipe (0089) já marcado: continua sem abrir pendência
+      const keptThanks = rules.acknowledgements && !m.opens_pending && isThanksAfterTeam(m.message_type, m.body);
+      const opens =
+        !ignored && !keptThanks && !(rules.acknowledgements && isAcknowledgement(m.message_type, m.body, rules.phrases));
       if (opens !== m.opens_pending || ignored !== Boolean(m.ignored_as_last)) {
         toChange.set(m.id, { opens_pending: opens, ignored_as_last: ignored });
       }

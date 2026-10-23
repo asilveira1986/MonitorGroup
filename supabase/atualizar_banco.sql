@@ -170,7 +170,8 @@ begin
   (77, 'Responsável na lista de membros (0086)', exists (select 1 from pg_proc where proname = 'group_members' and prosrc like '%team_member_id%')),
   (78, 'Responsável vê os seus grupos (0087)', to_regprocedure('public.my_responsible_group_ids()') is not null),
   (79, 'Duração dos áudios (0088)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'messages' and column_name = 'media_seconds')),
-  (80, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (80, 'Agradecimento depois da equipe (0089)', to_regprocedure('public.is_thanks_after_team(text)') is not null),
+  (81, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -179,7 +180,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -13454,6 +13455,74 @@ alter table public.private_messages add column if not exists media_seconds int;
 $mig0088$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0089_thanks_after_team.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0089', $mig0089$
+-- =====================================================================
+-- Agradecimento do cliente logo depois da equipe não deixa pendência.
+--
+-- O worker passa a reconhecer, logo depois de uma mensagem da equipe, o
+-- agradecimento/confirmação mesmo com nomes e palavras soltas ("Combinado
+-- Alex! Obrigada!", "Melhoras.") e não abre pendência; volta a abrir se
+-- vier pergunta, pedido, problema ou "não". Aqui a mesma regra (igual à de
+-- worker/src/acknowledgement.ts, isThanksAfterTeam) vale para as mensagens
+-- já gravadas, e os grupos são recalculados (pendências só diminuem).
+-- =====================================================================
+
+create or replace function public.is_thanks_after_team(p_body text)
+returns boolean
+language sql immutable
+as $$
+  with w as (
+    select array_remove(regexp_split_to_array(
+             regexp_replace(translate(lower(coalesce(p_body, '')), 'áàâãäéèêëíìîïóòôõöúùûüç', 'aaaaaeeeeiiiiooooouuuuc'), '[^a-z]+', ' ', 'g'),
+             ' '), '') as a
+  )
+  select coalesce(p_body, '') !~ '\?'
+     and cardinality(a) between 1 and 15
+     and not (a && array['preciso','precisamos','precisa','poderia','poderiam','pode','podem','podes','consegue','conseguem',
+       'conseguiria','quando','como','qual','quais','onde','porque','porq','pq','favor','solicito','solicitar','gostaria','queria',
+       'quero','mas','porem','entretanto','contudo','problema','erro','urgente','ainda','falta','faltou','faltando','nao','nada',
+       'envia','enviar','enviem','manda','mandar','mande','verificar','verifica','verificam','ajudar','duvida','duvidas','pergunta',
+       'aguardando','retorno','prazo','cade','novidade','novidades','outra','outro'])
+     and exists (select 1 from unnest(a) x
+                  where x ~ '^(obrigad[a-z]*|brigad[a-z]*|obg|agradec[a-z]*|grat[oa]s?|valeu|vlw|combinado|perfeit[oa]|otim[oa]|show|beleza|blz|ok|okay|okk|certo|entendi|entendido|maravilha|excelente|melhoras|recebi|recebid[oa]|top|joia|fechado|tranquilo|tmj|amem|amen)$')
+  from w
+$$;
+
+-- mensagens já gravadas: agradecimento logo depois da equipe deixa de abrir pendência
+-- (algumas voltas: "ok" e depois "obrigada" seguidos)
+do $$
+declare
+  v_round int;
+  v_n int;
+  v_c uuid;
+  v_r jsonb;
+begin
+  for v_round in 1..3 loop
+    with counting as (
+      select m.id, m.group_id, m.sent_at, m.from_team, m.opens_pending, m.message_type, m.body,
+             lag(m.from_team) over (partition by m.group_id order by m.sent_at, m.created_at) as prev_team
+        from public.messages m
+        join public.groups g on g.id = m.group_id
+        join public.app_settings s on s.company_id = g.company_id and s.ignore_acknowledgements
+       where not m.ignored_as_last and (m.from_team or m.opens_pending)
+    )
+    update public.messages m set opens_pending = false
+      from counting c
+     where m.id = c.id and not c.from_team and c.opens_pending and c.prev_team
+       and c.message_type = 'text' and public.is_thanks_after_team(c.body);
+    get diagnostics v_n = row_count;
+    raise notice 'volta %: % agradecimento(s) deixaram de abrir pendência', v_round, v_n;
+    exit when v_n = 0;
+  end loop;
+
+  for v_c in select id from public.companies loop
+    v_r := public.recalc_company_groups(v_c);
+  end loop;
+end $$;
+$mig0089$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -13572,6 +13641,7 @@ from (values
   (77, 'Responsável na lista de membros (0086)', exists (select 1 from pg_proc where proname = 'group_members' and prosrc like '%team_member_id%')),
   (78, 'Responsável vê os seus grupos (0087)', to_regprocedure('public.my_responsible_group_ids()') is not null),
   (79, 'Duração dos áudios (0088)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'messages' and column_name = 'media_seconds')),
-  (80, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (80, 'Agradecimento depois da equipe (0089)', to_regprocedure('public.is_thanks_after_team(text)') is not null),
+  (81, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

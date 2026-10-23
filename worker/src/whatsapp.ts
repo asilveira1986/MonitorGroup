@@ -24,7 +24,7 @@ import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
 import { AvatarQueue } from './avatars.js';
 import { storeMessageMedia, storePrivateMedia } from './media.js';
-import { extractContent, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
+import { extractContent, isAcknowledgement, isStickerOrEmoji, isThanksAfterTeam, messageChangeOf, phoneFromJid, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
 import { selfReadIds } from './receipts.js';
@@ -1573,6 +1573,24 @@ export class WhatsAppManager {
   }
 
   /** Dados comuns de uma mensagem de grupo (remetente, equipe, horário). */
+  /** A última mensagem do grupo que conta (da equipe ou do cliente pedindo algo) foi da equipe? */
+  private async lastWasTeam(session: Session, msg: WAMessage): Promise<boolean> {
+    const group = msg.key.remoteJid ? session.groupCache.get(msg.key.remoteJid) : undefined;
+    if (!group) return false;
+    const { data } = await db
+      .from('messages')
+      .select('from_team')
+      .eq('group_id', group.id)
+      .eq('ignored_as_last', false)
+      // pula os agradecimentos anteriores do cliente ("ok" e depois "obrigada"): contam como encerrados
+      .or('from_team.eq.true,opens_pending.eq.true')
+      .lt('sent_at', new Date(toSeconds(msg.messageTimestamp) * 1000).toISOString())
+      .order('sent_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return Boolean(data?.from_team);
+  }
+
   /**
    * Telefone (como jid @s.whatsapp.net) de quem aparece só pelo LID: primeiro o próprio WhatsApp
    * (relação LID → número guardada pela conexão), depois a lista de membros do grupo.
@@ -1659,7 +1677,11 @@ export class WhatsAppManager {
         : (member?.name ?? msg.pushName ?? session.lidNames.get(participant ?? '') ?? null),
       sentAtSeconds: toSeconds(msg.messageTimestamp),
       opensPending: !(
-        settings.ignore_acknowledgements && isAcknowledgement(content.type, content.body, settings.ignore_phrases)
+        settings.ignore_acknowledgements &&
+        (isAcknowledgement(content.type, content.body, settings.ignore_phrases) ||
+          // agradecimento/confirmação logo depois da equipe: encerra o assunto (só volta a pedir
+          // resposta se vier pergunta, pedido ou dúvida)
+          (!fromMe && !member && isThanksAfterTeam(content.type, content.body) && (await this.lastWasTeam(session, msg))))
       ),
       // figurinha/emoji do cliente não conta como a última mensagem dele
       ignoredAsLast:

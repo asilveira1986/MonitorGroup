@@ -126,6 +126,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    86. `supabase/migrations/0086_members_responsible.sql`
    87. `supabase/migrations/0087_responsible_sees_groups.sql`
    88. `supabase/migrations/0088_audio_duration.sql`
+   89. `supabase/migrations/0089_thanks_after_team.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

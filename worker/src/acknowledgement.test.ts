@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { isAcknowledgement, matchIgnorePhrase } from './acknowledgement.js';
+import { isAcknowledgement, isThanksAfterTeam, matchIgnorePhrase } from './acknowledgement.js';
 
 const PHRASES = ['obrigado pelo retorno doutora', 'fico no aguardo', 'Agradeço a atenção'];
 const ack = (body: string) => isAcknowledgement('text', body, PHRASES);
@@ -59,4 +59,21 @@ test('pedidos e perguntas continuam pedindo resposta', () => {
   ]) {
     assert.ok(!isAcknowledgement('text', m), m);
   }
+});
+
+test('agradecimento logo depois da equipe (isThanksAfterTeam)', () => {
+  for (const ok of ['Combinado Alex! Obrigada!', 'Melhoras.', 'Perfeito, obrigado pela atenção Dra. Ana', 'Recebido, valeu Rafa 🙏', 'Ok, combinado então']) {
+    assert.equal(isThanksAfterTeam('text', ok), true, ok);
+  }
+  for (const no of [
+    'Obrigado, mas e o prazo?',
+    'Obrigada! Preciso também da segunda via',
+    'Ok, mas ainda não recebi',
+    'Não recebi nada, obrigado',
+    'Bom dia, tudo bem?',
+    'Para fins de registro, informo que encaminhei o documento ao Micael',
+  ]) {
+    assert.equal(isThanksAfterTeam('text', no), false, no);
+  }
+  assert.equal(isThanksAfterTeam('image', 'obrigado'), false);
 });

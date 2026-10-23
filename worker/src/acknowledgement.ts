@@ -105,3 +105,34 @@ export function isAcknowledgement(type: string, body: string | null, phrases?: s
   // frase curta só com palavras de agradecimento/confirmação ("Recebi, obrigado!", "show, valeu 👍")
   return onlyAckWords(cleaned);
 }
+
+/** Palavras de agradecimento/confirmação que, depois de uma mensagem da equipe, encerram o assunto. */
+const THANKS_RE =
+  /^(obrigad\w*|brigad\w*|obg|agradec\w*|grat[oa]s?|valeu|vlw|combinado|perfeit[oa]|otim[oa]|show|beleza|blz|ok|okay|okk|certo|entendi|entendido|maravilha|excelente|melhoras|recebi|recebid[oa]|top|joia|fechado|tranquilo|tmj|amem|amen)$/;
+/** Palavras de pedido, dúvida ou problema: a mensagem pede resposta mesmo agradecendo. */
+const REQUEST_WORDS = new Set([
+  'preciso', 'precisamos', 'precisa', 'poderia', 'poderiam', 'pode', 'podem', 'podes', 'consegue', 'conseguem', 'conseguiria',
+  'quando', 'como', 'qual', 'quais', 'onde', 'porque', 'porq', 'pq', 'favor', 'solicito', 'solicitar', 'gostaria', 'queria',
+  'quero', 'mas', 'porem', 'entretanto', 'contudo', 'problema', 'erro', 'urgente', 'ainda', 'falta', 'faltou', 'faltando',
+  'nao', 'nada', 'envia', 'enviar', 'enviem', 'manda', 'mandar', 'mande', 'verificar', 'verifica', 'verificam', 'ajudar',
+  'duvida', 'duvidas', 'pergunta', 'aguardando', 'retorno', 'prazo', 'cade', 'novidade', 'novidades', 'outra', 'outro',
+]);
+
+/**
+ * Logo depois de uma mensagem da equipe: o cliente só agradece ou confirma ("Combinado Alex!
+ * Obrigada!", "Melhoras.", "Perfeito, obrigado pela atenção Dra. Ana") e não abre pendência.
+ * Mais solto que isAcknowledgement (aceita nomes e palavras soltas), mas só vale nesse momento e
+ * nunca com pergunta, pedido, problema ou "não"; até 15 palavras.
+ */
+export function isThanksAfterTeam(type: string, body: string | null): boolean {
+  if (type !== 'text' || !body || body.includes('?')) return false;
+  const words = body
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[^a-z]+/)
+    .filter(Boolean);
+  if (!words.length || words.length > 15) return false;
+  if (words.some((w) => REQUEST_WORDS.has(w))) return false;
+  return words.some((w) => THANKS_RE.test(w));
+}
