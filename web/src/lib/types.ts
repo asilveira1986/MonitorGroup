@@ -239,6 +239,9 @@ export type AppSettings = {
   demand_ai_enabled: boolean;
   /** abre demanda quando a equipe se compromete ("vou verificar", "te retorno", prazo) */
   demand_commitment_enabled: boolean;
+  /** aviso ao cliente ao registrar a demanda (0091) */
+  demand_notify_client?: boolean;
+  demand_notify_template?: string | null;
   demand_commitment_keywords: string[];
   demand_commitment_verbs?: string[];
   reply_enabled: boolean;

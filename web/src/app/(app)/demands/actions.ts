@@ -106,3 +106,19 @@ export async function saveDemandSettings(values: {
   revalidatePath('/', 'layout');
   return result(error);
 }
+
+/** Aviso ao cliente ao registrar a demanda (0091): liga/desliga e o texto (vazio = o padrão). */
+export async function saveDemandNotice(values: { enabled: boolean; template: string }): Promise<Result> {
+  const admin = await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('app_settings')
+    .update({
+      demand_notify_client: values.enabled,
+      demand_notify_template: values.template.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('company_id', admin.company_id);
+  revalidatePath('/settings/demand-types');
+  return result(error);
+}

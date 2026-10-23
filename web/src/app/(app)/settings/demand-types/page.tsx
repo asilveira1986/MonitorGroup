@@ -3,6 +3,7 @@ import { requireProfile } from '@/lib/auth';
 import { DEFAULT_DEMAND_TYPES } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { AppSettings } from '@/lib/types';
+import { DemandNotice } from '../demand-notice';
 import { DemandSettings } from '../demand-settings';
 import { DemandTypes, type DemandType } from './demand-types';
 
@@ -27,6 +28,13 @@ export default async function DemandTypesPage() {
     <div className="space-y-4">
       {!isAdmin && <AdminNotice />}
       <DemandTypes initial={types} counts={counts} canEdit={isAdmin} />
+      {settings && (
+        <DemandNotice
+          enabled={(settings as AppSettings).demand_notify_client ?? true}
+          template={(settings as AppSettings).demand_notify_template ?? null}
+          disabled={!isAdmin}
+        />
+      )}
       {settings && <DemandSettings settings={settings as AppSettings} disabled={!isAdmin} />}
     </div>
   );
