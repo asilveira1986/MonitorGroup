@@ -2,6 +2,7 @@
 
 import { Download, ExternalLink, FileText, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { AudioPlayer } from '@/components/audio-player';
 import type { Message } from '@/lib/types';
 
 const formatSize = (bytes: number | null | undefined) =>
@@ -95,15 +96,7 @@ export function MessageMedia({ message: m, onViewed }: { message: Message; onVie
 
   if (m.message_type === 'audio') {
     return (
-      <audio
-        controls
-        preload="none"
-        src={src}
-        onPlay={onViewed}
-        onError={() => setBroken(true)}
-        className="mb-1 h-10 w-72 max-w-full"
-        aria-label="Áudio da mensagem"
-      />
+      <AudioPlayer src={src} seconds={m.media_seconds} onPlay={onViewed} onError={() => setBroken(true)} />
     );
   }
 

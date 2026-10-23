@@ -113,6 +113,7 @@ from (values
   (76, 'Meu perfil (0085)', to_regprocedure('public.update_my_profile(text,text)') is not null),
   (77, 'Responsável na lista de membros (0086)', exists (select 1 from pg_proc where proname = 'group_members' and prosrc like '%team_member_id%')),
   (78, 'Responsável vê os seus grupos (0087)', to_regprocedure('public.my_responsible_group_ids()') is not null),
-  (79, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (79, 'Duração dos áudios (0088)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'messages' and column_name = 'media_seconds')),
+  (80, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

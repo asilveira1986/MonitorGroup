@@ -39,9 +39,16 @@ export function mediaInfo(msg: WAMessage) {
   const key = getContentType(content);
   if (!content || !key) return null;
   const inner = (content as Record<string, unknown>)[key] as
-    | { mimetype?: string | null; fileLength?: unknown; fileName?: string | null }
+    | { mimetype?: string | null; fileLength?: unknown; fileName?: string | null; seconds?: number | null }
     | undefined;
   if (!inner || typeof inner !== 'object') return null;
   const size = inner.fileLength == null ? null : Number(inner.fileLength);
-  return { mime: inner.mimetype ?? null, size: Number.isFinite(size) ? size : null, fileName: inner.fileName ?? null };
+  // duração (áudio e vídeo): o WhatsApp manda junto, sem precisar baixar
+  const seconds = inner.seconds == null ? null : Number(inner.seconds);
+  return {
+    mime: inner.mimetype ?? null,
+    size: Number.isFinite(size) ? size : null,
+    fileName: inner.fileName ?? null,
+    seconds: seconds != null && Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds) : null,
+  };
 }

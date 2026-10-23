@@ -129,6 +129,8 @@ export type Message = {
   media_path?: string | null;
   media_mime?: string | null;
   media_size?: number | null;
+  /** duração do áudio/vídeo (0088) */
+  media_seconds?: number | null;
   /** stored | too_large | failed | expired */
   media_status?: string | null;
   /** quando a mensagem do cliente foi vista: lida no celular conectado ou baixa no painel */

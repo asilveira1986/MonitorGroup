@@ -1417,6 +1417,7 @@ export class WhatsAppManager {
           if (q) quoted = { key: { remoteJid: to, id: q.wa_message_id as string, fromMe: Boolean(q.from_me) }, message: { conversation: (q.body as string) ?? '' } };
         }
         const type = (row.message_type as string) || 'text';
+        let sentSeconds: number | null = null;
         const caption = (row.body as string | null) ?? undefined;
         if (row.media_path) {
           // arquivo enviado pelo painel: está no Storage
@@ -1432,7 +1433,8 @@ export class WhatsAppManager {
                 : type === 'audio'
                   ? await audioContent(buffer, mimetype, Boolean(row.voice))
                   : { document: buffer, mimetype, fileName: (row.media_name as string | null) ?? 'arquivo', caption };
-          await session.sock.sendMessage(to, content, { messageId: waId, quoted });
+          const sent = await session.sock.sendMessage(to, content, { messageId: waId, quoted });
+          sentSeconds = Number(sent?.message?.audioMessage?.seconds ?? sent?.message?.videoMessage?.seconds) || null;
         } else {
           await session.sock.sendMessage(to, { text: row.body as string }, { messageId: waId, quoted });
         }
@@ -1462,6 +1464,8 @@ export class WhatsAppManager {
               ...(row.quoted_message_id ? { quoted_message_id: row.quoted_message_id } : {}),
             })
             .eq('id', sentId);
+          // duração do áudio enviado (0088), à parte
+          if (sentSeconds) await db.from('private_messages').update({ media_seconds: Math.round(sentSeconds) }).eq('id', sentId);
         }
         setTimeout(() => session.outbox.delete(waId), 10 * 60_000);
       } catch (err) {

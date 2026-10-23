@@ -4,6 +4,7 @@ import { Download, EyeOff, FileText, MoreVertical, Pencil, Reply, SmilePlus, Tra
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Lightbox } from '../groups/[id]/message-media';
+import { AudioPlayer } from '@/components/audio-player';
 import { Button, Textarea } from '@/components/ui';
 import { cn } from '@/lib/format';
 import { requestPrivateAction } from './actions';
@@ -21,6 +22,7 @@ export type PrivateMessageRow = {
   media_path?: string | null;
   media_size?: number | null;
   media_status?: string | null;
+  media_seconds?: number | null;
   edited_at?: string | null;
   original_body?: string | null;
   deleted_at?: string | null;
@@ -72,7 +74,7 @@ export function PrivateMedia({ message: m }: { message: PrivateMessageRow }) {
     );
   }
   if (m.message_type === 'audio') {
-    return <audio controls preload="none" src={src} onError={() => setBroken(true)} className="mb-1 h-10 w-72 max-w-full" aria-label="Áudio" />;
+    return <AudioPlayer src={src} seconds={m.media_seconds} onError={() => setBroken(true)} />;
   }
   if (m.message_type === 'video') {
     return <video controls preload="metadata" src={src} onError={() => setBroken(true)} className="mb-1 max-h-72 max-w-full rounded-xl bg-black" />;

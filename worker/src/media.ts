@@ -45,6 +45,10 @@ async function storeMedia(
   folder: string,
 ) {
   const { sock, msg, companyId, messageId, type } = opts;
+  // duração do áudio/vídeo (0088), mesmo sem guardar o arquivo; à parte, para um banco sem a
+  // coluna não atrapalhar o resto
+  const seconds = mediaInfo(msg)?.seconds;
+  if (seconds) void db.from(table).update({ media_seconds: seconds }).eq('id', messageId).then(() => {});
   if (!(MEDIA_TYPES as readonly string[]).includes(type)) return;
   const settings = await getSettings(companyId);
   if (settings.media_store_enabled === false) return;

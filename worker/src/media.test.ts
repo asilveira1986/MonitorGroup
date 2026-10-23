@@ -13,8 +13,8 @@ test('mediaExtension escolhe a extensão pelo tipo ou pelo nome', () => {
 test('mediaInfo lê tipo, tamanho e nome sem baixar', () => {
   const info = mediaInfo({
     key: {},
-    message: { audioMessage: { mimetype: 'audio/ogg; codecs=opus', fileLength: 4321, ptt: true } },
+    message: { audioMessage: { mimetype: 'audio/ogg; codecs=opus', fileLength: 4321, ptt: true, seconds: 37 } },
   } as never);
-  assert.deepEqual(info, { mime: 'audio/ogg; codecs=opus', size: 4321, fileName: null });
+  assert.deepEqual(info, { mime: 'audio/ogg; codecs=opus', size: 4321, fileName: null, seconds: 37 });
   assert.equal(mediaInfo({ key: {}, message: null } as never), null);
 });
