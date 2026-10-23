@@ -112,6 +112,7 @@ from (values
   (75, 'Revisão só dos grupos que mudaram (0084)', to_regprocedure('public.recalc_company_senders(uuid)') is not null),
   (76, 'Meu perfil (0085)', to_regprocedure('public.update_my_profile(text,text)') is not null),
   (77, 'Responsável na lista de membros (0086)', exists (select 1 from pg_proc where proname = 'group_members' and prosrc like '%team_member_id%')),
-  (78, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (78, 'Responsável vê os seus grupos (0087)', to_regprocedure('public.my_responsible_group_ids()') is not null),
+  (79, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
