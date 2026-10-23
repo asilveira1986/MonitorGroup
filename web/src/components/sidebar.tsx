@@ -119,10 +119,11 @@ export function Sidebar({
                   if (res && !res.ok) toast.error(res.error);
                 });
               }}
-              className="absolute inset-0 cursor-pointer opacity-0"
+              // a lista que abre fica na cor do menu, com as empresas em branco
+              className="absolute inset-0 cursor-pointer bg-surface text-white opacity-0 [color-scheme:dark]"
             >
               {companies!.map((c) => (
-                <option key={c.id} value={c.id}>
+                <option key={c.id} value={c.id} className="bg-surface text-white">
                   {c.name}
                   {c.active ? '' : ' (suspensa)'}
                 </option>
