@@ -1308,7 +1308,12 @@ export class WhatsAppManager {
     try {
       if (!(await privateEnabled(session.companyId))) throw new Error('conversas privadas desligadas na empresa');
       try {
-        await session.sock.resyncAppState(ALL_WA_PATCH_NAMES, true);
+        // a agenda (com os nomes salvos) fica na coleção critical_unblock_low. Sem apagar a versão
+        // guardada, o WhatsApp só manda as mudanças desde a última vez (e a agenda inteira veio uma
+        // vez só, no pareamento); sem versão, ele manda a coleção completa de novo
+        await session.sock.authState.keys.set({ 'app-state-sync-version': { critical_unblock_low: null } });
+        await session.sock.resyncAppState(['critical_unblock_low'], true);
+        await session.sock.resyncAppState(ALL_WA_PATCH_NAMES.filter((n) => n !== 'critical_unblock_low'), false);
       } catch (err) {
         log.warn({ err }, 'o WhatsApp não reenviou a agenda (segue com os membros dos grupos)');
       }
@@ -1329,8 +1334,8 @@ export class WhatsAppManager {
         }
       }
       await saveContacts(session.instanceId, session.companyId, [...people.values()]);
-      // dá um tempo para a agenda reenviada terminar de chegar e conta
-      await new Promise((r) => setTimeout(r, 5000));
+      // dá um tempo para a agenda reenviada terminar de gravar e conta
+      await new Promise((r) => setTimeout(r, 8000));
       const { count } = await db.from('wa_contacts').select('jid', { count: 'exact', head: true }).eq('instance_id', session.instanceId);
       await this.updateInstance(session.instanceId, {
         contacts_sync_status: 'done',

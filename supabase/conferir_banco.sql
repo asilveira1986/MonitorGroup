@@ -99,6 +99,7 @@ from (values
   (63, 'Sincronizar contatos (0072)', to_regprocedure('public.request_contacts_sync()') is not null),
   (64, 'Contatos com o nome salvo (0073)', to_regprocedure('public.save_wa_contacts(uuid,jsonb)') is not null),
   (65, 'Enviar áudio (0074)', to_regprocedure('public.send_group_message(uuid,text,uuid,boolean,jsonb)') is not null),
-  (66, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (66, 'Nome salvo pelo número (0075)', to_regprocedure('public.phone_key(text)') is not null),
+  (67, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

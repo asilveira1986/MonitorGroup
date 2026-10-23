@@ -24,9 +24,10 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
     supabase.from('whatsapp_instances').select('status').eq('status', 'connected').limit(1).maybeSingle(),
   ]);
   // situação dos contatos (0072) e quantos estão guardados
-  const [{ data: conns }, { count: contacts }] = await Promise.all([
+  const [{ data: conns }, { count: contacts }, { count: named }] = await Promise.all([
     supabase.from('whatsapp_instances').select('contacts_sync_status, contacts_synced_at').eq('company_id', profile.company_id ?? ''),
     supabase.from('wa_contacts').select('jid', { count: 'exact', head: true }),
+    supabase.from('wa_contacts').select('jid', { count: 'exact', head: true }).not('name', 'is', null),
   ]);
   // todas as conexões da empresa: sincronizando se alguma estiver; a sincronização mais recente
   const rows = (conns ?? []) as { contacts_sync_status: string | null; contacts_synced_at: string | null }[];
@@ -61,7 +62,7 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
           <ContactsSync
             status={sync.contacts_sync_status}
             syncedAt={sync.contacts_synced_at}
-            count={contacts ?? 0}
+            count={contacts ?? 0} named={named ?? 0}
           />
           <PrivateInbox
             initialChats={(chats ?? []) as PrivateChat[]}

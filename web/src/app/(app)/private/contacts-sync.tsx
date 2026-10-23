@@ -12,7 +12,18 @@ import { requestContactsSync } from './actions';
  * Situação dos contatos do WhatsApp conectado e o botão "Sincronizar contatos" (0072).
  * Enquanto sincroniza, a tela se atualiza sozinha.
  */
-export function ContactsSync({ status, syncedAt, count }: { status: string | null; syncedAt: string | null; count: number }) {
+export function ContactsSync({
+  status,
+  syncedAt,
+  count,
+  named,
+}: {
+  status: string | null;
+  syncedAt: string | null;
+  count: number;
+  /** com o nome salvo na agenda do celular */
+  named: number;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const syncing = status === 'syncing';
@@ -26,6 +37,7 @@ export function ContactsSync({ status, syncedAt, count }: { status: string | nul
       <span className="inline-flex items-center gap-1.5 text-ink-2">
         <Users className="h-4 w-4 text-muted" />
         <strong className="tabular text-ink">{formatNumber(count)}</strong> contato(s)
+        <span className="text-muted">· {formatNumber(named)} com nome salvo</span>
         <span className="text-muted" suppressHydrationWarning>
           {syncing ? '· sincronizando…' : syncedAt ? `· sincronizado ${timeAgo(syncedAt)}` : status === 'failed' ? '· a última sincronização falhou' : ''}
         </span>
