@@ -3,7 +3,7 @@
 import { Crown, Headset, Search, ShieldCheck, Smartphone, Users } from 'lucide-react';
 import { CallPrivateButton } from '../../private/call-private';
 import { useState } from 'react';
-import { Badge, Card, CardHeader } from '@/components/ui';
+import { Card, CardHeader } from '@/components/ui';
 import { Avatar } from '@/components/avatar';
 import { cn, formatPhone, timeAgo } from '@/lib/format';
 
@@ -104,9 +104,9 @@ export function GroupMembers({ members, total, canPrivate = false }: { members: 
                   <div className="flex shrink-0 flex-col items-end gap-0.5">
                     {canPrivate && !m.is_me && <CallPrivateButton jid={m.jid} phone={m.phone} name={m.name} />}
                     {m.team && (
-                      <Badge tone="brand">
-                        <Headset className="h-3 w-3" /> Equipe
-                      </Badge>
+                      <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-brand-text" title="Da equipe (cadastro de atendentes)">
+                        <Headset className="h-2.5 w-2.5" aria-hidden /> equipe
+                      </span>
                     )}
                     {m.role !== 'member' && !m.team && (
                       <span className="text-[10px] text-muted">{m.role === 'superadmin' ? 'criador' : 'admin'}</span>
