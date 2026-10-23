@@ -1343,6 +1343,10 @@ export class WhatsAppManager {
         contacts_count: count ?? 0,
       });
       log.info({ contacts: count, groupMembers: people.size }, 'contatos sincronizados sob demanda');
+      // com os números dos LIDs em mãos, revisa de novo quem é cliente e quem é da equipe (0076)
+      const { data: recalc, error: recalcError } = await db.rpc('recalc_company_groups', { p_company_id: session.companyId });
+      if (recalcError) log.warn({ err: recalcError.message }, 'não foi possível revisar as mensagens');
+      else log.info({ recalc }, 'mensagens revisadas: cliente × equipe');
     } catch (err) {
       log.warn({ err }, 'falha ao sincronizar os contatos');
       await this.updateInstance(session.instanceId, { contacts_sync_status: 'failed' }).catch(() => {});
@@ -1419,6 +1423,18 @@ export class WhatsAppManager {
         if (data?.phone) phoneJid = `${data.phone}@s.whatsapp.net`;
         if (data?.name) session.lidNames.set(jid, data.name as string);
       }
+    }
+    if (!phoneJid) {
+      // contatos do WhatsApp (0069/0073): a agenda e os membros de todos os grupos guardam o LID com o número
+      const { data } = await db
+        .from('wa_contacts')
+        .select('phone')
+        .eq('instance_id', session.instanceId)
+        .or(`jid.eq.${jid},lid.eq.${jid}`)
+        .not('phone', 'is', null)
+        .limit(1)
+        .maybeSingle();
+      if (data?.phone) phoneJid = `${data.phone}@s.whatsapp.net`;
     }
     // só guarda o que achou: sem número, tenta de novo quando a lista de membros for atualizada
     if (phoneJid) session.lidPhones.set(jid, phoneJid);

@@ -114,6 +114,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    74. `supabase/migrations/0074_send_audio.sql`
    75. `supabase/migrations/0075_contacts_phone_match.sql`
    76. `supabase/migrations/0076_reclassify_senders.sql`
+   77. `supabase/migrations/0077_lid_phone_mapping.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

@@ -103,7 +103,8 @@ CHECKS=$(cat <<'SQL'
   (65, 'Enviar áudio (0074)', to_regprocedure('public.send_group_message(uuid,text,uuid,boolean,jsonb)') is not null),
   (66, 'Nome salvo pelo número (0075)', to_regprocedure('public.phone_key(text)') is not null),
   (67, 'Verificação completa cliente × equipe (0076)', to_regclass('public.group_participants_lid_idx') is not null),
-  (68, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (68, 'Número do LID pela sessão (0077)', to_regprocedure('public.lid_phone(uuid,text)') is not null),
+  (69, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)
