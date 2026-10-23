@@ -91,6 +91,11 @@ export function GroupMembers({ members, total, canPrivate = false }: { members: 
                       <span className="truncate">{label}</span>
                       {m.role === 'superadmin' && <Crown className="h-3.5 w-3.5 shrink-0 text-warning-ink" aria-label="Criador do grupo" />}
                       {m.role === 'admin' && <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-brand-text" aria-label="Admin do grupo" />}
+                      {m.team && (
+                        <Headset className="h-3.5 w-3.5 shrink-0 text-brand-text" aria-label="Da equipe (cadastro de atendentes)">
+                          <title>Da equipe (cadastro de atendentes)</title>
+                        </Headset>
+                      )}
                     </p>
                     <p className="truncate text-[10.5px] text-muted" suppressHydrationWarning>
                       {m.phone && (m.name || m.is_me) ? `${formatPhone(m.phone)} · ` : ''}
@@ -103,11 +108,6 @@ export function GroupMembers({ members, total, canPrivate = false }: { members: 
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-0.5">
                     {canPrivate && !m.is_me && <CallPrivateButton jid={m.jid} phone={m.phone} name={m.name} />}
-                    {m.team && (
-                      <Headset className="h-3 w-3 text-brand-text" aria-label="Da equipe (cadastro de atendentes)">
-                        <title>Da equipe (cadastro de atendentes)</title>
-                      </Headset>
-                    )}
                     {m.role !== 'member' && !m.team && (
                       <span className="text-[10px] text-muted">{m.role === 'superadmin' ? 'criador' : 'admin'}</span>
                     )}
