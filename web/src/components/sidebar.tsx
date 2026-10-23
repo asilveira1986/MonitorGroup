@@ -80,10 +80,7 @@ export function Sidebar({
               <Building2 className="h-4 w-4" />
             </span>
           )}
-          <div className={cn('min-w-0', COLLAPSED_HIDE)}>
-            <p className="text-[10px] uppercase tracking-wide text-muted">Empresa</p>
-            <p className="truncate text-xs font-semibold text-ink">{company}</p>
-          </div>
+          <p className={cn('min-w-0 flex-1 truncate text-[calc(0.75rem-1px)] font-semibold leading-tight text-ink', COLLAPSED_HIDE)}>{company}</p>
         </div>
       )}
       <div className="flex items-center gap-2 px-1.5 [[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:px-0" title={user.name}>
@@ -96,11 +93,11 @@ export function Sidebar({
           </span>
         )}
         <div className={cn('min-w-0 flex-1', COLLAPSED_HIDE)}>
-          <p className="truncate text-sm font-medium text-ink">{user.name}</p>
-          <p className="truncate text-[11px] text-muted">{ROLE_LABEL[user.role as keyof typeof ROLE_LABEL] ?? 'Atendente'}</p>
+          <p className="truncate text-[calc(0.875rem-1px)] font-medium leading-tight text-ink">{user.name}</p>
+          <p className="truncate text-[10px] leading-tight text-muted">{ROLE_LABEL[user.role as keyof typeof ROLE_LABEL] ?? 'Atendente'}</p>
         </div>
       </div>
-      <div className="flex items-center justify-between gap-1 px-0.5 [[data-sidebar=collapsed]_aside_&]:justify-center">
+      <div className="flex items-center justify-between gap-1 px-1 [[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:px-0">
         <div className={cn('flex items-center', COLLAPSED_HIDE)}>
           {alertsOff !== undefined && <MyAlertsToggle off={alertsOff} compact />}
           <NotifyToggle />
