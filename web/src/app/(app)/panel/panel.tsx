@@ -238,7 +238,8 @@ export function GroupsPanel({
   hasNoResponsible,
 }: {
   /** pessoas da equipe e quantos grupos (no painel) cada uma é responsável */
-  responsibles: { id: string; name: string; groups: number }[];
+  /** hidden: grupos da pessoa fora do painel (não monitorados ou de que o número saiu) */
+  responsibles: { id: string; name: string; groups: number; hidden?: number }[];
   hasNoResponsible: boolean;
   groups: PanelGroup[];
   sectors: { id: string; name: string }[];
@@ -391,7 +392,7 @@ export function GroupsPanel({
                 <option value="all">Todos</option>
                 {responsibles.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.name} ({r.groups})
+                    {r.name} ({r.groups}{r.hidden ? ` · ${r.hidden} não monitorado${r.hidden > 1 ? 's' : ''}` : ''})
                   </option>
                 ))}
                 <option value="none">Sem responsável ({allGroups.filter((g) => !g.responsible_ids?.length).length})</option>
@@ -456,7 +457,16 @@ export function GroupsPanel({
 
       {shown.length === 0 ? (
         <div className="rounded-2xl border border-line bg-surface">
-          <EmptyState icon={<Search />} title="Nenhum grupo" description="Nenhum grupo com essa situação ou esse nome." />
+          <EmptyState
+            icon={<Search />}
+            title="Nenhum grupo"
+            description={(() => {
+              const r = responsibles.find((x) => x.id === responsible);
+              return r?.hidden && !r.groups
+                ? `${r.name} é responsável por ${r.hidden} grupo(s) que não estão sendo monitorados (ou de que o número saiu). Para aparecerem aqui, ligue o monitoramento em Grupos.`
+                : 'Nenhum grupo com essa situação ou esse nome.';
+            })()}
+          />
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1900px]:grid-cols-8">

@@ -28,6 +28,8 @@ export default async function PanelPage() {
     responsible_member_ids?: string[] | null;
     closed_at?: string | null;
     jid?: string;
+    monitored?: boolean;
+    removed_at?: string | null;
   };
   const infoOf = new Map(((groupSectors ?? []) as unknown as GroupInfo[]).map((g) => [g.id, g]));
   const { data: photoRows } = await supabase.from('contact_avatars').select('jid').like('jid', '%@g.us').not('path', 'is', null);
@@ -47,7 +49,15 @@ export default async function PanelPage() {
   const inUse = new Set(groups.flatMap((g) => g.responsible_ids));
   const responsibles = (team ?? [])
     .filter((t) => t.active || inUse.has(t.id as string))
-    .map((t) => ({ id: t.id as string, name: t.name as string, groups: groups.filter((g) => g.responsible_ids.includes(t.id as string)).length }))
+    .map((t) => ({
+      id: t.id as string,
+      name: t.name as string,
+      groups: groups.filter((g) => g.responsible_ids.includes(t.id as string)).length,
+      // grupos da pessoa que não entram no painel (monitoramento desligado ou o número saiu do grupo)
+      hidden: ((groupSectors ?? []) as unknown as GroupInfo[]).filter(
+        (g) => (!g.monitored || g.removed_at) && responsiblesOf(g).includes(t.id as string),
+      ).length,
+    }))
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   // setores que têm grupo no painel (o usuário só recebe os grupos que pode ver)
   const used = new Set(groups.map((g) => g.sector_id));
