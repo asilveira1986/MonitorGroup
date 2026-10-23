@@ -158,8 +158,9 @@ export function Sidebar({
           <ChevronsRight className="hidden h-4 w-4 [[data-sidebar=collapsed]_&]:block" />
         </button>
         <div className="mb-5 px-1.5 [[data-sidebar=collapsed]_&]:px-0">
-          <span className="[[data-sidebar=collapsed]_&]:hidden">
-            <Logo />
+          {/* nome menor e folga à direita: o botão de recolher fica no canto, sem cobrir o nome */}
+          <span className="block pr-8 [[data-sidebar=collapsed]_&]:hidden">
+            <Logo size={30} textClassName="text-[0.95rem]" className="gap-2" />
           </span>
           <span className="hidden justify-center [[data-sidebar=collapsed]_&]:flex">
             <Logo compact />

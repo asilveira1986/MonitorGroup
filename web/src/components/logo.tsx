@@ -30,12 +30,23 @@ export function LogoMark({ size = 36, className, alertDot = size >= 20 }: { size
 }
 
 /** Assinatura horizontal: símbolo + "Monitor" (Sora Bold) "Group" (Sora Regular). */
-export function Logo({ compact = false, size = 36, className }: { compact?: boolean; size?: number; className?: string }) {
+export function Logo({
+  compact = false,
+  size = 36,
+  className,
+  textClassName = 'text-[1.15rem]',
+}: {
+  compact?: boolean;
+  size?: number;
+  className?: string;
+  /** tamanho do nome (ex.: menor no menu lateral) */
+  textClassName?: string;
+}) {
   return (
     <div className={cn('flex items-center gap-2.5', className)}>
       <LogoMark size={size} />
       {!compact && (
-        <p className="font-display whitespace-nowrap text-[1.15rem] leading-none tracking-[-0.02em] text-ink">
+        <p className={cn('font-display whitespace-nowrap leading-none tracking-[-0.02em] text-ink', textClassName)}>
           <span className="font-bold">Monitor</span> <span className="font-normal">Group</span>
         </p>
       )}
