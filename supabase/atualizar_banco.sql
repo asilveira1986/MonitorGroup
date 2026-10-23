@@ -167,7 +167,8 @@ begin
   (74, 'Logo da empresa e foto dos atendentes (0083)', to_regprocedure('public.set_company_logo(text)') is not null),
   (75, 'Revisão só dos grupos que mudaram (0084)', to_regprocedure('public.recalc_company_senders(uuid)') is not null),
   (76, 'Meu perfil (0085)', to_regprocedure('public.update_my_profile(text,text)') is not null),
-  (77, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (77, 'Responsável na lista de membros (0086)', exists (select 1 from pg_proc where proname = 'group_members' and prosrc like '%team_member_id%')),
+  (78, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -176,7 +177,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -13298,6 +13299,78 @@ grant execute on function public.set_my_photo(text) to authenticated;
 $mig0085$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0086_members_responsible.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0086', $mig0086$
+-- =====================================================================
+-- Membros do grupo: com o cadastro do atendente (team_member_id), para a
+-- lista mostrar quem da equipe é o responsável pelo grupo.
+-- =====================================================================
+
+create or replace function public.group_members(p_group_id uuid)
+returns jsonb language sql stable security invoker set search_path = public as $$
+  with p as (
+    select gp.*
+    from public.group_participants gp
+    where gp.group_id = p_group_id and gp.left_at is null
+  ),
+  m as (
+    -- mensagens dos últimos 30 dias de cada remetente do grupo
+    select msg.sender_jid, msg.sender_phone, count(*) as n, max(msg.sent_at) as last_at,
+           (array_agg(msg.sender_name order by msg.sent_at desc) filter (where msg.sender_name is not null))[1] as last_name
+    from public.messages msg
+    where msg.group_id = p_group_id and msg.sent_at > now() - interval '30 days' and not msg.from_me
+    group by msg.sender_jid, msg.sender_phone
+  )
+  select coalesce(jsonb_agg(row_to_json(x) order by x.is_me desc, x.team desc, x.role_rank, x.last_message_at desc nulls last, x.name), '[]'::jsonb)
+  from (
+    select
+      p.jid,
+      p.lid,
+      p.phone,
+      -- nome: o do cadastro de atendentes, o salvo na agenda do celular, o do WhatsApp e o das mensagens
+      coalesce(tm.name, ag.name, nullif(p.name, ''), mm.last_name, (
+        select msg.sender_name from public.messages msg
+        where msg.group_id = p_group_id and msg.sender_name is not null
+          and (msg.sender_jid in (p.jid, p.lid) or (p.phone is not null and msg.sender_phone = p.phone))
+        order by msg.sent_at desc limit 1)) as name,
+      p.role,
+      case p.role when 'superadmin' then 0 when 'admin' then 1 else 2 end as role_rank,
+      tm.id is not null as team,
+      tm.id as team_member_id,
+      coalesce(p.phone = (select regexp_replace(coalesce(w.phone, ''), '\D', '', 'g')
+                          from public.whatsapp_instances w join public.groups g on g.instance_id = w.id
+                          where g.id = p_group_id), false) as is_me,
+      coalesce(mm.n, 0) as messages_30d,
+      mm.last_at as last_message_at,
+      p.joined_at,
+      exists (select 1 from public.contact_avatars a
+              where a.company_id = p.company_id and a.jid = p.jid and a.path is not null) as has_avatar
+    from p
+    left join lateral (
+      select t.id, t.name from public.team_members t
+      where t.company_id = p.company_id and t.active
+        and (t.jid in (p.jid, p.lid)
+             or (p.phone is not null and t.phone is not null and public.phone_key(t.phone) = public.phone_key(p.phone)))
+      limit 1
+    ) tm on true
+    left join lateral (
+      select w.name from public.wa_contacts w
+      where w.company_id = p.company_id and w.name is not null
+        and (w.jid in (p.jid, p.lid) or w.lid in (p.jid, p.lid)
+             or (p.phone is not null and w.phone is not null and public.phone_key(w.phone) = public.phone_key(p.phone)))
+      limit 1
+    ) ag on true
+    left join lateral (
+      select sum(m.n)::int as n, max(m.last_at) as last_at, max(m.last_name) as last_name
+      from m where m.sender_jid in (p.jid, p.lid) or (p.phone is not null and m.sender_phone = p.phone)
+    ) mm on true
+  ) x
+  where public.can_view_group(p_group_id)
+$$;
+grant execute on function public.group_members(uuid) to authenticated;
+$mig0086$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -13413,6 +13486,7 @@ from (values
   (74, 'Logo da empresa e foto dos atendentes (0083)', to_regprocedure('public.set_company_logo(text)') is not null),
   (75, 'Revisão só dos grupos que mudaram (0084)', to_regprocedure('public.recalc_company_senders(uuid)') is not null),
   (76, 'Meu perfil (0085)', to_regprocedure('public.update_my_profile(text,text)') is not null),
-  (77, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (77, 'Responsável na lista de membros (0086)', exists (select 1 from pg_proc where proname = 'group_members' and prosrc like '%team_member_id%')),
+  (78, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

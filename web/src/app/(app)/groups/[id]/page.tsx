@@ -247,7 +247,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             </Card>
           ))}
           <div id="membros" className="col-span-2 scroll-mt-20 lg:col-span-1">
-            <GroupMembers members={(groupMembers ?? []) as GroupMember[]} total={g.participants_count} canPrivate={Boolean(canPrivate)} />
+            <GroupMembers members={(groupMembers ?? []) as GroupMember[]} total={g.participants_count} canPrivate={Boolean(canPrivate)} responsibleIds={responsibleIds} />
           </div>
         </div>
 

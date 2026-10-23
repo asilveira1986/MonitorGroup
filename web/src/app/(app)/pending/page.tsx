@@ -1,5 +1,5 @@
 import { requireMenu } from '@/lib/auth';
-import { AlertOctagon, CheckCheck, Hourglass, PartyPopper } from 'lucide-react';
+import { AlertOctagon, CheckCheck, Hourglass, PartyPopper, UserCheck } from 'lucide-react';
 import Link from 'next/link';
 import { ActionButton } from '@/components/action-button';
 import { LiveTimer } from '@/components/live-timer';
@@ -17,6 +17,21 @@ export default async function PendingPage() {
     supabase.from('app_settings').select('timezone').single(),
   ]);
   const items = (data ?? []) as PendingItem[];
+  // responsáveis da equipe por grupo (0056)
+  const ids = items.map((i) => i.id);
+  const [{ data: resp }, { data: team }] = await Promise.all([
+    ids.length
+      ? supabase.from('groups').select('id, responsible_member_ids').in('id', ids)
+      : Promise.resolve({ data: [] as { id: string; responsible_member_ids: string[] | null }[] }),
+    supabase.from('team_members').select('id, name'),
+  ]);
+  const teamName = new Map(((team ?? []) as { id: string; name: string }[]).map((t) => [t.id, t.name]));
+  const responsiblesOf = new Map(
+    ((resp ?? []) as { id: string; responsible_member_ids: string[] | null }[]).map((g) => [
+      g.id,
+      (g.responsible_member_ids ?? []).map((id) => teamName.get(id)).filter(Boolean) as string[],
+    ]),
+  );
   const overdue = items.filter((i) => i.overdue).length;
 
   return (
@@ -75,6 +90,10 @@ export default async function PendingPage() {
                   </Link>
                   <Badge>{item.pending_count} msg</Badge>
                   <span className="text-xs text-muted">SLA {item.sla_minutes} min</span>
+                  <span className="inline-flex items-center gap-1 text-xs text-ink-2">
+                    <UserCheck className="h-3.5 w-3.5 text-brand-text" aria-hidden />
+                    {responsiblesOf.get(item.id)?.length ? responsiblesOf.get(item.id)!.join(', ') : 'sem responsável'}
+                  </span>
                 </div>
                 <p className="mt-1 line-clamp-2 text-sm text-ink-2">
                   <span className="font-medium text-ink">

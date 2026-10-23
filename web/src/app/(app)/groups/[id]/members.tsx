@@ -1,6 +1,6 @@
 'use client';
 
-import { Crown, Headset, Search, ShieldCheck, Smartphone, Users } from 'lucide-react';
+import { Crown, Headset, Search, ShieldCheck, Smartphone, UserCheck, Users } from 'lucide-react';
 import { CallPrivateButton } from '../../private/call-private';
 import { useState } from 'react';
 import { Card, CardHeader } from '@/components/ui';
@@ -13,6 +13,8 @@ export type GroupMember = {
   name: string | null;
   role: 'member' | 'admin' | 'superadmin';
   team: boolean;
+  /** cadastro do atendente (0086) */
+  team_member_id?: string | null;
   is_me: boolean;
   messages_30d: number;
   last_message_at: string | null;
@@ -33,7 +35,20 @@ const initials = (name: string) =>
  * Membros do grupo (lista do próprio WhatsApp, atualizada pelo worker quando alguém entra ou sai):
  * nome, telefone, admin do grupo, se é da equipe e a atividade dos últimos 30 dias.
  */
-export function GroupMembers({ members, total, canPrivate = false }: { members: GroupMember[]; total: number; canPrivate?: boolean }) {
+export function GroupMembers({
+  members: list,
+  total,
+  canPrivate = false,
+  responsibleIds = [],
+}: {
+  members: GroupMember[];
+  total: number;
+  canPrivate?: boolean;
+  /** responsáveis pelo grupo (da equipe): aparecem primeiro, marcados */
+  responsibleIds?: string[];
+}) {
+  const isResponsible = (m: GroupMember) => Boolean(m.team_member_id && responsibleIds.includes(m.team_member_id));
+  const members = [...list].sort((a, b) => Number(isResponsible(b)) - Number(isResponsible(a)));
   const [query, setQuery] = useState('');
   const q = query.trim().toLowerCase();
   const digits = q.replace(/\D/g, '');
@@ -91,13 +106,19 @@ export function GroupMembers({ members, total, canPrivate = false }: { members: 
                       <span className="truncate">{label}</span>
                       {m.role === 'superadmin' && <Crown className="h-3.5 w-3.5 shrink-0 text-warning-ink" aria-label="Criador do grupo" />}
                       {m.role === 'admin' && <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-brand-text" aria-label="Admin do grupo" />}
-                      {m.team && (
+                      {isResponsible(m) && (
+                        <UserCheck className="h-3.5 w-3.5 shrink-0 text-brand-text" aria-label="Responsável da equipe por este grupo">
+                          <title>Responsável da equipe por este grupo</title>
+                        </UserCheck>
+                      )}
+                      {m.team && !isResponsible(m) && (
                         <Headset className="h-3.5 w-3.5 shrink-0 text-brand-text" aria-label="Da equipe (cadastro de atendentes)">
                           <title>Da equipe (cadastro de atendentes)</title>
                         </Headset>
                       )}
                     </p>
                     <p className="truncate text-[10.5px] text-muted" suppressHydrationWarning>
+                      {isResponsible(m) && <span className="font-semibold text-brand-text">responsável · </span>}
                       {m.phone && (m.name || m.is_me) ? `${formatPhone(m.phone)} · ` : ''}
                       {m.messages_30d
                         ? `${m.messages_30d} msg em 30 dias · última ${timeAgo(m.last_message_at)}`

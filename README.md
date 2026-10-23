@@ -123,6 +123,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    83. `supabase/migrations/0083_logo_and_team_photo.sql`
    84. `supabase/migrations/0084_targeted_recalc.sql`
    85. `supabase/migrations/0085_my_profile.sql`
+   86. `supabase/migrations/0086_members_responsible.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
