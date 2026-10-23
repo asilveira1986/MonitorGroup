@@ -24,7 +24,7 @@ import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
 import { AvatarQueue } from './avatars.js';
 import { storeMessageMedia, storePrivateMedia } from './media.js';
-import { extractContent, isAcknowledgement, isStickerOrEmoji, isThanksAfterTeam, messageChangeOf, phoneFromJid, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
+import { extractContent, isAcknowledgement, isStickerOrEmoji, isThanksAfterTeam, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
 import { selfReadIds } from './receipts.js';
@@ -1010,6 +1010,23 @@ export class WhatsAppManager {
 
     // resposta citando uma mensagem gravada sem remetente: a citação diz quem a escreveu (0080)
     void this.identifyByQuote(session, group.id, msg).catch((err) => logger.warn({ err }, 'falha ao identificar pela citação'));
+    // citação para a conversa mostrar como no WhatsApp (0090)
+    if (result.inserted && result.message_id) void this.saveQuote(result.message_id, msg);
+  }
+
+  /** Guarda a mensagem citada pela resposta (0090; sem o script, a gravação falha calada). */
+  private async saveQuote(messageId: string, msg: WAMessage) {
+    const q = quoteOf(msg.message);
+    if (!q) return;
+    await db
+      .from('messages')
+      .update({
+        quoted_wa_id: q.id,
+        quoted_sender_jid: q.participant ? jidNormalizedUser(q.participant) : null,
+        quoted_body: q.body,
+        quoted_type: q.type,
+      })
+      .eq('id', messageId);
   }
 
   /**
@@ -1800,6 +1817,13 @@ export class WhatsAppManager {
       ) ?? []) as { group_id: string }[];
       for (const r of inserted) h.touchedGroups.add(r.group_id);
       h.imported += inserted.length;
+    }
+    // citações das respostas importadas (0090)
+    for (const msg of messages) {
+      const groupId = msg.key.remoteJid ? groupByJid.get(msg.key.remoteJid) : undefined;
+      if (!groupId || !msg.key.id || !quoteOf(msg.message)) continue;
+      const { data: row } = await db.from('messages').select('id').eq('group_id', groupId).eq('wa_message_id', msg.key.id).maybeSingle();
+      if (row) await this.saveQuote(row.id as string, msg);
     }
     // respostas citando mensagens gravadas sem remetente: a citação diz quem as escreveu (0080)
     for (const msg of messages) {

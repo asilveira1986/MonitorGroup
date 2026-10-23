@@ -393,6 +393,7 @@ export function Conversation({
     }
     return map;
   }, [contacts]);
+  const byWaId = useMemo(() => new Map(messages.map((x) => [x.wa_message_id, x])), [messages]);
   const teamNames = useMemo(() => new Map(demands.members.map((t) => [t.id, t.name])), [demands.members]);
   // nome de quem leu (tiques): membros do grupo por jid ou LID
   const receiptName = useCallback(
@@ -471,8 +472,9 @@ export function Conversation({
               )}
               <div className={cn('flex', m.from_team ? 'justify-end' : 'justify-start')}>
                 <div
+                  id={`msg-${m.id}`}
                   className={cn(
-                    'max-w-[88%] rounded-2xl px-3.5 py-2 text-sm shadow-sm sm:max-w-[80%]',
+                    'max-w-[88%] rounded-2xl px-3.5 py-2 text-sm shadow-sm transition-shadow sm:max-w-[80%]',
                     m.from_team ? 'rounded-br-md bg-brand-soft' : 'rounded-bl-md border border-line bg-surface',
                     pendingSince && !m.from_team && m.sent_at >= pendingSince && 'ring-2 ring-warning/60',
                   )}
@@ -558,6 +560,45 @@ export function Conversation({
                     />
                   ) : (
                     <>
+                      {m.quoted_wa_id && (() => {
+                        // citação como no WhatsApp: quem escreveu e o trecho; clicar leva à original
+                        const orig = byWaId.get(m.quoted_wa_id);
+                        const qWho = orig
+                          ? orig.from_me
+                            ? 'Você'
+                            : (orig.from_team && orig.team_member_id ? teamNames.get(orig.team_member_id) : null) ||
+                              orig.sender_name ||
+                              formatPhone(orig.sender_phone) ||
+                              'Cliente'
+                          : (m.quoted_sender_jid && people.get(m.quoted_sender_jid)?.name) ||
+                            formatPhone(m.quoted_sender_jid?.endsWith('@s.whatsapp.net') ? m.quoted_sender_jid.split('@')[0] : null) ||
+                            'Mensagem';
+                        const qText = orig
+                          ? withoutSignature(orig.body, orig.from_me ? orig.sender_name : null) || TYPE_LABEL[orig.message_type] || orig.message_type
+                          : m.quoted_body || (m.quoted_type ? (TYPE_LABEL[m.quoted_type] ?? m.quoted_type) : '');
+                        const team = orig ? orig.from_team : false;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!orig) return;
+                              const el = document.getElementById(`msg-${orig.id}`);
+                              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              el?.classList.add('ring-2', 'ring-brand');
+                              setTimeout(() => el?.classList.remove('ring-2', 'ring-brand'), 1600);
+                            }}
+                            className={cn(
+                              'mb-1.5 block w-full rounded-lg border-l-4 bg-black/[0.04] px-2.5 py-1 text-left text-xs dark:bg-white/[0.06]',
+                              team ? 'border-brand' : 'border-series-1',
+                              orig ? 'cursor-pointer hover:bg-black/[0.07]' : 'cursor-default',
+                            )}
+                            title={orig ? 'Ir para a mensagem respondida' : undefined}
+                          >
+                            <span className={cn('block font-semibold', team ? 'text-brand-text' : 'text-series-1')}>{qWho}</span>
+                            <span className="line-clamp-2 text-ink-2">{orig?.deleted_at ? '🚫 Mensagem apagada' : qText}</span>
+                          </button>
+                        );
+                      })()}
                       <MessageMedia message={m} onViewed={() => markViewed(m)} />
                       <p className="whitespace-pre-wrap break-words text-ink">
                         {m.message_type !== 'text' && !m.media_path && (

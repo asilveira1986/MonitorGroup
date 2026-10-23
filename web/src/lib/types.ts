@@ -131,6 +131,11 @@ export type Message = {
   media_size?: number | null;
   /** duração do áudio/vídeo (0088) */
   media_seconds?: number | null;
+  /** resposta citando outra mensagem (0090) */
+  quoted_wa_id?: string | null;
+  quoted_sender_jid?: string | null;
+  quoted_body?: string | null;
+  quoted_type?: string | null;
   /** stored | too_large | failed | expired */
   media_status?: string | null;
   /** quando a mensagem do cliente foi vista: lida no celular conectado ou baixa no painel */

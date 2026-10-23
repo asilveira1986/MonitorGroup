@@ -119,6 +119,27 @@ export function samePhone(a: string, b: string): boolean {
 
 export { isAcknowledgement, isStickerOrEmoji, isThanksAfterTeam } from './acknowledgement.js';
 
+/**
+ * Resposta citando outra mensagem (como no WhatsApp): id da original, quem a escreveu e um trecho
+ * dela (para mostrar a citação mesmo quando a original não está no sistema).
+ */
+export function quoteOf(
+  message: proto.IMessage | null | undefined,
+): { id: string; participant: string | null; type: string | null; body: string | null } | null {
+  const content = normalizeMessageContent(message);
+  const type = getContentType(content);
+  if (!content || !type) return null;
+  const ctx = ((content as Record<string, unknown>)[type] as { contextInfo?: proto.IContextInfo } | undefined)?.contextInfo;
+  if (!ctx?.stanzaId) return null;
+  const quoted = ctx.quotedMessage ? extractContent(ctx.quotedMessage) : null;
+  return {
+    id: ctx.stanzaId,
+    participant: ctx.participant ?? null,
+    type: quoted?.type ?? null,
+    body: quoted?.body ? quoted.body.slice(0, 300) : null,
+  };
+}
+
 /** Mensagem citada e quem a escreveu (a citação traz o autor da mensagem original). */
 export function quotedAuthor(message: proto.IMessage | null | undefined): { id: string; participant: string } | null {
   const content = normalizeMessageContent(message);

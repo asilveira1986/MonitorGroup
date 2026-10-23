@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isWithinBusinessHours } from './business-hours.js';
-import { extractContent, findKeyword, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quotedAuthor, reactionOf, samePhone } from './text.js';
+import { extractContent, findKeyword, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, reactionOf, samePhone } from './text.js';
 
 test('findKeyword ignora acentos e maiúsculas e respeita palavra inteira', () => {
   assert.equal(findKeyword('Isso é URGENTE!!', ['urgente']), 'urgente');
@@ -99,4 +99,17 @@ test('autor da mensagem citada', () => {
   );
   assert.equal(quotedAuthor({ extendedTextMessage: { text: 'ok', contextInfo: { stanzaId: 'Q1' } } }), null);
   assert.equal(quotedAuthor({ conversation: 'oi' }), null);
+});
+
+test('mensagem citada pela resposta (quoteOf)', () => {
+  assert.deepEqual(
+    quoteOf({
+      extendedTextMessage: {
+        text: 'Pode sim',
+        contextInfo: { stanzaId: 'Q9', participant: '555@lid', quotedMessage: { conversation: 'Podemos conversar por ligação?' } },
+      },
+    }),
+    { id: 'Q9', participant: '555@lid', type: 'text', body: 'Podemos conversar por ligação?' },
+  );
+  assert.equal(quoteOf({ conversation: 'oi' }), null);
 });

@@ -171,7 +171,8 @@ begin
   (78, 'Responsável vê os seus grupos (0087)', to_regprocedure('public.my_responsible_group_ids()') is not null),
   (79, 'Duração dos áudios (0088)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'messages' and column_name = 'media_seconds')),
   (80, 'Agradecimento depois da equipe (0089)', to_regprocedure('public.is_thanks_after_team(text)') is not null),
-  (81, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (81, 'Citações nas respostas (0090)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'messages' and column_name = 'quoted_wa_id')),
+  (82, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -180,7 +181,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -13523,6 +13524,24 @@ end $$;
 $mig0089$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0090_message_quotes.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0090', $mig0090$
+-- =====================================================================
+-- Respostas citando uma mensagem (como no WhatsApp) nos grupos.
+--
+-- O worker guarda qual mensagem foi respondida (id do WhatsApp), quem a
+-- escreveu e um trecho dela; a conversa mostra o quadro da citação acima
+-- da resposta (também quando a original é antiga e não está carregada).
+-- =====================================================================
+
+alter table public.messages
+  add column if not exists quoted_wa_id text,
+  add column if not exists quoted_sender_jid text,
+  add column if not exists quoted_body text,
+  add column if not exists quoted_type text;
+$mig0090$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -13642,6 +13661,7 @@ from (values
   (78, 'Responsável vê os seus grupos (0087)', to_regprocedure('public.my_responsible_group_ids()') is not null),
   (79, 'Duração dos áudios (0088)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'messages' and column_name = 'media_seconds')),
   (80, 'Agradecimento depois da equipe (0089)', to_regprocedure('public.is_thanks_after_team(text)') is not null),
-  (81, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (81, 'Citações nas respostas (0090)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'messages' and column_name = 'quoted_wa_id')),
+  (82, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
