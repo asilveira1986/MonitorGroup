@@ -34,7 +34,12 @@ function SectorTag({ g }: { g: Group }) {
 /** Responsáveis pelo grupo (pessoas da equipe). */
 function ResponsibleTag({ g }: { g: Group }) {
   const names = g.responsible_names ?? (g.team_members?.name ? [g.team_members.name] : []);
-  if (!names.length) return null;
+  if (!names.length)
+    return (
+      <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted" title="Nenhum responsável da equipe definido">
+        <UserCheck className="h-3 w-3" aria-hidden /> sem responsável
+      </span>
+    );
   return (
     <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-ink-2" title={names.length > 1 ? 'Responsáveis pelo grupo' : 'Responsável pelo grupo'}>
       <UserCheck className="h-3 w-3" aria-hidden /> {names.join(', ')}

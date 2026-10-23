@@ -1,6 +1,7 @@
-import { MessagesSquare, Search, Trash2 } from 'lucide-react';
+import { MessagesSquare, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { Card, EmptyState, Input, PageHeader } from '@/components/ui';
+import { GroupSearch } from './group-search';
+import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { requireMenu } from '@/lib/auth';
 import { cn } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
@@ -70,11 +71,7 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
       <PageHeader title="Grupos" description="Todos os grupos do WhatsApp conectado. Escolha quais devem ser monitorados." />
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <form className="relative w-full sm:w-80">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <Input name="q" defaultValue={q} placeholder="Buscar grupo…" className="pl-9" />
-          {filter !== 'all' && <input type="hidden" name="filter" value={filter} />}
-        </form>
+        <GroupSearch q={q} filter={filter} />
         <div className="flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-1 sm:inline-flex sm:flex-nowrap sm:gap-0">
           {FILTERS.map((f) => (
             <Link
