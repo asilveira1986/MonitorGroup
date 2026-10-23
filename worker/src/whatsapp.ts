@@ -23,7 +23,7 @@ import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
 import { AvatarQueue } from './avatars.js';
 import { storeMessageMedia, storePrivateMedia } from './media.js';
-import { extractContent, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quotedMessageId, reactionOf } from './text.js';
+import { extractContent, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
 import { selfReadIds } from './receipts.js';
@@ -949,6 +949,9 @@ export class WhatsAppManager {
       );
     }
 
+    // resposta citando uma mensagem gravada sem remetente: a citação diz quem a escreveu (0080)
+    void this.identifyByQuote(session, group.id, msg).catch((err) => logger.warn({ err }, 'falha ao identificar pela citação'));
+
     // demandas: comandos, cobranças, confirmações, prazos e classificação
     if (result.inserted && !result.stale && result.message_id) {
       await processDemandSignals({
@@ -965,6 +968,39 @@ export class WhatsAppManager {
         opensPending,
       });
     }
+  }
+
+  /**
+   * A mensagem cita outra que foi gravada sem remetente (o WhatsApp não informou): a citação traz
+   * o autor da original. Completa o remetente e, se for da equipe (ou o número conectado), passa a
+   * mensagem para a equipe e refaz o grupo (0080).
+   */
+  private async identifyByQuote(session: Session, groupId: string, msg: WAMessage) {
+    const quote = quotedAuthor(msg.message);
+    if (!quote) return;
+    const { data: target } = await db
+      .from('messages')
+      .select('id')
+      .eq('group_id', groupId)
+      .eq('wa_message_id', quote.id)
+      .is('sender_jid', null)
+      .eq('from_me', false)
+      .maybeSingle();
+    if (!target) return;
+    const author = jidNormalizedUser(quote.participant);
+    const me = this.isMe(session, author);
+    const alt = me ? null : await this.phoneJidForLid(session, msg.key.remoteJid, author);
+    const member = me ? null : await findTeamMember(session.companyId, author, alt);
+    const { error } = await db.rpc('identify_message_sender', {
+      p_message_id: target.id,
+      p_jid: author,
+      p_phone: phoneFromJid(author) ?? phoneFromJid(alt),
+      p_name: me ? (session.sock.user?.name ?? 'Número conectado') : (member?.name ?? session.lidNames.get(author) ?? null),
+      p_team_member_id: member?.id ?? null,
+      p_team: me || Boolean(member),
+    });
+    if (error) logger.warn({ err: error.message }, 'não foi possível identificar o remetente pela citação');
+    else logger.info({ messageId: target.id, team: me || Boolean(member) }, 'remetente identificado pela citação');
   }
 
   /**
@@ -1598,6 +1634,11 @@ export class WhatsAppManager {
       ) ?? []) as { group_id: string }[];
       for (const r of inserted) h.touchedGroups.add(r.group_id);
       h.imported += inserted.length;
+    }
+    // respostas citando mensagens gravadas sem remetente: a citação diz quem as escreveu (0080)
+    for (const msg of messages) {
+      const groupId = msg.key.remoteJid ? groupByJid.get(msg.key.remoteJid) : undefined;
+      if (groupId && quotedAuthor(msg.message)) await this.identifyByQuote(session, groupId, msg).catch(() => {});
     }
     // mensagens já gravadas sem remetente: completa com o que veio agora (0078)
     const senders = rows

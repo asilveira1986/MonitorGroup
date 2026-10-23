@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isWithinBusinessHours } from './business-hours.js';
-import { extractContent, findKeyword, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, reactionOf, samePhone } from './text.js';
+import { extractContent, findKeyword, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quotedAuthor, reactionOf, samePhone } from './text.js';
 
 test('findKeyword ignora acentos e maiúsculas e respeita palavra inteira', () => {
   assert.equal(findKeyword('Isso é URGENTE!!', ['urgente']), 'urgente');
@@ -90,4 +90,13 @@ test('mensagem apagada ou editada no WhatsApp', () => {
   );
   assert.equal(messageChangeOf({ protocolMessage: { type: 3, key: { id: 'M3' } } }), null);
   assert.equal(messageChangeOf({ conversation: 'oi' }), null);
+});
+
+test('autor da mensagem citada', () => {
+  assert.deepEqual(
+    quotedAuthor({ extendedTextMessage: { text: 'ok', contextInfo: { stanzaId: 'Q1', participant: '123@lid' } } }),
+    { id: 'Q1', participant: '123@lid' },
+  );
+  assert.equal(quotedAuthor({ extendedTextMessage: { text: 'ok', contextInfo: { stanzaId: 'Q1' } } }), null);
+  assert.equal(quotedAuthor({ conversation: 'oi' }), null);
 });

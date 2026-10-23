@@ -105,6 +105,7 @@ from (values
   (68, 'Número do LID pela sessão (0077)', to_regprocedure('public.lid_phone(uuid,text)') is not null),
   (69, 'Mensagens sem remetente (0078)', to_regprocedure('public.set_message_sender(uuid,uuid)') is not null),
   (70, 'Membros × atendentes e agenda (0079)', exists (select 1 from pg_proc where proname = 'group_members' and prosrc like '%phone_key%')),
-  (71, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (71, 'Remetente pela citação (0080)', to_regprocedure('public.identify_message_sender(uuid,text,text,text,uuid,boolean)') is not null),
+  (72, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

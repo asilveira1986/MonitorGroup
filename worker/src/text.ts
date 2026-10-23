@@ -119,6 +119,15 @@ export function samePhone(a: string, b: string): boolean {
 
 export { isAcknowledgement, isStickerOrEmoji } from './acknowledgement.js';
 
+/** Mensagem citada e quem a escreveu (a citação traz o autor da mensagem original). */
+export function quotedAuthor(message: proto.IMessage | null | undefined): { id: string; participant: string } | null {
+  const content = normalizeMessageContent(message);
+  const type = getContentType(content);
+  if (!content || !type) return null;
+  const ctx = ((content as Record<string, unknown>)[type] as { contextInfo?: proto.IContextInfo } | undefined)?.contextInfo;
+  return ctx?.stanzaId && ctx.participant ? { id: ctx.stanzaId, participant: ctx.participant } : null;
+}
+
 /** Id da mensagem citada (quando a mensagem é uma resposta a outra). */
 export function quotedMessageId(message: proto.IMessage | null | undefined): string | null {
   const content = normalizeMessageContent(message);

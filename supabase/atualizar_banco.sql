@@ -161,7 +161,8 @@ begin
   (68, 'Número do LID pela sessão (0077)', to_regprocedure('public.lid_phone(uuid,text)') is not null),
   (69, 'Mensagens sem remetente (0078)', to_regprocedure('public.set_message_sender(uuid,uuid)') is not null),
   (70, 'Membros × atendentes e agenda (0079)', exists (select 1 from pg_proc where proname = 'group_members' and prosrc like '%phone_key%')),
-  (71, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (71, 'Remetente pela citação (0080)', to_regprocedure('public.identify_message_sender(uuid,text,text,text,uuid,boolean)') is not null),
+  (72, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -170,7 +171,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -12692,6 +12693,55 @@ grant execute on function public.group_members(uuid) to authenticated;
 $mig0079$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0080_sender_from_quote.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0080', $mig0080$
+-- =====================================================================
+-- Remetente pela citação.
+--
+-- Quando alguém responde citando uma mensagem que foi gravada sem
+-- remetente (0078), a citação traz quem escreveu a original: o worker
+-- completa o remetente e, se for da equipe (ou o número conectado), passa
+-- a mensagem para a equipe e refaz tempos e pendência do grupo.
+-- =====================================================================
+
+create or replace function public.identify_message_sender(
+  p_message_id uuid, p_jid text, p_phone text default null, p_name text default null,
+  p_team_member_id uuid default null, p_team boolean default false
+)
+returns boolean
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_group uuid;
+  v_pending timestamptz;
+begin
+  update public.messages
+     set sender_jid = p_jid,
+         sender_phone = coalesce(sender_phone, nullif(p_phone, '')),
+         sender_name = coalesce(sender_name, nullif(p_name, '')),
+         from_team = from_team or coalesce(p_team, false),
+         team_member_id = coalesce(team_member_id, p_team_member_id)
+   where id = p_message_id and sender_jid is null and not from_me and nullif(p_jid, '') is not null
+  returning group_id into v_group;
+  if v_group is null then
+    return false;
+  end if;
+  if coalesce(p_team, false) then
+    select pending_since into v_pending from public.groups where id = v_group;
+    perform public.rebuild_group_state(v_group, coalesce(v_pending, now()));
+    update public.alerts a set status = 'resolved', resolved_at = now()
+      from public.groups g
+     where g.id = a.group_id and g.id = v_group and g.pending_since is null
+       and a.type = 'no_response' and a.status <> 'resolved';
+  end if;
+  return true;
+end;
+$$;
+revoke all on function public.identify_message_sender(uuid, text, text, text, uuid, boolean) from public, anon, authenticated;
+grant execute on function public.identify_message_sender(uuid, text, text, text, uuid, boolean) to service_role;
+$mig0080$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -12801,6 +12851,7 @@ from (values
   (68, 'Número do LID pela sessão (0077)', to_regprocedure('public.lid_phone(uuid,text)') is not null),
   (69, 'Mensagens sem remetente (0078)', to_regprocedure('public.set_message_sender(uuid,uuid)') is not null),
   (70, 'Membros × atendentes e agenda (0079)', exists (select 1 from pg_proc where proname = 'group_members' and prosrc like '%phone_key%')),
-  (71, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (71, 'Remetente pela citação (0080)', to_regprocedure('public.identify_message_sender(uuid,text,text,text,uuid,boolean)') is not null),
+  (72, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
