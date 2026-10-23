@@ -52,6 +52,21 @@ const initials = (s: string) =>
     .map((w) => w[0]!.toUpperCase())
     .join('') || '#';
 
+/**
+ * A mesma pessoa pode vir pelo número (agenda) e pelo LID (grupos): mostra uma vez só,
+ * de preferência a linha com o nome salvo e o número.
+ */
+function uniqueContacts(list: Contact[]) {
+  const best = new Map<string, Contact>();
+  const score = (c: Contact) => (c.name ? 2 : 0) + (c.jid.endsWith('@s.whatsapp.net') ? 1 : 0);
+  for (const c of list) {
+    const key = c.phone ?? c.jid;
+    const cur = best.get(key);
+    if (!cur || score(c) > score(cur)) best.set(key, c);
+  }
+  return [...best.values()];
+}
+
 /** Nova conversa: um contato do WhatsApp (busca) ou um número digitado. */
 function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string) => void }) {
   const [q, setQ] = useState('');
@@ -77,7 +92,7 @@ function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: 
           [`name.ilike.%${term}%`, `notify.ilike.%${term}%`, digits.length >= 3 ? `phone.ilike.%${digits}%` : null].filter(Boolean).join(','),
         );
       }
-      void query.then(({ data }) => setContacts((data ?? []) as Contact[]));
+      void query.then(({ data }) => setContacts(uniqueContacts((data ?? []) as Contact[])));
     }, 250);
     return () => clearTimeout(timer);
   }, [q]);

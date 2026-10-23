@@ -153,7 +153,8 @@ begin
   (61, 'Conversas privadas: arquivos, reações, editar e apagar (0070)', to_regprocedure('public.request_private_action(uuid,text,text,text)') is not null),
   (62, 'Conversas privadas: enviar arquivos e citar (0071)', to_regprocedure('public.send_private_message(uuid,text,uuid,jsonb)') is not null),
   (63, 'Sincronizar contatos (0072)', to_regprocedure('public.request_contacts_sync()') is not null),
-  (64, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (64, 'Contatos com o nome salvo (0073)', to_regprocedure('public.save_wa_contacts(uuid,jsonb)') is not null),
+  (65, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -162,7 +163,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -11803,6 +11804,103 @@ grant execute on function public.request_contacts_sync() to authenticated;
 $mig0072$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0073_contacts_names.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0073', $mig0073$
+-- =====================================================================
+-- Contatos com o nome salvo na agenda.
+--
+-- O WhatsApp manda a mesma pessoa de dois jeitos: pela agenda (número,
+-- com o nome salvo) e pelos grupos (LID, só com o nome que ela usa no
+-- WhatsApp). Agora:
+--  * a gravação mescla: um campo que não veio não apaga o que já havia;
+--  * o nome salvo passa entre o número e o LID da mesma pessoa (e o
+--    telefone para a linha do LID);
+--  * as conversas privadas sem nome (ou com o nome do WhatsApp / só o
+--    número) passam a mostrar o nome salvo.
+-- =====================================================================
+
+create index if not exists wa_contacts_phone_idx on public.wa_contacts (instance_id, phone) where phone is not null;
+create index if not exists wa_contacts_lid_idx on public.wa_contacts (instance_id, lid) where lid is not null;
+
+-- liga as linhas da mesma pessoa (número × LID) e leva o nome salvo para as conversas
+create or replace function public.link_wa_contacts(p_instance_id uuid)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+begin
+  -- telefone para a linha do LID
+  update public.wa_contacts t
+     set phone = s.phone, updated_at = now()
+    from public.wa_contacts s
+   where t.instance_id = p_instance_id and s.instance_id = p_instance_id
+     and t.jid <> s.jid and t.phone is null and s.phone is not null
+     and (t.jid = s.lid or (t.lid is not null and t.lid = s.lid));
+  -- nome salvo para a outra linha da mesma pessoa
+  update public.wa_contacts t
+     set name = s.name, updated_at = now()
+    from public.wa_contacts s
+   where t.instance_id = p_instance_id and s.instance_id = p_instance_id
+     and t.jid <> s.jid and t.name is null and s.name is not null
+     and ((t.phone is not null and t.phone = s.phone)
+          or (t.lid is not null and (t.lid = s.lid or t.lid = s.jid))
+          or (s.lid is not null and s.lid = t.jid));
+  -- conversas: nome salvo no lugar de nenhum nome, do nome do WhatsApp ou só do número
+  update public.private_chats c
+     set name = w.name
+    from public.wa_contacts w
+   where c.instance_id = p_instance_id and w.instance_id = p_instance_id
+     and w.jid = c.jid and w.name is not null and c.name is distinct from w.name
+     and (c.name is null or c.name = w.notify or c.name ~ '^[0-9 +()-]+$');
+end;
+$$;
+revoke all on function public.link_wa_contacts(uuid) from public, anon, authenticated;
+grant execute on function public.link_wa_contacts(uuid) to service_role;
+
+-- worker: grava um lote de contatos [{jid, lid, phone, name, notify}] sem apagar o que não veio
+create or replace function public.save_wa_contacts(p_instance_id uuid, p_rows jsonb)
+returns int
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_company uuid;
+  v_n int;
+begin
+  select company_id into v_company from public.whatsapp_instances where id = p_instance_id;
+  if v_company is null then
+    return 0;
+  end if;
+  insert into public.wa_contacts as t (instance_id, company_id, jid, lid, phone, name, notify, updated_at)
+  select p_instance_id, v_company, r.jid,
+         max(nullif(r.lid, '')), max(nullif(r.phone, '')), max(nullif(btrim(r.name), '')), max(nullif(btrim(r.notify), '')), now()
+    from jsonb_to_recordset(coalesce(p_rows, '[]'::jsonb)) as r(jid text, lid text, phone text, name text, notify text)
+   where nullif(r.jid, '') is not null
+   group by r.jid
+  on conflict (instance_id, jid) do update
+    set lid = coalesce(excluded.lid, t.lid),
+        phone = coalesce(excluded.phone, t.phone),
+        name = coalesce(excluded.name, t.name),
+        notify = coalesce(excluded.notify, t.notify),
+        updated_at = now();
+  get diagnostics v_n = row_count;
+  perform public.link_wa_contacts(p_instance_id);
+  return v_n;
+end;
+$$;
+revoke all on function public.save_wa_contacts(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.save_wa_contacts(uuid, jsonb) to service_role;
+
+-- acerta os contatos e conversas já gravados
+do $$
+declare
+  v_id uuid;
+begin
+  for v_id in select distinct instance_id from public.wa_contacts loop
+    perform public.link_wa_contacts(v_id);
+  end loop;
+end $$;
+$mig0073$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -11904,6 +12002,7 @@ from (values
   (61, 'Conversas privadas: arquivos, reações, editar e apagar (0070)', to_regprocedure('public.request_private_action(uuid,text,text,text)') is not null),
   (62, 'Conversas privadas: enviar arquivos e citar (0071)', to_regprocedure('public.send_private_message(uuid,text,uuid,jsonb)') is not null),
   (63, 'Sincronizar contatos (0072)', to_regprocedure('public.request_contacts_sync()') is not null),
-  (64, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (64, 'Contatos com o nome salvo (0073)', to_regprocedure('public.save_wa_contacts(uuid,jsonb)') is not null),
+  (65, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

@@ -19,13 +19,23 @@ export async function privateEnabled(companyId: string): Promise<boolean> {
   return on;
 }
 
-/** Grava/atualiza os contatos sincronizados pelo WhatsApp (em lotes). */
+/**
+ * Grava/atualiza os contatos sincronizados pelo WhatsApp (em lotes). A função do banco (0073) mescla:
+ * o que não veio não apaga o que havia, e o nome salvo passa entre o número e o LID da mesma pessoa.
+ */
 export async function saveContacts(instanceId: string, companyId: string, contacts: Partial<Contact>[]) {
   if (!contacts.length || !(await privateEnabled(companyId))) return;
   const rows = contacts.map((c) => contactRow(instanceId, companyId, c)).filter((r): r is Record<string, unknown> => Boolean(r));
   for (let i = 0; i < rows.length; i += 500) {
-    const { error } = await db.from('wa_contacts').upsert(rows.slice(i, i + 500), { onConflict: 'instance_id,jid' });
-    if (error) {
+    const batch = rows.slice(i, i + 500);
+    const { error } = await db.rpc('save_wa_contacts', {
+      p_instance_id: instanceId,
+      p_rows: batch.map(({ jid, lid, phone, name, notify }) => ({ jid, lid, phone, name, notify })),
+    });
+    if (error && /save_wa_contacts/.test(error.message)) {
+      // banco sem o script 0073: grava linha a linha só com os campos que vieram
+      for (const row of batch) await db.from('wa_contacts').upsert(row, { onConflict: 'instance_id,jid' });
+    } else if (error) {
       logger.warn({ err: error.message }, 'não foi possível guardar os contatos');
       return;
     }
