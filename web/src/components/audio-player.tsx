@@ -9,7 +9,8 @@ const SPEEDS = [1, 1.5, 2];
 
 /**
  * Tocador de áudio como no WhatsApp: ▶, barra de progresso e o tempo. A duração vem guardada com a
- * mensagem (0088) e aparece antes de tocar; o arquivo só é baixado ao dar play. Velocidade 1×/1,5×/2×.
+ * mensagem (0088) e aparece antes de tocar; sem ela, o tocador lê o tempo do começo do arquivo.
+ * Velocidade 1×/1,5×/2×.
  */
 export function AudioPlayer({
   src,
@@ -89,7 +90,9 @@ export function AudioPlayer({
       <audio
         ref={ref}
         src={src}
-        preload="none"
+        // sem a duração guardada (áudios antigos ou sem a informação do WhatsApp): carrega só o
+        // começo do arquivo para saber o tempo; com ela, o arquivo só baixa ao dar play
+        preload={seconds ? 'none' : 'metadata'}
         onPlay={() => {
           setPlaying(true);
           onPlay?.();
@@ -102,8 +105,19 @@ export function AudioPlayer({
         onPlaying={() => setLoading(false)}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => {
-          const d = e.currentTarget.duration;
-          if (Number.isFinite(d) && d > 0) setDuration(d);
+          const a = e.currentTarget;
+          if (Number.isFinite(a.duration) && a.duration > 0) return setDuration(a.duration);
+          // alguns arquivos (gravados no navegador) não trazem a duração no começo: pula para o fim
+          // para o navegador calcular, e volta
+          if (a.duration === Infinity) {
+            const back = () => {
+              a.removeEventListener('durationchange', back);
+              if (Number.isFinite(a.duration) && a.duration > 0) setDuration(a.duration);
+              a.currentTime = 0;
+            };
+            a.addEventListener('durationchange', back);
+            a.currentTime = 1e7;
+          }
         }}
         onError={() => {
           setLoading(false);
