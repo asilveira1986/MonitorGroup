@@ -2,6 +2,9 @@ import { createAdminClient } from '@/lib/supabase/server';
 
 export type RecalcSummary = {
   mensagens_reclassificadas: number;
+  /** 0076: de cliente para equipe e o contrário */
+  mensagens_da_equipe?: number;
+  mensagens_de_cliente?: number;
   grupos_recalculados: number;
   aguardando_antes: number;
   aguardando_depois: number;
