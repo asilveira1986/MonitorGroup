@@ -119,6 +119,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    79. `supabase/migrations/0079_members_team_names.sql`
    80. `supabase/migrations/0080_sender_from_quote.sql`
    81. `supabase/migrations/0081_unknown_senders.sql`
+   82. `supabase/migrations/0082_log_message_sender.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
