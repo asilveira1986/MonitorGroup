@@ -55,7 +55,8 @@ from (values
   (34, 'Frases a ignorar (0041)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'ignore_phrases')),
   (35, 'Mensagens rápidas (0042)', to_regclass('public.quick_replies') is not null),
-  (36, 'Fechamento da conversa (0043)', to_regprocedure('public.send_group_message(uuid,text,uuid,boolean)') is not null
+  (36, 'Fechamento da conversa (0043)', (to_regprocedure('public.send_group_message(uuid,text,uuid,boolean)') is not null
+       or to_regprocedure('public.send_group_message(uuid,text,uuid,boolean,jsonb)') is not null)
       and exists (select 1 from information_schema.columns
                   where table_schema = 'public' and table_name = 'groups' and column_name = 'closed_at')),
   (37, 'Fotos de perfil (0044)', to_regclass('public.contact_avatars') is not null),
