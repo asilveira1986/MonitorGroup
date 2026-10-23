@@ -26,14 +26,14 @@ function Permissions({
 }) {
   return (
     <div className="divide-y divide-line">
-      <Row
-        icon={MessageSquareReply}
-        title="Responder pelo sistema"
-        text="Enviar mensagens pelo painel nos grupos do setor (se responder pelo sistema estiver ligado em Geral)."
-        checked={value.can_reply}
-        onChange={(v) => onChange({ ...value, can_reply: v })}
-        disabled={disabled}
-      />
+      {/* responder: todos os usuários respondem nos grupos que veem (0094), não é mais por setor */}
+      <div className="flex items-start gap-3 py-3 text-xs text-ink-2">
+        <MessageSquareReply className="mt-0.5 h-5 w-5 shrink-0 text-muted" />
+        <p>
+          <span className="block text-sm font-medium text-ink">Responder pelo sistema</span>
+          Todos os usuários respondem nos grupos que veem (menos o perfil “só visualizar”).
+        </p>
+      </div>
       <Row
         icon={ClipboardList}
         title="Gerenciar demandas"

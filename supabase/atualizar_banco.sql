@@ -175,7 +175,8 @@ begin
   (82, 'Aviso ao cliente da demanda (0091)', to_regprocedure('public.demands_notify_client()') is not null),
   (83, 'Aviso de demanda concluída (0092)', to_regprocedure('public.deliver_demand(uuid,text,text)') is not null),
   (84, 'Avisos do sistema sempre vão (0093)', exists (select 1 from pg_proc where proname = 'guard_group_write' and prosrc like '%system_notice%')),
-  (85, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (85, 'Todos respondem nos grupos (0094)', exists (select 1 from pg_proc where proname = 'has_group_permission' and prosrc like '%(0094)%')),
+  (86, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -184,7 +185,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -13949,6 +13950,48 @@ $$;
 $mig0093$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0094_everyone_replies.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0094', $mig0094$
+-- =====================================================================
+-- Todos os usuários respondem em todos os grupos que veem.
+--
+-- A permissão "Responder pelo sistema" deixa de ser por setor: quem vê o
+-- grupo (pelo setor, por ser responsável ou por ser administrador) pode
+-- responder por ele. O perfil "só visualizar" continua só vendo, e a chave
+-- geral "Responder pelo sistema" (Configurações › Atendimento) continua
+-- valendo. "Quem pode responder" passa a "todos" nas empresas.
+-- =====================================================================
+
+update public.sectors set can_reply = true where not can_reply;
+alter table public.sectors alter column can_reply set default true;
+update public.app_settings set reply_allowed = 'all' where reply_allowed is distinct from 'all';
+
+create or replace function public.has_group_permission(p_group_id uuid, p_permission text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.groups where id = p_group_id and company_id = public.current_company_id())
+     and public.is_active_user()
+     and (p_permission = 'view' or public.can_write())
+     and (public.is_admin()
+          -- responsável pelo grupo: vê, responde, cuida das demandas e dos alertas
+          or (p_permission in ('view', 'reply', 'demands', 'alerts') and p_group_id = any(public.my_responsible_group_ids()))
+          or exists (
+       select 1
+       from public.groups g
+       join public.sectors s on s.id = g.sector_id
+       join public.sector_members sm on sm.sector_id = s.id and sm.user_id = auth.uid()
+       where g.id = p_group_id
+         and case p_permission
+               when 'view' then true
+               when 'reply' then true  -- todos respondem nos grupos que veem (0094)
+               when 'demands' then s.can_manage_demands
+               when 'alerts' then s.can_handle_alerts
+               else false
+             end
+     ))
+$$;
+$mig0094$);
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -14072,6 +14115,7 @@ from (values
   (82, 'Aviso ao cliente da demanda (0091)', to_regprocedure('public.demands_notify_client()') is not null),
   (83, 'Aviso de demanda concluída (0092)', to_regprocedure('public.deliver_demand(uuid,text,text)') is not null),
   (84, 'Avisos do sistema sempre vão (0093)', exists (select 1 from pg_proc where proname = 'guard_group_write' and prosrc like '%system_notice%')),
-  (85, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (85, 'Todos respondem nos grupos (0094)', exists (select 1 from pg_proc where proname = 'has_group_permission' and prosrc like '%(0094)%')),
+  (86, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
