@@ -198,8 +198,7 @@ export function Sidebar({
             )}
           >
             <Icon className="h-4 w-4 shrink-0 [[data-sidebar=collapsed]_aside_&]:h-5 [[data-sidebar=collapsed]_aside_&]:w-5" />
-            {/* o nome encolhe (com …) e o número continua inteiro à direita */}
-            <span className={cn('min-w-0 flex-1 truncate', COLLAPSED_HIDE)}>{label}</span>
+            <span className={cn('flex-1 whitespace-nowrap', COLLAPSED_HIDE)}>{label}</span>
             {/* recolhido: só um ponto sobre o ícone indicando que há itens */}
             {count > 0 && (
               <span
@@ -235,7 +234,7 @@ export function Sidebar({
 
   return (
     <>
-      <aside className="theme-deep sidebar-glow fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-line bg-surface px-3 py-4 transition-[width] duration-200 lg:flex [[data-sidebar=collapsed]_&]:w-[4.5rem] [[data-sidebar=collapsed]_&]:px-3">
+      <aside className="theme-deep sidebar-glow fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-surface px-3 py-4 transition-[width] duration-200 lg:flex [[data-sidebar=collapsed]_&]:w-[4.5rem] [[data-sidebar=collapsed]_&]:px-3">
         {/* recolher/expandir: discreto, no canto superior direito (vira uma aba na borda quando recolhido) */}
         <button
           type="button"
