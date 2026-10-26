@@ -11,6 +11,8 @@ const jetbrains = JetBrains_Mono({ variable: '--font-jetbrains', subsets: ['lati
 export const metadata: Metadata = {
   title: 'Monitor Group',
   description: 'Monitoramento de grupos de WhatsApp: garanta que todo cliente seja respondido.',
+  // aberto pela Tela de Início do iPhone: tela cheia, como app (e com notificações push)
+  appleWebApp: { capable: true, title: 'Monitor Group', statusBarStyle: 'default' },
 };
 
 export const viewport: Viewport = {

@@ -135,6 +135,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    95. `supabase/migrations/0095_lock_down_public.sql`
    96. `supabase/migrations/0096_lgpd_retention_requests.sql`
    97. `supabase/migrations/0097_agenda_standalone.sql`
+   98. `supabase/migrations/0098_push_notifications.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -310,6 +311,25 @@ O sino no topo da tela silencia todos os avisos em tela só no navegador em uso.
 - escolhe a **voz** (as instaladas no computador e no navegador; se não existir em outro computador, ele usa a voz em português padrão dele), a **velocidade** e o **tom**.
 **Sons dos avisos:** com a voz falando, toca um bipe curto antes da fala. Sem voz (desligada, ou o aviso/regra sem voz), cada tipo de aviso tem um som próprio: **mensagem recebida** (plim-plim suave), **informativo** (uma nota leve), **atenção** (dois bipes médios) e **crítico** (alarme curto com três bipes agudos, duas vezes; o SLA excedido usa este). Dá para ouvir cada um em *Regras de alerta › Avisos em tela › Tocar som*.
 O sino do topo silencia também a voz naquele navegador.
+
+## Notificações no celular e no computador (push)
+
+Os avisos chegam no aparelho **mesmo com o sistema fechado** e o celular bloqueado; tocar na notificação abre a tela certa (o grupo, Demandas, Agenda ou a conversa privada).
+
+**Como ativar (cada pessoa, em cada aparelho):** menu lateral › seu nome (**Meu perfil**) › **Notificações neste aparelho** › **Ativar** e permitir. Chega uma notificação de teste; o botão **Testar** manda outra.
+- **iPhone/iPad** (iOS 16.4 ou mais novo): abra o sistema no **Safari**, toque em **Compartilhar › Adicionar à Tela de Início** e entre pelo ícone criado; só assim o iPhone libera as notificações. O sistema abre em tela cheia, como um app.
+- **Android**: funciona no Chrome direto ou pelo atalho na tela inicial (menu ⋮ › *Instalar app* / *Adicionar à tela inicial*).
+- **Computador**: Chrome, Edge, Firefox e Safari.
+
+**O que avisa** (cada pessoa liga/desliga cada tipo no próprio perfil):
+| Aviso | Quem recebe |
+|---|---|
+| **Alertas dos grupos** (cliente sem resposta, palavra crítica, WhatsApp desconectado...) | quem vê o grupo (as regras de setor e responsável); sem grupo, os administradores. Regras com "mostrar no painel" desligado não avisam |
+| **Demanda nova para você**, **vence na próxima hora** e **atrasou** | os usuários ligados ao responsável da demanda (pelo e-mail da equipe) |
+| **Agenda**: quando alguém te inclui num compromisso e **15 minutos antes** | os participantes |
+| **Mensagem nova nas conversas privadas** | quem usa as conversas privadas |
+
+Quem fez a ação não recebe aviso dela. As chaves de envio são geradas pelo worker na primeira vez (nada a configurar; com `APP_URL` preenchido ele usa o endereço do painel como contato). O envio é gratuito (serviços de push da Apple, Google e Mozilla). O conteúdo vai criptografado até o aparelho e aparece na tela bloqueada: título do aviso, grupo e o começo da mensagem. Aparelho que saiu (app removido, permissão retirada) é apagado sozinho no próximo envio.
 
 ## Acompanhamento do dia a dia
 

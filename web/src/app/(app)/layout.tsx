@@ -85,6 +85,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
           phone: profile.phone ?? null,
           initials,
           photoSrc: profile.photo_path ? `/profile-photo/${profile.id}` : null,
+          role: profile.role,
         }}
       />
       <RealtimeListener />

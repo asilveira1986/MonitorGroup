@@ -7,14 +7,15 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { prepareMyPhoto, saveMyPhoto, updateMyProfile } from '@/app/(app)/profile/actions';
 import { ImageUpload } from '@/components/image-upload';
+import { PushSettings } from '@/components/push-settings';
 import { Button, Field, Input } from '@/components/ui';
 import { createClient } from '@/lib/supabase/client';
 
-export type MyProfile = { id: string; name: string; email: string; phone: string | null; initials: string; photoSrc: string | null };
+export type MyProfile = { id: string; name: string; email: string; phone: string | null; initials: string; photoSrc: string | null; role?: string };
 
 /**
  * Meu perfil (0085): o bloco do usuário no menu lateral abre a janela para editar nome, telefone,
- * foto e senha. A janela vai para o fim da página (fora do menu, que usa o tema escuro).
+ * foto e senha, e ativar as notificações push neste aparelho (0098). A janela vai para o fim da página (fora do menu, que usa o tema escuro).
  */
 export function ProfileDialog({ me, children, className }: { me: MyProfile; children: ReactNode; className?: string }) {
   const router = useRouter();
@@ -58,7 +59,7 @@ export function ProfileDialog({ me, children, className }: { me: MyProfile; chil
           <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Meu perfil">
             <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
             <form
-              className="relative w-full max-w-md space-y-4 rounded-t-2xl bg-surface p-5 text-ink shadow-2xl sm:rounded-2xl"
+              className="relative max-h-[92dvh] w-full max-w-md space-y-4 overflow-y-auto rounded-t-2xl bg-surface p-5 text-ink shadow-2xl sm:rounded-2xl"
               onSubmit={(e) => {
                 e.preventDefault();
                 save();
@@ -92,6 +93,7 @@ export function ProfileDialog({ me, children, className }: { me: MyProfile; chil
               <Field label="Telefone (com DDD)">
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="51 99999-8888" />
               </Field>
+              <PushSettings userId={me.id} agendaOnly={me.role === 'agenda'} />
               <div className="grid gap-3 border-t border-line pt-4 sm:grid-cols-2">
                 <Field label="Senha nova (opcional)">
                   <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" minLength={8} />

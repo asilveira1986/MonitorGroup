@@ -21,10 +21,12 @@
     "@supabase/supabase-js": "^2.117.2",
     "baileys": "^7.0.0-rc14",
     "pino": "^10.3.1",
+    "web-push": "^3.6.7",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
+    "@types/web-push": "^3.6.4",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }

@@ -8,6 +8,7 @@ import { env } from './env.js';
 import { logger } from './logger.js';
 import { applyMessageRetention, cleanupExpiredMedia } from './media.js';
 import { setWhatsAppSender } from './notify.js';
+import { startPush } from './push.js';
 import { WhatsAppManager } from './whatsapp.js';
 
 const ALERT_CHECK_MS = 60_000;
@@ -142,6 +143,8 @@ async function main() {
   // conteúdo das mensagens mais antigas que o prazo de guarda de cada empresa (LGPD)
   setTimeout(() => void applyMessageRetention(), 5 * 60_000);
   setInterval(() => void applyMessageRetention(), MEDIA_CLEANUP_MS);
+  // notificações push nos aparelhos (0098)
+  void startPush();
   logger.info('worker do MonitorGroup no ar');
 }
 
