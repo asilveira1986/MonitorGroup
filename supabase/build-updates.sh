@@ -127,7 +127,8 @@ CHECKS=$(cat <<'SQL'
   (88, 'Agenda por usuário e setores da agenda (0097)', to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[])') is not null),
   (89, 'Notificações push (0098)', to_regprocedure('public.claim_push_deliveries(integer)') is not null),
   (90, 'Push sem avisos atrasados (0099)', coalesce(position('30 minutes' in pg_get_functiondef(to_regprocedure('public.claim_push_deliveries(integer)'))), 0) > 0),
-  (91, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (91, 'Push: permissões do worker (0100)', coalesce(has_table_privilege('service_role', to_regclass('public.push_events'), 'update'), false)),
+  (92, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

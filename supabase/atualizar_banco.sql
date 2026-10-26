@@ -182,7 +182,8 @@ begin
   (88, 'Agenda por usuário e setores da agenda (0097)', to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[])') is not null),
   (89, 'Notificações push (0098)', to_regprocedure('public.claim_push_deliveries(integer)') is not null),
   (90, 'Push sem avisos atrasados (0099)', coalesce(position('30 minutes' in pg_get_functiondef(to_regprocedure('public.claim_push_deliveries(integer)'))), 0) > 0),
-  (91, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (91, 'Push: permissões do worker (0100)', coalesce(has_table_privilege('service_role', to_regclass('public.push_events'), 'update'), false)),
+  (92, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -191,7 +192,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -15107,6 +15108,21 @@ grant execute on function public.claim_push_deliveries(int) to service_role;
 $mig0099$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0100_push_grants.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0100', $mig0100$
+-- =====================================================================
+-- Notificações push: garante que o worker (chave de serviço) lê e grava
+-- as tabelas das notificações, mesmo em bancos em que as permissões
+-- padrão das tabelas novas não incluem a chave de serviço.
+-- =====================================================================
+
+grant select, insert, update, delete on public.push_config, public.push_subscriptions, public.push_events to service_role;
+grant usage, select on all sequences in schema public to service_role;
+grant execute on function public.claim_push_deliveries(int), public.push_delivery_result(uuid, boolean, boolean),
+  public.queue_scheduled_pushes() to service_role;
+$mig0100$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -15241,6 +15257,7 @@ from (values
   (88, 'Agenda por usuário e setores da agenda (0097)', to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[])') is not null),
   (89, 'Notificações push (0098)', to_regprocedure('public.claim_push_deliveries(integer)') is not null),
   (90, 'Push sem avisos atrasados (0099)', coalesce(position('30 minutes' in pg_get_functiondef(to_regprocedure('public.claim_push_deliveries(integer)'))), 0) > 0),
-  (91, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (91, 'Push: permissões do worker (0100)', coalesce(has_table_privilege('service_role', to_regclass('public.push_events'), 'update'), false)),
+  (92, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

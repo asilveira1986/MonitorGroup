@@ -8,7 +8,7 @@ import { env } from './env.js';
 import { logger } from './logger.js';
 import { applyMessageRetention, cleanupExpiredMedia } from './media.js';
 import { setWhatsAppSender } from './notify.js';
-import { startPush } from './push.js';
+import { pushStatus, startPush } from './push.js';
 import { WhatsAppManager } from './whatsapp.js';
 
 const ALERT_CHECK_MS = 60_000;
@@ -50,7 +50,7 @@ async function heartbeat(manager: WhatsAppManager) {
     last_seen_at: new Date().toISOString(),
     version: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
     whatsapp_version: manager.whatsappVersion(),
-    info: { sessions: manager.status(), host, waiting_for: role === 'waiting' ? waitingFor : null },
+    info: { sessions: manager.status(), host, waiting_for: role === 'waiting' ? waitingFor : null, push: pushStatus() },
   });
   if (error && !heartbeatWarned) {
     heartbeatWarned = true;
@@ -133,6 +133,8 @@ async function main() {
   setInterval(() => void heartbeat(manager).catch(() => {}), HEARTBEAT_MS);
 
   setWhatsAppSender((companyId, phone, text) => manager.sendText(companyId, phone, text));
+  // notificações push nos aparelhos (0098): não dependem da conexão do WhatsApp
+  void startPush();
   await manager.init();
 
   setInterval(() => void runPeriodicChecks(), ALERT_CHECK_MS);
@@ -143,8 +145,6 @@ async function main() {
   // conteúdo das mensagens mais antigas que o prazo de guarda de cada empresa (LGPD)
   setTimeout(() => void applyMessageRetention(), 5 * 60_000);
   setInterval(() => void applyMessageRetention(), MEDIA_CLEANUP_MS);
-  // notificações push nos aparelhos (0098)
-  void startPush();
   logger.info('worker do MonitorGroup no ar');
 }
 
