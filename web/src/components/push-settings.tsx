@@ -3,6 +3,7 @@
 import { BellOff, BellRing, Loader2, Share } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { ensurePushPublicKey } from '@/app/(app)/profile/actions';
 import { Button, Toggle } from '@/components/ui';
 import { createClient } from '@/lib/supabase/client';
 
@@ -76,17 +77,15 @@ export function PushSettings({ userId, agendaOnly }: { userId: string; agendaOnl
         return;
       }
       const supabase = createClient();
-      const { data: publicKey } = await supabase.rpc('push_public_key');
-      if (!publicKey) {
-        toast.error('As notificações ainda não estão prontas', {
-          description: 'O worker precisa estar atualizado e no ar (ele gera as chaves de envio).',
-        });
+      const key = await ensurePushPublicKey();
+      if (!key.ok) {
+        toast.error('As notificações ainda não estão prontas', { description: key.error });
         return;
       }
       const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
       await navigator.serviceWorker.ready;
       let sub = await reg.pushManager.getSubscription();
-      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey as string) });
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key.key) });
       const json = sub.toJSON();
       const { error } = await supabase.rpc('save_push_subscription', {
         p_endpoint: json.endpoint,

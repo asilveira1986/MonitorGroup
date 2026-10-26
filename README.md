@@ -136,6 +136,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    96. `supabase/migrations/0096_lgpd_retention_requests.sql`
    97. `supabase/migrations/0097_agenda_standalone.sql`
    98. `supabase/migrations/0098_push_notifications.sql`
+   99. `supabase/migrations/0099_push_stale_events.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -329,7 +330,7 @@ Os avisos chegam no aparelho **mesmo com o sistema fechado** e o celular bloquea
 | **Agenda**: quando alguém te inclui num compromisso e **15 minutos antes** | os participantes |
 | **Mensagem nova nas conversas privadas** | quem usa as conversas privadas |
 
-Quem fez a ação não recebe aviso dela. As chaves de envio são geradas pelo worker na primeira vez (nada a configurar; com `APP_URL` preenchido ele usa o endereço do painel como contato). O envio é gratuito (serviços de push da Apple, Google e Mozilla). O conteúdo vai criptografado até o aparelho e aparece na tela bloqueada: título do aviso, grupo e o começo da mensagem. Aparelho que saiu (app removido, permissão retirada) é apagado sozinho no próximo envio.
+Quem fez a ação não recebe aviso dela. As chaves de envio são geradas na primeira ativação (pelo painel ou pelo worker; nada a configurar). Quem envia é o worker: com ele fora do ar, os avisos esperam na fila, e os com mais de 30 minutos não são enviados quando ele volta. O envio é gratuito (serviços de push da Apple, Google e Mozilla). O conteúdo vai criptografado até o aparelho e aparece na tela bloqueada: título do aviso, grupo e o começo da mensagem. Aparelho que saiu (app removido, permissão retirada) é apagado sozinho no próximo envio.
 
 ## Acompanhamento do dia a dia
 

@@ -181,7 +181,8 @@ begin
   (87, 'LGPD: prazo de guarda e pedidos dos titulares (0096)', to_regprocedure('public.lgpd_person_erase(text)') is not null),
   (88, 'Agenda por usuário e setores da agenda (0097)', to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[])') is not null),
   (89, 'Notificações push (0098)', to_regprocedure('public.claim_push_deliveries(integer)') is not null),
-  (90, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (90, 'Push sem avisos atrasados (0099)', coalesce(position('30 minutes' in pg_get_functiondef(to_regprocedure('public.claim_push_deliveries(integer)'))), 0) > 0),
+  (91, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -190,7 +191,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -15033,6 +15034,79 @@ grant execute on function public.push_test() to authenticated;
 $mig0098$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0099_push_stale_events.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0099', $mig0099$
+-- =====================================================================
+-- Notificações push: avisos parados na fila não chegam atrasados.
+--
+-- Enquanto o worker está fora do ar (ou ainda sem a versão das
+-- notificações), os avisos ficam na fila. Quando ele volta, os com mais
+-- de 30 minutos saem da fila sem enviar (um "cliente sem resposta" de
+-- horas atrás não deve tocar no celular). As chaves de envio agora
+-- também podem ser geradas pelo painel, ao ativar as notificações.
+-- =====================================================================
+
+create or replace function public.claim_push_deliveries(p_limit int default 50)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  ev public.push_events%rowtype;
+  u record;
+  v_out jsonb := '[]'::jsonb;
+  v_claims text := current_setting('request.jwt.claims', true);
+  v_sub text := current_setting('request.jwt.claim.sub', true);
+  v_ok boolean;
+begin
+  for ev in
+    select * from public.push_events where processed_at is null order by id limit greatest(1, least(p_limit, 200))
+    for update skip locked
+  loop
+    -- aviso velho (worker fora do ar ou desatualizado): não chega atrasado; só sai da fila
+    if ev.created_at < now() - interval '30 minutes' then
+      update public.push_events set processed_at = now() where id = ev.id;
+      continue;
+    end if;
+    for u in
+      select p.id
+        from public.profiles p
+       where p.company_id = ev.company_id and p.active
+         and (p.id <> ev.actor_id or ev.actor_id is null or ev.kind = 'test')
+         and coalesce((p.push_prefs ->> case when ev.kind = 'test' then 'none' else ev.kind end)::boolean, true)
+         and exists (select 1 from public.push_subscriptions s where s.user_id = p.id)
+         and (ev.audience <> 'users' or p.id = any(ev.target_users))
+    loop
+      if ev.audience = 'users' then
+        v_ok := true;
+      else
+        -- confere como se fosse o próprio usuário logado
+        perform set_config('request.jwt.claim.sub', u.id::text, true);
+        perform set_config('request.jwt.claims', jsonb_build_object('sub', u.id, 'role', 'authenticated')::text, true);
+        v_ok := case ev.audience
+          when 'group' then ev.group_id = any(public.visible_group_ids())
+          when 'admins' then public.is_admin()
+          when 'private' then public.can_use_private_chats()
+          else false end;
+        perform set_config('request.jwt.claim.sub', coalesce(v_sub, ''), true);
+        perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
+      end if;
+      if v_ok then
+        v_out := v_out || coalesce((
+          select jsonb_agg(jsonb_build_object(
+                   'subscription_id', s.id, 'endpoint', s.endpoint, 'p256dh', s.p256dh, 'auth', s.auth,
+                   'payload', jsonb_build_object('title', ev.title, 'body', ev.body, 'url', ev.url,
+                                                 'tag', coalesce(ev.tag, ev.kind || ':' || ev.id))))
+            from public.push_subscriptions s where s.user_id = u.id), '[]'::jsonb);
+      end if;
+    end loop;
+    update public.push_events set processed_at = now() where id = ev.id;
+  end loop;
+  return v_out;
+end;
+$$;
+revoke all on function public.claim_push_deliveries(int) from public, anon, authenticated;
+grant execute on function public.claim_push_deliveries(int) to service_role;
+$mig0099$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -15166,6 +15240,7 @@ from (values
   (87, 'LGPD: prazo de guarda e pedidos dos titulares (0096)', to_regprocedure('public.lgpd_person_erase(text)') is not null),
   (88, 'Agenda por usuário e setores da agenda (0097)', to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[])') is not null),
   (89, 'Notificações push (0098)', to_regprocedure('public.claim_push_deliveries(integer)') is not null),
-  (90, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (90, 'Push sem avisos atrasados (0099)', coalesce(position('30 minutes' in pg_get_functiondef(to_regprocedure('public.claim_push_deliveries(integer)'))), 0) > 0),
+  (91, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

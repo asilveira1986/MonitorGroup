@@ -1,6 +1,8 @@
 'use server';
 
+import { createECDH } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
 import { requireProfile } from '@/lib/auth';
 import { friendlyDbError } from '@/lib/db-errors';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -37,4 +39,31 @@ export async function saveMyPhoto(path: string | null): Promise<Result> {
   const { error } = await (await createClient()).rpc('set_my_photo', { p_path: path });
   revalidatePath('/', 'layout');
   return result(error);
+}
+
+/**
+ * Chave pública das notificações push (0098). Se ainda não existe (worker ainda não atualizado),
+ * o próprio painel gera o par de chaves VAPID (P-256), igual ao worker faria.
+ */
+export async function ensurePushPublicKey(): Promise<{ ok: true; key: string } | { ok: false; error: string }> {
+  await requireProfile();
+  const { data: existing } = await (await createClient()).rpc('push_public_key');
+  if (existing) return { ok: true, key: existing as string };
+  const ecdh = createECDH('prime256v1');
+  ecdh.generateKeys();
+  const host = (await headers()).get('host');
+  const admin = createAdminClient();
+  const { error } = await admin.from('push_config').upsert(
+    {
+      id: 1,
+      public_key: ecdh.getPublicKey().toString('base64url'),
+      // 32 bytes sempre (a chave pode vir com zeros à esquerda a menos)
+      private_key: Buffer.concat([Buffer.alloc(32), ecdh.getPrivateKey()]).subarray(-32).toString('base64url'),
+      subject: host && !host.startsWith('localhost') ? `https://${host}` : 'mailto:suporte@monitorgroup.app',
+    },
+    { onConflict: 'id', ignoreDuplicates: true },
+  );
+  if (error) return { ok: false, error: friendlyDbError(error.message) };
+  const { data } = await admin.from('push_config').select('public_key').eq('id', 1).maybeSingle();
+  return data?.public_key ? { ok: true, key: data.public_key } : { ok: false, error: 'Não foi possível gerar as chaves das notificações.' };
 }
