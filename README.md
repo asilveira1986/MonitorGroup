@@ -138,6 +138,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    98. `supabase/migrations/0098_push_notifications.sql`
    99. `supabase/migrations/0099_push_stale_events.sql`
    100. `supabase/migrations/0100_push_grants.sql`
+   101. `supabase/migrations/0101_agenda_reminders.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -328,7 +329,7 @@ Os avisos chegam no aparelho **mesmo com o sistema fechado** e o celular bloquea
 |---|---|
 | **Alertas dos grupos** (cliente sem resposta, palavra crítica, WhatsApp desconectado...) | quem vê o grupo (as regras de setor e responsável); sem grupo, os administradores. Regras com "mostrar no painel" desligado não avisam |
 | **Demanda nova para você**, **vence na próxima hora** e **atrasou** | os usuários ligados ao responsável da demanda (pelo e-mail da equipe) |
-| **Agenda**: quando alguém te inclui num compromisso e **15 minutos antes** | os participantes |
+| **Agenda**: quando alguém te inclui num compromisso e nos **lembretes** escolhidos no compromisso (um ou mais: na hora, 5/10/15/30 min, 1/2/3 h, 1/2 dias ou 1 semana antes; dia todo: a partir das 8h do dia). Tocar abre o compromisso com os detalhes | os participantes |
 | **Mensagem nova nas conversas privadas** | quem usa as conversas privadas |
 
 Quem fez a ação não recebe aviso dela. As chaves de envio são geradas na primeira ativação (pelo painel ou pelo worker; nada a configurar). Quem envia é o worker: com ele fora do ar, os avisos esperam na fila, e os com mais de 30 minutos não são enviados quando ele volta. O envio é gratuito (serviços de push da Apple, Google e Mozilla). O conteúdo vai criptografado até o aparelho e aparece na tela bloqueada: título do aviso, grupo e o começo da mensagem. Aparelho que saiu (app removido, permissão retirada) é apagado sozinho no próximo envio.

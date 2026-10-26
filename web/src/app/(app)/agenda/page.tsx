@@ -8,7 +8,7 @@ import { cn, formatTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Demand } from '@/lib/types';
 import { DeliverButton, PersonSelect } from './agenda-controls';
-import { EventActions, NewEventButton, type AgendaEvent } from './event-controls';
+import { EventActions, EventDetails, NewEventButton, type AgendaEvent } from './event-controls';
 
 export const metadata: Metadata = { title: 'Monitor Group · Agenda' };
 
@@ -96,11 +96,36 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const ids = viewingOther ? (person?.member_ids ?? []) : myIds;
   void team;
 
+  // compromisso aberto (?evento=, da notificação ou de um clique): detalhes e a agenda no dia dele
+  const EVENT_COLS = 'id, member_id, owner_id, created_by, title, notes, starts_at, all_day, done_at, reminders';
+  let opened: AgendaEvent | null = null;
+  if (typeof sp.evento === 'string' && /^[0-9a-f-]{36}$/i.test(sp.evento)) {
+    const [{ data: ev }, { data: ppl }] = await Promise.all([
+      supabase.from('agenda_events').select(EVENT_COLS).eq('id', sp.evento).maybeSingle(),
+      supabase.from('agenda_event_people').select('user_id').eq('event_id', sp.evento),
+    ]);
+    if (ev) opened = { ...(ev as AgendaEvent), people: ((ppl ?? []) as { user_id: string }[]).map((r) => r.user_id) };
+  }
+
   // visão e data de referência (links antigos: ?dia= e ?mes=)
   const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
   const view: View =
-    sp.vista === 'dia' || sp.vista === 'semana' || sp.vista === 'mes' ? sp.vista : isDay(sp.dia) ? 'dia' : typeof sp.mes === 'string' ? 'mes' : 'semana';
-  const ref = isDay(sp.data) ? sp.data : isDay(sp.dia) ? sp.dia : typeof sp.mes === 'string' && /^\d{4}-\d{2}$/.test(sp.mes) ? `${sp.mes}-01` : today;
+    sp.vista === 'dia' || sp.vista === 'semana' || sp.vista === 'mes'
+      ? sp.vista
+      : isDay(sp.dia) || (opened && !isDay(sp.data))
+        ? 'dia'
+        : typeof sp.mes === 'string'
+          ? 'mes'
+          : 'semana';
+  const ref = isDay(sp.data)
+    ? sp.data
+    : isDay(sp.dia)
+      ? sp.dia
+      : typeof sp.mes === 'string' && /^\d{4}-\d{2}$/.test(sp.mes)
+        ? `${sp.mes}-01`
+        : opened
+          ? dayKey(opened.starts_at, timeZone)
+          : today;
   const [ry, rm] = parts(ref);
 
   // período mostrado (mês: a grade vai de domingo a sábado)
@@ -143,7 +168,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       // compromissos do período em que o usuário participa (0097)
       supabase
         .from('agenda_events')
-        .select('id, member_id, owner_id, title, notes, starts_at, all_day, done_at, agenda_event_people!inner(user_id)')
+        .select(`${EVENT_COLS}, agenda_event_people!inner(user_id)`)
         .eq('agenda_event_people.user_id', userId)
         .gte('starts_at', `${from}T00:00:00Z`)
         .lt('starts_at', `${until}T00:00:00Z`)
@@ -153,7 +178,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       ids.length
         ? supabase
             .from('agenda_events')
-            .select('id, member_id, owner_id, title, notes, starts_at, all_day, done_at')
+            .select(EVENT_COLS)
             .in('member_id', ids)
             .gte('starts_at', `${from}T00:00:00Z`)
             .lt('starts_at', `${until}T00:00:00Z`)
@@ -201,7 +226,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
 
   const href = (changes: Record<string, string | null>) => {
     const p = new URLSearchParams();
-    const cur: Record<string, string | null> = { pessoa: isAdmin ? wanted : null, vista: view, data: ref === today ? null : ref };
+    const cur: Record<string, string | null> = { quem: isAdmin ? wanted : null, vista: view, data: ref === today ? null : ref };
     for (const [k, v] of Object.entries({ ...cur, ...changes })) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/agenda?${s}` : '/agenda';
@@ -246,7 +271,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const eventItem = (e: AgendaEvent) => (
     <li key={e.id} className={cn('flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5', e.done_at && 'opacity-60')}>
       <span className="tabular w-14 shrink-0 text-xs font-semibold text-series-1">{e.all_day ? 'dia todo' : formatTime(e.starts_at, timeZone)}</span>
-      <div className="min-w-0 flex-1 basis-56">
+      <Link href={href({ evento: e.id })} scroll={false} className="min-w-0 flex-1 basis-56 hover:underline" title="Ver detalhes">
         <p className={cn('line-clamp-2 text-sm font-medium', e.done_at && 'line-through')}>
           <CalendarClock className="mr-1 inline h-3.5 w-3.5 text-series-1" aria-hidden />
           {e.title}
@@ -257,7 +282,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
             👥 {(e.people ?? []).map((id) => people.find((p) => p.id === id)?.name ?? 'usuário').join(', ')}
           </p>
         )}
-      </div>
+      </Link>
       {e.done_at && <span className="text-[11px] font-medium text-good-ink">concluído</span>}
       <EventActions event={e} timeZone={timeZone} people={pickPeople} teams={agendaTeams} />
     </li>
@@ -279,7 +304,8 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       return (
         <Link
           key={e.id}
-          href={href({ vista: 'dia', data: dayKey(e.starts_at, timeZone) })}
+          href={href({ evento: e.id })}
+          scroll={false}
           title={`${e.all_day ? 'Dia todo' : formatTime(e.starts_at, timeZone)} · ${e.title}${e.notes ? ` · ${e.notes}` : ''}`}
           className={cn(
             'block truncate rounded-md border-l-2 border-series-1 bg-series-1/10 px-1.5 py-0.5 text-[11px] text-ink hover:bg-series-1/20',
@@ -348,6 +374,17 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         description="Os seus compromissos (e os marcados para você) e as demandas para entregar, por dia, semana ou mês."
       />
 
+      {opened && (
+        <EventDetails
+          key={opened.id}
+          event={opened}
+          timeZone={timeZone}
+          people={pickPeople}
+          teams={agendaTeams}
+          ownerName={people.find((p) => p.id === (opened.owner_id ?? opened.created_by))?.name ?? null}
+          past={!opened.all_day && new Date(opened.starts_at).getTime() < now}
+        />
+      )}
       {
         <div className="space-y-4">
           {/* visão, período e resumo de hoje */}

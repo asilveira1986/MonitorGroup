@@ -17,6 +17,8 @@ export type AgendaEventInput = {
   /** ISO do início (com hora) ou do dia (dia todo) */
   startsAt: string;
   allDay: boolean;
+  /** lembretes: minutos antes (0 = na hora; dia todo: antes das 8h do dia) */
+  reminders: number[];
 };
 
 /** Novo compromisso (ou edição, com id) com os participantes (0097: save_agenda_event). */
@@ -34,6 +36,7 @@ async function save(id: string | null, v: AgendaEventInput): Promise<Result> {
     p_starts_at: starts.toISOString(),
     p_all_day: v.allDay,
     p_people: v.people,
+    p_reminders: v.reminders,
   });
   revalidatePath('/agenda');
   revalidatePath('/', 'layout');
