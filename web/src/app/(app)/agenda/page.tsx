@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, UserRound } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DemandStatusBadge } from '@/components/demands/status';
@@ -57,11 +57,20 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const [{ data: myIdsRaw }, { data: team }, { data: settings }] = await Promise.all([
+  const [{ data: myIdsRaw }, { data: team }, { data: settings }, { data: peopleRaw }, { data: teamsRaw }] = await Promise.all([
     supabase.rpc('my_team_member_ids'),
     supabase.from('team_members').select('id, name, active').order('name'),
     supabase.from('app_settings').select('timezone').maybeSingle(),
+    // usuários da empresa (agenda por usuário, 0097) e os setores da agenda
+    supabase.rpc('agenda_people'),
+    supabase.from('agenda_teams').select('id, name, agenda_team_members(user_id)').order('name'),
   ]);
+  const people = ((peopleRaw ?? []) as { id: string; name: string; role: string; member_ids: string[] }[]) ?? [];
+  const agendaTeams = ((teamsRaw ?? []) as { id: string; name: string; agenda_team_members: { user_id: string }[] }[]).map((t) => ({
+    id: t.id,
+    name: t.name,
+    userIds: t.agenda_team_members.map((m) => m.user_id),
+  }));
   // a própria agenda: a pessoa da equipe ligada ao e-mail de acesso; sem a ligação, a de mesmo nome
   const norm = (v: string | null | undefined) =>
     (v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -77,12 +86,15 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const now = new Date(nowIso).getTime();
   const today = dayKey(nowIso, timeZone);
 
-  // de quem é a agenda: a própria; administrador escolhe outra pessoa
-  const wanted = typeof sp.pessoa === 'string' ? sp.pessoa : null;
-  const people = (team ?? []).filter((t) => t.active || t.id === wanted) as { id: string; name: string; active: boolean }[];
-  const ids = isAdmin && wanted && people.some((p) => p.id === wanted) ? [wanted] : myIds;
-  const personName = ids.length === 1 ? (people.find((p) => p.id === ids[0])?.name ?? null) : null;
-  const viewingOther = isAdmin && Boolean(wanted) && !myIds.includes(ids[0] ?? '');
+  // de quem é a agenda: a do próprio usuário; administrador escolhe outro usuário (?quem=)
+  const wanted = typeof sp.quem === 'string' && isAdmin && people.some((p) => p.id === sp.quem) ? sp.quem : null;
+  const userId = wanted ?? profile.id;
+  const viewingOther = userId !== profile.id;
+  const person = people.find((p) => p.id === userId);
+  const personName = person?.name ?? profile.full_name ?? profile.email;
+  // demandas na agenda: as da pessoa da equipe ligada a esse usuário
+  const ids = viewingOther ? (person?.member_ids ?? []) : myIds;
+  void team;
 
   // visão e data de referência (links antigos: ?dia= e ?mes=)
   const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
@@ -106,40 +118,59 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   let open: Row[] = [];
   let delivered: Row[] = [];
   let events: AgendaEvent[] = [];
-  if (ids.length) {
+  {
     // o período e hoje (o resumo é sempre de hoje), com folga por causa do fuso
     const from = addDays(range.start < today ? range.start : today, -1);
     const until = addDays(range.end > today ? range.end : today, 2);
-    const [o, d, ev] = await Promise.all([
+    const none = Promise.resolve({ data: [] as unknown[] });
+    const [o, d, ev, evOld] = await Promise.all([
       supabase
         .from('demands')
         .select('*, groups(name), team_members(name)')
-        .in('assignee_id', ids)
+        .in('assignee_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000'])
         .in('status', ['aberta', 'em_andamento'])
         .order('promised_at', { ascending: true, nullsFirst: false })
         .limit(1000),
       supabase
         .from('demands')
         .select('*, groups(name), team_members(name)')
-        .in('assignee_id', ids)
+        .in('assignee_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000'])
         .eq('status', 'entregue')
         .gte('delivered_at', `${from}T00:00:00Z`)
         .lt('delivered_at', `${until}T00:00:00Z`)
         .order('delivered_at', { ascending: false })
         .limit(1000),
-      // compromissos do período (sem o script 0060, nenhum)
+      // compromissos do período em que o usuário participa (0097)
       supabase
         .from('agenda_events')
-        .select('id, member_id, title, notes, starts_at, all_day, done_at')
-        .in('member_id', ids)
+        .select('id, member_id, owner_id, title, notes, starts_at, all_day, done_at, agenda_event_people!inner(user_id)')
+        .eq('agenda_event_people.user_id', userId)
         .gte('starts_at', `${from}T00:00:00Z`)
         .lt('starts_at', `${until}T00:00:00Z`)
         .order('starts_at')
         .limit(1000),
+      // compromissos antigos, da pessoa da equipe ligada
+      ids.length
+        ? supabase
+            .from('agenda_events')
+            .select('id, member_id, owner_id, title, notes, starts_at, all_day, done_at')
+            .in('member_id', ids)
+            .gte('starts_at', `${from}T00:00:00Z`)
+            .lt('starts_at', `${until}T00:00:00Z`)
+            .order('starts_at')
+            .limit(1000)
+        : none,
     ]);
     open = (o.data ?? []) as Row[];
     delivered = (d.data ?? []) as Row[];
-    events = (ev.data ?? []) as AgendaEvent[];
+    const byId = new Map<string, AgendaEvent>();
+    for (const e of [...((ev.data ?? []) as AgendaEvent[]), ...((evOld.data ?? []) as AgendaEvent[])]) byId.set(e.id, { ...e, people: [] });
+    // participantes de cada compromisso (para mostrar e editar)
+    if (byId.size) {
+      const { data: ppl } = await supabase.from('agenda_event_people').select('event_id, user_id').in('event_id', [...byId.keys()]);
+      for (const r of (ppl ?? []) as { event_id: string; user_id: string }[]) byId.get(r.event_id)?.people?.push(r.user_id);
+    }
+    events = [...byId.values()].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   }
 
   const groupByDay = <T,>(rows: T[], when: (r: T) => string | null) => {
@@ -221,9 +252,14 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           {e.title}
         </p>
         <p className="line-clamp-2 text-xs text-ink-2">{e.notes || 'Compromisso'}</p>
+        {(e.people?.length ?? 0) > 1 && (
+          <p className="mt-0.5 truncate text-[11px] text-muted" title="Participantes">
+            👥 {(e.people ?? []).map((id) => people.find((p) => p.id === id)?.name ?? 'usuário').join(', ')}
+          </p>
+        )}
       </div>
       {e.done_at && <span className="text-[11px] font-medium text-good-ink">concluído</span>}
-      <EventActions event={e} personName={personName} timeZone={timeZone} />
+      <EventActions event={e} timeZone={timeZone} people={pickPeople} teams={agendaTeams} />
     </li>
   );
   const section = (key: string, title: React.ReactNode, entries: Entry[], tone?: 'critical') =>
@@ -297,41 +333,22 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     </p>
   );
 
+  // quem pode ser chamado para um compromisso: os usuários ativos da empresa
+  const pickPeople = people.map((p) => ({ id: p.id, name: p.name }));
   const todayDue = (dueOn.get(today) ?? []).filter((r) => !isLate(r)).length;
   const todayEvents = (eventsOn.get(today) ?? []).filter((e) => !e.done_at).length;
   const dayEntries = view === 'dia' ? entriesOf(ref) : [];
 
-  const personSelect = isAdmin && (
-    <PersonSelect
-      value={ids.length === 1 && (viewingOther || !myIds.length) ? ids[0] : ''}
-      mine={myIds.length > 0}
-      people={people.map((p) => ({ id: p.id, name: p.active ? p.name : `${p.name} (inativo)` }))}
-    />
-  );
+  const personSelect = isAdmin && <PersonSelect value={viewingOther ? userId : ''} people={people.map((p) => ({ id: p.id, name: p.name }))} />;
 
   return (
     <div data-wide>
       <PageHeader
         title="Agenda"
-        description="As demandas para entregar (pelo prazo prometido) e os compromissos, por dia, semana ou mês. Só o responsável marca a entrega, pelo botão “Demanda entregue”."
+        description="Os seus compromissos (e os marcados para você) e as demandas para entregar, por dia, semana ou mês."
       />
 
-      {!ids.length ? (
-        <div className="space-y-4">
-          {personSelect}
-          <Card>
-            <EmptyState
-              icon={<UserRound />}
-              title="Sua agenda ainda não está ligada à equipe"
-              description={
-                isAdmin
-                  ? 'Escolha uma pessoa da equipe acima para ver a agenda dela. Para ter a sua, um administrador liga o seu e-mail a uma pessoa em Configurações › Atendentes › Dar acesso ao sistema.'
-                  : 'Peça a um administrador para ligar o seu e-mail a uma pessoa da equipe (Configurações › Atendentes › Dar acesso ao sistema). Depois disso, as demandas em que você é o responsável aparecem aqui.'
-              }
-            />
-          </Card>
-        </div>
-      ) : (
+      {
         <div className="space-y-4">
           {/* visão, período e resumo de hoje */}
           <div className="flex flex-col gap-3">
@@ -368,7 +385,9 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
               <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
                 {personSelect}
                 <NewEventButton
-                  memberId={ids[0]}
+                  defaultPeople={[userId]}
+                  people={pickPeople}
+                  teams={agendaTeams}
                   personName={viewingOther ? personName : null}
                   timeZone={timeZone}
                   defaultDate={view === 'dia' || ref >= today ? ref : today}
@@ -523,7 +542,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
             </Card>
           )}
         </div>
-      )}
+      }
     </div>
   );
 }

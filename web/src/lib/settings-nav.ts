@@ -21,6 +21,7 @@ export const SETTINGS_NAV: { group: string; items: SettingsItem[] }[] = [
       { href: '/settings/users', label: 'Acessos ao painel', description: 'Quem entra no sistema e com qual perfil', check: 'users' },
       { href: '/settings/team', label: 'Atendentes', description: 'Quem responde nos grupos pelo WhatsApp', check: 'team' },
       { href: '/settings/sectors', label: 'Setores', description: 'Quais grupos cada pessoa vê e o que pode fazer', adminOnly: true, check: 'sectors' },
+      { href: '/settings/agenda-teams', label: 'Setores da agenda', description: 'Grupos de pessoas para marcar compromissos de uma vez', adminOnly: true },
       { href: '/settings/lgpd', label: 'Privacidade (LGPD)', description: 'Prazo de guarda das mensagens e pedidos dos titulares', adminOnly: true },
     ],
   },

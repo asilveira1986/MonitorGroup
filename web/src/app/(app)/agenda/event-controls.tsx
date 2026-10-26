@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import { Check, Pencil, Plus, RotateCcw, Trash2, Users, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -9,7 +9,10 @@ import { createAgendaEvent, deleteAgendaEvent, setAgendaEventDone, updateAgendaE
 
 export type AgendaEvent = {
   id: string;
-  member_id: string;
+  member_id: string | null;
+  owner_id?: string | null;
+  /** participantes (usuários, 0097) */
+  people?: string[];
   title: string;
   notes: string | null;
   starts_at: string;
@@ -51,15 +54,83 @@ function zonedParts(iso: string, timeZone: string) {
   return { date, time };
 }
 
+export type Person = { id: string; name: string };
+export type AgendaTeam = { id: string; name: string; userIds: string[] };
+
+/**
+ * Quem participa: escolher um setor da agenda marca todos dele (e dá para desmarcar um a um);
+ * também dá para marcar qualquer pessoa da empresa.
+ */
+function PeoplePicker({
+  people,
+  teams,
+  value,
+  onChange,
+}: {
+  people: Person[];
+  teams: AgendaTeam[];
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const [q, setQ] = useState('');
+  const has = new Set(value);
+  const shown = people.filter((p) => !q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase()));
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {teams.map((t) => {
+          const all = t.userIds.length > 0 && t.userIds.every((id) => has.has(id));
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onChange(all ? value.filter((id) => !t.userIds.includes(id)) : [...new Set([...value, ...t.userIds])])}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${all ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2 hover:border-brand-line'}`}
+              title={all ? 'Tirar todos deste setor' : 'Marcar todos deste setor'}
+            >
+              <Users className="h-3 w-3" /> {t.name} <span className="text-muted">({t.userIds.length})</span>
+            </button>
+          );
+        })}
+        <button type="button" onClick={() => onChange(people.map((p) => p.id))} className="rounded-full px-2 py-1 text-xs text-brand-text hover:underline">
+          todos
+        </button>
+        <button type="button" onClick={() => onChange([])} className="rounded-full px-2 py-1 text-xs text-ink-2 hover:underline">
+          ninguém
+        </button>
+      </div>
+      {people.length > 8 && <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar pessoa" className="h-8 text-xs" />}
+      <div className="max-h-44 overflow-y-auto rounded-xl border border-line p-1">
+        {shown.map((p) => (
+          <label key={p.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
+            <input
+              type="checkbox"
+              checked={has.has(p.id)}
+              onChange={(e) => onChange(e.target.checked ? [...value, p.id] : value.filter((id) => id !== p.id))}
+              className="h-4 w-4 accent-[var(--brand)]"
+            />
+            {p.name}
+          </label>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted">{value.length ? `${value.length} pessoa(s) — aparece na agenda de cada uma` : 'Ninguém marcado: fica só na sua agenda.'}</p>
+    </div>
+  );
+}
+
 function EventDialog({
-  memberId,
+  defaultPeople,
+  people,
+  teams,
   personName,
   timeZone,
   defaultDate,
   event,
   onClose,
 }: {
-  memberId: string;
+  defaultPeople: string[];
+  people: Person[];
+  teams: AgendaTeam[];
   personName: string | null;
   timeZone: string;
   defaultDate: string;
@@ -73,6 +144,7 @@ function EventDialog({
   const [date, setDate] = useState(initial.date);
   const [time, setTime] = useState(event?.all_day ? '09:00' : initial.time);
   const [allDay, setAllDay] = useState(event?.all_day ?? false);
+  const [who, setWho] = useState<string[]>(event?.people?.length ? event.people : defaultPeople);
   const [pending, start] = useTransition();
 
   useEffect(() => {
@@ -86,7 +158,7 @@ function EventDialog({
     if (!date) return void toast.error('Informe a data do compromisso.');
     // dia todo: meio-dia no fuso da empresa, para o dia não mudar com o fuso
     const startsAt = zonedIso(date, allDay ? '12:00' : time || '09:00', timeZone);
-    const values = { memberId, title, notes, startsAt, allDay };
+    const values = { people: who, title, notes, startsAt, allDay };
     start(async () => {
       const res = event ? await updateAgendaEvent(event.id, values) : await createAgendaEvent(values);
       if (!res.ok) return void toast.error(res.error);
@@ -128,6 +200,9 @@ function EventDialog({
           </Field>
         </div>
         <Toggle checked={allDay} onChange={setAllDay} label="Dia todo (sem horário)" />
+        <Field label="Participantes">
+          <PeoplePicker people={people} teams={teams} value={who} onChange={setWho} />
+        </Field>
         <Field label="Observação (opcional)">
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} placeholder="Local, link, detalhes..." />
         </Field>
@@ -143,7 +218,14 @@ function EventDialog({
 }
 
 /** Botão "Novo compromisso" (na agenda mostrada). */
-export function NewEventButton(props: { memberId: string; personName: string | null; timeZone: string; defaultDate: string }) {
+export function NewEventButton(props: {
+  defaultPeople: string[];
+  people: Person[];
+  teams: AgendaTeam[];
+  personName: string | null;
+  timeZone: string;
+  defaultDate: string;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -156,7 +238,17 @@ export function NewEventButton(props: { memberId: string; personName: string | n
 }
 
 /** Concluir, editar e excluir um compromisso. */
-export function EventActions({ event, personName, timeZone }: { event: AgendaEvent; personName: string | null; timeZone: string }) {
+export function EventActions({
+  event,
+  timeZone,
+  people,
+  teams,
+}: {
+  event: AgendaEvent;
+  timeZone: string;
+  people: Person[];
+  teams: AgendaTeam[];
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [pending, start] = useTransition();
@@ -193,8 +285,10 @@ export function EventActions({ event, personName, timeZone }: { event: AgendaEve
       </button>
       {editing && (
         <EventDialog
-          memberId={event.member_id}
-          personName={personName}
+          defaultPeople={event.people ?? []}
+          people={people}
+          teams={teams}
+          personName={null}
           timeZone={timeZone}
           defaultDate={zonedParts(event.starts_at, timeZone).date}
           event={event}

@@ -10,7 +10,7 @@ export function DeliverButton({ id, number }: { id: string; number: number }) {
 }
 
 /** Administrador: de quem é a agenda mostrada. */
-export function PersonSelect({ value, mine, people }: { value: string; mine: boolean; people: { id: string; name: string }[] }) {
+export function PersonSelect({ value, people }: { value: string; people: { id: string; name: string }[] }) {
   const router = useRouter();
   const params = useSearchParams();
   return (
@@ -20,13 +20,14 @@ export function PersonSelect({ value, mine, people }: { value: string; mine: boo
       className="h-9 w-56 text-sm"
       onChange={(e) => {
         const next = new URLSearchParams(params);
-        if (e.target.value) next.set('pessoa', e.target.value);
-        else next.delete('pessoa');
+        if (e.target.value) next.set('quem', e.target.value);
+        else next.delete('quem');
+        next.delete('pessoa');
         next.delete('dia');
         router.push(`/agenda${next.size ? `?${next}` : ''}`);
       }}
     >
-      <option value="">{mine ? 'Minha agenda' : 'Escolha uma pessoa'}</option>
+      <option value="">Minha agenda</option>
       {people.map((p) => (
         <option key={p.id} value={p.id}>
           {p.name}

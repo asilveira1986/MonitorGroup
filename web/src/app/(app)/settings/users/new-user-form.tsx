@@ -20,6 +20,7 @@ export function NewUserForm({ onDone }: { onDone?: () => void }) {
             <Select name="role" defaultValue="agent">
               <option value="agent">Atendente - atende os grupos do setor</option>
               <option value="viewer">Somente ver painéis - acompanha sem alterar nada</option>
+              <option value="agenda">Só agenda - usa apenas a Agenda (compromissos)</option>
               <option value="admin">Administrador - acesso total</option>
             </Select>
           </Field>

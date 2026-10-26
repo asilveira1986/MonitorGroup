@@ -273,7 +273,7 @@ export async function recalcGroups(): Promise<Result & { summary?: RecalcSummary
 export async function grantTeamMemberAccess(values: {
   memberId: string;
   email: string;
-  role: 'agent' | 'viewer' | 'admin';
+  role: 'agent' | 'viewer' | 'admin' | 'agenda';
   password: string;
 }): Promise<Result> {
   const admin = await requireAdmin();
@@ -281,7 +281,7 @@ export async function grantTeamMemberAccess(values: {
   const { data: member } = await supabase.from('team_members').select('id, name').eq('id', values.memberId).maybeSingle();
   if (!member) return { ok: false, error: 'Pessoa da equipe não encontrada.' };
   const email = values.email.trim().toLowerCase();
-  const role = values.role === 'admin' || values.role === 'viewer' ? values.role : 'agent';
+  const role = values.role === 'admin' || values.role === 'viewer' || values.role === 'agenda' ? values.role : 'agent';
   const res = await createCompanyUser({
     companyId: admin.company_id!,
     email,
@@ -320,7 +320,7 @@ export async function addAllowedEmail(form: FormData): Promise<Result> {
   const supabase = await createClient();
   const email = String(form.get('email') ?? '').trim().toLowerCase();
   const raw = form.get('role');
-  const role = raw === 'admin' || raw === 'viewer' ? raw : 'agent';
+  const role = raw === 'admin' || raw === 'viewer' || raw === 'agenda' ? raw : 'agent';
   const password = String(form.get('password') ?? '');
   const name = String(form.get('full_name') ?? '').trim();
   // o acesso é só por e-mail e senha: a senha inicial é obrigatória; o usuário fica na empresa de quem cadastra
@@ -382,7 +382,7 @@ export async function deleteUser(id: string): Promise<Result> {
   return { ok: true };
 }
 
-export async function updateUser(id: string, values: { role?: 'admin' | 'agent' | 'viewer'; active?: boolean }): Promise<Result> {
+export async function updateUser(id: string, values: { role?: 'admin' | 'agent' | 'viewer' | 'agenda'; active?: boolean }): Promise<Result> {
   const admin = await requireAdmin();
   if (id === admin.id) return { ok: false, error: 'Você não pode alterar o seu próprio acesso.' };
   const supabase = await createClient();

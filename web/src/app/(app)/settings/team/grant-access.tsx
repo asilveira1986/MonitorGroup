@@ -21,7 +21,7 @@ function randomPassword() {
 export function GrantAccess({ member }: { member: { id: string; name: string; user_email?: string | null } }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'agent' | 'viewer' | 'admin'>('agent');
+  const [role, setRole] = useState<'agent' | 'viewer' | 'admin' | 'agenda'>('agent');
   const [password, setPassword] = useState('');
   const [pending, start] = useTransition();
 
@@ -78,6 +78,7 @@ export function GrantAccess({ member }: { member: { id: string; name: string; us
                 <Select value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
                   <option value="agent">Atendente - atende os grupos do setor</option>
                   <option value="viewer">Somente ver painéis - acompanha sem alterar nada</option>
+                  <option value="agenda">Só agenda - usa apenas a Agenda (compromissos)</option>
                   <option value="admin">Administrador - acesso total</option>
                 </Select>
               </Field>

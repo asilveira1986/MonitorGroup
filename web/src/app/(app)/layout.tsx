@@ -57,7 +57,8 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         // demandas desligadas nas configurações: o item some do menu
         // + os menus que a empresa ocultou para este usuário (Configurações › Menus)
         hidden={[
-          ...(demandsEnabled(settings) ? [] : ['/demands', '/agenda']),
+          // a Agenda funciona sem as demandas (compromissos); só as Demandas somem
+          ...(demandsEnabled(settings) ? [] : ['/demands']),
           ...(privateOk ? [] : ['/private']),
           ...MENU_ITEMS.filter(
             (i) =>
@@ -66,6 +67,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
                 i.href,
                 profile.role === 'admin' || profile.platform_admin,
                 profile.role === 'viewer',
+                profile.role === 'agenda',
               ),
           ).map((i) => i.href),
         ]}

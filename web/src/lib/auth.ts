@@ -71,9 +71,10 @@ export async function requireMenu(href: string): Promise<Profile> {
   const profile = await requireProfile();
   const isAdmin = profile.role === 'admin' || profile.platform_admin;
   const viewer = profile.role === 'viewer';
+  const agendaOnly = profile.role === 'agenda';
   const config = await menuConfig();
-  if (!canSeeMenu(config, href, isAdmin, viewer)) {
-    const first = MENU_ITEMS.find((i) => canSeeMenu(config, i.href, isAdmin, viewer));
+  if (!canSeeMenu(config, href, isAdmin, viewer, agendaOnly)) {
+    const first = MENU_ITEMS.find((i) => canSeeMenu(config, i.href, isAdmin, viewer, agendaOnly));
     redirect(first ? first.href : '/auth/pending');
   }
   return profile;
