@@ -23,6 +23,7 @@ export type PrivateMessageRow = {
   media_size?: number | null;
   media_status?: string | null;
   media_seconds?: number | null;
+  anonymized_at?: string | null;
   edited_at?: string | null;
   original_body?: string | null;
   deleted_at?: string | null;

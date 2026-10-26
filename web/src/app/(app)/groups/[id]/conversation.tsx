@@ -459,8 +459,11 @@ export function Conversation({
           const teamName = m.from_team && m.team_member_id ? teamNames.get(m.team_member_id) : undefined;
           const name = teamName || m.sender_name || who?.name || null;
           // o WhatsApp não informou o remetente (0078): dá para indicar à mão quem foi
-          const unknownSender = !m.from_me && !m.sender_jid && !phone;
-          const sender = name || formatPhone(phone) || (m.from_me ? 'Número conectado' : unknownSender ? 'Remetente não identificado' : 'Cliente');
+          const removed = Boolean(m.anonymized_at);
+          const unknownSender = !m.from_me && !m.sender_jid && !phone && !removed;
+          const sender = removed
+            ? m.from_team ? 'Equipe' : 'Cliente'
+            : name || formatPhone(phone) || (m.from_me ? 'Número conectado' : unknownSender ? 'Remetente não identificado' : 'Cliente');
           // cliente: nome e telefone juntos (o telefone só some quando já é o próprio nome)
           const showPhone = !m.from_me && phone && name && name.replace(/\D/g, '') !== phone;
           return (
@@ -560,6 +563,9 @@ export function Conversation({
                     />
                   ) : (
                     <>
+                      {removed && (
+                        <p className="text-xs italic text-muted">🔒 Conteúdo apagado (prazo de guarda / LGPD)</p>
+                      )}
                       {m.quoted_wa_id && (() => {
                         // citação como no WhatsApp: quem escreveu e o trecho; clicar leva à original
                         const orig = byWaId.get(m.quoted_wa_id);

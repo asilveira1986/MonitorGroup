@@ -422,6 +422,7 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
                       <PrivateEditor message={m} onClose={() => setEditing(null)} />
                     ) : (
                       <>
+                        {m.anonymized_at && <p className="text-xs italic text-muted">🔒 Conteúdo apagado (prazo de guarda / LGPD)</p>}
                         {m.quoted_message_id && <Quoted target={byId.get(m.quoted_message_id)} />}
                         <PrivateMedia message={m} />
                         {/* documento guardado: o nome já aparece no cartão do arquivo */}

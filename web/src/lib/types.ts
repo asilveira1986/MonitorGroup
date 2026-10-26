@@ -131,6 +131,8 @@ export type Message = {
   media_size?: number | null;
   /** duração do áudio/vídeo (0088) */
   media_seconds?: number | null;
+  /** conteúdo e remetente apagados pelo prazo de guarda ou a pedido do titular (LGPD, 0096) */
+  anonymized_at?: string | null;
   /** resposta citando outra mensagem (0090) */
   quoted_wa_id?: string | null;
   quoted_sender_jid?: string | null;

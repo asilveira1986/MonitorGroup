@@ -6,7 +6,7 @@ import { refreshCache } from './cache.js';
 import { db } from './db.js';
 import { env } from './env.js';
 import { logger } from './logger.js';
-import { cleanupExpiredMedia } from './media.js';
+import { applyMessageRetention, cleanupExpiredMedia } from './media.js';
 import { setWhatsAppSender } from './notify.js';
 import { WhatsAppManager } from './whatsapp.js';
 
@@ -139,6 +139,9 @@ async function main() {
   // imagens e áudios mais antigos que o prazo de cada empresa
   setTimeout(() => void cleanupExpiredMedia(), 2 * 60_000);
   setInterval(() => void cleanupExpiredMedia(), MEDIA_CLEANUP_MS);
+  // conteúdo das mensagens mais antigas que o prazo de guarda de cada empresa (LGPD)
+  setTimeout(() => void applyMessageRetention(), 5 * 60_000);
+  setInterval(() => void applyMessageRetention(), MEDIA_CLEANUP_MS);
   logger.info('worker do MonitorGroup no ar');
 }
 

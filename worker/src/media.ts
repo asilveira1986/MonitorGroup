@@ -139,3 +139,35 @@ export async function cleanupExpiredMedia() {
     logger.warn({ err }, 'falha ao apagar arquivos antigos');
   }
 }
+
+/**
+ * Prazo de guarda das mensagens (LGPD, 0096): passado o prazo de cada empresa, apaga o conteúdo e o
+ * remetente das mensagens (fica o registro de que houve a mensagem) e os arquivos delas. Em lotes,
+ * para não travar o banco.
+ */
+export async function applyMessageRetention() {
+  try {
+    for (const companyId of await activeCompanyIds()) {
+      let total = 0;
+      for (let round = 0; round < 50; round++) {
+        const { data, error } = await db.rpc('apply_message_retention', { p_company_id: companyId, p_limit: 2000 });
+        if (error) {
+          // banco sem o script 0096: nada a fazer
+          if (!/apply_message_retention/.test(error.message)) logger.warn({ err: error.message }, 'prazo de guarda das mensagens');
+          return;
+        }
+        const r = data as { mensagens: number; privadas: number; arquivos: string[] };
+        const files = (r.arquivos ?? []).filter(Boolean);
+        for (let i = 0; i < files.length; i += 200) {
+          await db.storage.from(MEDIA_BUCKET).remove(files.slice(i, i + 200));
+        }
+        const n = (r.mensagens ?? 0) + (r.privadas ?? 0);
+        total += n;
+        if (n < 2000) break;
+      }
+      if (total) logger.info({ companyId, mensagens: total }, 'mensagens apagadas pelo prazo de guarda (LGPD)');
+    }
+  } catch (err) {
+    logger.warn({ err }, 'falha ao aplicar o prazo de guarda das mensagens');
+  }
+}
