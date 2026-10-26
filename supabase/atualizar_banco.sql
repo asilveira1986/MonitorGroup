@@ -127,7 +127,8 @@ begin
   (42, 'Arquivos e vídeos + equipe com acesso (0049)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'team_members' and column_name = 'user_email')),
   (43, 'Log de atividades (0050)', to_regprocedure('public.platform_activity_log(timestamptz,timestamptz,uuid,text,text,integer,integer)') is not null),
-  (44, 'Equipe reconhecida pelo LID (0051)', coalesce(pg_get_functiondef('public.recalc_company_groups(uuid)'::regprocedure) like '%gp.lid = m.sender_jid%', false)),
+  (44, 'Equipe reconhecida pelo LID (0051)', exists (select 1 from pg_proc where proname in ('recalc_company_groups', 'recalc_company_groups_core')
+      and pronamespace = 'public'::regnamespace and prosrc like '%gp.lid = m.sender_jid%')),
   (45, 'Silenciar grupo retirado (0053)', to_regclass('public.group_mutes') is null and not exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'sectors' and column_name = 'can_mute')),
   (46, 'Silenciar alertas retirado (0055)', to_regclass('public.alert_type_mutes') is null and not exists (select 1 from information_schema.columns
@@ -162,7 +163,7 @@ begin
   (69, 'Mensagens sem remetente (0078)', to_regprocedure('public.set_message_sender(uuid,uuid)') is not null),
   (70, 'Membros × atendentes e agenda (0079)', exists (select 1 from pg_proc where proname = 'group_members' and prosrc like '%phone_key%')),
   (71, 'Remetente pela citação (0080)', to_regprocedure('public.identify_message_sender(uuid,text,text,text,uuid,boolean)') is not null),
-  (72, 'Remetente pelos membros do grupo (0081)', exists (select 1 from pg_proc where proname = 'recalc_company_groups' and prosrc like '%0081%')),
+  (72, 'Remetente pelos membros do grupo (0081)', exists (select 1 from pg_proc where proname in ('recalc_company_groups', 'recalc_company_groups_core') and prosrc like '%0081%')),
   (73, 'Log do quem enviou? (0082)', exists (select 1 from pg_proc where proname = 'set_message_sender' and prosrc like '%activity_log%')),
   (74, 'Logo da empresa e foto dos atendentes (0083)', to_regprocedure('public.set_company_logo(text)') is not null),
   (75, 'Revisão só dos grupos que mudaram (0084)', to_regprocedure('public.recalc_company_senders(uuid)') is not null),
@@ -176,7 +177,8 @@ begin
   (83, 'Aviso de demanda concluída (0092)', to_regprocedure('public.deliver_demand(uuid,text,text)') is not null),
   (84, 'Avisos do sistema sempre vão (0093)', exists (select 1 from pg_proc where proname = 'guard_group_write' and prosrc like '%system_notice%')),
   (85, 'Todos respondem nos grupos (0094)', exists (select 1 from pg_proc where proname = 'has_group_permission' and prosrc like '%(0094)%')),
-  (86, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (86, 'Sem acesso sem login (0095)', not has_function_privilege('anon', 'public.company_indicator_params(uuid,text)', 'execute')),
+  (87, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -185,7 +187,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -13992,6 +13994,66 @@ $$;
 $mig0094$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0095_lock_down_public.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0095', $mig0095$
+-- =====================================================================
+-- Segurança: nada no banco fica acessível sem login.
+--
+-- O Postgres libera, por padrão, a execução de toda função nova para
+-- todos (PUBLIC), inclusive para quem chama a API só com a chave pública
+-- (anon, que vai no navegador). As funções sensíveis conferem o usuário,
+-- mas duas devolviam dados de qualquer empresa (company_indicator_params e
+-- recurrence_alert_candidates) e o executor de scripts ficava exposto.
+-- Agora:
+--  * quem não está logado (anon) não executa nenhuma função nem lê tabela;
+--  * as funções que o painel usa continuam liberadas para os logados;
+--  * as do worker e o executor de scripts ficam só com a chave de serviço;
+--  * o atualizar_banco.sql reaplica esta trava no fim de cada execução,
+--    para valer também nas funções criadas depois.
+-- =====================================================================
+
+create or replace function public.lock_down_public_access()
+returns void
+language plpgsql
+set search_path = public
+as $$
+declare
+  f record;
+begin
+  for f in
+    select p.oid::regprocedure as sig, has_function_privilege('authenticated', p.oid, 'execute') as for_users
+      from pg_proc p
+     where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
+  loop
+    -- o que os usuários logados já executavam continua valendo para eles (e para o worker)
+    if f.for_users then
+      execute format('grant execute on function %s to authenticated', f.sig);
+    end if;
+    execute format('grant execute on function %s to service_role', f.sig);
+    execute format('revoke execute on function %s from public, anon', f.sig);
+  end loop;
+
+  -- só o worker (chave de serviço) e o SQL Editor
+  revoke execute on function public.company_indicator_params(uuid, text) from authenticated;
+  revoke execute on function public.recurrence_alert_candidates(int, int, uuid) from authenticated;
+  revoke execute on function public._apply_migration(text, text) from authenticated;
+  revoke execute on function public.lock_down_public_access() from authenticated;
+
+  -- quem não está logado não lê nem grava tabela nenhuma (as regras por linha já barravam; agora
+  -- nem chega a elas)
+  revoke all on all tables in schema public from anon;
+  revoke all on all sequences in schema public from anon;
+end;
+$$;
+
+select public.lock_down_public_access();
+$mig0095$);
+commit;
+
+-- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
+do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
+commit;
+
 notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
@@ -14067,7 +14129,8 @@ from (values
   (42, 'Arquivos e vídeos + equipe com acesso (0049)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'team_members' and column_name = 'user_email')),
   (43, 'Log de atividades (0050)', to_regprocedure('public.platform_activity_log(timestamptz,timestamptz,uuid,text,text,integer,integer)') is not null),
-  (44, 'Equipe reconhecida pelo LID (0051)', coalesce(pg_get_functiondef('public.recalc_company_groups(uuid)'::regprocedure) like '%gp.lid = m.sender_jid%', false)),
+  (44, 'Equipe reconhecida pelo LID (0051)', exists (select 1 from pg_proc where proname in ('recalc_company_groups', 'recalc_company_groups_core')
+      and pronamespace = 'public'::regnamespace and prosrc like '%gp.lid = m.sender_jid%')),
   (45, 'Silenciar grupo retirado (0053)', to_regclass('public.group_mutes') is null and not exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'sectors' and column_name = 'can_mute')),
   (46, 'Silenciar alertas retirado (0055)', to_regclass('public.alert_type_mutes') is null and not exists (select 1 from information_schema.columns
@@ -14102,7 +14165,7 @@ from (values
   (69, 'Mensagens sem remetente (0078)', to_regprocedure('public.set_message_sender(uuid,uuid)') is not null),
   (70, 'Membros × atendentes e agenda (0079)', exists (select 1 from pg_proc where proname = 'group_members' and prosrc like '%phone_key%')),
   (71, 'Remetente pela citação (0080)', to_regprocedure('public.identify_message_sender(uuid,text,text,text,uuid,boolean)') is not null),
-  (72, 'Remetente pelos membros do grupo (0081)', exists (select 1 from pg_proc where proname = 'recalc_company_groups' and prosrc like '%0081%')),
+  (72, 'Remetente pelos membros do grupo (0081)', exists (select 1 from pg_proc where proname in ('recalc_company_groups', 'recalc_company_groups_core') and prosrc like '%0081%')),
   (73, 'Log do quem enviou? (0082)', exists (select 1 from pg_proc where proname = 'set_message_sender' and prosrc like '%activity_log%')),
   (74, 'Logo da empresa e foto dos atendentes (0083)', to_regprocedure('public.set_company_logo(text)') is not null),
   (75, 'Revisão só dos grupos que mudaram (0084)', to_regprocedure('public.recalc_company_senders(uuid)') is not null),
@@ -14116,6 +14179,7 @@ from (values
   (83, 'Aviso de demanda concluída (0092)', to_regprocedure('public.deliver_demand(uuid,text,text)') is not null),
   (84, 'Avisos do sistema sempre vão (0093)', exists (select 1 from pg_proc where proname = 'guard_group_write' and prosrc like '%system_notice%')),
   (85, 'Todos respondem nos grupos (0094)', exists (select 1 from pg_proc where proname = 'has_group_permission' and prosrc like '%(0094)%')),
-  (86, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (86, 'Sem acesso sem login (0095)', not has_function_privilege('anon', 'public.company_indicator_params(uuid,text)', 'execute')),
+  (87, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

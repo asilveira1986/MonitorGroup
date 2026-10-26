@@ -55,7 +55,7 @@ export async function sendNotifications(rule: AlertRule, alert: AlertPayload): P
           .then(() => {
             if (!delivered.includes('whatsapp')) delivered.push('whatsapp');
           })
-          .catch((err) => logger.error({ err, phone }, 'falha ao enviar alerta por WhatsApp')),
+          .catch((err) => logger.error({ err, phone: maskPhone(phone) }, 'falha ao enviar alerta por WhatsApp')),
       );
     }
   }
@@ -105,3 +105,9 @@ async function sendEmail(to: string[], subject: string, alert: AlertPayload) {
 
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
+/** Telefone no log só com o final (LGPD: o log não precisa do número inteiro). */
+function maskPhone(phone: string): string {
+  const d = digitsOnly(phone);
+  return d.length > 4 ? `***${d.slice(-4)}` : '***';
+}

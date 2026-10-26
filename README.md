@@ -132,6 +132,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    92. `supabase/migrations/0092_demand_done_notice.sql`
    93. `supabase/migrations/0093_system_notices.sql`
    94. `supabase/migrations/0094_everyone_replies.sql`
+   95. `supabase/migrations/0095_lock_down_public.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

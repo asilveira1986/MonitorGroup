@@ -58,7 +58,13 @@ export function indicatorTable(data: IndicatorData): { columns: Column[]; rows: 
   }
 }
 
-const cell = (value: string) => (/[";\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
+// texto que começa com = + - @ (ou tab) vira fórmula ao abrir no Excel/Planilhas ("injeção de CSV"):
+// um apóstrofo na frente mantém como texto. Números negativos ("-3") continuam números.
+const safe = (value: string) => (/^[=+\-@\t\r]/.test(value) && !/^-?\d+([.,]\d+)?$/.test(value) ? `'${value}` : value);
+const cell = (raw: string) => {
+  const value = safe(raw);
+  return /[";\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+};
 
 /** Linhas de CSV (separador ";", padrão do Excel em português) de uma tabela. */
 export function tableToCsvLines(columns: Column[], rows: Record<string, unknown>[], timeZone?: string): string[] {

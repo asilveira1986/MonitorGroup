@@ -362,7 +362,9 @@ export async function deleteUser(id: string): Promise<Result> {
   const { data: user } = await admin.from('profiles').select('id, email, full_name, company_id').eq('id', id).maybeSingle();
   if (!user) return { ok: false, error: 'Usuário não encontrado.' };
   await admin.from('allowed_emails').delete().eq('email', user.email);
-  await admin.from('team_members').update({ user_email: null }).ilike('user_email', user.email);
+  // e-mail exato, sem diferenciar maiúsculas ("_" e "%" escapados: no ilike seriam curingas e
+  // atingiriam outros cadastros)
+  await admin.from('team_members').update({ user_email: null }).ilike('user_email', user.email.replace(/[\\%_]/g, (c: string) => `\\${c}`));
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) return { ok: false, error: friendlyDbError(error.message) };
   await admin.from('activity_log').insert({
