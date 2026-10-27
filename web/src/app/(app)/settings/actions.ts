@@ -580,14 +580,15 @@ const cleanSector = (v: SectorInput) => ({
   can_handle_alerts: Boolean(v.can_handle_alerts),
 });
 
-export async function createSector(values: SectorInput): Promise<Result> {
+export async function createSector(values: SectorInput): Promise<Result & { id?: string }> {
   await requireAdmin();
   const row = cleanSector(values);
   if (!row.name) return { ok: false, error: 'Informe o nome do setor.' };
   const supabase = await createClient();
-  const { error } = await supabase.from('sectors').insert(row);
+  const { data, error } = await supabase.from('sectors').insert(row).select('id').single();
   revalidatePath('/', 'layout');
-  return result(error?.code === '23505' ? { message: 'Já existe um setor com esse nome.' } : error);
+  if (error) return result(error.code === '23505' ? { message: 'Já existe um setor com esse nome.' } : error);
+  return { ok: true, id: data.id as string };
 }
 
 /**

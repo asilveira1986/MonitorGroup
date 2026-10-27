@@ -420,7 +420,7 @@ O cartão mostra cada grupo numa linha com o motivo e a mensagem analisada. A te
 
 ## Setores e permissões de acesso
 
-Em **Configurações › Setores** (somente admin) você cria setores, marca os usuários e os grupos de cada um e escolhe o que o setor pode fazer.
+Em **Configurações › Pessoas › Setores** (somente admin) você cria um setor só pelo nome e, em **Editar**, marca as **Pessoas** e os **Grupos** dele (abas na mesma janela). O que o setor pode fazer (gerenciar demandas, tratar alertas) fica em *Mais opções*. Embaixo da lista, o setor que recebe os grupos novos.
 
 - **Cada grupo pertence a um setor só.** Marcar um grupo num setor tira ele do setor anterior. O setor também pode ser trocado na página do grupo.
 - **Quem é do setor vê os grupos do setor**: lista de grupos, painel, conversas, dashboard, indicadores, alertas e demandas mostram só esses grupos. Um usuário pode estar em mais de um setor.
