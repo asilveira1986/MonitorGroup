@@ -127,7 +127,9 @@ from (values
   (89, 'Notificações push (0098)', to_regprocedure('public.claim_push_deliveries(integer)') is not null),
   (90, 'Push sem avisos atrasados (0099)', coalesce(position('30 minutes' in pg_get_functiondef(to_regprocedure('public.claim_push_deliveries(integer)'))), 0) > 0),
   (91, 'Push: permissões do worker (0100)', coalesce(has_table_privilege('service_role', to_regclass('public.push_events'), 'update'), false)),
-  (92, 'Lembretes dos compromissos (0101)', to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[])') is not null),
-  (93, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (92, 'Lembretes dos compromissos (0101)', to_regprocedure('public.agenda_reminder_label(integer,boolean)') is not null),
+  (93, 'Tipos e repetição dos compromissos (0102)', to_regprocedure('public.delete_agenda_event(uuid,text)') is not null
+        and exists (select 1 from pg_trigger where tgname = 'agenda_people_push' and tgrelid = to_regclass('public.agenda_event_people'))),
+  (94, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

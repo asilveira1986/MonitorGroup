@@ -8,7 +8,7 @@ import { env } from './env.js';
 import { logger } from './logger.js';
 import { applyMessageRetention, cleanupExpiredMedia } from './media.js';
 import { setWhatsAppSender } from './notify.js';
-import { pushStatus, startPush } from './push.js';
+import { extendAgendaSeries, pushStatus, startPush } from './push.js';
 import { WhatsAppManager } from './whatsapp.js';
 
 const ALERT_CHECK_MS = 60_000;
@@ -145,6 +145,9 @@ async function main() {
   // conteúdo das mensagens mais antigas que o prazo de guarda de cada empresa (LGPD)
   setTimeout(() => void applyMessageRetention(), 5 * 60_000);
   setInterval(() => void applyMessageRetention(), MEDIA_CLEANUP_MS);
+  // compromissos que se repetem sem fim: a agenda sempre com 12 meses à frente
+  setTimeout(() => void extendAgendaSeries(), 3 * 60_000);
+  setInterval(() => void extendAgendaSeries(), 60 * 60_000);
   logger.info('worker do MonitorGroup no ar');
 }
 

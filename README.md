@@ -139,6 +139,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    99. `supabase/migrations/0099_push_stale_events.sql`
    100. `supabase/migrations/0100_push_grants.sql`
    101. `supabase/migrations/0101_agenda_reminders.sql`
+   102. `supabase/migrations/0102_agenda_types_repeat.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -314,6 +315,16 @@ O sino no topo da tela silencia todos os avisos em tela só no navegador em uso.
 - escolhe a **voz** (as instaladas no computador e no navegador; se não existir em outro computador, ele usa a voz em português padrão dele), a **velocidade** e o **tom**.
 **Sons dos avisos:** com a voz falando, toca um bipe curto antes da fala. Sem voz (desligada, ou o aviso/regra sem voz), cada tipo de aviso tem um som próprio: **mensagem recebida** (plim-plim suave), **informativo** (uma nota leve), **atenção** (dois bipes médios) e **crítico** (alarme curto com três bipes agudos, duas vezes; o SLA excedido usa este). Dá para ouvir cada um em *Regras de alerta › Avisos em tela › Tocar som*.
 O sino do topo silencia também a voz naquele navegador.
+
+## Agenda
+
+Cada usuário tem a sua agenda (dia, semana ou mês) com os compromissos em que participa e as demandas para entregar. No **Novo compromisso**:
+- **Tipo**: Reunião, Audiência, Prazo, Ligação, Visita, Pessoal... cada um com uma **cor**, que pinta o compromisso na agenda. Os tipos e as cores ficam em *Configurações › Tipos de compromisso* (administradores).
+- **Repetir**: todos os dias, todas as semanas (nos dias escolhidos), todos os meses ou todos os anos, a cada N; termina nunca, numa data ou depois de N vezes. Cada repetição é um compromisso (com os próprios lembretes e o próprio "concluir"); sem fim, a agenda fica sempre com 12 meses à frente. Editar ou excluir uma repetição pergunta: **só este** ou **este e os próximos**.
+- **Lembretes**: um ou mais, com o tempo antes (notificação no celular).
+- **Participantes**: pessoas ou setores da agenda inteiros (*Configurações › Setores da agenda*).
+
+Tocar num compromisso (ou na notificação dele) abre os detalhes: horário, tipo, repetição, observação, participantes, lembretes, com concluir, editar e excluir.
 
 ## Notificações no celular e no computador (push)
 

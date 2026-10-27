@@ -19,6 +19,20 @@ export type AgendaEventInput = {
   allDay: boolean;
   /** lembretes: minutos antes (0 = na hora; dia todo: antes das 8h do dia) */
   reminders: number[];
+  /** tipo do compromisso (0102) */
+  typeId: string | null;
+  /** repetição: null = não mexe (edição) / não repete (novo); { freq: 'none' } = deixa de repetir */
+  repeat: RepeatRule | { freq: 'none' } | null;
+  /** numa repetição: só este ou este e os próximos */
+  scope?: 'one' | 'following';
+};
+
+export type RepeatRule = {
+  freq: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  every: number;
+  weekdays: number[];
+  until: string | null;
+  count: number | null;
 };
 
 /** Novo compromisso (ou edição, com id) com os participantes (0097: save_agenda_event). */
@@ -37,6 +51,9 @@ async function save(id: string | null, v: AgendaEventInput): Promise<Result> {
     p_all_day: v.allDay,
     p_people: v.people,
     p_reminders: v.reminders,
+    p_type: v.typeId,
+    p_repeat: v.repeat,
+    p_scope: v.scope ?? 'one',
   });
   revalidatePath('/agenda');
   revalidatePath('/', 'layout');
@@ -60,10 +77,11 @@ export async function setAgendaEventDone(id: string, done: boolean): Promise<Res
   return result(error);
 }
 
-export async function deleteAgendaEvent(id: string): Promise<Result> {
+/** Exclui o compromisso; numa repetição, só este ou este e os próximos (0102). */
+export async function deleteAgendaEvent(id: string, scope: 'one' | 'following' = 'one'): Promise<Result> {
   await requireProfile();
   const supabase = await createClient();
-  const { error } = await supabase.from('agenda_events').delete().eq('id', id);
+  const { error } = await supabase.rpc('delete_agenda_event', { p_id: id, p_scope: scope });
   revalidatePath('/agenda');
   return result(error);
 }

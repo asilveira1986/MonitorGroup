@@ -4,10 +4,12 @@ import Link from 'next/link';
 import { DemandStatusBadge } from '@/components/demands/status';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { requireMenu } from '@/lib/auth';
+import { agendaColor, type AgendaType } from '@/lib/agenda-colors';
 import { cn, formatTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Demand } from '@/lib/types';
 import { DeliverButton, PersonSelect } from './agenda-controls';
+import type { RepeatRule } from './actions';
 import { EventActions, EventDetails, NewEventButton, type AgendaEvent } from './event-controls';
 
 export const metadata: Metadata = { title: 'Monitor Group · Agenda' };
@@ -57,14 +59,18 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const [{ data: myIdsRaw }, { data: team }, { data: settings }, { data: peopleRaw }, { data: teamsRaw }] = await Promise.all([
+  const [{ data: myIdsRaw }, { data: team }, { data: settings }, { data: peopleRaw }, { data: teamsRaw }, { data: typesRaw }] = await Promise.all([
     supabase.rpc('my_team_member_ids'),
     supabase.from('team_members').select('id, name, active').order('name'),
     supabase.from('app_settings').select('timezone').maybeSingle(),
     // usuários da empresa (agenda por usuário, 0097) e os setores da agenda
     supabase.rpc('agenda_people'),
     supabase.from('agenda_teams').select('id, name, agenda_team_members(user_id)').order('name'),
+    // tipos de compromisso, com a cor de cada um (0102)
+    supabase.from('agenda_event_types').select('id, name, color').order('position').order('name'),
   ]);
+  const types = (typesRaw ?? []) as AgendaType[];
+  const colorOf = (e: AgendaEvent) => agendaColor(types.find((t) => t.id === e.type_id)?.color);
   const people = ((peopleRaw ?? []) as { id: string; name: string; role: string; member_ids: string[] }[]) ?? [];
   const agendaTeams = ((teamsRaw ?? []) as { id: string; name: string; agenda_team_members: { user_id: string }[] }[]).map((t) => ({
     id: t.id,
@@ -97,7 +103,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   void team;
 
   // compromisso aberto (?evento=, da notificação ou de um clique): detalhes e a agenda no dia dele
-  const EVENT_COLS = 'id, member_id, owner_id, created_by, title, notes, starts_at, all_day, done_at, reminders';
+  const EVENT_COLS = 'id, member_id, owner_id, created_by, title, notes, starts_at, all_day, done_at, reminders, type_id, series_id';
   let opened: AgendaEvent | null = null;
   if (typeof sp.evento === 'string' && /^[0-9a-f-]{36}$/i.test(sp.evento)) {
     const [{ data: ev }, { data: ppl }] = await Promise.all([
@@ -197,6 +203,15 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     }
     events = [...byId.values()].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   }
+  // regra de repetição de cada compromisso que se repete (para mostrar e editar)
+  {
+    const seriesIds = [...new Set([...events, ...(opened ? [opened] : [])].map((e) => e.series_id).filter((x): x is string => Boolean(x)))];
+    if (seriesIds.length) {
+      const { data: rows } = await supabase.from('agenda_series').select('id, freq, every, weekdays, until, count').in('id', seriesIds);
+      const rule = new Map(((rows ?? []) as (RepeatRule & { id: string })[]).map(({ id, ...r }) => [id, { ...r, weekdays: r.freq === 'weekly' ? r.weekdays : [] }]));
+      for (const e of [...events, ...(opened ? [opened] : [])]) e.series = e.series_id ? (rule.get(e.series_id) ?? null) : null;
+    }
+  }
 
   const groupByDay = <T,>(rows: T[], when: (r: T) => string | null) => {
     const map = new Map<string, T[]>();
@@ -270,10 +285,12 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   };
   const eventItem = (e: AgendaEvent) => (
     <li key={e.id} className={cn('flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5', e.done_at && 'opacity-60')}>
-      <span className="tabular w-14 shrink-0 text-xs font-semibold text-series-1">{e.all_day ? 'dia todo' : formatTime(e.starts_at, timeZone)}</span>
+      <span className="tabular w-14 shrink-0 text-xs font-semibold" style={{ color: colorOf(e) }}>
+        {e.all_day ? 'dia todo' : formatTime(e.starts_at, timeZone)}
+      </span>
       <Link href={href({ evento: e.id })} scroll={false} className="min-w-0 flex-1 basis-56 hover:underline" title="Ver detalhes">
         <p className={cn('line-clamp-2 text-sm font-medium', e.done_at && 'line-through')}>
-          <CalendarClock className="mr-1 inline h-3.5 w-3.5 text-series-1" aria-hidden />
+          <CalendarClock className="mr-1 inline h-3.5 w-3.5" style={{ color: colorOf(e) }} aria-hidden />
           {e.title}
         </p>
         <p className="line-clamp-2 text-xs text-ink-2">{e.notes || 'Compromisso'}</p>
@@ -284,7 +301,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         )}
       </Link>
       {e.done_at && <span className="text-[11px] font-medium text-good-ink">concluído</span>}
-      <EventActions event={e} timeZone={timeZone} people={pickPeople} teams={agendaTeams} />
+      <EventActions event={e} timeZone={timeZone} people={pickPeople} teams={agendaTeams} types={types} />
     </li>
   );
   const section = (key: string, title: React.ReactNode, entries: Entry[], tone?: 'critical') =>
@@ -307,12 +324,12 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           href={href({ evento: e.id })}
           scroll={false}
           title={`${e.all_day ? 'Dia todo' : formatTime(e.starts_at, timeZone)} · ${e.title}${e.notes ? ` · ${e.notes}` : ''}`}
-          className={cn(
-            'block truncate rounded-md border-l-2 border-series-1 bg-series-1/10 px-1.5 py-0.5 text-[11px] text-ink hover:bg-series-1/20',
-            e.done_at && 'line-through opacity-60',
-          )}
+          className={cn('block truncate rounded-md border-l-2 px-1.5 py-0.5 text-[11px] text-ink hover:brightness-95', e.done_at && 'line-through opacity-60')}
+          style={{ borderLeftColor: colorOf(e), backgroundColor: `${colorOf(e)}1f` }}
         >
-          <span className="tabular font-semibold text-series-1">{e.all_day ? '' : `${formatTime(e.starts_at, timeZone)} `}</span>
+          <span className="tabular font-semibold" style={{ color: colorOf(e) }}>
+            {e.all_day ? '' : `${formatTime(e.starts_at, timeZone)} `}
+          </span>
           {e.title}
         </Link>
       );
@@ -351,8 +368,13 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         <span className="h-2 w-2 rounded-full bg-critical" /> atrasada
       </span>
       <span className="inline-flex items-center gap-1">
-        <span className="h-2 w-2 rounded-full bg-series-1" /> compromisso
+        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: agendaColor(null) }} /> {types.length ? 'compromisso sem tipo' : 'compromisso'}
       </span>
+      {types.map((t) => (
+        <span key={t.id} className="inline-flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: agendaColor(t.color) }} /> {t.name}
+        </span>
+      ))}
       <span className="inline-flex items-center gap-1">
         <span className="h-2 w-2 rounded-full bg-good" /> entregue
       </span>
@@ -374,6 +396,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
 
       {opened && (
         <EventDetails
+          types={types}
           key={opened.id}
           event={opened}
           timeZone={timeZone}
@@ -420,6 +443,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
               <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
                 {personSelect}
                 <NewEventButton
+                  types={types}
                   defaultPeople={[userId]}
                   people={pickPeople}
                   teams={agendaTeams}

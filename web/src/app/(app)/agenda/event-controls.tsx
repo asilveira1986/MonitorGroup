@@ -1,11 +1,12 @@
 'use client';
 
-import { Bell, CalendarClock, Check, Clock, Pencil, Plus, RotateCcw, StickyNote, Trash2, UserRound, Users, X } from 'lucide-react';
+import { Bell, CalendarClock, Check, Clock, Pencil, Plus, Repeat, RotateCcw, StickyNote, Tag, Trash2, UserRound, Users, X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Button, Field, Input, Textarea, Toggle } from '@/components/ui';
-import { createAgendaEvent, deleteAgendaEvent, setAgendaEventDone, updateAgendaEvent } from './actions';
+import { Button, Field, Input, Select, Textarea, Toggle } from '@/components/ui';
+import { AGENDA_COLORS, agendaColor, type AgendaType } from '@/lib/agenda-colors';
+import { createAgendaEvent, deleteAgendaEvent, setAgendaEventDone, updateAgendaEvent, type RepeatRule } from './actions';
 
 export type AgendaEvent = {
   id: string;
@@ -21,7 +22,157 @@ export type AgendaEvent = {
   done_at: string | null;
   /** lembretes: minutos antes (0101) */
   reminders?: number[];
+  /** tipo e repetição (0102) */
+  type_id?: string | null;
+  series_id?: string | null;
+  series?: RepeatRule | null;
 };
+
+// ---------- tipo e repetição (0102)
+const WEEKDAY_SHORT = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+const WEEKDAY_NAMES = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+const FREQ: { key: RepeatRule['freq']; label: string; unit: [string, string] }[] = [
+  { key: 'daily', label: 'Todos os dias', unit: ['dia', 'dias'] },
+  { key: 'weekly', label: 'Todas as semanas', unit: ['semana', 'semanas'] },
+  { key: 'monthly', label: 'Todos os meses', unit: ['mês', 'meses'] },
+  { key: 'yearly', label: 'Todos os anos', unit: ['ano', 'anos'] },
+];
+type RepeatState = { freq: RepeatRule['freq'] | 'none'; every: number; weekdays: number[]; end: 'never' | 'until' | 'count'; until: string; count: number };
+
+const toState = (r: RepeatRule | null | undefined, dow: number): RepeatState =>
+  r
+    ? { freq: r.freq, every: r.every || 1, weekdays: r.weekdays?.length ? r.weekdays : [dow], end: r.until ? 'until' : r.count ? 'count' : 'never', until: r.until ?? '', count: r.count ?? 10 }
+    : { freq: 'none', every: 1, weekdays: [dow], end: 'never', until: '', count: 10 };
+const toRule = (v: RepeatState): RepeatRule | null =>
+  v.freq === 'none'
+    ? null
+    : {
+        freq: v.freq,
+        every: Math.max(1, Math.min(99, v.every || 1)),
+        weekdays: v.freq === 'weekly' ? [...v.weekdays].sort() : [],
+        until: v.end === 'until' && v.until ? v.until : null,
+        count: v.end === 'count' ? Math.max(2, Math.min(500, v.count || 2)) : null,
+      };
+const sameRule = (a: RepeatRule | null, b: RepeatRule | null) => JSON.stringify(a) === JSON.stringify(b);
+
+/** "Toda semana (seg, qua) · 10 vezes" */
+export function repeatLabel(r: RepeatRule | null | undefined) {
+  if (!r) return null;
+  const f = FREQ.find((x) => x.key === r.freq);
+  if (!f) return null;
+  let text = r.every > 1 ? `A cada ${r.every} ${f.unit[1]}` : f.label;
+  if (r.freq === 'weekly' && r.weekdays.length) text += ` (${r.weekdays.map((d) => WEEKDAY_NAMES[d]).join(', ')})`;
+  if (r.until) text += ` · até ${r.until.slice(8, 10)}/${r.until.slice(5, 7)}/${r.until.slice(0, 4)}`;
+  else if (r.count) text += ` · ${r.count} vezes`;
+  return text;
+}
+
+function TypePicker({ types, value, onChange }: { types: AgendaType[]; value: string | null; onChange: (v: string | null) => void }) {
+  const chip = 'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition';
+  return (
+    <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Tipo do compromisso">
+      <button type="button" role="radio" aria-checked={!value} onClick={() => onChange(null)} className={`${chip} ${!value ? 'border-ink text-ink' : 'border-line text-ink-2 hover:border-ink-2'}`}>
+        Sem tipo
+      </button>
+      {types.map((t) => {
+        const on = value === t.id;
+        const hex = AGENDA_COLORS[t.color]?.hex;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(t.id)}
+            className={`${chip} ${on ? 'text-ink' : 'border-line text-ink-2 hover:text-ink'}`}
+            style={on ? { borderColor: hex, backgroundColor: `${hex}22` } : undefined}
+          >
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: hex }} aria-hidden /> {t.name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function RepeatPicker({ value, onChange }: { value: RepeatState; onChange: (v: RepeatState) => void }) {
+  const set = (p: Partial<RepeatState>) => onChange({ ...value, ...p });
+  const unit = FREQ.find((f) => f.key === value.freq)?.unit;
+  return (
+    <div className="space-y-2">
+      <Select value={value.freq} onChange={(e) => set({ freq: e.target.value as RepeatState['freq'] })} aria-label="Repetir">
+        <option value="none">Não repete</option>
+        {FREQ.map((f) => (
+          <option key={f.key} value={f.key}>
+            {f.label}
+          </option>
+        ))}
+      </Select>
+      {value.freq !== 'none' && unit && (
+        <div className="space-y-2 rounded-xl border border-line p-3">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-ink-2">A cada</span>
+            <Input
+              type="number"
+              min={1}
+              max={99}
+              value={value.every}
+              onChange={(e) => set({ every: Number(e.target.value) || 1 })}
+              className="h-9 w-16 text-center"
+              aria-label="Intervalo"
+            />
+            <span className="text-ink-2">{value.every > 1 ? unit[1] : unit[0]}</span>
+          </div>
+          {value.freq === 'weekly' && (
+            <div className="flex gap-1" role="group" aria-label="Dias da semana">
+              {WEEKDAY_SHORT.map((d, i) => {
+                const on = value.weekdays.includes(i);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    aria-pressed={on}
+                    aria-label={WEEKDAY_NAMES[i]}
+                    onClick={() => {
+                      const next = on ? value.weekdays.filter((x) => x !== i) : [...value.weekdays, i];
+                      if (next.length) set({ weekdays: next });
+                    }}
+                    className={`h-8 w-8 rounded-full text-xs font-semibold ${on ? 'bg-brand text-brand-ink' : 'bg-surface-2 text-ink-2 hover:text-ink'}`}
+                  >
+                    {d}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-ink-2">Termina</span>
+            <Select value={value.end} onChange={(e) => set({ end: e.target.value as RepeatState['end'] })} className="h-9 w-auto" aria-label="Termina">
+              <option value="never">Nunca</option>
+              <option value="until">Em uma data</option>
+              <option value="count">Depois de</option>
+            </Select>
+            {value.end === 'until' && <Input type="date" value={value.until} onChange={(e) => set({ until: e.target.value })} className="h-9 w-auto" required />}
+            {value.end === 'count' && (
+              <>
+                <Input
+                  type="number"
+                  min={2}
+                  max={500}
+                  value={value.count}
+                  onChange={(e) => set({ count: Number(e.target.value) || 2 })}
+                  className="h-9 w-20 text-center"
+                  aria-label="Quantas vezes"
+                />
+                <span className="text-ink-2">vezes</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** opções de lembrete (minutos antes; no dia todo, antes das 8h do dia) */
 const REMINDER_OPTIONS = [0, 5, 10, 15, 30, 60, 120, 180, 1440, 2880, 10080];
@@ -194,6 +345,7 @@ function EventDialog({
   timeZone,
   defaultDate,
   event,
+  types,
   onClose,
 }: {
   defaultPeople: string[];
@@ -203,6 +355,7 @@ function EventDialog({
   timeZone: string;
   defaultDate: string;
   event?: AgendaEvent;
+  types: AgendaType[];
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -219,6 +372,13 @@ function EventDialog({
     setAllDay(on);
     if (!event && reminders.length === 1 && reminders[0] === (on ? 15 : 0)) setReminders([on ? 0 : 15]);
   };
+  const [typeId, setTypeId] = useState<string | null>(event?.type_id ?? null);
+  const dowOf = (d: string) => new Date(`${d}T12:00:00Z`).getUTCDay();
+  const initialRule = event ? (event.series ?? null) : null;
+  const [repeat, setRepeat] = useState<RepeatState>(toState(initialRule, dowOf(initial.date)));
+  const [scope, setScope] = useState<'one' | 'following'>('one');
+  const inSeries = Boolean(event?.series_id);
+  const ruleChanged = !sameRule(toRule(repeat), initialRule);
   const [pending, start] = useTransition();
 
   useEffect(() => {
@@ -232,7 +392,20 @@ function EventDialog({
     if (!date) return void toast.error('Informe a data do compromisso.');
     // dia todo: meio-dia no fuso da empresa, para o dia não mudar com o fuso
     const startsAt = zonedIso(date, allDay ? '12:00' : time || '09:00', timeZone);
-    const values = { people: who, title, notes, startsAt, allDay, reminders };
+    const rule = toRule(repeat);
+    if (rule?.until && rule.until < date) return void toast.error('A data final da repetição é antes do compromisso.');
+    const values = {
+      people: who,
+      title,
+      notes,
+      startsAt,
+      allDay,
+      reminders,
+      typeId,
+      // novo: a regra (ou nada); edição: só se mudou ({ freq: 'none' } = deixa de repetir)
+      repeat: event ? (ruleChanged ? (rule ?? { freq: 'none' as const }) : null) : rule,
+      scope: inSeries && (ruleChanged || scope === 'following') ? ('following' as const) : ('one' as const),
+    };
     start(async () => {
       const res = event ? await updateAgendaEvent(event.id, values) : await createAgendaEvent(values);
       if (!res.ok) return void toast.error(res.error);
@@ -267,13 +440,30 @@ function EventDialog({
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Dia">
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => {
+                // semanal no dia padrão: acompanha o dia escolhido
+                if (e.target.value && repeat.weekdays.length === 1 && repeat.weekdays[0] === dowOf(date)) setRepeat({ ...repeat, weekdays: [dowOf(e.target.value)] });
+                setDate(e.target.value);
+              }}
+              required
+            />
           </Field>
           <Field label="Hora">
             <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={allDay} />
           </Field>
         </div>
         <Toggle checked={allDay} onChange={changeAllDay} label="Dia todo (sem horário)" />
+        {types.length > 0 && (
+          <Field label="Tipo">
+            <TypePicker types={types} value={typeId} onChange={setTypeId} />
+          </Field>
+        )}
+        <Field label="Repetir">
+          <RepeatPicker value={repeat} onChange={setRepeat} />
+        </Field>
         <Field label="Lembretes">
           <RemindersPicker value={reminders} onChange={setReminders} allDay={allDay} />
         </Field>
@@ -283,6 +473,28 @@ function EventDialog({
         <Field label="Observação (opcional)">
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} placeholder="Local, link, detalhes..." />
         </Field>
+        {inSeries && (
+          <div className="space-y-1.5 rounded-xl bg-surface-2 p-3 text-sm">
+            <p className="text-xs font-medium text-ink-2">Este compromisso se repete. Salvar em:</p>
+            {ruleChanged ? (
+              <p className="text-xs text-ink-2">A repetição mudou: vale para <b>este e os próximos</b>.</p>
+            ) : (
+              <div className="flex flex-wrap gap-4">
+                {(
+                  [
+                    ['one', 'Só este'],
+                    ['following', 'Este e os próximos'],
+                  ] as const
+                ).map(([k, label]) => (
+                  <label key={k} className="inline-flex cursor-pointer items-center gap-2">
+                    <input type="radio" name="scope" checked={scope === k} onChange={() => setScope(k)} className="accent-[var(--brand)]" />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="flex gap-2">
           <Button disabled={pending}>{pending ? 'Salvando…' : event ? 'Salvar' : 'Registrar compromisso'}</Button>
           <Button type="button" variant="ghost" onClick={onClose}>
@@ -302,6 +514,7 @@ export function NewEventButton(props: {
   personName: string | null;
   timeZone: string;
   defaultDate: string;
+  types: AgendaType[];
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -320,17 +533,20 @@ export function EventActions({
   timeZone,
   people,
   teams,
+  types,
   labels = false,
 }: {
   event: AgendaEvent;
   timeZone: string;
   people: Person[];
   teams: AgendaTeam[];
+  types: AgendaType[];
   /** com o nome em cada botão (detalhes do compromisso) */
   labels?: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [askDelete, setAskDelete] = useState(false);
   const [pending, start] = useTransition();
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) =>
     start(async () => {
@@ -359,10 +575,34 @@ export function EventActions({
         disabled={pending}
         className={`${btn} text-critical-ink`}
         aria-label="Excluir compromisso"
-        onClick={() => confirm(`Excluir o compromisso "${event.title}"?`) && run(() => deleteAgendaEvent(event.id), 'Compromisso excluído')}
+        onClick={() =>
+          event.series_id
+            ? setAskDelete(true)
+            : confirm(`Excluir o compromisso "${event.title}"?`) && run(() => deleteAgendaEvent(event.id), 'Compromisso excluído')
+        }
       >
         <Trash2 className="h-3.5 w-3.5" /> {labels && 'Excluir'}
       </button>
+      {askDelete && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Excluir compromisso que se repete">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setAskDelete(false)} />
+          <div className="relative w-full max-w-sm space-y-3 rounded-t-2xl bg-surface p-5 shadow-2xl sm:rounded-2xl">
+            <h2 className="text-base font-semibold">Excluir “{event.title}”</h2>
+            <p className="text-sm text-ink-2">Este compromisso se repete. O que excluir?</p>
+            <div className="flex flex-col gap-2">
+              <Button variant="secondary" disabled={pending} onClick={() => (setAskDelete(false), run(() => deleteAgendaEvent(event.id, 'one'), 'Compromisso excluído'))}>
+                Só este
+              </Button>
+              <Button variant="danger" disabled={pending} onClick={() => (setAskDelete(false), run(() => deleteAgendaEvent(event.id, 'following'), 'Este e os próximos excluídos'))}>
+                Este e os próximos
+              </Button>
+              <Button variant="ghost" onClick={() => setAskDelete(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {editing && (
         <EventDialog
           defaultPeople={event.people ?? []}
@@ -372,6 +612,7 @@ export function EventActions({
           timeZone={timeZone}
           defaultDate={zonedParts(event.starts_at, timeZone).date}
           event={event}
+          types={types}
           onClose={() => setEditing(false)}
         />
       )}
@@ -390,11 +631,13 @@ export function EventDetails({
   teams,
   ownerName,
   past,
+  types,
 }: {
   event: AgendaEvent;
   timeZone: string;
   people: Person[];
   teams: AgendaTeam[];
+  types: AgendaType[];
   ownerName: string | null;
   /** o horário já passou */
   past: boolean;
@@ -425,15 +668,21 @@ export function EventDetails({
   const names = (event.people ?? []).map((id) => people.find((p) => p.id === id)?.name ?? 'usuário');
   const row = 'flex items-start gap-3 text-sm';
   const icon = 'mt-0.5 h-4 w-4 shrink-0 text-ink-2';
+  const type = types.find((t) => t.id === event.type_id);
+  const color = agendaColor(type?.color);
+  const repeats = repeatLabel(event.series);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Detalhes do compromisso">
       <div className="absolute inset-0 bg-black/40" onClick={close} />
-      <div className="relative max-h-[92dvh] w-full max-w-md space-y-4 overflow-y-auto rounded-t-2xl bg-surface p-5 shadow-2xl sm:rounded-2xl">
+      <div
+        className="relative max-h-[92dvh] w-full max-w-md space-y-4 overflow-y-auto rounded-t-2xl border-t-4 bg-surface p-5 shadow-2xl sm:rounded-2xl"
+        style={{ borderTopColor: color }}
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-xs font-medium text-series-1">
-              <CalendarClock className="h-3.5 w-3.5" /> Compromisso
+            <p className="flex flex-wrap items-center gap-1.5 text-xs font-medium" style={{ color }}>
+              {type ? <Tag className="h-3.5 w-3.5" /> : <CalendarClock className="h-3.5 w-3.5" />} {type?.name ?? 'Compromisso'}
               {event.done_at ? (
                 <span className="rounded-full bg-good/15 px-2 py-0.5 text-[11px] text-good-ink">concluído</span>
               ) : (
@@ -455,6 +704,12 @@ export function EventDetails({
               <strong>{event.all_day ? 'Dia todo' : `às ${time}`}</strong>
             </p>
           </div>
+          {repeats && (
+            <div className={row}>
+              <Repeat className={icon} />
+              <p>{repeats}</p>
+            </div>
+          )}
           {event.notes && (
             <div className={row}>
               <StickyNote className={icon} />
@@ -479,7 +734,7 @@ export function EventDetails({
           )}
         </div>
         <div className="border-t border-line pt-3">
-          <EventActions event={event} timeZone={timeZone} people={people} teams={teams} labels />
+          <EventActions event={event} timeZone={timeZone} people={people} teams={teams} types={types} labels />
         </div>
       </div>
     </div>

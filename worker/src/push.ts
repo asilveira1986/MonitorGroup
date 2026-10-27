@@ -126,6 +126,13 @@ async function queueScheduled() {
   }
 }
 
+/** Compromissos que se repetem sem fim (0102): mantém 12 meses à frente na agenda. */
+export async function extendAgendaSeries() {
+  const { error } = await db.rpc('agenda_extend_series');
+  // banco ainda sem o script 0102: nada a fazer
+  if (error && !/agenda_extend_series/.test(error.message)) logger.warn({ err: error.message }, 'falha ao estender as repetições da agenda');
+}
+
 export async function startPush() {
   const ready = await ensureKeys().catch((err) => {
     logger.warn({ err }, 'notificações push indisponíveis');
