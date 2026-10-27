@@ -143,6 +143,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    103. `supabase/migrations/0103_customer_tags.sql`
    104. `supabase/migrations/0104_lgpd_platform_only.sql`
    105. `supabase/migrations/0105_forward_cross_reply.sql`
+   106. `supabase/migrations/0106_team_whatsapp_notices.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -431,6 +432,15 @@ Ative em **Configurações › Geral › Responder pelo sistema** (somente admin
 - **Assinar com o nome** (ligado por padrão): a mensagem começa com `*Nome:*`, para o cliente saber quem respondeu. No painel e nos indicadores, a resposta conta para quem a escreveu.
 - **Quem pode responder**: todos os usuários ou só administradores. A regra é conferida no banco.
 - A tela mostra o andamento de cada envio: na fila, enviando, enviada ou não enviada. Se o envio falhar, há as opções **Tentar de novo** e **Descartar**. Mensagens que não saírem em 10 minutos (WhatsApp desconectado) são marcadas como não enviadas, para não chegarem atrasadas ao cliente.
+
+## Avisos no WhatsApp da equipe
+
+Em *Configurações › Avisos no WhatsApp* (administradores ligam/desligam e editam o texto, com variáveis e prévia):
+- **Novo compromisso**: quem foi incluído num compromisso recebe o aviso no WhatsApp dele (com dia, hora, observação e quem marcou; `{link}` abre o compromisso no painel).
+- **Lembretes dos compromissos**: nos lembretes escolhidos em cada compromisso, o lembrete vai também pelo WhatsApp de cada participante.
+- **Nova demanda**: o responsável recebe o aviso no WhatsApp ao ganhar uma demanda (número, descrição, grupo e prazo).
+
+Saem pelo WhatsApp conectado da empresa para o telefone em *Meu perfil* (ou, sem ele, o do cadastro em *Atendentes*). Começam desligados. Quem fez a ação não recebe o próprio aviso; aviso parado por mais de 30 minutos (WhatsApp desconectado) não sai.
 
 ## Encaminhar e responder entre o grupo e o privado
 

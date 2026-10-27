@@ -38,6 +38,7 @@ export const SETTINGS_NAV: { group: string; items: SettingsItem[] }[] = [
     items: [
       { href: '/settings/demand-types', label: 'Demandas', description: 'Tipos e como as demandas são criadas' },
       { href: '/settings/atendimento', label: 'Respostas e mensagens', description: 'Responder pelo sistema e o que ignorar' },
+      { href: '/settings/team-notices', label: 'Avisos no WhatsApp', description: 'Compromissos e demandas no WhatsApp da equipe' },
       { href: '/settings/quick-replies', label: 'Mensagens rápidas', description: 'Atalhos com \\ na resposta', check: 'quickReplies' },
       { href: '/settings/menus', label: 'Menus', description: 'Itens do menu lateral para cada perfil', adminOnly: true },
     ],

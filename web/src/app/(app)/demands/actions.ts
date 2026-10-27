@@ -108,19 +108,25 @@ export async function saveDemandSettings(values: {
 }
 
 /** Avisos ao cliente (0091 registro, 0092 conclusão): liga/desliga e o texto (vazio = o padrão). */
-export async function saveDemandNotice(values: { kind?: 'created' | 'done'; enabled: boolean; template: string }): Promise<Result> {
+/** colunas de cada aviso (ligado, texto): ao cliente (0091/0092) e no WhatsApp da equipe (0106) */
+const NOTICE_COLUMNS = {
+  created: ['demand_notify_client', 'demand_notify_template'],
+  done: ['demand_done_notify', 'demand_done_template'],
+  agenda_new: ['agenda_whats_new', 'agenda_whats_new_template'],
+  agenda_reminder: ['agenda_whats_reminder', 'agenda_whats_reminder_template'],
+  demand_assignee: ['demand_whats_assignee', 'demand_whats_assignee_template'],
+} as const;
+
+export async function saveDemandNotice(values: { kind?: keyof typeof NOTICE_COLUMNS; enabled: boolean; template: string }): Promise<Result> {
   const admin = await requireAdmin();
   const supabase = await createClient();
-  const done = values.kind === 'done';
+  const [on, text] = NOTICE_COLUMNS[values.kind ?? 'created'];
   const { error } = await supabase
     .from('app_settings')
-    .update({
-      [done ? 'demand_done_notify' : 'demand_notify_client']: values.enabled,
-      [done ? 'demand_done_template' : 'demand_notify_template']: values.template.trim() || null,
-      updated_at: new Date().toISOString(),
-    })
+    .update({ [on]: values.enabled, [text]: values.template.trim() || null, updated_at: new Date().toISOString() })
     .eq('company_id', admin.company_id);
   revalidatePath('/settings/demand-types');
+  revalidatePath('/settings/team-notices');
   return result(error);
 }
 

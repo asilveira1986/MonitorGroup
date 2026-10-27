@@ -21,6 +21,12 @@ export function setWhatsAppSender(sender: WhatsAppSender) {
   whatsappSender = sender;
 }
 
+/** Texto pelo WhatsApp conectado da empresa (avisos da equipe, 0106). */
+export async function sendWhatsApp(companyId: string, phone: string, text: string) {
+  if (!whatsappSender) throw new Error('WhatsApp ainda não está pronto');
+  await whatsappSender(companyId, digitsOnly(phone), text);
+}
+
 const SEVERITY_LABEL: Record<string, string> = { info: 'ℹ️ Info', warning: '⚠️ Atenção', critical: '🚨 Crítico' };
 
 function formatText(alert: AlertPayload) {

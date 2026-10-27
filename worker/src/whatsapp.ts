@@ -233,7 +233,12 @@ export class WhatsAppManager {
   async sendText(companyId: string, phone: string, text: string) {
     const session = [...this.sessions.values()].find((s) => s.companyId === companyId && s.sock.user && !s.stopped);
     if (!session) throw new Error('nenhum WhatsApp da empresa conectado para enviar a notificação');
-    await session.sock.sendMessage(`${phone}@s.whatsapp.net`, { text });
+    // o número como o WhatsApp conhece (ex.: celular sem o 9 em contas antigas)
+    let to = `${phone}@s.whatsapp.net`;
+    const [found] = (await session.sock.onWhatsApp(phone).catch(() => [])) ?? [];
+    if (found && !found.exists) throw new Error('Este número não tem WhatsApp.');
+    if (found?.jid) to = jidNormalizedUser(found.jid);
+    await session.sock.sendMessage(to, { text });
   }
 
   /** Atende os comandos enviados pelo painel (conectar / desconectar). */

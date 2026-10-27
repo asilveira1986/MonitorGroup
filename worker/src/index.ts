@@ -9,6 +9,7 @@ import { logger } from './logger.js';
 import { applyMessageRetention, cleanupExpiredMedia } from './media.js';
 import { setWhatsAppSender } from './notify.js';
 import { extendAgendaSeries, pushStatus, startPush } from './push.js';
+import { startTeamWhatsApp } from './team-whatsapp.js';
 import { WhatsAppManager } from './whatsapp.js';
 
 const ALERT_CHECK_MS = 60_000;
@@ -136,6 +137,8 @@ async function main() {
   // notificações push nos aparelhos (0098): não dependem da conexão do WhatsApp
   void startPush();
   await manager.init();
+  // avisos no WhatsApp da equipe: compromissos e demandas (0106)
+  startTeamWhatsApp();
 
   setInterval(() => void runPeriodicChecks(), ALERT_CHECK_MS);
   setInterval(() => void refreshCache(true), ALERT_CHECK_MS);

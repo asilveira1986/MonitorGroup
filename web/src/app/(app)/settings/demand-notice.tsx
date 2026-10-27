@@ -24,7 +24,32 @@ const KINDS = {
     vars: ['numero', 'demanda', 'tipo', 'responsavel', 'entregue_em', 'observacao', 'grupo'],
     hint: '{observacao} vira “📝 Observação: …” quando a entrega tiver observação (e some quando não tiver).',
   },
+  // avisos no WhatsApp da equipe (0106)
+  agenda_new: {
+    title: 'Novo compromisso: aviso no WhatsApp de quem foi incluído',
+    description:
+      'Quando alguém inclui uma pessoa num compromisso, ela recebe o aviso no WhatsApp dela (o telefone do perfil ou o da equipe), pelo número conectado.',
+    template: '📅 *Novo compromisso na sua agenda*\n*{titulo}*\n🗓️ {data} {hora}{observacao}\n\nMarcado por {criado_por}',
+    vars: ['titulo', 'data', 'hora', 'tipo', 'observacao', 'participantes', 'criado_por', 'link'],
+    hint: '{hora} é “às 14:30” ou “dia todo”; {observacao} vira “📝 …” quando houver; {link} abre o compromisso no painel.',
+  },
+  agenda_reminder: {
+    title: 'Lembretes dos compromissos no WhatsApp',
+    description:
+      'Nos lembretes escolhidos em cada compromisso (15 min antes, na véspera…), cada participante recebe também o lembrete no WhatsApp dele.',
+    template: '⏰ *Lembrete:* {titulo}\n🗓️ {data} {hora} ({quando}){observacao}',
+    vars: ['titulo', 'data', 'hora', 'quando', 'tipo', 'observacao', 'participantes', 'criado_por', 'link'],
+    hint: '{quando} é “em 15 min”, “amanhã”…',
+  },
+  demand_assignee: {
+    title: 'Nova demanda: aviso no WhatsApp do responsável',
+    description: 'Quando uma demanda é registrada (ou passada) para alguém, o responsável recebe o aviso no WhatsApp dele.',
+    template: '📋 *Nova demanda para você* (nº {numero})\n{demanda}\n\n👥 *Grupo:* {grupo}\n📅 *Prazo:* {prazo}',
+    vars: ['numero', 'demanda', 'tipo', 'grupo', 'prazo'],
+    hint: '{prazo} é a data de entrega, ou “a definir”.',
+  },
 } as const;
+export type NoticeKind = keyof typeof KINDS;
 
 export const DEFAULT_DEMAND_NOTICE = KINDS.created.template;
 
@@ -37,6 +62,13 @@ const SAMPLE: Record<string, string> = {
   entregue_em: '27/10/2026 às 16:40',
   observacao: '\n\n📝 *Observação:* Boleto enviado para o e-mail do financeiro, vencimento dia 05.',
   grupo: 'Cliente Exemplo',
+  titulo: 'Reunião com o cliente',
+  data: '28/10/2026',
+  hora: 'às 14:30',
+  quando: 'em 15 min',
+  participantes: 'Ana Souza, Bruno Lima',
+  criado_por: 'Alexandre Silveira',
+  link: 'https://seu-painel.vercel.app/agenda?evento=…',
 };
 
 /**
@@ -105,7 +137,7 @@ export function DemandNotice({
               onClick={() =>
                 start(async () => {
                   const res = await saveDemandNotice({ kind, enabled: on, template: text === DEFAULT ? '' : text });
-                  if (res.ok) toast.success(on ? 'Aviso ao cliente salvo' : 'Aviso ao cliente desligado');
+                  if (res.ok) toast.success(on ? 'Aviso salvo' : 'Aviso desligado');
                   else toast.error(res.error);
                 })
               }
