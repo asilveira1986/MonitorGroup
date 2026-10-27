@@ -136,6 +136,7 @@ from (values
   (97, 'Avisos no WhatsApp da equipe (0106)', to_regprocedure('public.claim_team_whatsapp(integer)') is not null),
   (98, 'Pessoas e setores sem cadastro duplicado (0107)', to_regprocedure('public.agenda_sectors()') is not null),
   (99, 'Limpeza do que fica sem uso (0108)', to_regprocedure('public.cleanup_old_data()') is not null),
-  (100, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (100, 'Lista de contatos completa (0109)', to_regprocedure('public.contact_directory(text,integer)') is not null),
+  (101, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

@@ -192,7 +192,8 @@ begin
   (97, 'Avisos no WhatsApp da equipe (0106)', to_regprocedure('public.claim_team_whatsapp(integer)') is not null),
   (98, 'Pessoas e setores sem cadastro duplicado (0107)', to_regprocedure('public.agenda_sectors()') is not null),
   (99, 'Limpeza do que fica sem uso (0108)', to_regprocedure('public.cleanup_old_data()') is not null),
-  (100, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (100, 'Lista de contatos completa (0109)', to_regprocedure('public.contact_directory(text,integer)') is not null),
+  (101, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -201,7 +202,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -16646,6 +16647,145 @@ drop table if exists public.agenda_teams;
 $mig0108$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0109_contact_directory.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0109', $mig0109$
+-- =====================================================================
+-- Lista de contatos completa (Nova conversa no privado).
+--
+--  * Junta, numa lista só e sem repetir a mesma pessoa:
+--    - os contatos da agenda do WhatsApp conectado (nome salvo e número);
+--    - quem já tem conversa privada (inclusive números digitados no
+--      sistema);
+--    - as pessoas da equipe (com o WhatsApp cadastrado).
+--  * A mesma pessoa vinda pelo número e pelo identificador do WhatsApp
+--    (LID) aparece uma vez, com o nome salvo e o número. O número do LID
+--    é descoberto pelo mapeamento guardado pelo WhatsApp conectado.
+--  * Antes a lista mostrava só 50 contatos; agora mostra todos (com busca
+--    por nome ou número).
+-- =====================================================================
+
+-- o telefone dos contatos que só vieram pelo LID (mapeamento do WhatsApp conectado)
+create or replace function public.link_wa_contacts(p_instance_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.wa_contacts t
+     set phone = public.lid_phone(p_instance_id, t.jid), updated_at = now()
+   where t.instance_id = p_instance_id and t.phone is null and t.jid like '%@lid'
+     and public.lid_phone(p_instance_id, t.jid) is not null;
+  update public.wa_contacts t
+     set phone = public.lid_phone(p_instance_id, t.lid), updated_at = now()
+   where t.instance_id = p_instance_id and t.phone is null and t.lid like '%@lid'
+     and public.lid_phone(p_instance_id, t.lid) is not null;
+  -- telefone para a linha do LID
+  update public.wa_contacts t
+     set phone = s.phone, updated_at = now()
+    from public.wa_contacts s
+   where t.instance_id = p_instance_id and s.instance_id = p_instance_id
+     and t.jid <> s.jid and t.phone is null and s.phone is not null
+     and (t.jid = s.lid or (t.lid is not null and t.lid = s.lid));
+  -- nome salvo para a outra linha da mesma pessoa (pelo LID ou pelo número, com ou sem o 9)
+  update public.wa_contacts t
+     set name = s.name, updated_at = now()
+    from public.wa_contacts s
+   where t.instance_id = p_instance_id and s.instance_id = p_instance_id
+     and t.jid <> s.jid and t.name is null and s.name is not null
+     and ((t.phone is not null and public.phone_key(t.phone) = public.phone_key(s.phone))
+          or (t.lid is not null and (t.lid = s.lid or t.lid = s.jid))
+          or (s.lid is not null and s.lid = t.jid));
+  -- conversas: nome salvo no lugar de nenhum nome, do nome do WhatsApp ou só do número
+  update public.private_chats c
+     set name = w.name
+    from public.wa_contacts w
+   where c.instance_id = p_instance_id and w.instance_id = p_instance_id
+     and w.name is not null and c.name is distinct from w.name
+     and (w.jid = c.jid or (c.phone is not null and public.phone_key(w.phone) = public.phone_key(c.phone)))
+     and (c.name is null or c.name = w.notify or c.name ~ '^[0-9 +()-]+$');
+  -- conversas sem número que agora têm (pelo contato)
+  update public.private_chats c
+     set phone = w.phone
+    from public.wa_contacts w
+   where c.instance_id = p_instance_id and w.instance_id = p_instance_id
+     and c.phone is null and w.phone is not null and (w.jid = c.jid or w.lid = c.jid);
+end;
+$$;
+revoke all on function public.link_wa_contacts(uuid) from public, anon, authenticated;
+grant execute on function public.link_wa_contacts(uuid) to service_role;
+
+do $$
+declare
+  v_id uuid;
+begin
+  for v_id in select id from public.whatsapp_instances loop
+    perform public.link_wa_contacts(v_id);
+  end loop;
+end $$;
+
+-- a lista: agenda do WhatsApp + conversas + equipe, uma linha por pessoa
+create or replace function public.contact_directory(p_search text default null, p_limit int default 5000)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_company uuid := public.current_company_id();
+  v_term text := nullif(btrim(coalesce(p_search, '')), '');
+  v_digits text := nullif(regexp_replace(coalesce(p_search, ''), '\D', '', 'g'), '');
+  v_out jsonb;
+begin
+  if not public.can_use_private_chats() then
+    return '[]'::jsonb;
+  end if;
+  with src as (
+    -- agenda do WhatsApp (nome salvo = prioridade 1)
+    select w.jid, w.phone, w.name, w.notify, 'agenda'::text as origem,
+           case when w.name is not null then 1 else 4 end as prio
+      from public.wa_contacts w
+     where w.company_id = v_company
+       and w.jid not like '%@g.us' and w.jid not like '%@broadcast' and w.jid not like '%@newsletter'
+    union all
+    -- conversas privadas (números digitados no sistema e quem escreveu no privado)
+    select c.jid, c.phone, c.name, null, 'conversa', case when c.name is not null then 2 else 5 end
+      from public.private_chats c
+     where c.company_id = v_company
+    union all
+    -- pessoas da equipe com WhatsApp
+    select t.phone || '@s.whatsapp.net', t.phone, t.name, null, 'equipe', 3
+      from public.team_members t
+     where t.company_id = v_company and t.active and t.phone is not null
+  ), keyed as (
+    select s.*, coalesce('p' || public.phone_key(s.phone), 'j' || s.jid) as k from src s
+  ), merged as (
+    select k,
+           -- o nome mais confiável (agenda > conversa > equipe), senão o nome no WhatsApp
+           (array_agg(name order by prio) filter (where name is not null))[1] as name,
+           (array_agg(notify) filter (where notify is not null))[1] as notify,
+           (array_agg(phone order by prio) filter (where phone is not null))[1] as phone,
+           -- para abrir a conversa: a que já existe, senão pelo número, senão o identificador
+           coalesce((array_agg(jid) filter (where origem = 'conversa'))[1],
+                    (array_agg(jid) filter (where jid like '%@s.whatsapp.net'))[1],
+                    (array_agg(jid))[1]) as jid,
+           bool_or(origem = 'agenda' and name is not null) as na_agenda,
+           bool_or(origem = 'conversa') as tem_conversa,
+           bool_or(origem = 'equipe') as equipe
+      from keyed group by k
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'jid', jid, 'phone', phone, 'name', name, 'notify', notify,
+           'saved', na_agenda, 'chat', tem_conversa, 'team', equipe)
+           order by (name is null and notify is null), lower(coalesce(name, notify, phone, jid))), '[]'::jsonb)
+    into v_out
+    from (
+      select * from merged m
+       where (v_term is null
+              or m.name ilike '%' || v_term || '%' or m.notify ilike '%' || v_term || '%'
+              or (v_digits is not null and length(v_digits) >= 3 and m.phone like '%' || v_digits || '%'))
+       order by (m.name is null and m.notify is null), lower(coalesce(m.name, m.notify, m.phone, m.jid))
+       limit greatest(1, least(coalesce(p_limit, 5000), 20000))
+    ) x;
+  return v_out;
+end;
+$$;
+grant execute on function public.contact_directory(text, int) to authenticated;
+$mig0109$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -16790,6 +16930,7 @@ from (values
   (97, 'Avisos no WhatsApp da equipe (0106)', to_regprocedure('public.claim_team_whatsapp(integer)') is not null),
   (98, 'Pessoas e setores sem cadastro duplicado (0107)', to_regprocedure('public.agenda_sectors()') is not null),
   (99, 'Limpeza do que fica sem uso (0108)', to_regprocedure('public.cleanup_old_data()') is not null),
-  (100, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (100, 'Lista de contatos completa (0109)', to_regprocedure('public.contact_directory(text,integer)') is not null),
+  (101, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

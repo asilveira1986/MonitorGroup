@@ -34,7 +34,9 @@ export type PrivateChat = {
 };
 type PrivateMessage = PrivateMessageRow;
 type Outgoing = { id: string; chat_id: string; body: string | null; media_name?: string | null; message_type?: string; status: string; error: string | null; created_at: string; wa_message_id: string | null };
-type Contact = { jid: string; phone: string | null; name: string | null; notify: string | null };
+/** contato da lista (0109): agenda do WhatsApp + conversas + equipe, uma linha por pessoa */
+type Contact = { jid: string; phone: string | null; name: string | null; notify: string | null; saved?: boolean; chat?: boolean; team?: boolean };
+const SHOW_STEP = 200;
 
 const TYPE_LABEL: Record<string, string> = {
   image: '📷 Imagem',
@@ -57,21 +59,6 @@ const initials = (s: string) =>
     .map((w) => w[0]!.toUpperCase())
     .join('') || '#';
 
-/**
- * A mesma pessoa pode vir pelo número (agenda) e pelo LID (grupos): mostra uma vez só,
- * de preferência a linha com o nome salvo e o número.
- */
-function uniqueContacts(list: Contact[]) {
-  const best = new Map<string, Contact>();
-  const score = (c: Contact) => (c.name ? 2 : 0) + (c.jid.endsWith('@s.whatsapp.net') ? 1 : 0);
-  for (const c of list) {
-    const key = c.phone ?? c.jid;
-    const cur = best.get(key);
-    if (!cur || score(c) > score(cur)) best.set(key, c);
-  }
-  return [...best.values()];
-}
-
 /** Nova conversa: um contato do WhatsApp (busca) ou um número digitado. */
 function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string) => void }) {
   const [q, setQ] = useState('');
@@ -79,6 +66,7 @@ function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: 
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [pending, start] = useTransition();
+  const [shown, setShown] = useState(SHOW_STEP);
 
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -86,19 +74,21 @@ function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: 
     return () => window.removeEventListener('keydown', esc);
   }, [onClose]);
 
-  // busca nos contatos sincronizados do WhatsApp (nome salvo, nome no WhatsApp ou número)
+  // todos os contatos (agenda do WhatsApp conectado, conversas e equipe), sem repetir a pessoa;
+  // a busca filtra por nome salvo, nome no WhatsApp ou número
   useEffect(() => {
     const term = q.trim();
-    const timer = setTimeout(() => {
-      let query = createClient().from('wa_contacts').select('jid, phone, name, notify').order('name', { nullsFirst: false }).limit(50);
-      if (term) {
-        const digits = term.replace(/\D/g, '');
-        query = query.or(
-          [`name.ilike.%${term}%`, `notify.ilike.%${term}%`, digits.length >= 3 ? `phone.ilike.%${digits}%` : null].filter(Boolean).join(','),
-        );
-      }
-      void query.then(({ data }) => setContacts(uniqueContacts((data ?? []) as Contact[])));
-    }, 250);
+    const timer = setTimeout(
+      () => {
+        void createClient()
+          .rpc('contact_directory', { p_search: term || null, p_limit: 5000 })
+          .then(({ data }) => {
+            setContacts((data ?? []) as Contact[]);
+            setShown(SHOW_STEP);
+          });
+      },
+      term ? 250 : 0,
+    );
     return () => clearTimeout(timer);
   }, [q]);
 
@@ -117,7 +107,10 @@ function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: 
         <div className="flex items-start justify-between gap-3 border-b border-line p-4">
           <div>
             <h2 className="text-base font-semibold">Nova conversa</h2>
-            <p className="text-xs text-ink-2">Escolha um contato ou digite um número.</p>
+            <p className="text-xs text-ink-2">
+              Escolha um contato ou digite um número.
+              {contacts && contacts.length > 0 && ` ${contacts.length} contato(s)${q.trim() ? ' encontrado(s)' : ''}.`}
+            </p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-1 text-muted hover:text-ink" aria-label="Fechar">
             <X className="h-5 w-5" />
@@ -152,10 +145,10 @@ function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: 
           )}
           {contacts?.length === 0 && (
             <li className="px-3 py-3 text-sm text-muted">
-              Nenhum contato encontrado. Os contatos aparecem conforme o WhatsApp conectado sincroniza a agenda.
+              Nenhum contato encontrado. Use “Sincronizar contatos” para trazer a agenda do WhatsApp conectado, ou digite o número acima.
             </li>
           )}
-          {contacts?.map((c) => {
+          {contacts?.slice(0, shown).map((c) => {
             const title = c.name || c.notify || formatPhone(c.phone) || 'Contato';
             return (
               <li key={c.jid}>
@@ -175,10 +168,22 @@ function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: 
                       {c.name && c.notify && c.notify !== c.name ? ` · ${c.notify}` : ''}
                     </span>
                   </span>
+                  <span className="flex shrink-0 gap-1 text-[10px]">
+                    {c.saved && <span className="rounded-full bg-surface-2 px-1.5 text-ink-2" title="Salvo na agenda do WhatsApp conectado">agenda</span>}
+                    {c.chat && <span className="rounded-full bg-brand-soft px-1.5 text-brand-text" title="Já tem conversa no sistema">conversa</span>}
+                    {c.team && <span className="rounded-full bg-good/15 px-1.5 text-good-ink" title="Pessoa da equipe">equipe</span>}
+                  </span>
                 </button>
               </li>
             );
           })}
+          {contacts && contacts.length > shown && (
+            <li className="px-3 py-2">
+              <Button type="button" size="sm" variant="secondary" className="w-full" onClick={() => setShown(shown + SHOW_STEP)}>
+                Mostrar mais ({contacts.length - shown})
+              </Button>
+            </li>
+          )}
         </ul>
       </div>
     </div>

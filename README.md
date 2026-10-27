@@ -146,6 +146,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    106. `supabase/migrations/0106_team_whatsapp_notices.sql`
    107. `supabase/migrations/0107_people_sectors_unified.sql`
    108. `supabase/migrations/0108_cleanup_old_data.sql`
+   109. `supabase/migrations/0109_contact_directory.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -459,6 +460,15 @@ Em *Configurações › WhatsApp › Avisos automáticos* (administradores ligam
 - **Nova demanda**: o responsável recebe o aviso no WhatsApp ao ganhar uma demanda (número, descrição, grupo e prazo).
 
 Saem pelo WhatsApp conectado da empresa para o telefone em *Meu perfil* (ou, sem ele, o do cadastro em *Atendentes*). Começam desligados. Quem fez a ação não recebe o próprio aviso; aviso parado por mais de 30 minutos (WhatsApp desconectado) não sai.
+
+## Lista de contatos (Nova conversa no privado)
+
+A lista mostra **todos** os contatos, uma linha por pessoa, com busca por nome ou número:
+- os da **agenda do WhatsApp conectado** (nome salvo e número; marca *agenda*);
+- quem já tem **conversa** no sistema, inclusive números digitados aqui (marca *conversa*);
+- as pessoas da **equipe** com WhatsApp cadastrado (marca *equipe*).
+
+A mesma pessoa que vem pelo número e pelo identificador interno do WhatsApp (LID) aparece uma vez, com o nome salvo; o número de quem só veio pelo LID é descoberto pelo mapeamento do WhatsApp conectado. Para trazer a agenda inteira de novo, use **Sincronizar contatos** no topo das Conversas privadas. A lista mostra 200 por vez (*Mostrar mais*).
 
 ## Encaminhar e responder entre o grupo e o privado
 
