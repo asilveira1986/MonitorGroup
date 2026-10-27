@@ -189,8 +189,8 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
                 {teamOptions.length === 0 && (
                   <p className="mt-1 text-[11px] text-muted">
                     Cadastre as pessoas em{' '}
-                    <Link href="/settings/team" className="underline">
-                      Configurações › Atendentes
+                    <Link href="/settings/people" className="underline">
+                      Configurações › Pessoas
                     </Link>
                     .
                   </p>

@@ -7,7 +7,7 @@ Sistema web que acompanha as mensagens recebidas e enviadas nos grupos de WhatsA
 - **Dashboard**: tempo médio de primeira resposta, mediana e P90, % dentro do SLA, volume diário (clientes x equipe), distribuição dos tempos de resposta, movimento por hora, ranking dos grupos e desempenho de cada atendente.
 - **Alertas configuráveis**: cliente sem resposta há X minutos, palavras-chave ("urgente", "cancelar"…), volume alto de mensagens, grupo parado e WhatsApp desconectado. Os avisos chegam no painel (em tempo real), por **e-mail**, por **WhatsApp** ou por **webhook** (Slack, Teams, n8n, Zapier…).
 - **Indicadores configuráveis**: o dashboard é montado a partir de um catálogo de indicadores agrupados em blocos. Em **Configurações › Indicadores** (só administradores) é possível ligar/desligar cada indicador ou bloco, ligar/desligar o alerta, editar os parâmetros e restaurar o padrão. As mudanças valem na hora para todos e ficam registradas (quem e quando). Desligar não apaga dados.
-- **Importação do histórico**: ao ler o QR code, as mensagens anteriores dos grupos monitorados (padrão: últimos 30 dias, só texto) são importadas em segundo plano e as métricas do período já aparecem no dashboard. Para um número já conectado, use **Configurações › WhatsApp › Importar histórico** (gera um novo QR code, pois o WhatsApp só envia o histórico na conexão). A conversa de cada grupo carrega 50 mensagens por vez ao rolar.
+- **Importação do histórico**: ao ler o QR code, as mensagens anteriores dos grupos monitorados (padrão: últimos 30 dias, só texto) são importadas em segundo plano e as métricas do período já aparecem no dashboard. Para um número já conectado, use **Configurações › WhatsApp › Conexão e arquivos › Importar histórico** (gera um novo QR code, pois o WhatsApp só envia o histórico na conexão). A conversa de cada grupo carrega 50 mensagens por vez ao rolar.
 - **Grupos excluídos**: quando o número conectado sai ou é removido de um grupo, ou o grupo é apagado no celular, ele vai para a aba **Grupos › Excluídos**, sai da fila e dos alertas, mas o histórico continua disponível. O administrador pode excluí-lo definitivamente de lá. Se o número voltar ao grupo, ele é reativado sozinho.
 - **Login** com e-mail e senha cadastrados por um administrador. Só entra quem foi autorizado.
 - Tudo roda na nuvem: o navegador é o único programa necessário.
@@ -26,7 +26,7 @@ Sistema web que acompanha as mensagens recebidas e enviadas nos grupos de WhatsA
 | `worker` | Conecta ao WhatsApp, grava as mensagens dos grupos e dispara os alertas | Railway (ou qualquer serviço que rode Docker 24h) |
 | `web` | Painel: login, dashboard, fila, grupos, alertas e configurações | Vercel |
 
-**Como uma conversa é avaliada:** cada mensagem de um grupo é classificada como *cliente* ou *equipe*. Mensagens enviadas pelo número conectado e pelos atendentes cadastrados em **Configurações › Equipe** contam como equipe. Quando um cliente escreve, o grupo entra na fila de pendências. Quando a equipe responde, a pendência fecha e o sistema registra o tempo de resposta, contado a partir da **última** mensagem do cliente antes da resposta. A fila de pendências e os alertas de "sem resposta" continuam contando a espera desde a primeira mensagem não respondida. Mensagens curtas de agradecimento ("ok", "obrigado", 👍) não abrem uma nova pendência (essa opção pode ser desligada).
+**Como uma conversa é avaliada:** cada mensagem de um grupo é classificada como *cliente* ou *equipe*. Mensagens enviadas pelo número conectado e pelos atendentes cadastrados em **Configurações › Pessoas** contam como equipe. Quando um cliente escreve, o grupo entra na fila de pendências. Quando a equipe responde, a pendência fecha e o sistema registra o tempo de resposta, contado a partir da **última** mensagem do cliente antes da resposta. A fila de pendências e os alertas de "sem resposta" continuam contando a espera desde a primeira mensagem não respondida. Mensagens curtas de agradecimento ("ok", "obrigado", 👍) não abrem uma nova pendência (essa opção pode ser desligada).
 
 ---
 
@@ -144,6 +144,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    104. `supabase/migrations/0104_lgpd_platform_only.sql`
    105. `supabase/migrations/0105_forward_cross_reply.sql`
    106. `supabase/migrations/0106_team_whatsapp_notices.sql`
+   107. `supabase/migrations/0107_people_sectors_unified.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -196,15 +197,31 @@ O worker precisa ficar ligado 24 horas por dia, porque mantém a conexão com o 
    Ele administra a plataforma (menu **Empresas**) e a primeira empresa.
 
    **O primeiro usuário vira administrador automaticamente.**
-2. Em **Configurações › WhatsApp**, clique em **Nova conexão** e leia o QR code com o celular (*Aparelhos conectados › Conectar um aparelho*).
+2. Em **Configurações › WhatsApp › Conexão e arquivos**, clique em **Nova conexão** e leia o QR code com o celular (*Aparelhos conectados › Conectar um aparelho*).
 3. Os grupos aparecem em **Grupos**. Desligue o monitoramento dos grupos que não são de clientes.
-4. Em **Configurações › Equipe**, cadastre os números dos atendentes que respondem pelo próprio celular.
-5. Em **Configurações › Geral**, ajuste o horário comercial e o SLA. Depois revise as regras em **Configurações › Regras de alerta**.
-6. Em **Configurações › Usuários**, cadastre as outras pessoas com e-mail e uma senha inicial. Cada uma pode trocar a senha em **Esqueci minha senha**, na tela de login.
+4. Em **Configurações › Pessoas**, cadastre os números dos atendentes que respondem pelo próprio celular.
+5. Em **Configurações › Empresa › Dados da empresa**, ajuste o horário comercial e o SLA. Depois revise as regras em **Configurações › Regras de alerta**.
+6. Em **Configurações › Pessoas**, cadastre as outras pessoas com e-mail e uma senha inicial. Cada uma pode trocar a senha em **Esqueci minha senha**, na tela de login.
+
+## Configurações: onde fica cada coisa
+
+| Grupo | Telas |
+|---|---|
+| **Empresa** | Dados da empresa (nome, logo, horário comercial, feriados) · Menus · Privacidade (LGPD, só o administrador geral) |
+| **Pessoas** | **Pessoas**: um cadastro só para quem atende nos grupos e quem entra no painel · **Setores**: quem vê cada grupo e as equipes da agenda |
+| **WhatsApp** | Conexão e arquivos · Respostas e mensagens · Mensagens rápidas · **Avisos automáticos** (ao cliente no grupo e à equipe no WhatsApp) |
+| **Atendimento** | Demandas (tipos e como são criadas) · Agenda (tipos de compromisso) · Etiquetas |
+| **Monitoramento** | Regras de alerta · Avisos em tela e voz · Indicadores |
+
+**Pessoas** (desde a 0107): cada pessoa aparece uma vez, com duas chaves — *atende nos grupos* (as mensagens dela contam como da equipe) e *entra no painel* (login com o perfil). Nome e telefone são os mesmos nos dois e mudam também pelo *Meu perfil*. **Nova pessoa** cadastra os dois de uma vez; quem só tem um deles ganha o outro pelos botões *Dar acesso* / *+ Atende nos grupos*.
+
+**Setores** (desde a 0107): os mesmos setores servem para os grupos e para a agenda (marcar o setor inteiro num compromisso e ver a agenda do setor). Os antigos "setores da agenda" viraram Setores; se o nome já existia, o novo fica "Nome (agenda)". Um setor sem grupos não dá acesso a grupo nenhum.
+
+Os endereços antigos (Acessos ao painel, Atendentes, Setores da agenda, Avisos no WhatsApp) levam para as telas novas.
 
 ## Demandas
 
-Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer de quatro origens, cada uma ligada ou desligada em **Configurações › Geral › Demandas** (somente admin):
+Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer de quatro origens, cada uma ligada ou desligada em **Configurações › Atendimento › Demandas** (somente admin):
 
 - **Manual**: botão *Nova demanda* em **Demandas** ou *criar demanda* sobre uma mensagem na conversa do grupo.
 - **Comandos e palavras-chave**: a equipe escreve no grupo (de preferência respondendo à mensagem do cliente):
@@ -220,7 +237,7 @@ Uma demanda é um pedido do cliente acompanhado até a entrega. Ela pode nascer 
 
   Sem resposta a uma mensagem, o comando vale para a demanda aberta mais recente do grupo. Palavras-chave do cliente (lista editável) também podem abrir demandas.
 - **Compromisso da equipe** (ligado por padrão): quando alguém da equipe responde no grupo com uma frase de compromisso (*vou verificar*, *te retorno em seguida*, *vou providenciar*…, lista editável) ou informa um prazo (*até amanhã*, *até sexta*, *em 2 dias*, *prazo…*), a demanda abre sozinha:
-  - **gatilhos**: *verbos de ação* (verificar, corrigir, realizar, ajustar, enviar…, lista editável) valem em qualquer forma de compromisso: *vou/vamos/irei/iremos corrigir*, *vou já te enviar*, *estou corrigindo*, *corrigirei*, *fico de corrigir*, *pode deixar que eu corrijo*. As *frases prontas* (*te retorno*, *dar uma olhada*, *deixa comigo*…) valem como estão. Negação logo antes (*não vou conseguir verificar*) não abre demanda. Em **Configurações › Geral › Demandas** há um campo para testar uma frase, e o histórico da demanda mostra o gatilho que a abriu;
+  - **gatilhos**: *verbos de ação* (verificar, corrigir, realizar, ajustar, enviar…, lista editável) valem em qualquer forma de compromisso: *vou/vamos/irei/iremos corrigir*, *vou já te enviar*, *estou corrigindo*, *corrigirei*, *fico de corrigir*, *pode deixar que eu corrijo*. As *frases prontas* (*te retorno*, *dar uma olhada*, *deixa comigo*…) valem como estão. Negação logo antes (*não vou conseguir verificar*) não abre demanda. Em **Configurações › Atendimento › Demandas** há um campo para testar uma frase, e o histórico da demanda mostra o gatilho que a abriu;
   - **descrição**: o pedido do cliente que foi respondido (a mensagem citada, se a equipe respondeu citando; senão, a mensagem do cliente que essa resposta atendeu);
   - **responsável**: quem respondeu (atendente cadastrado em Equipe); **prazo**: o informado na frase, se houver; **tipo**: pelas categorias de *Tipo de demanda*;
   - se o pedido já é uma demanda, ou se a equipe volta a falar sem pedido novo do cliente (ex.: "vou verificar" e, depois, "te envio até amanhã"), a demanda existente passa para *em andamento* e recebe o prazo, sem duplicar.
@@ -238,14 +255,14 @@ O sistema atende várias empresas com uma só instalação (um banco, um painel 
   - define **limites** de grupos monitorados e de usuários (em branco = sem limite);
   - acompanha o uso: usuários, grupos monitorados, WhatsApp conectado e mensagens dos últimos 30 dias;
   - clica em **Entrar na empresa** (ou usa o seletor no topo do painel) para configurar ou dar suporte vendo exatamente o que a empresa vê.
-- **Cada empresa** conecta o próprio número em **Configurações › WhatsApp**, cadastra os próprios usuários em **Configurações › Usuários** e ajusta tudo nas suas configurações, sem afetar as outras. Os alertas por WhatsApp saem pelo número da própria empresa. As demandas são numeradas por empresa (#1, #2…).
+- **Cada empresa** conecta o próprio número em **Configurações › WhatsApp › Conexão e arquivos**, cadastra os próprios usuários em **Configurações › Pessoas** e ajusta tudo nas suas configurações, sem afetar as outras. Os alertas por WhatsApp saem pelo número da própria empresa. As demandas são numeradas por empresa (#1, #2…).
 - **Um e-mail pertence a uma empresa só.**
 - **Criar um administrador da plataforma** (acesso total: menu Empresas, cadastro de empresas e usuários, liberação de acessos e administrador em qualquer empresa): abra `supabase/criar_admin_plataforma.sql`, troque o e-mail, a senha e o nome no início e execute no SQL Editor do Supabase. Pode executar de novo para promover um usuário que já existe ou trocar a senha dele.
-- **Ao atualizar para esta versão**, os dados atuais viram a primeira empresa (com o nome de *Configurações › Geral*) e os administradores atuais passam a administrar a plataforma.
+- **Ao atualizar para esta versão**, os dados atuais viram a primeira empresa (com o nome de *Configurações › Empresa › Dados da empresa*) e os administradores atuais passam a administrar a plataforma.
 
 ## Perfis de usuário
 
-Em **Configurações › Usuários**, cada pessoa tem um perfil (dá para trocar na lista):
+Em **Configurações › Pessoas**, cada pessoa tem um perfil (dá para trocar na lista):
 
 | Perfil | O que faz |
 |---|---|
@@ -257,7 +274,7 @@ Como os atendentes, quem só vê painéis enxerga os grupos dos setores em que e
 
 ## Menus do menu lateral
 
-Em **Configurações › Menus** (administradores) você escolhe, para cada item do menu lateral, quem o vê: **Todos**, **Só administradores** ou **Oculto**. Vale para todos os usuários da empresa (cada empresa tem a sua configuração). Menu oculto também bloqueia a página: quem abrir pelo endereço volta para o primeiro menu liberado. **Configurações** nunca some para administradores, para ninguém ficar trancado do lado de fora. As demandas desligadas em *Configurações › Geral* continuam saindo do menu sozinhas.
+Em **Configurações › Menus** (administradores) você escolhe, para cada item do menu lateral, quem o vê: **Todos**, **Só administradores** ou **Oculto**. Vale para todos os usuários da empresa (cada empresa tem a sua configuração). Menu oculto também bloqueia a página: quem abrir pelo endereço volta para o primeiro menu liberado. **Configurações** nunca some para administradores, para ninguém ficar trancado do lado de fora. As demandas desligadas em *Configurações › Empresa › Dados da empresa* continuam saindo do menu sozinhas.
 
 ## Identidade visual
 
@@ -303,7 +320,7 @@ Com o painel aberto, os avisos abrem **grandes, no centro da tela**, todos no me
 
 Um aviso por vez; o mesmo grupo/assunto atualiza o aviso anterior ("cliente sem resposta" e "SLA excedido" do mesmo grupo viram um aviso só). O SLA é conferido a cada 30 segundos e avisa na virada; pendências que já estavam vencidas quando a tela foi aberta não abrem aviso (continuam no Painel de grupos e em Aguardando resposta). Mensagens da equipe e a importação do histórico não geram aviso.
 
-A configuração fica em **Configurações › Geral › Alertas em tela** (só administradores alteram; vale para todos):
+A configuração fica em **Configurações › Monitoramento › Avisos em tela e voz** (só administradores alteram; vale para todos):
 
 - **Mostrar o alerta de nova mensagem** (ligado/desligado);
 - **Abrir também os alertas (SLA excedido e alertas do sistema)**; desligado, os alertas do sistema aparecem só como um aviso pequeno no canto;
@@ -313,7 +330,7 @@ A configuração fica em **Configurações › Geral › Alertas em tela** (só 
 
 O sino no topo da tela silencia todos os avisos em tela só no navegador em uso.
 
-**Aviso por voz** e **avisos em tela** ficam em *Configurações › Regras de alerta*, que reúne tudo de alertas em três seções: **Regras**, **Avisos em tela** (aviso grande, tempo na tela e som) e **Aviso por voz**. No aviso por voz você:
+**Aviso por voz** e **avisos em tela** ficam em *Configurações › Monitoramento › Avisos em tela e voz* (as regras ficam em *Regras de alerta*). No aviso por voz você:
 - liga ou desliga a voz, e escolhe falar ou não as mensagens novas e o SLA excedido (cada regra de alerta liga ou desliga a própria voz em *Editar regra*);
 - escolhe **o que cada aviso fala**: uma frase com itens clicáveis (nome do grupo, quem enviou, texto da mensagem, tempo esperando, SLA, tipo e gravidade do alerta…), com exemplo e botão **Ouvir**. Item sem valor (ex.: alerta sem grupo) sai da frase junto com a ligação ("no grupo …");
 - escolhe a **voz** (as instaladas no computador e no navegador; se não existir em outro computador, ele usa a voz em português padrão dele), a **velocidade** e o **tom**.
@@ -323,10 +340,10 @@ O sino do topo silencia também a voz naquele navegador.
 ## Agenda
 
 Cada usuário tem a sua agenda (dia, semana ou mês) com os compromissos em que participa e as demandas para entregar. No **Novo compromisso**:
-- **Tipo**: Reunião, Audiência, Prazo, Ligação, Visita, Pessoal... cada um com uma **cor**, que pinta o compromisso na agenda. Os tipos e as cores ficam em *Configurações › Tipos de compromisso* (administradores).
+- **Tipo**: Reunião, Audiência, Prazo, Ligação, Visita, Pessoal... cada um com uma **cor**, que pinta o compromisso na agenda. Os tipos e as cores ficam em *Configurações › Atendimento › Agenda* (administradores).
 - **Repetir**: todos os dias, todas as semanas (nos dias escolhidos), todos os meses ou todos os anos, a cada N; termina nunca, numa data ou depois de N vezes. Cada repetição é um compromisso (com os próprios lembretes e o próprio "concluir"); sem fim, a agenda fica sempre com 12 meses à frente. Editar ou excluir uma repetição pergunta: **só este** ou **este e os próximos**.
 - **Lembretes**: um ou mais, com o tempo antes (notificação no celular).
-- **Participantes**: pessoas ou setores da agenda inteiros (*Configurações › Setores da agenda*).
+- **Participantes**: pessoas ou setores inteiros (*Configurações › Pessoas › Setores*).
 
 Tocar num compromisso (ou na notificação dele) abre os detalhes: horário, tipo, repetição, observação, participantes, lembretes, com concluir, editar e excluir.
 
@@ -426,7 +443,7 @@ Na tela de cada grupo, o cartão **Membros** lista quem está no grupo (a lista 
 
 ## Responder pelo sistema
 
-Ative em **Configurações › Geral › Responder pelo sistema** (somente admin). A conversa de cada grupo monitorado ganha uma caixa de resposta, e cada mensagem tem a opção **responder**, que cita a mensagem original como no WhatsApp.
+Ative em **Configurações › WhatsApp › Respostas e mensagens** (somente admin). A conversa de cada grupo monitorado ganha uma caixa de resposta, e cada mensagem tem a opção **responder**, que cita a mensagem original como no WhatsApp.
 
 - A mensagem vai para uma fila e o worker a envia pelo **número conectado**. Como o painel é um aparelho conectado ao número (igual ao WhatsApp Web), a mensagem **aparece também no celular**. O caminho contrário já existia: o que é enviado pelo celular aparece no painel.
 - **Assinar com o nome** (ligado por padrão): a mensagem começa com `*Nome:*`, para o cliente saber quem respondeu. No painel e nos indicadores, a resposta conta para quem a escreveu.
@@ -435,7 +452,7 @@ Ative em **Configurações › Geral › Responder pelo sistema** (somente admin
 
 ## Avisos no WhatsApp da equipe
 
-Em *Configurações › Avisos no WhatsApp* (administradores ligam/desligam e editam o texto, com variáveis e prévia):
+Em *Configurações › WhatsApp › Avisos automáticos* (administradores ligam/desligam e editam o texto, com variáveis e prévia):
 - **Novo compromisso**: quem foi incluído num compromisso recebe o aviso no WhatsApp dele (com dia, hora, observação e quem marcou; `{link}` abre o compromisso no painel).
 - **Lembretes dos compromissos**: nos lembretes escolhidos em cada compromisso, o lembrete vai também pelo WhatsApp de cada participante.
 - **Nova demanda**: o responsável recebe o aviso no WhatsApp ao ganhar uma demanda (número, descrição, grupo e prazo).
@@ -495,7 +512,7 @@ A tela de login mostra o motivo do erro. Os casos mais comuns:
 | *E-mail ainda não confirmado* | Em **Authentication › Users**, confirme o usuário ou recrie com *Auto confirm user*. |
 | *Não foi possível conectar ao Supabase* | URL errada ou projeto pausado (projetos gratuitos pausam após 7 dias sem uso; reative no painel do Supabase). |
 | *Banco de dados não preparado* | Execute os scripts `0001` a `0004` no SQL Editor. |
-| *Acesso não liberado* | O e-mail não está autorizado; um administrador precisa cadastrá-lo em **Configurações › Usuários**. |
+| *Acesso não liberado* | O e-mail não está autorizado; um administrador precisa cadastrá-lo em **Configurações › Pessoas**. |
 | O link de "Esqueci minha senha" volta para o login | Configure **Site URL** e **Redirect URLs** em **Authentication › URL Configuration**. |
 
 Criou o usuário antes de rodar os scripts? Basta executar o `0004`: ele cria os perfis que faltam e torna administrador o usuário mais antigo.
@@ -516,7 +533,7 @@ Uma função nova do painel está usando campos que o banco ainda não tem: falt
 
 ## QR code não aparece
 
-A tela **Configurações › WhatsApp** mostra no topo se o worker está no ar:
+A tela **Configurações › WhatsApp › Conexão e arquivos** mostra no topo se o worker está no ar:
 
 - **"O worker do WhatsApp está fora do ar" / "ainda não se conectou"**: o serviço no Railway não está rodando ou não alcança o banco. Confira se o deploy terminou e o log mostra `worker do MonitorGroup no ar`, se o **Root Directory** é `worker` e as variáveis `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` (chave *service_role*, não a anon). Após mudar variáveis, faça novo deploy.
 - **Log do Railway com "não foi possível ler o banco"**: URL/chave erradas ou scripts SQL não executados.
@@ -526,7 +543,7 @@ A tela **Configurações › WhatsApp** mostra no topo se o worker está no ar:
   2. Pare qualquer `npm run dev`/`npm start` do worker no seu computador.
   3. Execute o script `0013_worker_lock.sql` e faça um novo deploy. A partir dele só uma cópia se conecta por vez; uma cópia extra fica aguardando e aparece como aviso nesta tela.
   4. Aguarde 10 a 15 minutos e clique em **Conectar**. Leia o QR code assim que aparecer.
-  5. O worker anuncia a versão atual do WhatsApp Web (buscada em web.whatsapp.com; aparece no topo de **Configurações › WhatsApp**) e, se o pareamento falhar, alterna para um perfil de conexão mais simples. Se ainda assim falhar, a mensagem de erro traz um "Diagnóstico da última tentativa" (versão, perfil e em quantos segundos a conexão caiu): envie esse texto ao suporte.
+  5. O worker anuncia a versão atual do WhatsApp Web (buscada em web.whatsapp.com; aparece no topo de **Configurações › WhatsApp › Conexão e arquivos**) e, se o pareamento falhar, alterna para um perfil de conexão mais simples. Se ainda assim falhar, a mensagem de erro traz um "Diagnóstico da última tentativa" (versão, perfil e em quantos segundos a conexão caiu): envie esse texto ao suporte.
 - **"Não foi possível verificar o worker"**: execute o script `0005_worker_status.sql`.
 
 ## Custos estimados

@@ -58,6 +58,10 @@ export default async function SectorsPage() {
               só administradores veem esses grupos.
             </li>
             <li>• A regra é aplicada no banco de dados, em qualquer tela.</li>
+            <li>
+              • Na <strong>Agenda</strong>, o setor marca todos de uma vez no compromisso e mostra a agenda do setor. Um setor só
+              para a agenda (sem grupos) não dá acesso a grupo nenhum.
+            </li>
           </ul>
         </Card>
         <Card>

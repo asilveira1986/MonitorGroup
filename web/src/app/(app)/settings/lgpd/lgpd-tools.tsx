@@ -133,7 +133,7 @@ export function TitularRequests() {
             </p>
             {found.atendente && (
               <p className="mt-1 text-xs text-warning-ink">
-                Este telefone é de um atendente: para apagar, remova-o antes em Configurações › Atendentes.
+                Este telefone é de um atendente: para apagar, remova-o antes em Configurações › Pessoas.
               </p>
             )}
             <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">

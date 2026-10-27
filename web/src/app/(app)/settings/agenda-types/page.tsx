@@ -3,7 +3,7 @@ import type { AgendaType } from '@/lib/agenda-colors';
 import { createClient } from '@/lib/supabase/server';
 import { AgendaTypes } from './types';
 
-/** Organização › Tipos de compromisso (0102): nome e cor de cada tipo na agenda. */
+/** Atendimento › Agenda: tipos de compromisso (0102): nome e cor de cada tipo na agenda. */
 export default async function AgendaTypesPage() {
   await requireAdmin();
   const supabase = await createClient();

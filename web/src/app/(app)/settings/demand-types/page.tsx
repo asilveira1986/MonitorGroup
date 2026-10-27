@@ -3,7 +3,7 @@ import { requireProfile } from '@/lib/auth';
 import { DEFAULT_DEMAND_TYPES } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { AppSettings } from '@/lib/types';
-import { DemandNotice } from '../demand-notice';
+import Link from 'next/link';
 import { DemandSettings } from '../demand-settings';
 import { DemandTypes, type DemandType } from './demand-types';
 
@@ -28,22 +28,14 @@ export default async function DemandTypesPage() {
     <div className="space-y-4">
       {!isAdmin && <AdminNotice />}
       <DemandTypes initial={types} counts={counts} canEdit={isAdmin} />
-      {settings && (
-        <DemandNotice
-          enabled={(settings as AppSettings).demand_notify_client ?? true}
-          template={(settings as AppSettings).demand_notify_template ?? null}
-          disabled={!isAdmin}
-        />
-      )}
-      {settings && (
-        <DemandNotice
-          kind="done"
-          enabled={(settings as AppSettings).demand_done_notify ?? true}
-          template={(settings as AppSettings).demand_done_template ?? null}
-          disabled={!isAdmin}
-        />
-      )}
       {settings && <DemandSettings settings={settings as AppSettings} disabled={!isAdmin} />}
+      <p className="px-1 text-xs text-muted">
+        Os avisos automáticos das demandas (ao cliente no grupo e ao responsável no WhatsApp) ficam em{' '}
+        <Link href="/settings/notices" className="underline underline-offset-2">
+          WhatsApp › Avisos automáticos
+        </Link>
+        .
+      </p>
     </div>
   );
 }

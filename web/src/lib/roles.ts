@@ -1,6 +1,6 @@
 import type { Role } from '@/lib/types';
 
-/** Perfis de usuário (Configurações › Acessos ao painel). */
+/** Perfis de usuário (Configurações › Pessoas). */
 export const ROLE_LABEL: Record<Role, string> = {
   admin: 'Administrador',
   agent: 'Atendente',

@@ -63,20 +63,19 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     supabase.rpc('my_team_member_ids'),
     supabase.from('team_members').select('id, name, active').order('name'),
     supabase.from('app_settings').select('timezone').maybeSingle(),
-    // usuários da empresa (agenda por usuário, 0097) e os setores da agenda
+    // usuários da empresa (agenda por usuário, 0097) e os setores
     supabase.rpc('agenda_people'),
-    supabase.from('agenda_teams').select('id, name, agenda_team_members(user_id)').order('name'),
+    // setores (0107: os mesmos Setores dos grupos), com as pessoas de cada um
+    supabase.rpc('agenda_sectors'),
     // tipos de compromisso, com a cor de cada um (0102)
     supabase.from('agenda_event_types').select('id, name, color').order('position').order('name'),
   ]);
   const types = (typesRaw ?? []) as AgendaType[];
   const colorOf = (e: AgendaEvent) => agendaColor(types.find((t) => t.id === e.type_id)?.color);
   const people = ((peopleRaw ?? []) as { id: string; name: string; role: string; member_ids: string[] }[]) ?? [];
-  const agendaTeams = ((teamsRaw ?? []) as { id: string; name: string; agenda_team_members: { user_id: string }[] }[]).map((t) => ({
-    id: t.id,
-    name: t.name,
-    userIds: t.agenda_team_members.map((m) => m.user_id),
-  }));
+  const agendaTeams = ((teamsRaw ?? []) as { id: string; name: string; user_ids: string[] }[])
+    .map((t) => ({ id: t.id, name: t.name, userIds: t.user_ids ?? [] }))
+    .filter((t) => t.userIds.length > 0);
   // a própria agenda: a pessoa da equipe ligada ao e-mail de acesso; sem a ligação, a de mesmo nome
   const norm = (v: string | null | undefined) =>
     (v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();

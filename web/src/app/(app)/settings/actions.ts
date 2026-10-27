@@ -292,8 +292,7 @@ export async function grantTeamMemberAccess(values: {
   });
   if (!res.ok) return { ok: false, error: friendlyDbError(res.error) };
   const { error } = await supabase.from('team_members').update({ user_email: email }).eq('id', member.id);
-  revalidatePath('/settings/team');
-  revalidatePath('/settings/users');
+  revalidatePath('/settings/people');
   return result(error);
 }
 
@@ -301,7 +300,7 @@ export async function removeTeamMember(id: string): Promise<Result> {
   await requireProfile();
   const supabase = await createClient();
   const { error } = await supabase.from('team_members').delete().eq('id', id);
-  revalidatePath('/settings/team');
+  revalidatePath('/settings/people');
   return result(error);
 }
 
@@ -310,7 +309,7 @@ export async function setMemberAlertsOwnGroups(id: string, only: boolean): Promi
   await requireAdmin();
   const supabase = await createClient();
   const { error } = await supabase.from('team_members').update({ alerts_own_groups_only: only }).eq('id', id);
-  revalidatePath('/settings/team');
+  revalidatePath('/settings/people');
   return result(error);
 }
 
@@ -333,7 +332,7 @@ export async function addAllowedEmail(form: FormData): Promise<Result> {
     createdBy: admin.id,
   });
   if (!res.ok) return { ok: false, error: friendlyDbError(res.error) };
-  revalidatePath('/settings/users');
+  revalidatePath('/settings/people');
   return { ok: true };
 }
 
@@ -343,7 +342,7 @@ export async function removeAllowedEmail(email: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.from('allowed_emails').delete().eq('email', email);
   if (!error) await supabase.from('profiles').update({ active: false }).eq('email', email);
-  revalidatePath('/settings/users');
+  revalidatePath('/settings/people');
   return result(error);
 }
 
@@ -378,7 +377,7 @@ export async function deleteUser(id: string): Promise<Result> {
     entity_id: id,
     summary: `Excluiu o usuário ${user.full_name ? `${user.full_name} (${user.email})` : user.email}`,
   });
-  revalidatePath('/settings/users');
+  revalidatePath('/settings/people');
   return { ok: true };
 }
 
@@ -391,7 +390,7 @@ export async function updateUser(id: string, values: { role?: 'admin' | 'agent' 
     const { data } = await supabase.from('profiles').select('email').eq('id', id).single();
     if (data) await supabase.from('allowed_emails').upsert({ email: data.email, role: values.role, company_id: admin.company_id });
   }
-  revalidatePath('/settings/users');
+  revalidatePath('/settings/people');
   return result(error);
 }
 
@@ -740,6 +739,104 @@ export async function saveCompanyLogo(path: string | null): Promise<Result> {
 export async function saveTeamPhoto(memberId: string, path: string | null): Promise<Result> {
   await requireProfile();
   const { error } = await (await createClient()).rpc('set_team_member_photo', { p_member_id: memberId, p_path: path });
-  revalidatePath('/settings/team');
+  revalidatePath('/settings/people');
   return result(error);
+}
+
+// ---------------------------------------------------------------- Pessoas (0107)
+/** telefone só com dígitos e com 55 no Brasil (DDD + número) */
+const brPhone = (raw: string | null | undefined) => {
+  const d = String(raw ?? '').replace(/\D/g, '');
+  if (!d) return null;
+  return d.length === 10 || d.length === 11 ? `55${d}` : d;
+};
+const revalidatePeople = () => {
+  revalidatePath('/settings/people');
+  revalidatePath('/', 'layout');
+};
+
+/**
+ * Nova pessoa (0107): um cadastro só. "Atende nos grupos" cria o atendente (pelo telefone);
+ * "entra no painel" cria o acesso (e-mail, perfil e senha). Os dois ficam ligados pelo e-mail.
+ */
+export async function addPerson(form: FormData): Promise<Result> {
+  const admin = await requireAdmin();
+  const supabase = await createClient();
+  const name = String(form.get('name') ?? '').trim().replace(/\s+/g, ' ');
+  const phone = brPhone(String(form.get('phone') ?? ''));
+  const email = String(form.get('email') ?? '').trim().toLowerCase();
+  const attends = form.get('attends') === 'on';
+  const access = form.get('access') === 'on';
+  const raw = form.get('role');
+  const role = raw === 'admin' || raw === 'viewer' || raw === 'agenda' ? raw : 'agent';
+  if (!name) return { ok: false, error: 'Informe o nome.' };
+  if (!attends && !access) return { ok: false, error: 'Marque se a pessoa atende nos grupos, entra no painel, ou os dois.' };
+  if (attends && !phone) return { ok: false, error: 'Para atender nos grupos, informe o WhatsApp da pessoa (com DDD).' };
+  if (access && !email) return { ok: false, error: 'Para entrar no painel, informe o e-mail.' };
+
+  if (access) {
+    const res = await createCompanyUser({
+      companyId: admin.company_id!,
+      email,
+      password: String(form.get('password') ?? ''),
+      role,
+      name,
+      createdBy: admin.id,
+    });
+    if (!res.ok) return { ok: false, error: friendlyDbError(res.error) };
+    if (phone) await createAdminClient().from('profiles').update({ phone }).eq('email', email).eq('company_id', admin.company_id!);
+  }
+  if (attends) {
+    const { error } = await supabase.from('team_members').insert({ name, phone, user_email: access ? email : null });
+    if (error) {
+      return {
+        ok: false,
+        error: /duplicate|unique/i.test(error.message) ? 'Já existe um atendente com esse telefone.' : friendlyDbError(error.message),
+      };
+    }
+    // mensagens antigas da pessoa passam a contar como da equipe
+    await recalcCompanyGroups(admin.company_id);
+  }
+  revalidatePeople();
+  return { ok: true };
+}
+
+/** Editar nome e telefone: vale para o acesso e para o atendente da pessoa. */
+export async function updatePerson(values: { profileId: string | null; memberId: string | null; name: string; phone: string }): Promise<Result> {
+  const admin = await requireAdmin();
+  const supabase = await createClient();
+  const name = values.name.trim().replace(/\s+/g, ' ');
+  if (!name) return { ok: false, error: 'Informe o nome.' };
+  const phone = brPhone(values.phone);
+  if (values.memberId) {
+    // o atendente; o acesso ligado a ele acompanha (0107)
+    const { error } = await supabase.from('team_members').update({ name, phone }).eq('id', values.memberId);
+    if (error) return { ok: false, error: /duplicate|unique/i.test(error.message) ? 'Já existe um atendente com esse telefone.' : friendlyDbError(error.message) };
+  }
+  if (values.profileId) {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ full_name: name, phone })
+      .eq('id', values.profileId)
+      .eq('company_id', admin.company_id!);
+    if (error) return result(error);
+  }
+  if (values.memberId) await recalcCompanyGroups(admin.company_id);
+  revalidatePeople();
+  return { ok: true };
+}
+
+/** Quem só entra no painel passa a atender nos grupos (vira atendente, ligado pelo e-mail). */
+export async function makeAttendant(profileId: string): Promise<Result> {
+  const admin = await requireAdmin();
+  const supabase = await createClient();
+  const { data: p } = await supabase.from('profiles').select('full_name, email, phone').eq('id', profileId).maybeSingle();
+  if (!p) return { ok: false, error: 'Pessoa não encontrada.' };
+  const { error } = await supabase
+    .from('team_members')
+    .insert({ name: (p.full_name as string) || (p.email as string).split('@')[0], phone: brPhone(p.phone as string | null), user_email: p.email });
+  if (error) return { ok: false, error: /duplicate|unique/i.test(error.message) ? 'Já existe um atendente com esse telefone.' : friendlyDbError(error.message) };
+  await recalcCompanyGroups(admin.company_id);
+  revalidatePeople();
+  return { ok: true };
 }

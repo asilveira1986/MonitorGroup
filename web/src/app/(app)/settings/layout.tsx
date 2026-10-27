@@ -24,7 +24,7 @@ export default async function SettingsLayout({ children }: LayoutProps<'/setting
       : states.some((s) => s === 'connecting' || s === 'qr')
         ? 'connecting'
         : 'disconnected',
-    users: (users.count ?? 0) > 1,
+    users: (users.count ?? 0) > 1 || (team.count ?? 0) > 0,
     team: (team.count ?? 0) > 0,
     sectors: (sectors.count ?? 0) > 0,
     quickReplies: (quick.count ?? 0) > 0,
@@ -32,7 +32,7 @@ export default async function SettingsLayout({ children }: LayoutProps<'/setting
   };
   return (
     <>
-      <PageHeader title="Configurações" description="Organização, canais, atendimento e monitoramento." />
+      <PageHeader title="Configurações" description="Empresa, pessoas, WhatsApp, atendimento e monitoramento." />
       <SettingsNav isAdmin={isAdmin} platformAdmin={profile.platform_admin} status={status} />
       <div className="mt-5 min-w-0">{children}</div>
     </>

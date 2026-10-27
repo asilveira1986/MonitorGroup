@@ -107,7 +107,7 @@ const messageText = (type: string, body: string | null) =>
   type === 'text' ? body : `${TYPE_LABEL[type] ?? type}${body ? ` ${body}` : ''}`;
 
 /**
- * Quem recebe avisos só dos grupos em que é responsável (Configurações › Atendentes): os grupos dele
+ * Quem recebe avisos só dos grupos em que é responsável (Configurações › Pessoas): os grupos dele
  * e os grupos sem responsável. null = todos os grupos. Lido no máximo a cada 30 s.
  */
 let scopeCache: { at: number; groups: Set<string> | null } | null = null;

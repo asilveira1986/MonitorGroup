@@ -126,7 +126,7 @@ export async function saveDemandNotice(values: { kind?: keyof typeof NOTICE_COLU
     .update({ [on]: values.enabled, [text]: values.template.trim() || null, updated_at: new Date().toISOString() })
     .eq('company_id', admin.company_id);
   revalidatePath('/settings/demand-types');
-  revalidatePath('/settings/team-notices');
+  revalidatePath('/settings/notices');
   return result(error);
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Building2, Check, Headset, MessageCircle, type LucideIcon } from 'lucide-react';
+import { Activity, Building2, Check, Headset, MessageCircle, Users, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -10,8 +10,9 @@ import { SETTINGS_NAV, type SettingsCheck } from '@/lib/settings-nav';
 export type NavStatus = Partial<Record<SettingsCheck, boolean>> & { whatsappState?: 'connected' | 'connecting' | 'disconnected' | null };
 
 const GROUP_ICON: Record<string, LucideIcon> = {
-  Organização: Building2,
-  Canais: MessageCircle,
+  Empresa: Building2,
+  Pessoas: Users,
+  WhatsApp: MessageCircle,
   Atendimento: Headset,
   Monitoramento: Activity,
 };
