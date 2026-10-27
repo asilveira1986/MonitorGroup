@@ -10,7 +10,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const [{ count: pending }, { count: alerts }, { count: demands }, { data: settings }, company, { data: companies }, { data: due }, { data: privateOk }] = await Promise.all([
+  const [{ count: pending }, { count: alerts }, { count: demands }, { data: settings }, company, { data: companies }, { data: due }, { data: privateOk }, { data: logoRow }, { data: unreadRows }] = await Promise.all([
     supabase.from('pending_queue').select('id', { count: 'exact', head: true }),
     supabase.from('alerts').select('id', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', ['aberta', 'em_andamento']),
@@ -29,15 +29,13 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     supabase.rpc('my_due_demands'),
     // conversas privadas (0069): só quem administra a plataforma, com o módulo ligado na empresa
     profile.platform_admin ? supabase.rpc('can_use_private_chats') : Promise.resolve({ data: false }),
+    // logo da empresa (0083) e não lidas do privado: junto com o resto (uma ida ao banco só)
+    supabase.from('companies').select('logo_path').eq('id', profile.company_id ?? '').maybeSingle(),
+    profile.platform_admin ? supabase.from('private_chats').select('unread_count').gt('unread_count', 0) : Promise.resolve({ data: [] }),
   ]);
-  // logo da empresa (0083; sem o script, a coluna não existe e fica sem logo)
-  const { data: logoRow } = await supabase.from('companies').select('logo_path').eq('id', company?.id ?? '').maybeSingle();
   const companyLogo = Boolean((logoRow as { logo_path?: string | null } | null)?.logo_path);
   const privateUnread = privateOk
-    ? ((await supabase.from('private_chats').select('unread_count').gt('unread_count', 0)).data ?? []).reduce(
-        (n, c) => n + Number((c as { unread_count: number }).unread_count),
-        0,
-      )
+    ? ((unreadRows ?? []) as { unread_count: number }[]).reduce((n, c) => n + Number(c.unread_count), 0)
     : 0;
   const dueToday = Number((due as { hoje?: number } | null)?.hoje ?? 0);
   const dueLate = Number((due as { atrasadas?: number } | null)?.atrasadas ?? 0);

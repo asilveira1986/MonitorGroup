@@ -145,6 +145,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    105. `supabase/migrations/0105_forward_cross_reply.sql`
    106. `supabase/migrations/0106_team_whatsapp_notices.sql`
    107. `supabase/migrations/0107_people_sectors_unified.sql`
+   108. `supabase/migrations/0108_cleanup_old_data.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -545,6 +546,16 @@ A tela **Configurações › WhatsApp › Conexão e arquivos** mostra no topo s
   4. Aguarde 10 a 15 minutos e clique em **Conectar**. Leia o QR code assim que aparecer.
   5. O worker anuncia a versão atual do WhatsApp Web (buscada em web.whatsapp.com; aparece no topo de **Configurações › WhatsApp › Conexão e arquivos**) e, se o pareamento falhar, alterna para um perfil de conexão mais simples. Se ainda assim falhar, a mensagem de erro traz um "Diagnóstico da última tentativa" (versão, perfil e em quantos segundos a conexão caiu): envie esse texto ao suporte.
 - **"Não foi possível verificar o worker"**: execute o script `0005_worker_status.sql`.
+
+## Limpeza automática (espaço)
+
+Uma vez por dia o worker apaga o que fica guardado sem uso:
+- **filas de envio** já resolvidas há mais de 30 dias (respostas, encaminhadas, avisos; a mensagem continua na conversa) e pedidos de editar/apagar/reagir já feitos;
+- **confirmações de entrega/leitura** de mensagens com mais de 60 dias (os tiques só importam nas recentes);
+- **log de atividades** com mais de 1 ano (o de LGPD fica);
+- **arquivos sem uso** no Storage há mais de 3 dias: áudio gravado que já foi enviado (o WhatsApp devolve a própria cópia), foto ou logo trocados, envio abandonado. Nada que uma mensagem, foto, logo ou fila ainda use é apagado.
+
+Além disso continuam o prazo dos arquivos das mensagens (*WhatsApp › Conexão e arquivos*) e o prazo de guarda das mensagens (*Privacidade (LGPD)*). No banco, o espaço liberado é reaproveitado pelas próximas gravações (o Postgres não "encolhe" o arquivo na hora).
 
 ## Custos estimados
 

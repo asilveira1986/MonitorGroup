@@ -10,6 +10,7 @@ import { applyMessageRetention, cleanupExpiredMedia } from './media.js';
 import { setWhatsAppSender } from './notify.js';
 import { extendAgendaSeries, pushStatus, startPush } from './push.js';
 import { startTeamWhatsApp } from './team-whatsapp.js';
+import { runDailyCleanup } from './cleanup.js';
 import { WhatsAppManager } from './whatsapp.js';
 
 const ALERT_CHECK_MS = 60_000;
@@ -148,6 +149,9 @@ async function main() {
   // conteúdo das mensagens mais antigas que o prazo de guarda de cada empresa (LGPD)
   setTimeout(() => void applyMessageRetention(), 5 * 60_000);
   setInterval(() => void applyMessageRetention(), MEDIA_CLEANUP_MS);
+  // limpeza diária do que fica guardado sem uso (0108)
+  setTimeout(() => void runDailyCleanup().catch((err) => logger.warn({ err }, 'falha na limpeza diária')), 10 * 60_000);
+  setInterval(() => void runDailyCleanup().catch((err) => logger.warn({ err }, 'falha na limpeza diária')), 24 * 60 * 60_000);
   // compromissos que se repetem sem fim: a agenda sempre com 12 meses à frente
   setTimeout(() => void extendAgendaSeries(), 3 * 60_000);
   setInterval(() => void extendAgendaSeries(), 60 * 60_000);

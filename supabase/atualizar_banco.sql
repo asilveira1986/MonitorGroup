@@ -179,7 +179,7 @@ begin
   (85, 'Todos respondem nos grupos (0094)', exists (select 1 from pg_proc where proname = 'has_group_permission' and prosrc like '%(0094)%')),
   (86, 'Sem acesso sem login (0095)', not has_function_privilege('anon', 'public.company_indicator_params(uuid,text)', 'execute')),
   (87, 'LGPD: prazo de guarda e pedidos dos titulares (0096)', to_regprocedure('public.lgpd_person_erase(text)') is not null),
-  (88, 'Agenda por usuário e setores da agenda (0097)', to_regclass('public.agenda_event_people') is not null and to_regclass('public.agenda_teams') is not null),
+  (88, 'Agenda por usuário (0097)', to_regclass('public.agenda_event_people') is not null),
   (89, 'Notificações push (0098)', to_regprocedure('public.claim_push_deliveries(integer)') is not null),
   (90, 'Push sem avisos atrasados (0099)', coalesce(position('30 minutes' in pg_get_functiondef(to_regprocedure('public.claim_push_deliveries(integer)'))), 0) > 0),
   (91, 'Push: permissões do worker (0100)', coalesce(has_table_privilege('service_role', to_regclass('public.push_events'), 'update'), false)),
@@ -191,7 +191,8 @@ begin
   (96, 'Encaminhar e responder entre conversas (0105)', to_regprocedure('public.forward_message(text,uuid,text,uuid)') is not null),
   (97, 'Avisos no WhatsApp da equipe (0106)', to_regprocedure('public.claim_team_whatsapp(integer)') is not null),
   (98, 'Pessoas e setores sem cadastro duplicado (0107)', to_regprocedure('public.agenda_sectors()') is not null),
-  (99, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (99, 'Limpeza do que fica sem uso (0108)', to_regprocedure('public.cleanup_old_data()') is not null),
+  (100, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -200,7 +201,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -16564,6 +16565,87 @@ grant execute on function public.agenda_sectors() to authenticated;
 $mig0107$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0108_cleanup_old_data.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0108', $mig0108$
+-- =====================================================================
+-- Otimização: limpeza do que fica guardado sem uso e índices novos.
+--
+--  * cleanup_old_data() (o worker chama uma vez por dia):
+--    - filas de envio já resolvidas (respostas, encaminhadas e avisos do
+--      painel, enviadas ou com falha) há mais de 30 dias: a mensagem em si
+--      continua na conversa;
+--    - pedidos de editar/apagar/reagir já resolvidos há mais de 30 dias;
+--    - confirmações de entrega/leitura de mensagens com mais de 60 dias
+--      (os tiques só importam nas recentes);
+--    - log de atividades com mais de 1 ano (o de LGPD fica);
+--    - repetições da agenda sem nenhum compromisso.
+--  * storage_orphans(): arquivos guardados que nada mais usa (áudio
+--    gravado que já foi enviado, foto/logo trocados, envio abandonado),
+--    com mais de 3 dias; o worker apaga do Storage.
+--  * Os setores da agenda (0097), já copiados para os Setores (0107), saem.
+--  * Índices para a agenda e os lembretes.
+-- =====================================================================
+
+create index if not exists agenda_events_company_starts_idx on public.agenda_events (company_id, starts_at);
+create index if not exists agenda_events_open_starts_idx on public.agenda_events (starts_at) where done_at is null;
+create index if not exists outgoing_messages_done_idx on public.outgoing_messages (created_at) where status in ('sent', 'failed');
+create index if not exists private_outgoing_done_idx on public.private_outgoing (created_at) where status in ('sent', 'failed');
+
+create or replace function public.cleanup_old_data()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  n_out int; n_pout int; n_act int; n_pact int; n_rec int; n_log int; n_series int;
+begin
+  delete from public.outgoing_messages where status in ('sent', 'failed') and created_at < now() - interval '30 days';
+  get diagnostics n_out = row_count;
+  delete from public.private_outgoing where status in ('sent', 'failed') and created_at < now() - interval '30 days';
+  get diagnostics n_pout = row_count;
+  delete from public.message_actions where status in ('done', 'failed') and created_at < now() - interval '30 days';
+  get diagnostics n_act = row_count;
+  delete from public.private_actions where status in ('done', 'failed') and created_at < now() - interval '30 days';
+  get diagnostics n_pact = row_count;
+  delete from public.message_receipts r
+   using public.messages m
+   where m.id = r.message_id and m.sent_at < now() - interval '60 days';
+  get diagnostics n_rec = row_count;
+  delete from public.activity_log where created_at < now() - interval '365 days' and category is distinct from 'lgpd';
+  get diagnostics n_log = row_count;
+  delete from public.agenda_series s where not exists (select 1 from public.agenda_events e where e.series_id = s.id);
+  get diagnostics n_series = row_count;
+  return jsonb_build_object('respostas', n_out, 'privadas', n_pout, 'acoes', n_act + n_pact, 'confirmacoes', n_rec,
+                            'log', n_log, 'repeticoes', n_series);
+end;
+$$;
+revoke all on function public.cleanup_old_data() from public, anon, authenticated;
+grant execute on function public.cleanup_old_data() to service_role;
+
+-- arquivos do Storage que nada usa (o worker apaga em lotes)
+create or replace function public.storage_orphans(p_limit int default 500)
+returns setof text language sql stable security definer set search_path = public, storage as $$
+  select o.name
+    from storage.objects o
+   where o.bucket_id = 'media'
+     and o.created_at < now() - interval '3 days'
+     and not exists (select 1 from public.messages m where m.media_path = o.name)
+     and not exists (select 1 from public.private_messages m where m.media_path = o.name)
+     and not exists (select 1 from public.outgoing_messages q where q.media_path = o.name)
+     and not exists (select 1 from public.private_outgoing q where q.media_path = o.name)
+     and not exists (select 1 from public.profiles p where p.photo_path = o.name)
+     and not exists (select 1 from public.team_members t where t.photo_path = o.name)
+     and not exists (select 1 from public.companies c where c.logo_path = o.name)
+     and not exists (select 1 from public.contact_avatars a where a.path = o.name or a.full_path = o.name)
+   order by o.created_at
+   limit greatest(1, least(p_limit, 1000))
+$$;
+revoke all on function public.storage_orphans(int) from public, anon, authenticated;
+grant execute on function public.storage_orphans(int) to service_role;
+
+-- os setores da agenda viraram Setores (0107): as tabelas saem
+drop table if exists public.agenda_team_members;
+drop table if exists public.agenda_teams;
+$mig0108$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -16695,7 +16777,7 @@ from (values
   (85, 'Todos respondem nos grupos (0094)', exists (select 1 from pg_proc where proname = 'has_group_permission' and prosrc like '%(0094)%')),
   (86, 'Sem acesso sem login (0095)', not has_function_privilege('anon', 'public.company_indicator_params(uuid,text)', 'execute')),
   (87, 'LGPD: prazo de guarda e pedidos dos titulares (0096)', to_regprocedure('public.lgpd_person_erase(text)') is not null),
-  (88, 'Agenda por usuário e setores da agenda (0097)', to_regclass('public.agenda_event_people') is not null and to_regclass('public.agenda_teams') is not null),
+  (88, 'Agenda por usuário (0097)', to_regclass('public.agenda_event_people') is not null),
   (89, 'Notificações push (0098)', to_regprocedure('public.claim_push_deliveries(integer)') is not null),
   (90, 'Push sem avisos atrasados (0099)', coalesce(position('30 minutes' in pg_get_functiondef(to_regprocedure('public.claim_push_deliveries(integer)'))), 0) > 0),
   (91, 'Push: permissões do worker (0100)', coalesce(has_table_privilege('service_role', to_regclass('public.push_events'), 'update'), false)),
@@ -16707,6 +16789,7 @@ from (values
   (96, 'Encaminhar e responder entre conversas (0105)', to_regprocedure('public.forward_message(text,uuid,text,uuid)') is not null),
   (97, 'Avisos no WhatsApp da equipe (0106)', to_regprocedure('public.claim_team_whatsapp(integer)') is not null),
   (98, 'Pessoas e setores sem cadastro duplicado (0107)', to_regprocedure('public.agenda_sectors()') is not null),
-  (99, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (99, 'Limpeza do que fica sem uso (0108)', to_regprocedure('public.cleanup_old_data()') is not null),
+  (100, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
