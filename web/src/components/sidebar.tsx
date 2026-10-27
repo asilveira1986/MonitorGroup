@@ -3,9 +3,8 @@
 import { Bell, Building2, CalendarDays, ChevronDown, MessageCircle, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, useTransition } from 'react';
-import { toast } from 'sonner';
-import { switchCompany } from '@/app/(app)/platform/actions';
+import { useState } from 'react';
+import { CompanyMenu } from '@/components/company-menu';
 import { ProfileDialog, type MyProfile } from '@/components/profile-dialog';
 import { Logo } from '@/components/logo';
 import { MyAlertsToggle, NotifyToggle } from '@/components/message-notifier';
@@ -59,7 +58,7 @@ export function Sidebar({
   /** Meu perfil (0085): o bloco do usuário abre a edição */
   me?: MyProfile;
   /** quem administra a plataforma: troca de empresa pela empresa no rodapé do menu */
-  companies?: { id: string; name: string; active: boolean }[];
+  companies?: { id: string; name: string; active: boolean; hasLogo?: boolean }[];
   companyId?: string | null;
   /** a empresa tem logo (Configurações › Empresa, 0083): aparece no menu ao lado do nome */
   companyLogo?: boolean;
@@ -78,7 +77,6 @@ export function Sidebar({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  const [switching, startSwitch] = useTransition();
   const canSwitch = platformAdmin && Boolean(companies?.length) && Boolean(companyId);
   const companyIcon = companyLogo ? (
     // eslint-disable-next-line @next/next/no-img-element -- logo privado por link temporário
@@ -104,32 +102,12 @@ export function Sidebar({
     <div className="mt-2 shrink-0 space-y-1 border-t border-line pt-2">
       {company &&
         (canSwitch ? (
-          <label className={cn(row, 'relative cursor-pointer hover:bg-white/[0.06]', switching && 'opacity-60')} title="Trocar de empresa">
-            {companyIcon}
-            <span className={cn('min-w-0 flex-1 truncate text-[calc(0.75rem-1px)] font-semibold leading-tight text-ink', COLLAPSED_HIDE)}>{company}</span>
-            <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-muted', COLLAPSED_HIDE)} aria-hidden />
-            <select
-              value={companyId ?? ''}
-              disabled={switching}
-              aria-label="Trocar de empresa"
-              onChange={(e) => {
-                const id = e.target.value;
-                startSwitch(async () => {
-                  const res = await switchCompany(id);
-                  if (res && !res.ok) toast.error(res.error);
-                });
-              }}
-              // a lista que abre fica na cor do menu, com as empresas em branco
-              className="absolute inset-0 cursor-pointer bg-surface text-white opacity-0 [color-scheme:dark]"
-            >
-              {companies!.map((c) => (
-                <option key={c.id} value={c.id} className="bg-surface text-white">
-                  {c.name}
-                  {c.active ? '' : ' (suspensa)'}
-                </option>
-              ))}
-            </select>
-          </label>
+          <CompanyMenu
+            companies={companies!.map((c) => ({ ...c, hasLogo: c.id === companyId ? companyLogo : c.hasLogo }))}
+            currentId={companyId!}
+            rowClass={row}
+            hideClass={COLLAPSED_HIDE}
+          />
         ) : (
           <div className={row} title={company}>
             {companyIcon}

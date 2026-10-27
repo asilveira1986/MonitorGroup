@@ -23,7 +23,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     currentCompany(),
     // quem administra a plataforma troca de empresa pelo topo
     profile.platform_admin
-      ? supabase.from('companies').select('id, name, active').order('name')
+      ? supabase.from('companies').select('id, name, active, logo_path').order('name')
       : Promise.resolve({ data: null }),
     // agenda: demandas do usuário para entregar hoje e atrasadas (sem o script 0059, nada)
     supabase.rpc('my_due_demands'),
@@ -77,7 +77,16 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         company={company?.name ?? null}
         companyLogo={companyLogo}
         companyId={company?.id ?? null}
-        companies={profile.platform_admin ? (companies ?? undefined) : undefined}
+        companies={
+          profile.platform_admin
+            ? ((companies ?? []) as { id: string; name: string; active: boolean; logo_path?: string | null }[]).map((c) => ({
+                id: c.id,
+                name: c.name,
+                active: c.active,
+                hasLogo: Boolean(c.logo_path),
+              }))
+            : undefined
+        }
         me={{
           id: profile.id,
           name: profile.full_name || profile.email.split('@')[0],
