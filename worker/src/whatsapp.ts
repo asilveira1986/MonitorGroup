@@ -10,6 +10,7 @@ import makeWASocket, {
   jidNormalizedUser,
   makeCacheableSignalKeyStore,
   proto,
+  type AnyMessageContent,
   type BinaryNode,
   type GroupMetadata,
   type GroupParticipant,
@@ -24,7 +25,7 @@ import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
 import { AvatarQueue } from './avatars.js';
 import { storeMessageMedia, storePrivateMedia } from './media.js';
-import { extractContent, isAcknowledgement, isStickerOrEmoji, isThanksAfterTeam, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
+import { extractContent, isAcknowledgement, isForwarded, isStickerOrEmoji, isThanksAfterTeam, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
 import { selfReadIds } from './receipts.js';
@@ -105,7 +106,22 @@ type OutgoingRow = {
   media_path?: string | null;
   media_mime?: string | null;
   voice?: boolean;
+  // encaminhar e responder citando o privado (0105)
+  media_name?: string | null;
+  forwarded?: boolean;
+  quoted_private_message_id?: string | null;
 };
+
+/** "Encaminhada" no WhatsApp (0105) */
+const FORWARDED = { isForwarded: true, forwardingScore: 1 };
+
+/** Conteúdo de um arquivo guardado no Storage, pronto para o WhatsApp (imagem, vídeo, áudio, documento). */
+async function mediaContent(type: string, buffer: Buffer, mimetype: string, opts: { caption?: string; fileName?: string | null; voice?: boolean }) {
+  if (type === 'image') return { image: buffer, caption: opts.caption, mimetype };
+  if (type === 'video') return { video: buffer, caption: opts.caption, mimetype };
+  if (type === 'audio') return audioContent(buffer, mimetype, Boolean(opts.voice));
+  return { document: buffer, mimetype, fileName: opts.fileName ?? 'arquivo', caption: opts.caption };
+}
 
 /**
  * Revisão cliente × equipe só dos grupos que mudaram (0084); sem o script, a completa (0076).
@@ -399,19 +415,38 @@ export class WhatsAppManager {
             message: { conversation: q.body ?? '' },
           };
         }
+      } else if (row.quoted_private_message_id) {
+        // "Responder no grupo" (0105): cita a mensagem da conversa privada
+        const { data: q } = await db
+          .from('private_messages')
+          .select('wa_message_id, from_me, body, private_chats!inner(jid)')
+          .eq('id', row.quoted_private_message_id)
+          .maybeSingle();
+        const chatJid = (q as { private_chats?: { jid: string } } | null)?.private_chats?.jid;
+        if (q && chatJid) {
+          quoted = {
+            key: { remoteJid: chatJid, id: q.wa_message_id as string, fromMe: Boolean(q.from_me), participant: q.from_me ? undefined : chatJid },
+            message: { conversation: (q.body as string) ?? '' },
+          };
+        }
       }
+      const contextInfo = row.forwarded ? FORWARDED : undefined;
 
       // registrado antes do envio: a mensagem volta pelo messages.upsert com o nome de quem respondeu
       session.outbox.set(waId, row.sender_name);
       if (row.closes_conversation) session.closingOutbox.add(waId);
       if (row.media_path) {
-        // áudio gravado no painel (0074): está no Storage
+        // áudio gravado no painel (0074) ou arquivo encaminhado (0105): está no Storage
         const file = await db.storage.from('media').download(row.media_path);
-        if (file.error || !file.data) throw new Error('Áudio não encontrado no Storage.');
-        const content = await audioContent(Buffer.from(await file.data.arrayBuffer()), row.media_mime ?? 'audio/ogg', Boolean(row.voice));
-        await session.sock.sendMessage(group.jid, content, { messageId: waId, quoted });
+        if (file.error || !file.data) throw new Error('Arquivo não encontrado no Storage.');
+        const content = await mediaContent(row.message_type ?? 'audio', Buffer.from(await file.data.arrayBuffer()), row.media_mime ?? 'audio/ogg', {
+          caption: row.text_to_send || undefined,
+          fileName: row.media_name,
+          voice: row.voice,
+        });
+        await session.sock.sendMessage(group.jid, { ...content, ...(contextInfo ? { contextInfo } : {}) } as AnyMessageContent, { messageId: waId, quoted });
       } else {
-        await session.sock.sendMessage(group.jid, { text: row.text_to_send }, { messageId: waId, quoted });
+        await session.sock.sendMessage(group.jid, { text: row.text_to_send, ...(contextInfo ? { contextInfo } : {}) }, { messageId: waId, quoted });
       }
       await db
         .from('outgoing_messages')
@@ -1016,6 +1051,8 @@ export class WhatsAppManager {
 
   /** Guarda a mensagem citada pela resposta (0090; sem o script, a gravação falha calada). */
   private async saveQuote(messageId: string, msg: WAMessage) {
+    // encaminhada (0105; sem o script, a gravação falha calada)
+    if (isForwarded(msg.message)) await db.from('messages').update({ forwarded: true }).eq('id', messageId);
     const q = quoteOf(msg.message);
     if (!q) return;
     await db
@@ -1433,6 +1470,24 @@ export class WhatsAppManager {
             .maybeSingle();
           if (q) quoted = { key: { remoteJid: to, id: q.wa_message_id as string, fromMe: Boolean(q.from_me) }, message: { conversation: (q.body as string) ?? '' } };
         }
+        // "Responder no privado" (0105): cita a mensagem do grupo
+        let quotedFrom: string | null = null;
+        if (row.quoted_group_message_id) {
+          const { data: q } = await db
+            .from('messages')
+            .select('wa_message_id, sender_jid, sender_name, from_me, body, groups!messages_group_id_fkey!inner(jid, name)')
+            .eq('id', row.quoted_group_message_id)
+            .maybeSingle();
+          const g = (q as { groups?: { jid: string; name: string } } | null)?.groups;
+          if (q && g) {
+            quoted = {
+              key: { remoteJid: g.jid, id: q.wa_message_id as string, fromMe: Boolean(q.from_me), participant: (q.sender_jid as string | null) ?? undefined },
+              message: { conversation: (q.body as string) ?? '' },
+            };
+            quotedFrom = [g.name, q.sender_name as string | null].filter(Boolean).join(' · ');
+          }
+        }
+        const contextInfo = row.forwarded ? FORWARDED : undefined;
         const type = (row.message_type as string) || 'text';
         let sentSeconds: number | null = null;
         const caption = (row.body as string | null) ?? undefined;
@@ -1442,18 +1497,11 @@ export class WhatsAppManager {
           if (file.error || !file.data) throw new Error('Arquivo não encontrado no Storage.');
           const buffer = Buffer.from(await file.data.arrayBuffer());
           const mimetype = (row.media_mime as string | null) ?? 'application/octet-stream';
-          const content =
-            type === 'image'
-              ? { image: buffer, caption, mimetype }
-              : type === 'video'
-                ? { video: buffer, caption, mimetype }
-                : type === 'audio'
-                  ? await audioContent(buffer, mimetype, Boolean(row.voice))
-                  : { document: buffer, mimetype, fileName: (row.media_name as string | null) ?? 'arquivo', caption };
-          const sent = await session.sock.sendMessage(to, content, { messageId: waId, quoted });
+          const content = await mediaContent(type, buffer, mimetype, { caption, fileName: row.media_name as string | null, voice: Boolean(row.voice) });
+          const sent = await session.sock.sendMessage(to, { ...content, ...(contextInfo ? { contextInfo } : {}) } as AnyMessageContent, { messageId: waId, quoted });
           sentSeconds = Number(sent?.message?.audioMessage?.seconds ?? sent?.message?.videoMessage?.seconds) || null;
         } else {
-          await session.sock.sendMessage(to, { text: row.body as string }, { messageId: waId, quoted });
+          await session.sock.sendMessage(to, { text: row.body as string, ...(contextInfo ? { contextInfo } : {}) }, { messageId: waId, quoted });
         }
         const now = new Date().toISOString();
         await db.from('private_outgoing').update({ status: 'sent', wa_message_id: waId, sent_at: now, error: null }).eq('id', id);
@@ -1473,6 +1521,13 @@ export class WhatsAppManager {
         });
         // o arquivo enviado e a citação já ficam na mensagem gravada
         const sentId = (ing as { message_id?: string } | null)?.message_id;
+        // encaminhada e citação de um grupo (0105), à parte (sem o script, a mensagem fica sem isso)
+        if (sentId && (row.forwarded || quotedFrom)) {
+          await db
+            .from('private_messages')
+            .update({ forwarded: Boolean(row.forwarded), ...(quotedFrom ? { quoted_body: (quoted?.message?.conversation as string) ?? null, quoted_from: quotedFrom } : {}) })
+            .eq('id', sentId);
+        }
         if (sentId && (row.media_path || row.quoted_message_id)) {
           await db
             .from('private_messages')

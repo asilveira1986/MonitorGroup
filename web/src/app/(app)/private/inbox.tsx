@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Loader2, MessageSquarePlus, Mic, Paperclip, Search, Send, UserRound, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Forward, Loader2, MessageSquarePlus, Mic, Paperclip, Search, Send, UserRound, X } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -19,6 +19,7 @@ import {
   type PrivateReaction,
 } from './message-tools';
 import { TagChips, TagEditor, type CustomerTag } from '@/components/customer-tags';
+import { ShareDialog, type ShareMode, type ShareSource } from '@/components/share-dialog';
 
 export type PrivateChat = {
   id: string;
@@ -286,6 +287,8 @@ function ChatView({ chat, timeZone, onBack, tags }: { chat: PrivateChat; timeZon
   const [file, setFile] = useState<File | null>(null);
   const [recording, setRecording] = useState(false);
   const [replyTo, setReplyTo] = useState<PrivateMessage | null>(null);
+  // encaminhar / responder num grupo (0105)
+  const [share, setShare] = useState<{ source: ShareSource; mode: ShareMode } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const pickFile = (f: File | null | undefined) => {
     if (!f) return;
@@ -403,6 +406,12 @@ function ChatView({ chat, timeZone, onBack, tags }: { chat: PrivateChat; timeZon
                           myReaction={(reactionsOf.get(m.id) ?? []).find((r) => r.from_me)?.emoji ?? null}
                           onEdit={() => setEditing(m.id)}
                           onReply={() => setReplyTo(m)}
+                          onForward={() =>
+                            setShare({ mode: 'forward', source: { kind: 'private', id: m.id, author: m.from_me ? 'Você' : title, preview: m.body || TYPE_LABEL[m.message_type] || m.message_type } })
+                          }
+                          onReplyGroup={() =>
+                            setShare({ mode: 'reply-group', source: { kind: 'private', id: m.id, author: m.from_me ? 'Você' : title, preview: m.body || TYPE_LABEL[m.message_type] || m.message_type } })
+                          }
                         />
                       </span>
                     )}
@@ -429,7 +438,18 @@ function ChatView({ chat, timeZone, onBack, tags }: { chat: PrivateChat; timeZon
                     ) : (
                       <>
                         {m.anonymized_at && <p className="text-xs italic text-muted">🔒 Conteúdo apagado (prazo de guarda / LGPD)</p>}
+                        {m.forwarded && (
+                          <p className="mb-0.5 inline-flex items-center gap-1 text-[11px] italic text-muted">
+                            <Forward className="h-3 w-3" /> Encaminhada
+                          </p>
+                        )}
                         {m.quoted_message_id && <Quoted target={byId.get(m.quoted_message_id)} />}
+                        {!m.quoted_message_id && m.quoted_from && (
+                          <div className="mb-1.5 rounded-lg border-l-4 border-series-1 bg-black/[0.04] px-2.5 py-1 text-xs dark:bg-white/[0.06]">
+                            <p className="font-semibold text-series-1">{m.quoted_from}</p>
+                            <p className="line-clamp-2 text-ink-2">{m.quoted_body || 'Mensagem do grupo'}</p>
+                          </div>
+                        )}
                         <PrivateMedia message={m} />
                         {/* documento guardado: o nome já aparece no cartão do arquivo */}
                         {!(m.message_type === 'document' && m.media_path) && (
@@ -577,6 +597,7 @@ function ChatView({ chat, timeZone, onBack, tags }: { chat: PrivateChat; timeZon
           </Button>
         )}
       </form>
+      {share && <ShareDialog source={share.source} mode={share.mode} canPrivate canGroup onClose={() => setShare(null)} />}
     </div>
   );
 }

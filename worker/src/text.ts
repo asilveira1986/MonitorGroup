@@ -149,6 +149,15 @@ export function quotedAuthor(message: proto.IMessage | null | undefined): { id: 
   return ctx?.stanzaId && ctx.participant ? { id: ctx.stanzaId, participant: ctx.participant } : null;
 }
 
+/** Mensagem encaminhada ("Encaminhada" no WhatsApp, 0105). */
+export function isForwarded(message: proto.IMessage | null | undefined): boolean {
+  const content = normalizeMessageContent(message);
+  const type = getContentType(content);
+  if (!content || !type) return false;
+  const ctx = ((content as Record<string, unknown>)[type] as { contextInfo?: proto.IContextInfo } | undefined)?.contextInfo;
+  return Boolean(ctx?.isForwarded);
+}
+
 /** Id da mensagem citada (quando a mensagem é uma resposta a outra). */
 export function quotedMessageId(message: proto.IMessage | null | undefined): string | null {
   const content = normalizeMessageContent(message);

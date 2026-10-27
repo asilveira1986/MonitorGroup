@@ -113,3 +113,10 @@ test('mensagem citada pela resposta (quoteOf)', () => {
   );
   assert.equal(quoteOf({ conversation: 'oi' }), null);
 });
+
+test('isForwarded reconhece a mensagem encaminhada', async () => {
+  const { isForwarded } = await import('./text.js');
+  assert.equal(isForwarded({ extendedTextMessage: { text: 'oi', contextInfo: { isForwarded: true, forwardingScore: 1 } } }), true);
+  assert.equal(isForwarded({ conversation: 'oi' }), false);
+  assert.equal(isForwarded({ imageMessage: { caption: 'x', contextInfo: { isForwarded: true } } }), true);
+});

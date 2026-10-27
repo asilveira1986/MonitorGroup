@@ -142,6 +142,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    102. `supabase/migrations/0102_agenda_types_repeat.sql`
    103. `supabase/migrations/0103_customer_tags.sql`
    104. `supabase/migrations/0104_lgpd_platform_only.sql`
+   105. `supabase/migrations/0105_forward_cross_reply.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -430,6 +431,13 @@ Ative em **Configurações › Geral › Responder pelo sistema** (somente admin
 - **Assinar com o nome** (ligado por padrão): a mensagem começa com `*Nome:*`, para o cliente saber quem respondeu. No painel e nos indicadores, a resposta conta para quem a escreveu.
 - **Quem pode responder**: todos os usuários ou só administradores. A regra é conferida no banco.
 - A tela mostra o andamento de cada envio: na fila, enviando, enviada ou não enviada. Se o envio falhar, há as opções **Tentar de novo** e **Descartar**. Mensagens que não saírem em 10 minutos (WhatsApp desconectado) são marcadas como não enviadas, para não chegarem atrasadas ao cliente.
+
+## Encaminhar e responder entre o grupo e o privado
+
+- **Encaminhar** (ícone ↪ na mensagem do grupo; menu ⋮ › *Encaminhar* no privado): manda a mensagem para outro grupo ou para uma conversa privada, com busca. Vai texto, imagem, vídeo, áudio ou documento (o arquivo precisa estar guardado no sistema) e chega como **Encaminhada** no WhatsApp; no painel também aparece "Encaminhada".
+- **Responder no privado** (botão *privado* na mensagem de um cliente no grupo): escreve a resposta e ela vai para a conversa privada com essa pessoa, **citando a mensagem do grupo** (como o "Responder em particular" do WhatsApp). A conversa é criada se ainda não existir.
+- **Responder num grupo** (menu ⋮ da mensagem no privado): escolhe o grupo e a resposta sai lá citando a mensagem da conversa privada.
+- Valem as regras de sempre: as conversas privadas só para quem pode usá-las; nos grupos, as de *Responder pelo sistema* (ligado, grupo monitorado, quem pode responder).
 
 ## Modo TV (monitor na parede)
 

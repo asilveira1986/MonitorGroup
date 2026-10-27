@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, EyeOff, FileText, MoreVertical, Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react';
+import { Download, EyeOff, FileText, Forward, MoreVertical, Pencil, Reply, SmilePlus, Trash2, Users } from 'lucide-react';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Lightbox } from '../groups/[id]/message-media';
@@ -29,6 +29,10 @@ export type PrivateMessageRow = {
   deleted_at?: string | null;
   hidden_at?: string | null;
   quoted_message_id?: string | null;
+  /** encaminhada e citação de outra conversa, ex.: de um grupo (0105) */
+  forwarded?: boolean;
+  quoted_body?: string | null;
+  quoted_from?: string | null;
 };
 export type PrivateReaction = { id: string; message_id: string; reactor_jid: string; from_me: boolean; emoji: string };
 
@@ -126,11 +130,16 @@ export function PrivateMessageMenu({
   myReaction,
   onEdit,
   onReply,
+  onForward,
+  onReplyGroup,
 }: {
   message: PrivateMessageRow;
   myReaction: string | null;
   onEdit: () => void;
   onReply: () => void;
+  /** encaminhar / responder num grupo (0105) */
+  onForward?: () => void;
+  onReplyGroup?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [up, setUp] = useState(false);
@@ -219,6 +228,32 @@ export function PrivateMessageMenu({
               className={item}
             >
               <Reply className="h-3.5 w-3.5" /> Responder
+            </button>
+          )}
+          {!m.deleted_at && onReplyGroup && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onReplyGroup();
+              }}
+              className={item}
+            >
+              <Users className="h-3.5 w-3.5" /> Responder num grupo
+            </button>
+          )}
+          {!m.deleted_at && onForward && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onForward();
+              }}
+              className={item}
+            >
+              <Forward className="h-3.5 w-3.5" /> Encaminhar
             </button>
           )}
           {m.from_me && (

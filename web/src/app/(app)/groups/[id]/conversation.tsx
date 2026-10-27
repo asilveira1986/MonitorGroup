@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, CheckCheck, Clock, Loader2, Lock, Reply } from 'lucide-react';
+import { Check, CheckCheck, Clock, Forward, Loader2, Lock, MessageCircle, Reply } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { markMediaSeen } from '../../actions';
@@ -17,6 +17,7 @@ import { PAGE_SIZE } from './constants';
 import { MessageMedia } from './message-media';
 import { MessageEditor, MessageMenu } from './message-menu';
 import { CallPrivateButton } from '../../private/call-private';
+import { ShareDialog, type ShareMode, type ShareSource } from '@/components/share-dialog';
 import { useRealtime } from '@/lib/use-realtime';
 
 
@@ -208,6 +209,8 @@ export function Conversation({
   const [viewed, setViewed] = useState<Set<string>>(new Set());
   const [demandFrom, setDemandFrom] = useState<Message | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  // encaminhar / responder no privado (0105)
+  const [share, setShare] = useState<{ source: ShareSource; mode: ShareMode } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState<Set<string>>(new Set());
   const [hasMore, setHasMore] = useState(initial.length >= PAGE_SIZE);
@@ -534,6 +537,38 @@ export function Conversation({
                         <Reply className="h-3 w-3" /> responder
                       </button>
                     )}
+                    {!m.deleted_at && !removed && (reply.enabled || canPrivate) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShare({
+                            mode: 'forward',
+                            source: { kind: 'group', id: m.id, author: sender, preview: withoutSignature(m.body, m.from_me ? m.sender_name : null) || (TYPE_LABEL[m.message_type] ?? m.message_type) },
+                          })
+                        }
+                        className={cn('inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] text-muted hover:bg-surface-2 hover:text-brand-text', !reply.enabled && 'ml-auto')}
+                        aria-label="Encaminhar a mensagem"
+                        title="Encaminhar para um grupo ou conversa privada"
+                      >
+                        <Forward className="h-3 w-3" />
+                      </button>
+                    )}
+                    {canPrivate && !m.deleted_at && !m.from_me && m.sender_jid && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShare({
+                            mode: 'reply-private',
+                            source: { kind: 'group', id: m.id, author: sender, preview: withoutSignature(m.body, null) || (TYPE_LABEL[m.message_type] ?? m.message_type) },
+                          })
+                        }
+                        className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] text-muted hover:bg-surface-2 hover:text-brand-text"
+                        aria-label={`Responder ${sender} no privado`}
+                        title="Responder no privado (citando esta mensagem)"
+                      >
+                        <MessageCircle className="h-3 w-3" /> privado
+                      </button>
+                    )}
                     {reply.enabled && m.from_me && editing !== m.id && (
                       <MessageMenu message={m} onEdit={() => setEditing(m.id)} />
                     )}
@@ -605,6 +640,11 @@ export function Conversation({
                           </button>
                         );
                       })()}
+                      {m.forwarded && (
+                        <p className="mb-0.5 inline-flex items-center gap-1 text-[11px] italic text-muted">
+                          <Forward className="h-3 w-3" /> Encaminhada
+                        </p>
+                      )}
                       <MessageMedia message={m} onViewed={() => markViewed(m)} />
                       <p className="whitespace-pre-wrap break-words text-ink">
                         {m.message_type !== 'text' && !m.media_path && (
@@ -664,6 +704,9 @@ export function Conversation({
       </div>
     </div>
       <Composer groupId={groupId} config={reply} replyTo={replyTo} onClearReply={() => setReplyTo(null)} />
+      {share && (
+        <ShareDialog source={share.source} mode={share.mode} canPrivate={canPrivate} canGroup={reply.enabled} onClose={() => setShare(null)} />
+      )}
       {demandFrom && (
         <DemandForm
           groups={[]}

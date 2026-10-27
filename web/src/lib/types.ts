@@ -99,6 +99,8 @@ export type Group = {
 };
 
 export type Message = {
+  /** encaminhada no WhatsApp (0105) */
+  forwarded?: boolean;
   /** editada (no painel ou no WhatsApp) e o texto antes da 1ª edição (0066) */
   edited_at?: string | null;
   original_body?: string | null;
