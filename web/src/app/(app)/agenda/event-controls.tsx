@@ -193,48 +193,38 @@ export function reminderLabel(m: number, allDay = false) {
 /** Lembretes do compromisso: um ou mais, cada um com o tempo antes (notificação no celular). */
 function RemindersPicker({ value, onChange, allDay }: { value: number[]; onChange: (v: number[]) => void; allDay: boolean }) {
   const free = REMINDER_OPTIONS.filter((m) => !value.includes(m));
-  const set = (i: number, m: number) => onChange([...new Set(value.map((v, k) => (k === i ? m : v)))].sort((a, b) => a - b));
   return (
-    <div className="space-y-2">
-      {value.map((m, i) => (
-        <div key={m} className="flex items-center gap-2">
-          <Bell className="h-4 w-4 shrink-0 text-series-1" aria-hidden />
-          <select
-            value={m}
-            onChange={(e) => set(i, Number(e.target.value))}
-            aria-label={`Lembrete ${i + 1}`}
-            className="h-10 flex-1 rounded-xl border border-line bg-surface px-3 text-base text-ink outline-none focus:border-brand-line sm:h-9 sm:text-sm"
-          >
-            {[m, ...free].sort((a, b) => a - b).map((o) => (
-              <option key={o} value={o}>
-                {reminderLabel(o, allDay)}
-              </option>
-            ))}
-          </select>
+    <div className="flex flex-wrap items-center gap-1.5">
+      {value.map((m) => (
+        <span key={m} className="inline-flex h-7 items-center gap-1 rounded-full bg-series-1/12 pl-2 pr-1 text-xs font-medium text-ink">
+          <Bell className="h-3 w-3 text-series-1" aria-hidden />
+          {reminderLabel(m, allDay)}
           <button
             type="button"
             onClick={() => onChange(value.filter((v) => v !== m))}
-            className="rounded-lg p-1.5 text-ink-2 hover:bg-surface-2 hover:text-critical-ink"
-            aria-label="Tirar este lembrete"
+            className="rounded-full p-0.5 text-ink-2 hover:bg-surface-2 hover:text-critical-ink"
+            aria-label={`Tirar o lembrete ${reminderLabel(m, allDay)}`}
           >
-            <X className="h-4 w-4" />
+            <X className="h-3 w-3" />
           </button>
-        </div>
-      ))}
-      <div className="flex flex-wrap items-center gap-2">
-        {value.length < MAX_REMINDERS && free.length > 0 && (
-          <button
-            type="button"
-            onClick={() => onChange([...value, free.find((m) => m > (value[value.length - 1] ?? -1)) ?? free[0]].sort((a, b) => a - b))}
-            className="inline-flex items-center gap-1 rounded-full border border-line px-2.5 py-1 text-xs font-medium text-ink-2 hover:border-brand-line hover:text-ink"
-          >
-            <Plus className="h-3 w-3" /> Adicionar lembrete
-          </button>
-        )}
-        <span className="text-[11px] text-muted">
-          {value.length ? 'Notificação no celular/computador de cada participante.' : 'Sem lembrete.'}
         </span>
-      </div>
+      ))}
+      {value.length < MAX_REMINDERS && free.length > 0 && (
+        <select
+          value=""
+          onChange={(e) => e.target.value !== '' && onChange([...value, Number(e.target.value)].sort((x, y) => x - y))}
+          aria-label="Adicionar lembrete"
+          className="h-7 rounded-full border border-dashed border-line bg-surface px-2 text-xs text-ink-2 outline-none hover:border-brand-line focus:border-brand-line"
+        >
+          <option value="">+ lembrete</option>
+          {free.map((o) => (
+            <option key={o} value={o}>
+              {reminderLabel(o, allDay)}
+            </option>
+          ))}
+        </select>
+      )}
+      {!value.length && <span className="text-[11px] text-muted">Sem lembrete</span>}
     </div>
   );
 }
@@ -319,9 +309,9 @@ function PeoplePicker({
         </button>
       </div>
       {people.length > 8 && <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar pessoa" className="h-8 text-xs" />}
-      <div className="max-h-44 overflow-y-auto rounded-xl border border-line p-1">
+      <div className="max-h-36 overflow-y-auto rounded-xl border border-line p-1">
         {shown.map((p) => (
-          <label key={p.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
+          <label key={p.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-surface-2">
             <input
               type="checkbox"
               checked={has.has(p.id)}
@@ -418,84 +408,97 @@ function EventDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Compromisso">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <form onSubmit={submit} className="relative max-h-[92dvh] w-full max-w-md space-y-4 overflow-y-auto rounded-t-2xl bg-surface p-5 shadow-2xl sm:rounded-2xl">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">{event ? 'Editar compromisso' : 'Novo compromisso'}</h2>
-            {personName && <p className="text-xs text-ink-2">Na agenda de {personName}</p>}
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-ink-2 hover:bg-surface-2" aria-label="Fechar">
+      <form onSubmit={submit} className="relative flex max-h-[92dvh] w-full max-w-md flex-col rounded-t-2xl bg-surface shadow-2xl sm:rounded-2xl lg:max-w-3xl">
+        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+          <h2 className="text-base font-semibold">
+            {event ? 'Editar compromisso' : 'Novo compromisso'}
+            {personName && <span className="ml-2 text-xs font-normal text-ink-2">na agenda de {personName}</span>}
+          </h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-ink-2 hover:bg-surface-2" aria-label="Fechar">
             <X className="h-5 w-5" />
           </button>
         </div>
-        <Field label="Título">
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ex.: Reunião com o cliente, audiência, ligar para..."
-            maxLength={200}
-            required
-            autoFocus
-          />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Dia">
-            <Input
-              type="date"
-              value={date}
-              onChange={(e) => {
-                // semanal no dia padrão: acompanha o dia escolhido
-                if (e.target.value && repeat.weekdays.length === 1 && repeat.weekdays[0] === dowOf(date)) setRepeat({ ...repeat, weekdays: [dowOf(e.target.value)] });
-                setDate(e.target.value);
-              }}
-              required
-            />
-          </Field>
-          <Field label="Hora">
-            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={allDay} />
-          </Field>
-        </div>
-        <Toggle checked={allDay} onChange={changeAllDay} label="Dia todo (sem horário)" />
-        {types.length > 0 && (
-          <Field label="Tipo">
-            <TypePicker types={types} value={typeId} onChange={setTypeId} />
-          </Field>
-        )}
-        <Field label="Repetir">
-          <RepeatPicker value={repeat} onChange={setRepeat} />
-        </Field>
-        <Field label="Lembretes">
-          <RemindersPicker value={reminders} onChange={setReminders} allDay={allDay} />
-        </Field>
-        <Field label="Participantes">
-          <PeoplePicker people={people} teams={teams} value={who} onChange={setWho} />
-        </Field>
-        <Field label="Observação (opcional)">
-          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} placeholder="Local, link, detalhes..." />
-        </Field>
-        {inSeries && (
-          <div className="space-y-1.5 rounded-xl bg-surface-2 p-3 text-sm">
-            <p className="text-xs font-medium text-ink-2">Este compromisso se repete. Salvar em:</p>
-            {ruleChanged ? (
-              <p className="text-xs text-ink-2">A repetição mudou: vale para <b>este e os próximos</b>.</p>
-            ) : (
-              <div className="flex flex-wrap gap-4">
-                {(
-                  [
-                    ['one', 'Só este'],
-                    ['following', 'Este e os próximos'],
-                  ] as const
-                ).map(([k, label]) => (
-                  <label key={k} className="inline-flex cursor-pointer items-center gap-2">
-                    <input type="radio" name="scope" checked={scope === k} onChange={() => setScope(k)} className="accent-[var(--brand)]" />
-                    {label}
+        {/* computador: duas colunas (o quê e quando | repetição, lembretes e quem) */}
+        <div className="grid flex-1 gap-x-5 gap-y-3 overflow-y-auto px-4 py-3 lg:grid-cols-2">
+          <div className="space-y-3">
+            <Field label="Título">
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Ex.: Reunião com o cliente, audiência, ligar para..."
+                maxLength={200}
+                required
+                autoFocus
+              />
+            </Field>
+            <div className="grid grid-cols-[1fr_auto] items-end gap-3">
+              <Field label="Dia">
+                <Input
+                  type="date"
+                  value={date}
+                  onChange={(e) => {
+                    // semanal no dia padrão: acompanha o dia escolhido
+                    if (e.target.value && repeat.weekdays.length === 1 && repeat.weekdays[0] === dowOf(date)) setRepeat({ ...repeat, weekdays: [dowOf(e.target.value)] });
+                    setDate(e.target.value);
+                  }}
+                  required
+                />
+              </Field>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-ink-2">Hora</span>
+                  <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-ink-2">
+                    <input type="checkbox" checked={allDay} onChange={(e) => changeAllDay(e.target.checked)} className="h-3.5 w-3.5 accent-[var(--brand)]" />
+                    dia todo
                   </label>
-                ))}
+                </div>
+                <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={allDay} className="w-36 sm:w-32" aria-label="Hora" />
+              </div>
+          </div>
+            {types.length > 0 && (
+              <Field label="Tipo">
+                <TypePicker types={types} value={typeId} onChange={setTypeId} />
+              </Field>
+            )}
+            <Field label="Observação (opcional)">
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={2000} placeholder="Local, link, detalhes..." />
+            </Field>
+          </div>
+          <div className="space-y-3">
+            <Field label="Repetir">
+              <RepeatPicker value={repeat} onChange={setRepeat} />
+            </Field>
+            <Field label="Lembretes">
+              <RemindersPicker value={reminders} onChange={setReminders} allDay={allDay} />
+            </Field>
+            <Field label="Participantes">
+              <PeoplePicker people={people} teams={teams} value={who} onChange={setWho} />
+            </Field>
+            {inSeries && (
+              <div className="space-y-1.5 rounded-xl bg-surface-2 p-3 text-sm">
+                <p className="text-xs font-medium text-ink-2">Este compromisso se repete. Salvar em:</p>
+                {ruleChanged ? (
+                  <p className="text-xs text-ink-2">A repetição mudou: vale para <b>este e os próximos</b>.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-4">
+                    {(
+                      [
+                        ['one', 'Só este'],
+                        ['following', 'Este e os próximos'],
+                      ] as const
+                    ).map(([k, label]) => (
+                      <label key={k} className="inline-flex cursor-pointer items-center gap-2">
+                        <input type="radio" name="scope" checked={scope === k} onChange={() => setScope(k)} className="accent-[var(--brand)]" />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
-        <div className="flex gap-2">
+        </div>
+        <div className="flex gap-2 border-t border-line px-4 py-3">
           <Button disabled={pending}>{pending ? 'Salvando…' : event ? 'Salvar' : 'Registrar compromisso'}</Button>
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancelar
