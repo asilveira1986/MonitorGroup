@@ -148,6 +148,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    108. `supabase/migrations/0108_cleanup_old_data.sql`
    109. `supabase/migrations/0109_contact_directory.sql`
    110. `supabase/migrations/0110_thanks_reply_to_team.sql`
+   111. `supabase/migrations/0111_reaction_answers.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -557,6 +558,10 @@ A tela **Configurações › WhatsApp › Conexão e arquivos** mostra no topo s
   4. Aguarde 10 a 15 minutos e clique em **Conectar**. Leia o QR code assim que aparecer.
   5. O worker anuncia a versão atual do WhatsApp Web (buscada em web.whatsapp.com; aparece no topo de **Configurações › WhatsApp › Conexão e arquivos**) e, se o pareamento falhar, alterna para um perfil de conexão mais simples. Se ainda assim falhar, a mensagem de erro traz um "Diagnóstico da última tentativa" (versão, perfil e em quantos segundos a conexão caiu): envie esse texto ao suporte.
 - **"Não foi possível verificar o worker"**: execute o script `0005_worker_status.sql`.
+
+## Reação da equipe conta como resposta
+
+Quando a equipe (o número conectado ou alguém marcado como da equipe em *Pessoas*) **reage** (👍 🙏 😂…) à mensagem do cliente, o grupo deixa de aguardar resposta, desde que o cliente não tenha escrito de novo depois da mensagem que recebeu a reação; os alertas de "sem resposta" do grupo são resolvidos. Liga/desliga em *Configurações › WhatsApp › Respostas e mensagens* (começa ligado). A reação não entra no tempo de resposta.
 
 ## Limpeza automática (espaço)
 

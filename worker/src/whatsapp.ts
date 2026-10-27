@@ -1196,7 +1196,8 @@ export class WhatsAppManager {
 
   /**
    * Reação a uma mensagem (👍 ❤️ ...): uma por pessoa por mensagem. Trocar o emoji substitui,
-   * tirar a reação apaga. Não é mensagem: não mexe em pendência, tempos nem avisos.
+   * tirar a reação apaga. Não é mensagem: não conta nos tempos nem gera aviso; mas a reação da
+   * equipe à mensagem do cliente tira o grupo de "aguardando resposta" (0111).
    */
   private async handleReaction(session: Session, msg: WAMessage, reaction: { targetId: string; emoji: string }) {
     const group = await this.getGroup(session, msg.key.remoteJid!);
@@ -1231,6 +1232,11 @@ export class WhatsAppManager {
       { onConflict: 'message_id,reactor_jid' },
     );
     if (error) logger.warn({ err: error.message }, 'não foi possível guardar a reação');
+    // reação da equipe a uma mensagem do cliente conta como resposta (0111; sem o script, nada)
+    else if (d.fromTeam) {
+      const { data: answered } = await db.rpc('answer_by_reaction', { p_message: target.id });
+      if (answered) logger.info({ group: group.id }, 'grupo respondido por reação da equipe');
+    }
   }
 
   /** Mensagem editada ou apagada no WhatsApp (por qualquer pessoa): atualiza a conversa. */

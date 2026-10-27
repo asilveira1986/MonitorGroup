@@ -180,6 +180,8 @@ export async function saveIgnoreSettings(values: {
   acknowledgements: boolean;
   stickers: boolean;
   phrases: string[];
+  /** reação da equipe conta como resposta (0111) */
+  reactions?: boolean;
 }): Promise<Result & { summary?: ReapplySummary }> {
   const profile = await requireAdmin();
   const phrases = [...new Set(values.phrases.map((p) => p.trim().replace(/\s+/g, ' ')).filter(Boolean))]
@@ -196,6 +198,10 @@ export async function saveIgnoreSettings(values: {
     })
     .eq('company_id', profile.company_id);
   if (error) return result(error);
+  // à parte: sem o script 0111 a coluna não existe e o resto salva normal
+  if (values.reactions !== undefined) {
+    await supabase.from('app_settings').update({ reaction_answers: values.reactions }).eq('company_id', profile.company_id);
+  }
   // as mensagens já recebidas passam pelas mesmas regras
   let summary: ReapplySummary | undefined;
   try {

@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, FlaskConical, MessageSquareOff, Plus, Save, Smile, X, XCircle } from 'lucide-react';
+import { CheckCircle2, FlaskConical, MessageSquareOff, Plus, Save, Smile, SmilePlus, X, XCircle } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Card, CardHeader, Input } from '@/components/ui';
@@ -18,6 +18,7 @@ const SUGGESTIONS = ['obrigado pelo retorno', 'fico no aguardo', 'agradeço a at
 export function IgnoreSettings({ settings, disabled }: { settings: AppSettings; disabled: boolean }) {
   const [acks, setAcks] = useState(settings.ignore_acknowledgements);
   const [stickers, setStickers] = useState(settings.ignore_stickers_emoji !== false);
+  const [reactions, setReactions] = useState((settings as { reaction_answers?: boolean }).reaction_answers !== false);
   const [phrases, setPhrases] = useState<string[]>(settings.ignore_phrases ?? []);
   const [draft, setDraft] = useState('');
   const [sample, setSample] = useState('');
@@ -155,6 +156,15 @@ export function IgnoreSettings({ settings, disabled }: { settings: AppSettings; 
           disabled={lock}
         />
 
+        <Row
+          icon={SmilePlus}
+          title="Reação da equipe conta como resposta"
+          text="Quando a equipe reage (👍 🙏 😂…) à mensagem do cliente, o grupo deixa de aguardar resposta, se o cliente não escreveu de novo depois."
+          checked={reactions}
+          onChange={setReactions}
+          disabled={lock}
+        />
+
         <div className="py-3">
           <p className="flex items-center gap-1.5 text-sm font-medium">
             <FlaskConical className="h-4 w-4 text-muted" /> Testar uma mensagem
@@ -187,7 +197,7 @@ export function IgnoreSettings({ settings, disabled }: { settings: AppSettings; 
             disabled={pending}
             onClick={() =>
               start(async () => {
-                const res = await saveIgnoreSettings({ acknowledgements: acks, stickers, phrases });
+                const res = await saveIgnoreSettings({ acknowledgements: acks, stickers, phrases, reactions });
                 if (!res.ok) return void toast.error(res.error);
                 const s = res.summary;
                 const g = s?.grupos;

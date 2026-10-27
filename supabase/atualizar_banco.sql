@@ -194,7 +194,8 @@ begin
   (99, 'Limpeza do que fica sem uso (0108)', to_regprocedure('public.cleanup_old_data()') is not null),
   (100, 'Lista de contatos completa (0109)', to_regprocedure('public.contact_directory(text,integer)') is not null),
   (101, 'Agradecimento respondendo a equipe (0110)', exists (select 1 from public.schema_migrations where version = '0110')),
-  (102, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (102, 'Reação da equipe conta como resposta (0111)', to_regprocedure('public.answer_by_reaction(uuid)') is not null),
+  (103, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -203,7 +204,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -16827,6 +16828,76 @@ end $$;
 $mig0110$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0111_reaction_answers.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0111', $mig0111$
+-- =====================================================================
+-- Reação da equipe conta como resposta.
+--
+-- Quando a equipe (o número conectado ou alguém cadastrado em Pessoas)
+-- reage a uma mensagem do cliente (👍 🙏 😂 ...), o grupo deixa de
+-- aguardar resposta, desde que não haja mensagem do cliente depois da que
+-- recebeu a reação. Os alertas de "sem resposta" do grupo são resolvidos.
+-- Liga/desliga em Configurações › WhatsApp › Respostas e mensagens
+-- (começa ligado). Os grupos que já estão aguardando e têm essa reação
+-- também são acertados.
+-- =====================================================================
+
+alter table public.app_settings add column if not exists reaction_answers boolean not null default true;
+
+-- o worker chama ao gravar a reação da equipe (p_message: a mensagem que recebeu a reação)
+create or replace function public.answer_by_reaction(p_message uuid)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare
+  m public.messages%rowtype;
+  g public.groups%rowtype;
+begin
+  select * into m from public.messages where id = p_message;
+  if m.id is null or m.from_team then
+    return false;
+  end if;
+  select * into g from public.groups where id = m.group_id;
+  if g.id is null or g.pending_since is null
+     or not coalesce((select reaction_answers from public.app_settings where company_id = g.company_id), true) then
+    return false;
+  end if;
+  -- o cliente escreveu de novo depois da mensagem que recebeu a reação: ainda aguarda
+  if exists (select 1 from public.messages x
+              where x.group_id = m.group_id and not x.from_team and x.opens_pending and not x.ignored_as_last
+                and x.sent_at > m.sent_at) then
+    return false;
+  end if;
+  update public.groups set pending_since = null, pending_message_id = null, pending_count = 0 where id = g.id;
+  update public.alerts set status = 'resolved', resolved_at = now()
+   where group_id = g.id and type = 'no_response' and status <> 'resolved';
+  return true;
+end;
+$$;
+revoke all on function public.answer_by_reaction(uuid) from public, anon, authenticated;
+grant execute on function public.answer_by_reaction(uuid) to service_role;
+
+-- os grupos que já aguardam e têm reação da equipe na última mensagem do cliente
+do $$
+declare
+  r record;
+  v_n int := 0;
+begin
+  for r in
+    select distinct on (m.group_id) m.id
+      from public.message_reactions x
+      join public.messages m on m.id = x.message_id and not m.from_team
+      join public.groups g on g.id = m.group_id and g.pending_since is not null
+     where x.from_team and m.sent_at >= g.pending_since
+     order by m.group_id, m.sent_at desc
+  loop
+    if public.answer_by_reaction(r.id) then
+      v_n := v_n + 1;
+    end if;
+  end loop;
+  raise notice '% grupo(s) respondidos por reação da equipe', v_n;
+end $$;
+$mig0111$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -16973,6 +17044,7 @@ from (values
   (99, 'Limpeza do que fica sem uso (0108)', to_regprocedure('public.cleanup_old_data()') is not null),
   (100, 'Lista de contatos completa (0109)', to_regprocedure('public.contact_directory(text,integer)') is not null),
   (101, 'Agradecimento respondendo a equipe (0110)', exists (select 1 from public.schema_migrations where version = '0110')),
-  (102, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (102, 'Reação da equipe conta como resposta (0111)', to_regprocedure('public.answer_by_reaction(uuid)') is not null),
+  (103, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
