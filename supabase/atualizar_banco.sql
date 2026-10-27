@@ -193,7 +193,8 @@ begin
   (98, 'Pessoas e setores sem cadastro duplicado (0107)', to_regprocedure('public.agenda_sectors()') is not null),
   (99, 'Limpeza do que fica sem uso (0108)', to_regprocedure('public.cleanup_old_data()') is not null),
   (100, 'Lista de contatos completa (0109)', to_regprocedure('public.contact_directory(text,integer)') is not null),
-  (101, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (101, 'Agradecimento respondendo a equipe (0110)', exists (select 1 from public.schema_migrations where version = '0110')),
+  (102, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -202,7 +203,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -16786,6 +16787,46 @@ grant execute on function public.contact_directory(text, int) to authenticated;
 $mig0109$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0110_thanks_reply_to_team.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0110', $mig0110$
+-- =====================================================================
+-- Agradecimento respondendo a uma mensagem da equipe não deixa pendência.
+--
+-- Ex.: a atendente manda um arquivo e o cliente responde (citando) com
+-- "Obrigado @Cíntia". Mesmo que outra mensagem do cliente tenha vindo no
+-- meio, a resposta à mensagem da equipe que só agradece/confirma encerra o
+-- assunto (a mesma regra de "logo depois da equipe": volta a pedir
+-- resposta se vier pergunta, pedido, problema ou "não"). O worker já faz
+-- assim nas novas; aqui valem também as mensagens já gravadas, e os grupos
+-- são recalculados (pendências só diminuem).
+-- =====================================================================
+
+do $$
+declare
+  v_n int;
+  v_c uuid;
+  v_r jsonb;
+begin
+  update public.messages m set opens_pending = false
+    from public.groups g
+    join public.app_settings s on s.company_id = g.company_id and s.ignore_acknowledgements
+   where g.id = m.group_id
+     and m.opens_pending and not m.from_team and m.message_type = 'text'
+     and m.quoted_wa_id is not null
+     and public.is_thanks_after_team(m.body)
+     and exists (select 1 from public.messages q
+                  where q.group_id = m.group_id and q.wa_message_id = m.quoted_wa_id and q.from_team);
+  get diagnostics v_n = row_count;
+  raise notice '% agradecimento(s) respondendo a equipe deixaram de abrir pendência', v_n;
+  if v_n > 0 then
+    for v_c in select id from public.companies loop
+      v_r := public.recalc_company_groups(v_c);
+    end loop;
+  end if;
+end $$;
+$mig0110$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -16931,6 +16972,7 @@ from (values
   (98, 'Pessoas e setores sem cadastro duplicado (0107)', to_regprocedure('public.agenda_sectors()') is not null),
   (99, 'Limpeza do que fica sem uso (0108)', to_regprocedure('public.cleanup_old_data()') is not null),
   (100, 'Lista de contatos completa (0109)', to_regprocedure('public.contact_directory(text,integer)') is not null),
-  (101, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (101, 'Agradecimento respondendo a equipe (0110)', exists (select 1 from public.schema_migrations where version = '0110')),
+  (102, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

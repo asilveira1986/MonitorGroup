@@ -1651,6 +1651,23 @@ export class WhatsAppManager {
 
   /** Dados comuns de uma mensagem de grupo (remetente, equipe, horário). */
   /** A última mensagem do grupo que conta (da equipe ou do cliente pedindo algo) foi da equipe? */
+  /**
+   * A mensagem responde (cita) uma mensagem da equipe? Ex.: o cliente responde ao arquivo que a
+   * atendente mandou com "Obrigado @Fulana": o assunto está encerrado, mesmo com outra mensagem dele
+   * no meio.
+   */
+  private async quotedIsTeam(session: Session, msg: WAMessage): Promise<boolean> {
+    const quote = quotedAuthor(msg.message);
+    if (!quote) return false;
+    if (this.isMe(session, quote.participant)) return true;
+    const group = msg.key.remoteJid ? session.groupCache.get(msg.key.remoteJid) : undefined;
+    if (group) {
+      const { data } = await db.from('messages').select('from_team').eq('group_id', group.id).eq('wa_message_id', quote.id).maybeSingle();
+      if (data) return Boolean(data.from_team);
+    }
+    return Boolean(await findTeamMember(session.companyId, quote.participant, null));
+  }
+
   private async lastWasTeam(session: Session, msg: WAMessage): Promise<boolean> {
     const group = msg.key.remoteJid ? session.groupCache.get(msg.key.remoteJid) : undefined;
     if (!group) return false;
@@ -1758,7 +1775,11 @@ export class WhatsAppManager {
         (isAcknowledgement(content.type, content.body, settings.ignore_phrases) ||
           // agradecimento/confirmação logo depois da equipe: encerra o assunto (só volta a pedir
           // resposta se vier pergunta, pedido ou dúvida)
-          (!fromMe && !member && isThanksAfterTeam(content.type, content.body) && (await this.lastWasTeam(session, msg))))
+          (!fromMe &&
+            !member &&
+            isThanksAfterTeam(content.type, content.body) &&
+            // respondendo (citando) uma mensagem da equipe, ou logo depois da equipe
+            ((await this.quotedIsTeam(session, msg)) || (await this.lastWasTeam(session, msg)))))
       ),
       // figurinha/emoji do cliente não conta como a última mensagem dele
       ignoredAsLast:

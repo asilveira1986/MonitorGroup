@@ -147,6 +147,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    107. `supabase/migrations/0107_people_sectors_unified.sql`
    108. `supabase/migrations/0108_cleanup_old_data.sql`
    109. `supabase/migrations/0109_contact_directory.sql`
+   110. `supabase/migrations/0110_thanks_reply_to_team.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
