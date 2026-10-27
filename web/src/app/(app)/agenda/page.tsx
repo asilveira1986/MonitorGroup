@@ -92,14 +92,21 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const now = new Date(nowIso).getTime();
   const today = dayKey(nowIso, timeZone);
 
-  // de quem é a agenda: a do próprio usuário; administrador escolhe outro usuário (?quem=)
-  const wanted = typeof sp.quem === 'string' && isAdmin && people.some((p) => p.id === sp.quem) ? sp.quem : null;
+  // de quem é a agenda: a do próprio usuário; administrador escolhe outro usuário (?quem=) ou um
+  // setor da agenda inteiro (?setor=: os compromissos de todos do setor)
+  const agendaTeam = typeof sp.setor === 'string' && isAdmin ? (agendaTeams.find((t) => t.id === sp.setor) ?? null) : null;
+  const wanted = !agendaTeam && typeof sp.quem === 'string' && isAdmin && people.some((p) => p.id === sp.quem) ? sp.quem : null;
   const userId = wanted ?? profile.id;
-  const viewingOther = userId !== profile.id;
+  const viewingOther = Boolean(agendaTeam) || userId !== profile.id;
   const person = people.find((p) => p.id === userId);
-  const personName = person?.name ?? profile.full_name ?? profile.email;
+  const personName = agendaTeam ? `setor ${agendaTeam.name}` : (person?.name ?? profile.full_name ?? profile.email);
+  const userIds = agendaTeam ? agendaTeam.userIds : [userId];
   // demandas na agenda: as da pessoa da equipe ligada a esse usuário
-  const ids = viewingOther ? (person?.member_ids ?? []) : myIds;
+  const ids = agendaTeam
+    ? [...new Set(people.filter((p) => agendaTeam.userIds.includes(p.id)).flatMap((p) => p.member_ids))]
+    : viewingOther
+      ? (person?.member_ids ?? [])
+      : myIds;
   void team;
 
   // compromisso aberto (?evento=, da notificação ou de um clique): detalhes e a agenda no dia dele
@@ -175,7 +182,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       supabase
         .from('agenda_events')
         .select(`${EVENT_COLS}, agenda_event_people!inner(user_id)`)
-        .eq('agenda_event_people.user_id', userId)
+        .in('agenda_event_people.user_id', userIds.length ? userIds : ['00000000-0000-0000-0000-000000000000'])
         .gte('starts_at', `${from}T00:00:00Z`)
         .lt('starts_at', `${until}T00:00:00Z`)
         .order('starts_at')
@@ -241,7 +248,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
 
   const href = (changes: Record<string, string | null>) => {
     const p = new URLSearchParams();
-    const cur: Record<string, string | null> = { quem: isAdmin ? wanted : null, vista: view, data: ref === today ? null : ref };
+    const cur: Record<string, string | null> = { quem: isAdmin ? wanted : null, setor: agendaTeam?.id ?? null, vista: view, data: ref === today ? null : ref };
     for (const [k, v] of Object.entries({ ...cur, ...changes })) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/agenda?${s}` : '/agenda';
@@ -294,7 +301,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           {e.title}
         </p>
         <p className="line-clamp-2 text-xs text-ink-2">{e.notes || 'Compromisso'}</p>
-        {(e.people?.length ?? 0) > 1 && (
+        {((e.people?.length ?? 0) > 1 || (agendaTeam && (e.people?.length ?? 0) > 0)) && (
           <p className="mt-0.5 truncate text-[11px] text-muted" title="Participantes">
             👥 {(e.people ?? []).map((id) => people.find((p) => p.id === id)?.name ?? 'usuário').join(', ')}
           </p>
@@ -385,7 +392,14 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const pickPeople = people.map((p) => ({ id: p.id, name: p.name }));
   const dayEntries = view === 'dia' ? entriesOf(ref) : [];
 
-  const personSelect = isAdmin && <PersonSelect value={viewingOther ? userId : ''} people={people.map((p) => ({ id: p.id, name: p.name }))} />;
+  const personSelect = isAdmin && (
+    <PersonSelect
+      value={wanted && wanted !== profile.id ? wanted : ''}
+      team={agendaTeam?.id ?? ''}
+      people={people.map((p) => ({ id: p.id, name: p.name }))}
+      teams={agendaTeams.map((t) => ({ id: t.id, name: t.name }))}
+    />
+  );
 
   return (
     <div data-wide>
@@ -444,7 +458,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                 {personSelect}
                 <NewEventButton
                   types={types}
-                  defaultPeople={[userId]}
+                  defaultPeople={userIds}
                   people={pickPeople}
                   teams={agendaTeams}
                   personName={viewingOther ? personName : null}
