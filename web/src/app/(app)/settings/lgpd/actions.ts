@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireAdmin } from '@/lib/auth';
+import { requirePlatformAdmin } from '@/lib/auth';
 import { friendlyDbError } from '@/lib/db-errors';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 
@@ -21,7 +21,7 @@ export type PersonSummary = {
 
 /** Prazo de guarda das mensagens (meses; null = sem prazo). */
 export async function saveMessageRetention(months: number | null): Promise<Result> {
-  const admin = await requireAdmin();
+  const admin = await requirePlatformAdmin();
   const supabase = await createClient();
   const { error } = await supabase
     .from('app_settings')
@@ -33,7 +33,7 @@ export async function saveMessageRetention(months: number | null): Promise<Resul
 
 /** O que existe da pessoa (fica no log). */
 export async function lgpdSummary(phone: string): Promise<Result<PersonSummary>> {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const { data, error } = await (await createClient()).rpc('lgpd_person_summary', { p_phone: phone });
   if (error) return { ok: false, error: friendlyDbError(error.message) };
   return { ok: true, data: data as PersonSummary };
@@ -41,7 +41,7 @@ export async function lgpdSummary(phone: string): Promise<Result<PersonSummary>>
 
 /** Apaga os dados da pessoa e os arquivos dela no Storage (fica no log). */
 export async function lgpdErase(phone: string): Promise<Result<{ mensagens_grupos: number; conversas_privadas: number; participacoes: number; arquivos: number }>> {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const { data, error } = await (await createClient()).rpc('lgpd_person_erase', { p_phone: phone });
   if (error) return { ok: false, error: friendlyDbError(error.message) };
   const r = data as { mensagens_grupos: number; conversas_privadas: number; participacoes: number; arquivos: string[] };

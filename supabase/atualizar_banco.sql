@@ -187,7 +187,8 @@ begin
   (93, 'Tipos e repetição dos compromissos (0102)', to_regprocedure('public.delete_agenda_event(uuid,text)') is not null
         and exists (select 1 from pg_trigger where tgname = 'agenda_people_push' and tgrelid = to_regclass('public.agenda_event_people'))),
   (94, 'Etiquetas de clientes (0103)', to_regprocedure('public.set_group_tags(uuid,uuid[])') is not null),
-  (95, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (95, 'LGPD só para o administrador geral (0104)', exists (select 1 from pg_trigger where tgname = 'app_settings_guard_retention')),
+  (96, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -196,7 +197,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -15889,6 +15890,57 @@ create trigger customer_tags_cleanup after delete on public.customer_tags
 $mig0103$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0104_lgpd_platform_only.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0104', $mig0104$
+-- =====================================================================
+-- Privacidade (LGPD) só para o administrador geral do sistema.
+--
+-- O prazo de guarda das mensagens e os pedidos dos titulares (consultar,
+-- exportar e apagar os dados de uma pessoa) passam a ser só de quem
+-- administra a plataforma; os administradores das empresas não veem
+-- mais a tela nem conseguem pelo banco.
+-- =====================================================================
+
+-- pedidos dos titulares (consultar, exportar, apagar): todos passam por aqui
+create or replace function public.lgpd_check_admin(p_phone text)
+returns text
+language plpgsql stable security definer set search_path = public
+as $$
+declare
+  v_digits text := regexp_replace(coalesce(p_phone, ''), '\D', '', 'g');
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Só o administrador geral do sistema atende pedidos de dados pessoais (LGPD).' using errcode = '42501';
+  end if;
+  if length(v_digits) between 10 and 11 then
+    v_digits := '55' || v_digits;  -- DDD + número: Brasil
+  end if;
+  if length(v_digits) < 12 or length(v_digits) > 15 then
+    raise exception 'Informe o telefone com DDD (e o código do país, se não for do Brasil).';
+  end if;
+  return v_digits;
+end;
+$$;
+revoke all on function public.lgpd_check_admin(text) from public, anon, authenticated;
+
+
+-- prazo de guarda das mensagens: só o administrador geral muda (o worker e o SQL Editor seguem livres)
+create or replace function public.app_settings_guard_retention()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.message_retention_months is distinct from old.message_retention_months
+     and auth.uid() is not null and not public.is_platform_admin() then
+    raise exception 'Só o administrador geral do sistema muda o prazo de guarda das mensagens (LGPD).' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists app_settings_guard_retention on public.app_settings;
+create trigger app_settings_guard_retention before update of message_retention_months on public.app_settings
+  for each row execute function public.app_settings_guard_retention();
+$mig0104$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -16028,6 +16080,7 @@ from (values
   (93, 'Tipos e repetição dos compromissos (0102)', to_regprocedure('public.delete_agenda_event(uuid,text)') is not null
         and exists (select 1 from pg_trigger where tgname = 'agenda_people_push' and tgrelid = to_regclass('public.agenda_event_people'))),
   (94, 'Etiquetas de clientes (0103)', to_regprocedure('public.set_group_tags(uuid,uuid[])') is not null),
-  (95, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (95, 'LGPD só para o administrador geral (0104)', exists (select 1 from pg_trigger where tgname = 'app_settings_guard_retention')),
+  (96, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

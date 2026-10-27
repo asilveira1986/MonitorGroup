@@ -33,7 +33,7 @@ export default async function SettingsLayout({ children }: LayoutProps<'/setting
   return (
     <>
       <PageHeader title="Configurações" description="Organização, canais, atendimento e monitoramento." />
-      <SettingsNav isAdmin={isAdmin} status={status} />
+      <SettingsNav isAdmin={isAdmin} platformAdmin={profile.platform_admin} status={status} />
       <div className="mt-5 min-w-0">{children}</div>
     </>
   );

@@ -141,6 +141,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    101. `supabase/migrations/0101_agenda_reminders.sql`
    102. `supabase/migrations/0102_agenda_types_repeat.sql`
    103. `supabase/migrations/0103_customer_tags.sql`
+   104. `supabase/migrations/0104_lgpd_platform_only.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

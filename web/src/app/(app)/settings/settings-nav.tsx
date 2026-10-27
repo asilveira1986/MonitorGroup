@@ -20,9 +20,9 @@ const GROUP_ICON: Record<string, LucideIcon> = {
  * Menu das Configurações em dois níveis, na horizontal: os grupos numa linha e, embaixo, os itens
  * só do grupo clicado (o da página atual vem escolhido). A descrição aparece ao passar o mouse.
  */
-export function SettingsNav({ isAdmin, status }: { isAdmin: boolean; status: NavStatus }) {
+export function SettingsNav({ isAdmin, platformAdmin = false, status }: { isAdmin: boolean; platformAdmin?: boolean; status: NavStatus }) {
   const pathname = usePathname();
-  const groups = SETTINGS_NAV.map((g) => ({ ...g, items: g.items.filter((i) => isAdmin || !i.adminOnly) })).filter((g) => g.items.length);
+  const groups = SETTINGS_NAV.map((g) => ({ ...g, items: g.items.filter((i) => (isAdmin || !i.adminOnly) && (platformAdmin || !i.platformOnly)) })).filter((g) => g.items.length);
   const activeGroup = groups.find((g) => g.items.some((i) => i.href === pathname))?.group ?? groups[0].group;
   const [openGroup, setOpenGroup] = useState<string | null>(activeGroup);
   const [lastActive, setLastActive] = useState(activeGroup);

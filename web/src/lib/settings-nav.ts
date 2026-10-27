@@ -9,6 +9,8 @@ export type SettingsItem = {
   label: string;
   description: string;
   adminOnly?: boolean;
+  /** só quem administra a plataforma (administrador geral do sistema) */
+  platformOnly?: boolean;
   /** item que mostra ✓ quando já foi configurado */
   check?: SettingsCheck;
 };
@@ -24,7 +26,7 @@ export const SETTINGS_NAV: { group: string; items: SettingsItem[] }[] = [
       { href: '/settings/agenda-teams', label: 'Setores da agenda', description: 'Grupos de pessoas para marcar compromissos de uma vez', adminOnly: true },
       { href: '/settings/agenda-types', label: 'Tipos de compromisso', description: 'Os tipos da agenda e a cor de cada um', adminOnly: true },
       { href: '/settings/tags', label: 'Etiquetas', description: 'Etiquetas para marcar os clientes nos grupos e no privado', adminOnly: true },
-      { href: '/settings/lgpd', label: 'Privacidade (LGPD)', description: 'Prazo de guarda das mensagens e pedidos dos titulares', adminOnly: true },
+      { href: '/settings/lgpd', label: 'Privacidade (LGPD)', description: 'Prazo de guarda das mensagens e pedidos dos titulares', adminOnly: true, platformOnly: true },
     ],
   },
   {

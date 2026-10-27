@@ -1,13 +1,13 @@
 import type { NextRequest } from 'next/server';
-import { requireProfile } from '@/lib/auth';
+import { requirePlatformAdmin } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
 /**
  * Pedido do titular (LGPD): todos os dados da pessoa (pelo telefone) num arquivo JSON, para entregar
- * a ela. Só administradores (conferido no banco); a exportação fica no log de atividades.
+ * a ela. Só o administrador geral do sistema (conferido no banco); a exportação fica no log de atividades.
  */
 export async function GET(request: NextRequest) {
-  await requireProfile();
+  await requirePlatformAdmin();
   const phone = request.nextUrl.searchParams.get('phone') ?? '';
   const { data, error } = await (await createClient()).rpc('lgpd_person_export', { p_phone: phone });
   if (error) return new Response(error.message, { status: 403 });
