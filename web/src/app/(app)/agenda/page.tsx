@@ -361,8 +361,6 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
 
   // quem pode ser chamado para um compromisso: os usuários ativos da empresa
   const pickPeople = people.map((p) => ({ id: p.id, name: p.name }));
-  const todayDue = (dueOn.get(today) ?? []).filter((r) => !isLate(r)).length;
-  const todayEvents = (eventsOn.get(today) ?? []).filter((e) => !e.done_at).length;
   const dayEntries = view === 'dia' ? entriesOf(ref) : [];
 
   const personSelect = isAdmin && <PersonSelect value={viewingOther ? userId : ''} people={people.map((p) => ({ id: p.id, name: p.name }))} />;
@@ -387,7 +385,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       )}
       {
         <div className="space-y-4">
-          {/* visão, período e resumo de hoje */}
+          {/* visão e período */}
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className="inline-flex rounded-xl border border-line bg-surface p-1" role="tablist" aria-label="Visão da agenda">
@@ -430,17 +428,6 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                   defaultDate={view === 'dia' || ref >= today ? ref : today}
                 />
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              {personName && (
-                <span className="mr-1 text-ink-2">
-                  Agenda de <strong className="text-ink">{personName}</strong>
-                </span>
-              )}
-              <span className="rounded-full bg-critical/12 px-2.5 py-1 font-medium text-critical-ink">{late.length} atrasada(s)</span>
-              <span className="rounded-full bg-warning/15 px-2.5 py-1 font-medium text-warning-ink">{todayDue} para hoje</span>
-              <span className="rounded-full bg-series-1/12 px-2.5 py-1 font-medium text-series-1">{todayEvents} compromisso(s) hoje</span>
-              <span className="rounded-full bg-good/15 px-2.5 py-1 font-medium text-good-ink">{doneOn.get(today)?.length ?? 0} entregue(s) hoje</span>
             </div>
           </div>
 
