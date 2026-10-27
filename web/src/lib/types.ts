@@ -62,6 +62,8 @@ export type Instance = {
 };
 
 export type Group = {
+  /** etiquetas do cliente (0103) */
+  tags?: string[];
   /** setor do grupo (define quem vê e atende) */
   sector_id?: string | null;
   /** nome do setor (quando a consulta inclui sectors(name)) */

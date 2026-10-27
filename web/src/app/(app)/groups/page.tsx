@@ -6,6 +6,7 @@ import { requireMenu } from '@/lib/auth';
 import { cn } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Group } from '@/lib/types';
+import { TagChips, type CustomerTag } from '@/components/customer-tags';
 import { GroupsTable } from './groups-table';
 import { RemovedGroups, type RemovedGroup } from './removed-groups';
 
@@ -22,8 +23,12 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
   const sp = await searchParams;
   const q = typeof sp.q === 'string' ? sp.q : '';
   const filter = typeof sp.filter === 'string' ? sp.filter : 'all';
+  // filtro por etiqueta do cliente (0103)
+  const tag = typeof sp.tag === 'string' && /^[0-9a-f-]{36}$/i.test(sp.tag) ? sp.tag : null;
 
   const supabase = await createClient();
+  const { data: tagRows } = await supabase.from('customer_tags').select('id, name, color').order('name');
+  const tags = (tagRows ?? []) as CustomerTag[];
   const { count: removedCount } = await supabase
     .from('groups')
     .select('id', { count: 'exact', head: true })
@@ -54,6 +59,7 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
     if (filter === 'pending') query = query.eq('monitored', true).not('pending_since', 'is', null);
     if (filter === 'monitored') query = query.eq('monitored', true);
     if (filter === 'ignored') query = query.eq('monitored', false);
+    if (tag) query = query.contains('tags', [tag]);
     const [{ data: rows }, { data: team }] = await Promise.all([query.limit(500), supabase.from('team_members').select('id, name')]);
     const teamName = new Map((team ?? []).map((t) => [t.id as string, t.name as string]));
     groups = ((rows ?? []) as Group[]).map((g) => {
@@ -71,12 +77,12 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
       <PageHeader title="Grupos" description="Todos os grupos do WhatsApp conectado. Escolha quais devem ser monitorados." />
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <GroupSearch q={q} filter={filter} />
+        <GroupSearch q={q} filter={filter} tag={tag} />
         <div className="flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-1 sm:inline-flex sm:flex-nowrap sm:gap-0">
           {FILTERS.map((f) => (
             <Link
               key={f.value}
-              href={`/groups?filter=${f.value}${q ? `&q=${encodeURIComponent(q)}` : ''}`}
+              href={`/groups?filter=${f.value}${q ? `&q=${encodeURIComponent(q)}` : ''}${tag && f.value !== 'removed' ? `&tag=${tag}` : ''}`}
               className={cn(
                 'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium sm:py-1.5',
                 filter === f.value ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink',
@@ -92,6 +98,26 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
           ))}
         </div>
       </div>
+
+      {tags.length > 0 && filter !== 'removed' && (
+        <div className="-mt-1 mb-4 flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="text-ink-2">Etiqueta:</span>
+          {tags.map((t) => {
+            const on = tag === t.id;
+            const base = `/groups?filter=${filter}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+            return (
+              <Link key={t.id} href={on ? base : `${base}&tag=${t.id}`} className={cn('rounded-full', on ? 'ring-2 ring-ink' : 'opacity-80 hover:opacity-100')}>
+                <TagChips ids={[t.id]} all={tags} />
+              </Link>
+            );
+          })}
+          {tag && (
+            <Link href={`/groups?filter=${filter}${q ? `&q=${encodeURIComponent(q)}` : ''}`} className="text-ink-2 underline-offset-2 hover:underline">
+              limpar
+            </Link>
+          )}
+        </div>
+      )}
 
       <Card>
         {filter === 'removed' ? (
@@ -111,7 +137,7 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
             description="Os grupos aparecem automaticamente depois que o WhatsApp é conectado em Configurações > WhatsApp."
           />
         ) : (
-          <GroupsTable groups={groups} photos={groupPhotos} />
+          <GroupsTable groups={groups} photos={groupPhotos} tags={tags} />
         )}
       </Card>
     </>

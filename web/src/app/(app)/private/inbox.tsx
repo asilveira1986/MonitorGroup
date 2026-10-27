@@ -18,6 +18,7 @@ import {
   type PrivateMessageRow,
   type PrivateReaction,
 } from './message-tools';
+import { TagChips, TagEditor, type CustomerTag } from '@/components/customer-tags';
 
 export type PrivateChat = {
   id: string;
@@ -27,6 +28,8 @@ export type PrivateChat = {
   last_message_at: string | null;
   last_message_preview: string | null;
   unread_count: number;
+  /** etiquetas do cliente (0103) */
+  tags?: string[];
 };
 type PrivateMessage = PrivateMessageRow;
 type Outgoing = { id: string; chat_id: string; body: string | null; media_name?: string | null; message_type?: string; status: string; error: string | null; created_at: string; wa_message_id: string | null };
@@ -204,7 +207,7 @@ function StatusTicks({ status }: { status: number | null }) {
 }
 
 /** Conversa aberta: mensagens (tempo real), fila de envio e o campo para responder. */
-function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: string; onBack: () => void }) {
+function ChatView({ chat, timeZone, onBack, tags }: { chat: PrivateChat; timeZone: string; onBack: () => void; tags: CustomerTag[] }) {
   const [messages, setMessages] = useState<PrivateMessage[] | null>(null);
   const [outgoing, setOutgoing] = useState<Outgoing[]>([]);
   const [text, setText] = useState('');
@@ -361,6 +364,9 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
         <div className="min-w-0">
           <p className="truncate font-semibold">{title}</p>
           <p className="truncate text-xs text-muted">{chat.phone ? formatPhone(chat.phone) : 'número não informado pelo WhatsApp'}</p>
+          <div className="mt-1">
+            <TagEditor key={(chat.tags ?? []).join()} kind="private" targetId={chat.id} value={chat.tags ?? []} all={tags} canEdit />
+          </div>
         </div>
       </div>
 
@@ -579,13 +585,24 @@ function ChatView({ chat, timeZone, onBack }: { chat: PrivateChat; timeZone: str
  * Caixa de entrada das conversas privadas: lista à esquerda (busca, não lidas, nova conversa) e a
  * conversa aberta à direita. No celular, uma coisa por vez.
  */
-export function PrivateInbox({ initialChats, selectedId, timeZone }: { initialChats: PrivateChat[]; selectedId: string | null; timeZone: string }) {
+export function PrivateInbox({
+  initialChats,
+  selectedId,
+  timeZone,
+  tags = [],
+}: {
+  initialChats: PrivateChat[];
+  selectedId: string | null;
+  timeZone: string;
+  tags?: CustomerTag[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [chats, setChats] = useState(initialChats);
   const [selected, setSelected] = useState<string | null>(selectedId);
   const [q, setQ] = useState('');
   const [creating, setCreating] = useState(false);
+  const [tagFilter, setTagFilter] = useState('');
   const [lastInitial, setLastInitial] = useState(initialChats);
   if (initialChats !== lastInitial) {
     // a página recarregou (nova conversa criada): usa a lista nova
@@ -614,6 +631,7 @@ export function PrivateInbox({ initialChats, selectedId, timeZone }: { initialCh
   const digits = term.replace(/\D/g, '');
   const list = [...chats]
     .filter((c) => !term || chatTitle(c).toLowerCase().includes(term) || (digits.length >= 3 && (c.phone ?? '').includes(digits)))
+    .filter((c) => !tagFilter || (c.tags ?? []).includes(tagFilter))
     .sort((a, b) => ((b.last_message_at ?? '') > (a.last_message_at ?? '') ? 1 : -1));
   const current = chats.find((c) => c.id === selected) ?? null;
 
@@ -629,10 +647,27 @@ export function PrivateInbox({ initialChats, selectedId, timeZone }: { initialCh
             <MessageSquarePlus className="h-4 w-4" />
           </Button>
         </div>
+        {tags.length > 0 && (
+          <div className="border-b border-line px-3 py-2">
+            <select
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              aria-label="Filtrar por etiqueta"
+              className="h-8 w-full rounded-lg border border-line bg-surface px-2 text-base text-ink outline-none focus:border-brand-line sm:text-xs"
+            >
+              <option value="">Todas as etiquetas</option>
+              {tags.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <ul className="min-h-0 flex-1 overflow-y-auto">
           {list.length === 0 && (
             <li className="p-6 text-center text-sm text-muted">
-              {term ? 'Nenhuma conversa encontrada.' : 'Nenhuma conversa ainda. As mensagens no privado aparecem aqui; use o botão + para iniciar uma.'}
+              {term || tagFilter ? 'Nenhuma conversa encontrada.' : 'Nenhuma conversa ainda. As mensagens no privado aparecem aqui; use o botão + para iniciar uma.'}
             </li>
           )}
           {list.map((c) => {
@@ -662,6 +697,11 @@ export function PrivateInbox({ initialChats, selectedId, timeZone }: { initialCh
                         <span className="tabular shrink-0 rounded-full bg-good px-1.5 text-[10px] font-semibold text-white">{c.unread_count}</span>
                       )}
                     </span>
+                    {(c.tags?.length ?? 0) > 0 && (
+                      <span className="mt-0.5 block">
+                        <TagChips ids={c.tags} all={tags} size="xs" />
+                      </span>
+                    )}
                   </span>
                 </button>
               </li>
@@ -671,7 +711,7 @@ export function PrivateInbox({ initialChats, selectedId, timeZone }: { initialCh
       </div>
       <div className={cn('min-h-0', !current && 'hidden md:block')}>
         {current ? (
-          <ChatView key={current.id} chat={current} timeZone={timeZone} onBack={() => choose(null)} />
+          <ChatView key={current.id} chat={current} timeZone={timeZone} onBack={() => choose(null)} tags={tags} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted">
             <UserRound className="h-10 w-10" />

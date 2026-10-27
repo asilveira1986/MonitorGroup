@@ -140,6 +140,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    100. `supabase/migrations/0100_push_grants.sql`
    101. `supabase/migrations/0101_agenda_reminders.sql`
    102. `supabase/migrations/0102_agenda_types_repeat.sql`
+   103. `supabase/migrations/0103_customer_tags.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -407,6 +408,14 @@ Em **Configurações › Setores** (somente admin) você cria setores, marca os 
 - **Administradores veem e fazem tudo.** Grupos sem setor e usuários sem setor ficam visíveis só para administradores.
 - **Grupos novos** entram no setor escolhido em *Setor dos grupos novos*. Com "Nenhum", só administradores veem até alguém definir.
 - **Na primeira atualização** é criado o setor **Geral** com todos os grupos e usuários, para nada mudar até você organizar os setores.
+
+## Etiquetas de clientes
+
+Marque os clientes com etiquetas coloridas (VIP, Inadimplente, Novo cliente...), **nos grupos e nas conversas privadas**:
+- **No grupo**: no topo da tela do grupo, **+ Etiqueta** abre a lista para marcar/desmarcar; digite um nome novo para criar na hora (com a cor). Quem vê o grupo e não é só de ver painéis etiqueta.
+- **No privado**: no topo da conversa, do mesmo jeito.
+- As etiquetas aparecem na lista de **Grupos** (com filtro por etiqueta acima da lista) e na lista das **Conversas privadas** (com o filtro "Todas as etiquetas").
+- Em *Configurações › Etiquetas* (administradores): renomear, trocar a cor, excluir (sai de todos) e ver quantos clientes têm cada uma.
 
 ## Membros do grupo
 

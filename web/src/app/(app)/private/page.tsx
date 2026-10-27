@@ -6,6 +6,7 @@ import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { ContactsSync } from './contacts-sync';
 import { PrivateInbox, type PrivateChat } from './inbox';
+import type { CustomerTag } from '@/components/customer-tags';
 
 export const metadata: Metadata = { title: 'Monitor Group · Conversas privadas' };
 
@@ -17,11 +18,13 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
   const profile = await requireProfile();
   if (!profile.platform_admin) redirect('/dashboard');
   const supabase = await createClient();
-  const [{ data: allowed }, { data: chats }, { data: settings }, { data: instance }] = await Promise.all([
+  const [{ data: allowed }, { data: chats }, { data: settings }, { data: instance }, { data: tagRows }] = await Promise.all([
     supabase.rpc('can_use_private_chats'),
     supabase.from('private_chats').select('*').order('last_message_at', { ascending: false, nullsFirst: false }).limit(300),
     supabase.from('app_settings').select('timezone').maybeSingle(),
     supabase.from('whatsapp_instances').select('status').eq('status', 'connected').limit(1).maybeSingle(),
+    // etiquetas de clientes (0103)
+    supabase.from('customer_tags').select('id, name, color').order('name'),
   ]);
   // situação dos contatos (0072) e quantos estão guardados
   const [{ data: conns }, { count: contacts }, { count: named }] = await Promise.all([
@@ -68,6 +71,7 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
             initialChats={(chats ?? []) as PrivateChat[]}
             selectedId={typeof sp.c === 'string' ? sp.c : null}
             timeZone={settings?.timezone ?? 'America/Sao_Paulo'}
+            tags={(tagRows ?? []) as CustomerTag[]}
           />
         </>
       )}

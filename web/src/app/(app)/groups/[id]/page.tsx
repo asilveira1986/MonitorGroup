@@ -13,6 +13,7 @@ import { GroupMembers, type GroupMember } from './members';
 import { PAGE_SIZE } from './constants';
 import type { QuickReply } from '@/lib/quick-replies';
 import { Avatar } from '@/components/avatar';
+import { TagEditor, type CustomerTag } from '@/components/customer-tags';
 import { Conversation } from './conversation';
 import { GroupFiles } from './group-files';
 import { DeleteRemovedGroupButton } from '../removed-groups';
@@ -44,7 +45,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
   const recentlySent = minutesAgo(5);
-  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }, { data: closingCfg }, { data: groupPhoto }, { data: canPrivate }] = await Promise.all([
+  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }, { data: closingCfg }, { data: groupPhoto }, { data: canPrivate }, { data: tagRows }] = await Promise.all([
     supabase.from('team_members').select('id, name, active').order('name'),
     supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
     // respostas do painel que ainda não voltaram pelo WhatsApp
@@ -67,6 +68,8 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     supabase.from('contact_avatars').select('path').eq('jid', group?.jid ?? '').maybeSingle(),
     // "Chamar no privado" (0069): só quem administra a plataforma, com o módulo ligado
     profile.platform_admin ? supabase.rpc('can_use_private_chats') : Promise.resolve({ data: false }),
+    // etiquetas de clientes (0103)
+    supabase.from('customer_tags').select('id, name, color').order('name'),
   ]);
   const categories = (typeInd?.params as { categories?: { name: string }[] } | undefined)?.categories;
   if (!group) notFound();
@@ -150,6 +153,13 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
                 <UserCheck className="h-3.5 w-3.5" /> {responsibleNames.length > 1 ? 'Responsáveis' : 'Responsável'}:{' '}
                 {responsibleNames.length ? responsibleNames.join(', ') : 'não definido'}
               </p>
+              <TagEditor
+                kind="group"
+                targetId={g.id}
+                value={g.tags ?? []}
+                all={(tagRows ?? []) as CustomerTag[]}
+                canEdit={!viewer && !g.removed_at}
+              />
             </div>
           </div>
         </div>

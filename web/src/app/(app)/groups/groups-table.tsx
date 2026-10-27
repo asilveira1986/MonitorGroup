@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui';
 import { cn, formatNumber, timeAgo } from '@/lib/format';
 import type { Group } from '@/lib/types';
 import { MonitorToggle } from './group-controls';
+import { TagChips, type CustomerTag } from '@/components/customer-tags';
 
 function Status({ g }: { g: Group }) {
   if (!g.monitored) return <Badge>Ignorado</Badge>;
@@ -47,7 +48,7 @@ function ResponsibleTag({ g }: { g: Group }) {
   );
 }
 
-export function GroupsTable({ groups, photos }: { groups: Group[]; photos?: string[] }) {
+export function GroupsTable({ groups, photos, tags = [] }: { groups: Group[]; photos?: string[]; tags?: CustomerTag[] }) {
   const withPhoto = new Set(photos ?? []);
   return (
     <>
@@ -73,6 +74,11 @@ export function GroupsTable({ groups, photos }: { groups: Group[]; photos?: stri
                   <SectorTag g={g} />
                   <ResponsibleTag g={g} />
                 </span>
+                {(g.tags?.length ?? 0) > 0 && (
+                  <span className="mt-1 block">
+                    <TagChips ids={g.tags} all={tags} size="xs" />
+                  </span>
+                )}
                 <span className="mt-1.5 block">
                   <Status g={g} />
                 </span>
@@ -115,6 +121,11 @@ export function GroupsTable({ groups, photos }: { groups: Group[]; photos?: stri
                       <SectorTag g={g} />
                       <ResponsibleTag g={g} />
                     </span>
+                    {(g.tags?.length ?? 0) > 0 && (
+                      <span className="mt-1 block max-w-[280px]">
+                        <TagChips ids={g.tags} all={tags} size="xs" />
+                      </span>
+                    )}
                   </span>
                 </Link>
               </td>

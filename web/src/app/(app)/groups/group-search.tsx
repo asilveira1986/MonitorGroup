@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui';
 
 /** Busca de grupos: filtra enquanto digita; apagar o texto (ou o ×) limpa o filtro na hora. */
-export function GroupSearch({ q, filter }: { q: string; filter: string }) {
+export function GroupSearch({ q, filter, tag = null }: { q: string; filter: string; tag?: string | null }) {
   const router = useRouter();
   const pathname = usePathname();
   const [value, setValue] = useState(q);
@@ -15,6 +15,7 @@ export function GroupSearch({ q, filter }: { q: string; filter: string }) {
     const p = new URLSearchParams();
     if (filter !== 'all') p.set('filter', filter);
     if (text.trim()) p.set('q', text.trim());
+    if (tag) p.set('tag', tag);
     router.replace(p.size ? `${pathname}?${p}` : pathname);
   };
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
