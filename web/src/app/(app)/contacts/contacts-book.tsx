@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Card, Field, Input, Select, Textarea } from '@/components/ui';
+import { Avatar } from '@/components/avatar';
 import { TagChips, type CustomerTag } from '@/components/customer-tags';
 import { createCustomerTag } from '@/app/(app)/tag-actions';
 import { AGENDA_COLORS, type AgendaColor } from '@/lib/agenda-colors';
@@ -29,6 +30,8 @@ export type Contact = {
   organization?: string | null;
   notes?: string | null;
   tags?: string[];
+  /** identificador com foto de perfil guardada (0113) */
+  photo?: string | null;
 };
 type Filter = 'all' | 'system' | 'whatsapp' | 'chat' | 'team';
 const FILTERS: { key: Filter; label: string }[] = [
@@ -323,12 +326,12 @@ export function ContactsBook({ tags }: { tags: CustomerTag[] }) {
         )}
         {list.slice(0, shown).map((c) => {
           const title = titleOf(c);
-          const sub = [c.phone ? formatPhone(c.phone) : c.jid.endsWith('@lid') ? 'sem número' : null, c.name && c.notify && c.notify !== c.name ? `~${c.notify}` : null, c.email, c.organization]
+          const sub = [c.phone ? (formatPhone(c.phone) === title ? null : formatPhone(c.phone)) : c.jid.endsWith('@lid') ? 'sem número' : null, c.name && c.notify && c.notify !== c.name ? `~${c.notify}` : null, c.email, c.organization]
             .filter(Boolean)
             .join(' · ');
           return (
             <li key={c.jid} className="flex flex-wrap items-center gap-3 px-4 py-2.5 sm:flex-nowrap">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">{initials(title)}</span>
+              <Avatar jid={c.photo} hasPhoto={Boolean(c.photo)} name={title} fallback={initials(title)} className="h-10 w-10 rounded-full bg-brand-soft text-xs text-brand-text" />
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-1.5">
                   <span className="truncate text-sm font-medium">{title}</span>

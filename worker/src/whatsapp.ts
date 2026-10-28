@@ -584,6 +584,8 @@ export class WhatsAppManager {
           await resolveDisconnectAlerts(instanceId);
           await this.syncGroups(session);
           session.markGroupsReady();
+          // fotos dos contatos e das conversas privadas (depois das dos grupos, na mesma fila)
+          void this.queueContactPhotos(session).catch((err) => log.warn({ err }, 'fotos dos contatos'));
         }
 
         if (connection === 'close') {
@@ -1297,6 +1299,8 @@ export class WhatsAppManager {
     if (error) logger.warn({ err: error.message }, 'não foi possível guardar a mensagem privada');
     // imagem/áudio/arquivo: guarda para abrir no painel (em segundo plano)
     const r = ingested as { inserted?: boolean; message_id?: string; chat_id?: string } | null;
+    // foto de perfil de quem escreveu (a fila ignora quem já foi visto nos últimos 7 dias)
+    if (r?.inserted && !fromHistory && !fromMe) session.avatars.add([jid]);
     // resposta citando outra mensagem (0071)
     const quotedWa = quotedMessageId(msg.message);
     if (r?.inserted && r.message_id && r.chat_id && quotedWa) {
@@ -1563,6 +1567,24 @@ export class WhatsAppManager {
   }
 
   /**
+   * Fotos de perfil dos contatos (0113): as conversas privadas (as mais recentes primeiro) e a agenda
+   * do WhatsApp entram na fila das fotos, que só busca quem não foi visto nos últimos 7 dias.
+   */
+  private async queueContactPhotos(session: Session) {
+    if (!(await privateEnabled(session.companyId))) return;
+    const [{ data: chats }, { data: contacts }] = await Promise.all([
+      db
+        .from('private_chats')
+        .select('jid')
+        .eq('instance_id', session.instanceId)
+        .order('last_message_at', { ascending: false, nullsFirst: false })
+        .limit(1000),
+      db.from('wa_contacts').select('jid').eq('instance_id', session.instanceId).not('name', 'is', null).limit(5000),
+    ]);
+    session.avatars.add([...(chats ?? []), ...(contacts ?? [])].map((r) => r.jid as string));
+  }
+
+  /**
    * "Sincronizar contatos" (0072): pede ao WhatsApp o reenvio completo dos dados sincronizados
    * (a agenda chega pelos eventos contacts.upsert, com os nomes salvos) e completa com os membros
    * de todos os grupos do número (nome que usam no WhatsApp, telefone e LID).
@@ -1607,6 +1629,7 @@ export class WhatsAppManager {
         contacts_count: count ?? 0,
       });
       log.info({ contacts: count, groupMembers: people.size }, 'contatos sincronizados sob demanda');
+      void this.queueContactPhotos(session).catch((err) => log.warn({ err }, 'fotos dos contatos'));
       // com os números dos LIDs em mãos, revisa de novo quem é cliente e quem é da equipe (0076)
       const { data: recalc, error: recalcError } = await recalcSenders(session.companyId);
       if (recalcError) log.warn({ err: recalcError.message }, 'não foi possível revisar as mensagens');

@@ -141,7 +141,8 @@ CHECKS=$(cat <<'SQL'
   (101, 'Agradecimento respondendo a equipe (0110)', exists (select 1 from public.schema_migrations where version = '0110')),
   (102, 'Reação da equipe conta como resposta (0111)', to_regprocedure('public.answer_by_reaction(uuid)') is not null),
   (103, 'Contatos (0112)', to_regprocedure('public.save_contact(uuid,text,text,text,text,text,uuid[])') is not null),
-  (104, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (104, 'Contatos com nome e foto (0113)', exists (select 1 from pg_proc where proname = 'contact_directory' and prosrc like '%photo_jid%')),
+  (105, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

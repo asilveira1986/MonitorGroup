@@ -9,6 +9,7 @@ import { cn, formatPhone, formatTime, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import { useRealtime } from '@/lib/use-realtime';
 import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
+import { Avatar } from '@/components/avatar';
 import { markPrivateChatRead, preparePrivateUpload, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
 import {
   PrivateEditor,
@@ -35,7 +36,7 @@ export type PrivateChat = {
 type PrivateMessage = PrivateMessageRow;
 type Outgoing = { id: string; chat_id: string; body: string | null; media_name?: string | null; message_type?: string; status: string; error: string | null; created_at: string; wa_message_id: string | null };
 /** contato da lista (0109): agenda do WhatsApp + conversas + equipe, uma linha por pessoa */
-type Contact = { jid: string; phone: string | null; name: string | null; notify: string | null; saved?: boolean; chat?: boolean; team?: boolean };
+type Contact = { jid: string; phone: string | null; name: string | null; notify: string | null; saved?: boolean; chat?: boolean; team?: boolean; photo?: string | null };
 const SHOW_STEP = 200;
 
 const TYPE_LABEL: Record<string, string> = {
@@ -158,9 +159,7 @@ function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: 
                   onClick={() => open({ jid: c.jid, name: c.name ?? c.notify ?? undefined })}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-surface-2 disabled:opacity-60"
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
-                    {initials(title)}
-                  </span>
+                  <Avatar jid={c.photo} hasPhoto={Boolean(c.photo)} name={title} fallback={initials(title)} className="h-9 w-9 rounded-full bg-brand-soft text-xs text-brand-text" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{title}</span>
                     <span className="block truncate text-xs text-muted">
