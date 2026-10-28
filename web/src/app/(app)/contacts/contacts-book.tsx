@@ -54,16 +54,19 @@ const initials = (s: string) =>
     .join('') || '#';
 
 /** Novo contato ou edição: nome, telefone, e-mail, empresa, observações e etiquetas. */
-function ContactDialog({
+export function ContactDialog({
   contact,
   tags: allTags,
   onClose,
   onSaved,
+  heading,
 }: {
   contact: Contact | null;
   tags: CustomerTag[];
   onClose: () => void;
   onSaved: () => void;
+  /** título da janela (padrão: "Novo contato" / "Editar contato") */
+  heading?: string;
 }) {
   const [form, setForm] = useState<ContactInput>({
     name: contact?.name ?? contact?.notify ?? '',
@@ -79,6 +82,7 @@ function ContactDialog({
   const set = (k: keyof ContactInput) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
   // contato só da agenda do WhatsApp (ou de uma conversa): salvar cria o cadastro no sistema
   const fromWhatsApp = Boolean(contact && !contact.id);
+  const title = heading ?? (contact ? 'Editar contato' : 'Novo contato');
 
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -98,7 +102,7 @@ function ContactDialog({
     });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label={contact ? 'Editar contato' : 'Novo contato'}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label={title}>
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <form
         className="relative flex max-h-[90vh] w-full max-w-lg flex-col rounded-t-2xl bg-surface shadow-2xl sm:rounded-2xl"
@@ -107,7 +111,7 @@ function ContactDialog({
           start(async () => {
             const res = await saveContact(contact?.id ?? null, form);
             if (!res.ok) return void toast.error(res.error);
-            toast.success(contact ? 'Contato salvo' : 'Contato cadastrado');
+            toast.success(contact?.id ? 'Contato salvo' : 'Contato cadastrado');
             onSaved();
             onClose();
           });
@@ -115,7 +119,7 @@ function ContactDialog({
       >
         <div className="flex items-start justify-between gap-3 border-b border-line p-4">
           <div>
-            <h2 className="text-base font-semibold">{contact ? 'Editar contato' : 'Novo contato'}</h2>
+            <h2 className="text-base font-semibold">{title}</h2>
             {fromWhatsApp && (
               <p className="text-xs text-ink-2">Salvar cadastra o contato no sistema. O nome muda no painel e nas conversas; a agenda do celular não muda.</p>
             )}

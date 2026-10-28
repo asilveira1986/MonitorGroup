@@ -23,6 +23,7 @@ import {
 import { TagChips, TagEditor, type CustomerTag } from '@/components/customer-tags';
 import { ShareDialog, type ShareMode, type ShareSource } from '@/components/share-dialog';
 import { OwnerControl, type ChatAgent } from './owner-control';
+import { SaveContactButton } from './save-contact';
 
 export type PrivateChat = {
   id: string;
@@ -393,7 +394,10 @@ function ChatView({
           <p className="truncate font-semibold">{title}</p>
           <p className="truncate text-xs text-muted">{chat.phone ? formatPhone(chat.phone) : 'número não informado pelo WhatsApp'}</p>
           <div className="mt-1">
-            <TagEditor key={(chat.tags ?? []).join()} kind="private" targetId={chat.id} value={chat.tags ?? []} all={tags} canEdit />
+            <span className="flex flex-wrap items-center gap-1">
+              <TagEditor key={(chat.tags ?? []).join()} kind="private" targetId={chat.id} value={chat.tags ?? []} all={tags} canEdit />
+              <SaveContactButton chat={chat} tags={tags} />
+            </span>
           </div>
         </div>
         <div className="ml-auto shrink-0">
