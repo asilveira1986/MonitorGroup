@@ -321,6 +321,7 @@ Com o painel aberto, os avisos abrem **grandes, no centro da tela**, todos no me
 | **Nova mensagem** | verde | um cliente escreveu num grupo monitorado |
 | **SLA excedido** | vermelho | a mensagem do cliente passou do tempo de resposta (SLA do grupo ou o padrão, em tempo útil se essa opção estiver ligada); mostra quem enviou, a mensagem e há quanto tempo espera |
 | **Alertas do sistema** | pela gravidade (vermelho, amarelo ou azul) | o sistema criou um alerta: cliente sem resposta, palavra-chave, WhatsApp desconectado, grupo sem movimentação, prazo vencido, retrabalho, reincidência… |
+| **Mensagem no privado** | verde | um cliente escreveu numa conversa privada (só para quem usa as conversas privadas; não aparece se a conversa já está aberta na tela). **Abrir conversa** leva direto a ela |
 
 Um aviso por vez; o mesmo grupo/assunto atualiza o aviso anterior ("cliente sem resposta" e "SLA excedido" do mesmo grupo viram um aviso só). O SLA é conferido a cada 30 segundos e avisa na virada; pendências que já estavam vencidas quando a tela foi aberta não abrem aviso (continuam no Painel de grupos e em Aguardando resposta). Mensagens da equipe e a importação do histórico não geram aviso.
 

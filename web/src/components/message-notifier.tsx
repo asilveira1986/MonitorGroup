@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertOctagon, AlertTriangle, Bell, BellOff, BellRing, CalendarDays, Clock, Info } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, Bell, BellOff, BellRing, CalendarDays, Clock, Info, MessageCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -206,6 +206,47 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
               text: messageText(m.message_type, m.body),
               href: `/groups/${m.group_id}`,
               action: 'Abrir grupo',
+              at: Date.now(),
+            });
+          });
+      })
+      // mensagem nova no privado (só chega para quem usa as conversas privadas)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'private_messages' }, (payload) => {
+        const m = payload.new as { chat_id: string; from_me: boolean; sender_name: string | null; message_type: string; body: string | null; sent_at: string };
+        if (m.from_me || !configRef.current.enabled || configRef.current.userOff) return;
+        // a sincronização de conversas antigas não gera aviso
+        if (Date.now() - new Date(m.sent_at).getTime() > 10 * 60_000) return;
+        // já está com essa conversa aberta na tela: não precisa avisar
+        if (window.location.pathname === '/private' && new URLSearchParams(window.location.search).get('c') === m.chat_id) return;
+        void createClient()
+          .from('private_chats')
+          .select('name, phone')
+          .eq('id', m.chat_id)
+          .maybeSingle()
+          .then(({ data: c }) => {
+            const chat = c as { name: string | null; phone: string | null } | null;
+            const who = chat?.name || m.sender_name || formatPhone(chat?.phone) || 'Contato';
+            const v = configRef.current;
+            pushRef.current({
+              speech:
+                v.voiceMessages !== false
+                  ? renderTemplate(templateFor(v.voiceOptions, 'message'), {
+                      grupo: 'conversa privada',
+                      remetente: who,
+                      mensagem: m.message_type === 'text' ? m.body : null,
+                      tipo_mensagem: VOICE_TYPE[m.message_type] ?? m.message_type,
+                    })
+                  : undefined,
+              key: `pm-${m.chat_id}`,
+              tone: 'brand',
+              heading: 'Mensagem no privado',
+              icon: MessageCircle,
+              group: who,
+              who: chat?.name && chat.phone ? formatPhone(chat.phone) : null,
+              phone: null,
+              text: messageText(m.message_type, m.body),
+              href: `/private?c=${m.chat_id}`,
+              action: 'Abrir conversa',
               at: Date.now(),
             });
           });

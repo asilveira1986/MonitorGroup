@@ -630,6 +630,12 @@ export function PrivateInbox({
   const [creating, setCreating] = useState(false);
   const [tagFilter, setTagFilter] = useState('');
   const [lastInitial, setLastInitial] = useState(initialChats);
+  // abriu outra conversa pelo endereço (aviso na tela, notificação): passa para ela
+  const [lastSelectedId, setLastSelectedId] = useState(selectedId);
+  if (selectedId !== lastSelectedId) {
+    setLastSelectedId(selectedId);
+    if (selectedId) setSelected(selectedId);
+  }
   if (initialChats !== lastInitial) {
     // a página recarregou (nova conversa criada): usa a lista nova
     setLastInitial(initialChats);
