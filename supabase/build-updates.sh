@@ -143,7 +143,8 @@ CHECKS=$(cat <<'SQL'
   (103, 'Contatos (0112)', to_regprocedure('public.save_contact(uuid,text,text,text,text,text,uuid[])') is not null),
   (104, 'Contatos com nome e foto (0113)', exists (select 1 from pg_proc where proname = 'contact_directory' and prosrc like '%photo_jid%')),
   (105, 'Conversas privadas por usuário (0114)', to_regprocedure('public.assign_private_chat(uuid,uuid)') is not null),
-  (106, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (106, 'Dashboard mais rápido (0115)', to_regprocedure('public.dashboard_bundle(timestamptz,timestamptz,uuid,uuid,boolean)') is not null),
+  (107, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

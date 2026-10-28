@@ -18,13 +18,28 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
   // o dashboard só conhece o catálogo: calcula os indicadores ativos, na ordem configurada
   // e, junto, o mesmo cálculo no intervalo de comparação (dia anterior no mesmo horário)
   const args = { p_group_id: filters.groupId, p_member_id: filters.memberId };
-  const [{ data, error }, { data: before }, { data: summary }, { data: summaryBefore }] = await Promise.all([
-    supabase.rpc('indicator_values', { p_from: filters.from, p_to: filters.to, ...args }),
-    supabase.rpc('indicator_values', { p_from: comparison.from, p_to: comparison.to, ...args }),
-    // visão da gestão: totalizadores do período e do intervalo de comparação
-    supabase.rpc('management_summary', { p_from: filters.from, p_to: filters.to, ...args }),
-    supabase.rpc('management_summary', { p_from: comparison.from, p_to: comparison.to, ...args }),
-  ]);
+  // indicadores + visão da gestão de cada período numa chamada só (0115: os dois aproveitam os mesmos
+  // cálculos); banco sem o script 0115: as quatro chamadas de antes
+  type Bundle = { indicators: unknown; summary: unknown };
+  const bundle = (from: string, to: string, kpiOnly: boolean) =>
+    supabase.rpc('dashboard_bundle', { p_from: from, p_to: to, ...args, p_kpi_only: kpiOnly });
+  // a comparação só mostra a variação dos números: não calcula gráficos, tabelas nem listas
+  const [cur, prev] = await Promise.all([bundle(filters.from, filters.to, false), bundle(comparison.from, comparison.to, true)]);
+  const [{ data, error }, { data: before }, { data: summary }, { data: summaryBefore }] =
+    cur.error && /dashboard_bundle/.test(cur.error.message)
+      ? await Promise.all([
+          supabase.rpc('indicator_values', { p_from: filters.from, p_to: filters.to, ...args }),
+          supabase.rpc('indicator_values', { p_from: comparison.from, p_to: comparison.to, ...args }),
+          // visão da gestão: totalizadores do período e do intervalo de comparação
+          supabase.rpc('management_summary', { p_from: filters.from, p_to: filters.to, ...args }),
+          supabase.rpc('management_summary', { p_from: comparison.from, p_to: comparison.to, ...args }),
+        ])
+      : [
+          { data: (cur.data as Bundle | null)?.indicators ?? null, error: cur.error },
+          { data: (prev.data as Bundle | null)?.indicators ?? null },
+          { data: (cur.data as Bundle | null)?.summary ?? null },
+          { data: (prev.data as Bundle | null)?.summary ?? null },
+        ];
   const indicators = (data ?? []) as IndicatorValue[];
   const previous = Object.fromEntries(
     ((before ?? []) as IndicatorValue[])

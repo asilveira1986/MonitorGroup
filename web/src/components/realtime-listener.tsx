@@ -9,6 +9,9 @@ import { useRealtime } from '@/lib/use-realtime';
  * (os avisos em tela ficam no MessageNotifier).
  */
 const MIN_INTERVAL_MS = 10_000;
+// telas de indicadores (cálculo pesado no banco): no máximo uma vez por minuto
+const HEAVY_PAGES = ['/dashboard', '/reports'];
+const HEAVY_INTERVAL_MS = 60_000;
 
 export function RealtimeListener() {
   const router = useRouter();
@@ -25,7 +28,8 @@ export function RealtimeListener() {
       return;
     }
     if (timer.current) return;
-    const wait = Math.max(1500, MIN_INTERVAL_MS - (Date.now() - last.current));
+    const heavy = HEAVY_PAGES.some((p) => window.location.pathname.startsWith(p));
+    const wait = Math.max(1500, (heavy ? HEAVY_INTERVAL_MS : MIN_INTERVAL_MS) - (Date.now() - last.current));
     timer.current = setTimeout(() => {
       timer.current = null;
       last.current = Date.now();

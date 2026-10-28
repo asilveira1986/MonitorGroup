@@ -256,9 +256,17 @@ export function TvBoard({
     const id = setInterval(() => router.refresh(), REFRESH_MS);
     return () => clearInterval(id);
   }, [router]);
+  // mensagens chegando o tempo todo: no máximo uma atualização a cada 30 s (cada uma recalcula os
+  // indicadores no banco)
+  const lastRefresh = useRef(0);
   const refreshSoon = () => {
-    if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    refreshTimer.current = setTimeout(() => router.refresh(), 4000);
+    if (refreshTimer.current) return;
+    const wait = Math.max(4000, 30_000 - (Date.now() - lastRefresh.current));
+    refreshTimer.current = setTimeout(() => {
+      refreshTimer.current = null;
+      lastRefresh.current = Date.now();
+      router.refresh();
+    }, wait);
   };
   useRealtime('tv-board', (channel) =>
     channel
