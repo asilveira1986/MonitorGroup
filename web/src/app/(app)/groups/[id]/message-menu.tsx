@@ -18,7 +18,18 @@ export type MessageMenuItem = { key: string; label: string; icon: ReactNode; onC
  * editar (até 15 min), apagar para mim (só no número conectado, sem prazo) e apagar para todos (até
  * 2 dias), como no WhatsApp. O pedido vai para o worker, que faz no WhatsApp; a conversa atualiza sozinha.
  */
-export function MessageMenu({ message: m, onEdit, items = [] }: { message: Message; onEdit?: () => void; items?: MessageMenuItem[] }) {
+export function MessageMenu({
+  message: m,
+  onEdit,
+  items = [],
+  align = 'right',
+}: {
+  message: Message;
+  onEdit?: () => void;
+  items?: MessageMenuItem[];
+  /** lado em que o menu se apoia: 'left' nos balões do cliente (à esquerda da conversa) */
+  align?: 'left' | 'right';
+}) {
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
@@ -41,7 +52,7 @@ export function MessageMenu({ message: m, onEdit, items = [] }: { message: Messa
   const toggle = () => {
     const btn = ref.current?.getBoundingClientRect();
     const area = ref.current?.closest('.overflow-y-auto')?.getBoundingClientRect();
-    setUp(Boolean(btn && btn.bottom + 40 * (items.length + (onEdit ? 3 : 0)) + 20 > (area ? area.bottom : window.innerHeight)));
+    setUp(Boolean(btn && btn.bottom + 40 * (items.length + (onEdit ? 3 : 0)) + 20 > Math.min(area ? area.bottom : Infinity, window.innerHeight)));
     const age = Date.now() - new Date(m.sent_at).getTime();
     setLimits({ edit: !m.deleted_at && m.message_type === 'text' && age < EDIT_MS, del: !m.deleted_at && age < DELETE_MS });
     setOpen((o) => !o);
@@ -61,7 +72,7 @@ export function MessageMenu({ message: m, onEdit, items = [] }: { message: Messa
         <MoreVertical className="h-3.5 w-3.5" />
       </button>
       {open && (
-        <div role="menu" className={`absolute right-0 z-30 w-56 ${up ? 'bottom-full mb-1' : 'top-full mt-1'} overflow-hidden rounded-xl border border-line bg-surface py-1 text-sm shadow-lg`}>
+        <div role="menu" className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} z-30 w-56 ${up ? 'bottom-full mb-1' : 'top-full mt-1'} overflow-hidden rounded-xl border border-line bg-surface py-1 text-sm shadow-lg`}>
           {items.map((it) => (
             <button
               key={it.key}

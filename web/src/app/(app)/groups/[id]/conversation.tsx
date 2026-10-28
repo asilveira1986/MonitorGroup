@@ -531,34 +531,23 @@ export function Conversation({
                         <ClipboardList className="h-3 w-3" /> demanda
                       </Link>
                     )}
-                    {reply.enabled && !m.deleted_at && (
-                      <button
-                        onClick={() => setReplyTo(m)}
-                        className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] text-muted hover:bg-surface-2 hover:text-brand-text"
-                        aria-label={`Responder a ${sender}`}
-                      >
-                        <Reply className="h-3 w-3" /> responder
-                      </button>
-                    )}
-                    {!m.deleted_at && !removed && (reply.enabled || canPrivate) && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShare({
-                            mode: 'forward',
-                            source: { kind: 'group', id: m.id, author: sender, preview: withoutSignature(m.body, m.from_me ? m.sender_name : null) || (TYPE_LABEL[m.message_type] ?? m.message_type) },
-                          })
-                        }
-                        className={cn('inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] text-muted hover:bg-surface-2 hover:text-brand-text', !reply.enabled && 'ml-auto')}
-                        aria-label="Encaminhar a mensagem"
-                        title="Encaminhar para um grupo ou conversa privada"
-                      >
-                        <Forward className="h-3 w-3" />
-                      </button>
-                    )}
                     {(() => {
                       // opções da mensagem no "⋮" (como no privado)
                       const items: MessageMenuItem[] = [];
+                      if (reply.enabled && !m.deleted_at)
+                        items.push({ key: 'reply', label: 'Responder', icon: <Reply />, onClick: () => setReplyTo(m) });
+                      if (!m.deleted_at && !removed && (reply.enabled || canPrivate))
+                        items.push({
+                          key: 'forward',
+                          label: 'Encaminhar',
+                          icon: <Forward />,
+                          title: 'Encaminhar para um grupo ou conversa privada',
+                          onClick: () =>
+                            setShare({
+                              mode: 'forward',
+                              source: { kind: 'group', id: m.id, author: sender, preview: withoutSignature(m.body, m.from_me ? m.sender_name : null) || (TYPE_LABEL[m.message_type] ?? m.message_type) },
+                            }),
+                        });
                       if (canPrivate && !m.deleted_at && !m.from_me && m.sender_jid)
                         items.push({
                           key: 'reply-private',
@@ -578,7 +567,13 @@ export function Conversation({
                       if (!m.from_team && m.sender_jid)
                         items.push({ key: 'team', label: 'É da equipe', icon: <UserCheck />, title: 'Marcar este remetente como membro da equipe', onClick: () => markTeam(m.sender_jid!, name ?? '', phone) });
                       const own = reply.enabled && m.from_me && editing !== m.id;
-                      return (items.length > 0 || own) && <MessageMenu message={m} items={items} onEdit={own ? () => setEditing(m.id) : undefined} />;
+                      return (
+                        (items.length > 0 || own) && (
+                          <span className="ml-auto">
+                            <MessageMenu message={m} items={items} onEdit={own ? () => setEditing(m.id) : undefined} align={m.from_team ? 'right' : 'left'} />
+                          </span>
+                        )
+                      );
                     })()}
                   </div>
                   {m.deleted_at ? (
