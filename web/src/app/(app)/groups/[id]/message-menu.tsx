@@ -1,7 +1,7 @@
 'use client';
 
 import { EyeOff, MoreVertical, Pencil, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { requestMessageAction } from '../../actions';
 import { Button, Textarea } from '@/components/ui';
@@ -10,12 +10,15 @@ import type { Message } from '@/lib/types';
 const EDIT_MS = 15 * 60_000;
 const DELETE_MS = 2 * 86_400_000;
 
+/** opção extra do menu (responder no privado, criar demanda, é da equipe...) */
+export type MessageMenuItem = { key: string; label: string; icon: ReactNode; onClick: () => void; title?: string };
+
 /**
- * Menu "⋮" de uma mensagem do número conectado: editar (até 15 min), apagar para mim (só no número
- * conectado, sem prazo) e apagar para todos (até 2 dias),
- * como no WhatsApp. O pedido vai para o worker, que faz no WhatsApp; a conversa atualiza sozinha.
+ * Menu "⋮" de uma mensagem: as opções extras (items) e, na mensagem do número conectado (onEdit),
+ * editar (até 15 min), apagar para mim (só no número conectado, sem prazo) e apagar para todos (até
+ * 2 dias), como no WhatsApp. O pedido vai para o worker, que faz no WhatsApp; a conversa atualiza sozinha.
  */
-export function MessageMenu({ message: m, onEdit }: { message: Message; onEdit: () => void }) {
+export function MessageMenu({ message: m, onEdit, items = [] }: { message: Message; onEdit?: () => void; items?: MessageMenuItem[] }) {
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
@@ -38,7 +41,7 @@ export function MessageMenu({ message: m, onEdit }: { message: Message; onEdit: 
   const toggle = () => {
     const btn = ref.current?.getBoundingClientRect();
     const area = ref.current?.closest('.overflow-y-auto')?.getBoundingClientRect();
-    setUp(Boolean(btn && btn.bottom + 140 > (area ? area.bottom : window.innerHeight)));
+    setUp(Boolean(btn && btn.bottom + 40 * (items.length + (onEdit ? 3 : 0)) + 20 > (area ? area.bottom : window.innerHeight)));
     const age = Date.now() - new Date(m.sent_at).getTime();
     setLimits({ edit: !m.deleted_at && m.message_type === 'text' && age < EDIT_MS, del: !m.deleted_at && age < DELETE_MS });
     setOpen((o) => !o);
@@ -58,14 +61,32 @@ export function MessageMenu({ message: m, onEdit }: { message: Message; onEdit: 
         <MoreVertical className="h-3.5 w-3.5" />
       </button>
       {open && (
-        <div role="menu" className={`absolute right-0 z-30 w-52 ${up ? 'bottom-full mb-1' : 'top-full mt-1'} overflow-hidden rounded-xl border border-line bg-surface py-1 text-sm shadow-lg`}>
+        <div role="menu" className={`absolute right-0 z-30 w-56 ${up ? 'bottom-full mb-1' : 'top-full mt-1'} overflow-hidden rounded-xl border border-line bg-surface py-1 text-sm shadow-lg`}>
+          {items.map((it) => (
+            <button
+              key={it.key}
+              type="button"
+              role="menuitem"
+              title={it.title}
+              onClick={() => {
+                setOpen(false);
+                it.onClick();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-2 [&_svg]:h-3.5 [&_svg]:w-3.5"
+            >
+              {it.icon} {it.label}
+            </button>
+          ))}
+          {items.length > 0 && onEdit && <div className="my-1 border-t border-line" />}
+          {onEdit && (
+          <>
           <button
             type="button"
             role="menuitem"
             disabled={!limits.edit}
             onClick={() => {
               setOpen(false);
-              onEdit();
+              onEdit?.();
             }}
             className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
             title={limits.edit ? undefined : 'O WhatsApp só permite editar mensagens de texto até 15 minutos depois do envio'}
@@ -106,6 +127,8 @@ export function MessageMenu({ message: m, onEdit }: { message: Message; onEdit: 
           >
             <Trash2 className="h-3.5 w-3.5" /> Apagar para todos
           </button>
+          </>
+          )}
         </div>
       )}
     </div>

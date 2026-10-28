@@ -1,9 +1,10 @@
 'use client';
 
-import { Check, CheckCheck, Clock, Forward, Loader2, Lock, MessageCircle, Reply } from 'lucide-react';
+import { Check, CheckCheck, Clock, Forward, Loader2, Lock, MessageCircle, MessageSquareReply, Reply, UserCheck } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { markMediaSeen } from '../../actions';
+import { markMediaSeen, markSenderAsTeam } from '../../actions';
 import { Badge, EmptyState } from '@/components/ui';
 import { cn, formatDateTime, formatDuration, formatPhone, formatTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
@@ -12,11 +13,11 @@ import { Composer, OutgoingBubble, type ReplyConfig } from './composer';
 import Link from 'next/link';
 import { ClipboardList } from 'lucide-react';
 import { DemandForm } from '@/components/demands/demand-form';
-import { MarkTeamButton, MessageSenderPicker } from '../group-controls';
+import { MessageSenderPicker } from '../group-controls';
 import { PAGE_SIZE } from './constants';
 import { MessageMedia } from './message-media';
-import { MessageEditor, MessageMenu } from './message-menu';
-import { CallPrivateButton } from '../../private/call-private';
+import { MessageEditor, MessageMenu, type MessageMenuItem } from './message-menu';
+import { startPrivateChat } from '../../private/actions';
 import { ShareDialog, type ShareMode, type ShareSource } from '@/components/share-dialog';
 import { useRealtime } from '@/lib/use-realtime';
 
@@ -211,6 +212,24 @@ export function Conversation({
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   // encaminhar / responder no privado (0105)
   const [share, setShare] = useState<{ source: ShareSource; mode: ShareMode } | null>(null);
+  const router = useRouter();
+  const [, startAction] = useTransition();
+  // "Conversar no privado" e "É da equipe" (menu ⋮ da mensagem)
+  const openPrivate = (jid: string | null, phone: string | null, name: string | null) =>
+    startAction(async () => {
+      const res = await startPrivateChat(phone ? { phone, name: name ?? undefined } : { jid: jid!, name: name ?? undefined });
+      if (!res.ok) return void toast.error(res.error);
+      router.push(`/private?c=${res.data!.id}`);
+    });
+  const markTeam = (jid: string, name: string, phone: string | null) => {
+    const finalName = window.prompt('Marcar este remetente como membro da equipe. Nome:', name);
+    if (!finalName) return;
+    startAction(async () => {
+      const res = await markSenderAsTeam(jid, finalName, phone);
+      if (res.ok) toast.success(`${finalName} agora conta como equipe`);
+      else toast.error(res.error);
+    });
+  };
   const [editing, setEditing] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState<Set<string>>(new Set());
   const [hasMore, setHasMore] = useState(initial.length >= PAGE_SIZE);
@@ -501,32 +520,16 @@ export function Conversation({
                         {formatPhone(phone)}
                       </button>
                     )}
-                    {canPrivate && !m.from_me && (m.sender_jid || phone) && (
-                      <CallPrivateButton jid={m.sender_jid} phone={phone} name={name} compact />
-                    )}
-                    {!m.from_team && m.sender_jid && (
-                      <MarkTeamButton jid={m.sender_jid} name={name ?? ''} phone={phone} />
-                    )}
                     {unknownSender && demands.members.length > 0 && (
                       <MessageSenderPicker messageId={m.id} members={demands.members} current={m.team_member_id ?? null} />
                     )}
-                    {m.demand_id ? (
+                    {m.demand_id && (
                       <Link
                         href={`/demands?status=all&id=${m.demand_id}`}
                         className="inline-flex items-center gap-1 rounded-full bg-series-1/12 px-2 py-0.5 text-[10px] font-medium text-series-1 hover:underline"
                       >
                         <ClipboardList className="h-3 w-3" /> demanda
                       </Link>
-                    ) : (
-                      !m.from_team &&
-                      demands.manualEnabled && (
-                        <button
-                          onClick={() => setDemandFrom(m)}
-                          className="text-[11px] text-muted underline-offset-2 hover:text-brand-text hover:underline"
-                        >
-                          criar demanda
-                        </button>
-                      )
                     )}
                     {reply.enabled && !m.deleted_at && (
                       <button
@@ -553,25 +556,30 @@ export function Conversation({
                         <Forward className="h-3 w-3" />
                       </button>
                     )}
-                    {canPrivate && !m.deleted_at && !m.from_me && m.sender_jid && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShare({
-                            mode: 'reply-private',
-                            source: { kind: 'group', id: m.id, author: sender, preview: withoutSignature(m.body, null) || (TYPE_LABEL[m.message_type] ?? m.message_type) },
-                          })
-                        }
-                        className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] text-muted hover:bg-surface-2 hover:text-brand-text"
-                        aria-label={`Responder ${sender} no privado`}
-                        title="Responder no privado (citando esta mensagem)"
-                      >
-                        <MessageCircle className="h-3 w-3" /> privado
-                      </button>
-                    )}
-                    {reply.enabled && m.from_me && editing !== m.id && (
-                      <MessageMenu message={m} onEdit={() => setEditing(m.id)} />
-                    )}
+                    {(() => {
+                      // opções da mensagem no "⋮" (como no privado)
+                      const items: MessageMenuItem[] = [];
+                      if (canPrivate && !m.deleted_at && !m.from_me && m.sender_jid)
+                        items.push({
+                          key: 'reply-private',
+                          label: 'Responder no privado',
+                          icon: <MessageSquareReply />,
+                          title: 'Responder no privado (citando esta mensagem)',
+                          onClick: () =>
+                            setShare({
+                              mode: 'reply-private',
+                              source: { kind: 'group', id: m.id, author: sender, preview: withoutSignature(m.body, null) || (TYPE_LABEL[m.message_type] ?? m.message_type) },
+                            }),
+                        });
+                      if (canPrivate && !m.from_me && (m.sender_jid || phone))
+                        items.push({ key: 'chat', label: 'Conversar no privado', icon: <MessageCircle />, onClick: () => openPrivate(m.sender_jid, phone, name) });
+                      if (!m.demand_id && !m.from_team && demands.manualEnabled)
+                        items.push({ key: 'demand', label: 'Criar demanda', icon: <ClipboardList />, onClick: () => setDemandFrom(m) });
+                      if (!m.from_team && m.sender_jid)
+                        items.push({ key: 'team', label: 'É da equipe', icon: <UserCheck />, title: 'Marcar este remetente como membro da equipe', onClick: () => markTeam(m.sender_jid!, name ?? '', phone) });
+                      const own = reply.enabled && m.from_me && editing !== m.id;
+                      return (items.length > 0 || own) && <MessageMenu message={m} items={items} onEdit={own ? () => setEditing(m.id) : undefined} />;
+                    })()}
                   </div>
                   {m.deleted_at ? (
                     <div className="text-ink-2">

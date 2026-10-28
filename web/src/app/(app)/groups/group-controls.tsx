@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Button, Input, Select, Toggle } from '@/components/ui';
 import { cn } from '@/lib/format';
 import { useRealtime } from '@/lib/use-realtime';
-import { markSenderAsTeam, setMessageSender, setGroupMonitored, setGroupResponsibles, setGroupSector, setGroupSla } from '../actions';
+import { setMessageSender, setGroupMonitored, setGroupResponsibles, setGroupSector, setGroupSla } from '../actions';
 
 /** Setor do grupo (somente admin): define quem vê e age sobre o grupo. */
 export function SectorSelect({
@@ -237,27 +237,6 @@ export function SlaForm({ groupId, sla, defaultSla }: { groupId: string; sla: nu
         Salvar
       </Button>
     </form>
-  );
-}
-
-export function MarkTeamButton({ jid, name, phone }: { jid: string; name: string; phone: string | null }) {
-  const [pending, start] = useTransition();
-  return (
-    <button
-      disabled={pending}
-      className="text-[11px] text-muted underline-offset-2 hover:text-brand-text hover:underline disabled:opacity-50"
-      onClick={() => {
-        const finalName = window.prompt('Marcar este remetente como membro da equipe. Nome:', name);
-        if (!finalName) return;
-        start(async () => {
-          const res = await markSenderAsTeam(jid, finalName, phone);
-          if (res.ok) toast.success(`${finalName} agora conta como equipe`);
-          else toast.error(res.error);
-        });
-      }}
-    >
-      é da equipe?
-    </button>
   );
 }
 
