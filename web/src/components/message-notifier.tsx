@@ -210,7 +210,8 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
             });
           });
       })
-      // mensagem nova no privado (só chega para quem usa as conversas privadas)
+      // mensagem nova no privado (só chega para quem usa as conversas privadas e vê a conversa); avisa
+      // das conversas sem responsável e das do próprio usuário (0114), não das de outros usuários
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'private_messages' }, (payload) => {
         const m = payload.new as { chat_id: string; from_me: boolean; sender_name: string | null; message_type: string; body: string | null; sent_at: string };
         if (m.from_me || !configRef.current.enabled || configRef.current.userOff) return;
@@ -218,38 +219,38 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         if (Date.now() - new Date(m.sent_at).getTime() > 10 * 60_000) return;
         // já está com essa conversa aberta na tela: não precisa avisar
         if (window.location.pathname === '/private' && new URLSearchParams(window.location.search).get('c') === m.chat_id) return;
-        void createClient()
-          .from('private_chats')
-          .select('name, phone')
-          .eq('id', m.chat_id)
-          .maybeSingle()
-          .then(({ data: c }) => {
-            const chat = c as { name: string | null; phone: string | null } | null;
-            const who = chat?.name || m.sender_name || formatPhone(chat?.phone) || 'Contato';
-            const v = configRef.current;
-            pushRef.current({
-              speech:
-                v.voiceMessages !== false
-                  ? renderTemplate(templateFor(v.voiceOptions, 'message'), {
-                      grupo: 'conversa privada',
-                      remetente: who,
-                      mensagem: m.message_type === 'text' ? m.body : null,
-                      tipo_mensagem: VOICE_TYPE[m.message_type] ?? m.message_type,
-                    })
-                  : undefined,
-              key: `pm-${m.chat_id}`,
-              tone: 'brand',
-              heading: 'Mensagem no privado',
-              icon: MessageCircle,
-              group: who,
-              who: chat?.name && chat.phone ? formatPhone(chat.phone) : null,
-              phone: null,
-              text: messageText(m.message_type, m.body),
-              href: `/private?c=${m.chat_id}`,
-              action: 'Abrir conversa',
-              at: Date.now(),
-            });
+        const supabase = createClient();
+        void Promise.all([
+          supabase.from('private_chats').select('name, phone, assigned_to').eq('id', m.chat_id).maybeSingle(),
+          supabase.auth.getSession(),
+        ]).then(([{ data: c }, { data: auth }]) => {
+          const chat = c as { name: string | null; phone: string | null; assigned_to?: string | null } | null;
+          if (!chat || (chat.assigned_to && chat.assigned_to !== auth.session?.user.id)) return;
+          const who = chat?.name || m.sender_name || formatPhone(chat?.phone) || 'Contato';
+          const v = configRef.current;
+          pushRef.current({
+            speech:
+              v.voiceMessages !== false
+                ? renderTemplate(templateFor(v.voiceOptions, 'message'), {
+                    grupo: 'conversa privada',
+                    remetente: who,
+                    mensagem: m.message_type === 'text' ? m.body : null,
+                    tipo_mensagem: VOICE_TYPE[m.message_type] ?? m.message_type,
+                  })
+                : undefined,
+            key: `pm-${m.chat_id}`,
+            tone: 'brand',
+            heading: 'Mensagem no privado',
+            icon: MessageCircle,
+            group: who,
+            who: chat?.name && chat.phone ? formatPhone(chat.phone) : null,
+            phone: null,
+            text: messageText(m.message_type, m.body),
+            href: `/private?c=${m.chat_id}`,
+            action: 'Abrir conversa',
+            at: Date.now(),
           });
+        });
       })
       // alerta criado pelo sistema
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'alerts' }, (payload) => {

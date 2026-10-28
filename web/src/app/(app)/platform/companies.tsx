@@ -243,8 +243,8 @@ function PrivateChatsToggle({ companyId, enabled }: { companyId: string; enabled
         label={<span className="text-sm font-medium">Conversas privadas</span>}
       />
       <span className="text-xs text-ink-2">
-        Recebe e envia mensagens no privado e guarda os contatos do WhatsApp. Desligado, nada do privado é gravado. Por enquanto, só quem
-        administra a plataforma usa.
+        Recebe e envia mensagens no privado e guarda os contatos do WhatsApp. Desligado, nada do privado é gravado. Administradores e
+        atendentes da empresa usam: cada um vê as suas conversas e as sem responsável (administradores veem todas).
       </span>
     </div>
   );

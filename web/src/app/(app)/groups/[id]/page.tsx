@@ -66,8 +66,8 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     supabase.from('app_settings').select('closing_shortcut').maybeSingle(),
     // imagem do grupo (guardada pelo worker)
     supabase.from('contact_avatars').select('path').eq('jid', group?.jid ?? '').maybeSingle(),
-    // "Chamar no privado" (0069): só quem administra a plataforma, com o módulo ligado
-    profile.platform_admin ? supabase.rpc('can_use_private_chats') : Promise.resolve({ data: false }),
+    // "Chamar no privado" (0069): administradores e atendentes, com o módulo ligado (0114)
+    supabase.rpc('can_use_private_chats'),
     // etiquetas de clientes (0103)
     supabase.from('customer_tags').select('id, name, color').order('name'),
   ]);

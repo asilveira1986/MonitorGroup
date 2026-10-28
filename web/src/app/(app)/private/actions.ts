@@ -100,3 +100,13 @@ export async function markPrivateChatRead(chatId: string): Promise<Result> {
   const { error } = await supabase.rpc('mark_private_chat_read', { p_chat_id: chatId });
   return error ? fail(error) : { ok: true };
 }
+
+/** Assumir, transferir (p_user) ou devolver para "Sem responsável" (null) uma conversa (0114). */
+export async function assignPrivateChat(chatId: string, userId: string | null): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('assign_private_chat', { p_chat: chatId, p_user: userId });
+  if (error) return fail(error);
+  revalidatePath('/private');
+  return { ok: true };
+}

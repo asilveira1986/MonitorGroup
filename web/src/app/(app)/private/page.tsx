@@ -1,22 +1,22 @@
 import { Lock, MessageCircle } from 'lucide-react';
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { ContactsSync } from './contacts-sync';
 import { PrivateInbox, type PrivateChat } from './inbox';
+import type { ChatAgent } from './owner-control';
 import type { CustomerTag } from '@/components/customer-tags';
 
 export const metadata: Metadata = { title: 'Monitor Group · Conversas privadas' };
 
 /**
  * Conversas privadas (1 a 1) do WhatsApp conectado: receber, responder e iniciar conversas com um
- * contato salvo ou um número novo. Nesta fase, só para quem administra a plataforma (0069).
+ * contato salvo ou um número novo. Administradores e atendentes: cada um vê as suas conversas e as sem
+ * responsável; administradores veem todas (0114).
  */
 export default async function PrivatePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const profile = await requireProfile();
-  if (!profile.platform_admin) redirect('/dashboard');
   const supabase = await createClient();
   const [{ data: allowed }, { data: chats }, { data: settings }, { data: instance }, { data: tagRows }] = await Promise.all([
     supabase.rpc('can_use_private_chats'),
@@ -26,6 +26,8 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
     // etiquetas de clientes (0103)
     supabase.from('customer_tags').select('id, name, color').order('name'),
   ]);
+  // responsável pelas conversas (0114): administradores veem todas; a lista de quem pode receber
+  const [{ data: seesAll }, { data: agents }] = await Promise.all([supabase.rpc('private_sees_all'), supabase.rpc('private_chat_agents')]);
   // situação dos contatos (0072) e quantos estão guardados
   const [{ data: conns }, { count: contacts }, { count: named }] = await Promise.all([
     supabase.from('whatsapp_instances').select('contacts_sync_status, contacts_synced_at').eq('company_id', profile.company_id ?? ''),
@@ -72,6 +74,7 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
             selectedId={typeof sp.c === 'string' ? sp.c : null}
             timeZone={settings?.timezone ?? 'America/Sao_Paulo'}
             tags={(tagRows ?? []) as CustomerTag[]}
+            viewer={{ me: profile.id, seesAll: Boolean(seesAll), agents: (agents ?? []) as ChatAgent[] }}
           />
         </>
       )}

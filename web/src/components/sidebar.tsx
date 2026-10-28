@@ -19,7 +19,7 @@ const NAV = [
   { href: '/demands', label: 'Demandas', icon: ClipboardList, badgeKey: 'demands' as const },
   { href: '/agenda', label: 'Agenda', icon: CalendarDays, badgeKey: 'agenda' as const },
   { href: '/groups', label: 'Grupos', icon: MessagesSquare },
-  // conversas privadas (0069): só quem administra a plataforma, na empresa com o módulo ligado
+  // conversas privadas (0069): administradores e atendentes, na empresa com o módulo ligado (0114)
   { href: '/private', label: 'Conversas privadas', icon: MessageCircle, badgeKey: 'private' as const },
   // contatos (0112): agenda do WhatsApp + cadastros do sistema; mesmo acesso das conversas privadas
   { href: '/contacts', label: 'Contatos', icon: BookUser },

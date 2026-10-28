@@ -243,7 +243,7 @@ export function ContactsBook({ tags }: { tags: CustomerTag[] }) {
 
   const talk = (c: Contact) =>
     start(async () => {
-      if (c.chat_id) return router.push(`/private?c=${c.chat_id}`);
+      // sempre pelo banco: a conversa de outro usuário avisa com quem está (0114)
       const res = await startPrivateChat(c.jid.startsWith('contact:') ? { phone: c.phone ?? '', name: c.name ?? undefined } : { jid: c.jid, name: c.name ?? c.notify ?? undefined });
       if (!res.ok) return void toast.error(res.error);
       router.push(`/private?c=${res.data!.id}`);

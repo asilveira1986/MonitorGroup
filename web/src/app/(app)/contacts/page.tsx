@@ -1,6 +1,5 @@
 import { Lock } from 'lucide-react';
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import type { CustomerTag } from '@/components/customer-tags';
 import { requireProfile } from '@/lib/auth';
@@ -17,7 +16,6 @@ export const metadata: Metadata = { title: 'Monitor Group · Contatos' };
  */
 export default async function ContactsPage() {
   const profile = await requireProfile();
-  if (!profile.platform_admin) redirect('/dashboard');
   const supabase = await createClient();
   const [{ data: allowed }, { data: tagRows }, { data: conns }, { count: contacts }, { count: named }] = await Promise.all([
     supabase.rpc('can_use_private_chats'),

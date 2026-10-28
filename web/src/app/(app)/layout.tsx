@@ -27,11 +27,12 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
       : Promise.resolve({ data: null }),
     // agenda: demandas do usuário para entregar hoje e atrasadas (sem o script 0059, nada)
     supabase.rpc('my_due_demands'),
-    // conversas privadas (0069): só quem administra a plataforma, com o módulo ligado na empresa
-    profile.platform_admin ? supabase.rpc('can_use_private_chats') : Promise.resolve({ data: false }),
+    // conversas privadas (0114): administradores e atendentes, com o módulo ligado na empresa
+    supabase.rpc('can_use_private_chats'),
     // logo da empresa (0083) e não lidas do privado: junto com o resto (uma ida ao banco só)
     supabase.from('companies').select('logo_path').eq('id', profile.company_id ?? '').maybeSingle(),
-    profile.platform_admin ? supabase.from('private_chats').select('unread_count').gt('unread_count', 0) : Promise.resolve({ data: [] }),
+    // não lidas: as do usuário e as sem responsável (as que avisam ele)
+    supabase.from('private_chats').select('unread_count').gt('unread_count', 0).or(`assigned_to.is.null,assigned_to.eq.${profile.id}`),
   ]);
   const companyLogo = Boolean((logoRow as { logo_path?: string | null } | null)?.logo_path);
   const privateUnread = privateOk

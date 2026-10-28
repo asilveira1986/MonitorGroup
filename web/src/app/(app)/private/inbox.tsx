@@ -21,6 +21,7 @@ import {
 } from './message-tools';
 import { TagChips, TagEditor, type CustomerTag } from '@/components/customer-tags';
 import { ShareDialog, type ShareMode, type ShareSource } from '@/components/share-dialog';
+import { OwnerControl, type ChatAgent } from './owner-control';
 
 export type PrivateChat = {
   id: string;
@@ -32,7 +33,12 @@ export type PrivateChat = {
   unread_count: number;
   /** etiquetas do cliente (0103) */
   tags?: string[];
+  /** responsável (0114); null = sem responsável */
+  assigned_to?: string | null;
 };
+/** quem usa a tela: para as abas e o responsável (0114) */
+type Viewer = { me: string; seesAll: boolean; agents: ChatAgent[] };
+type Tab = 'all' | 'mine' | 'queue';
 type PrivateMessage = PrivateMessageRow;
 type Outgoing = { id: string; chat_id: string; body: string | null; media_name?: string | null; message_type?: string; status: string; error: string | null; created_at: string; wa_message_id: string | null };
 /** contato da lista (0109): agenda do WhatsApp + conversas + equipe, uma linha por pessoa */
@@ -212,7 +218,21 @@ function StatusTicks({ status }: { status: number | null }) {
 }
 
 /** Conversa aberta: mensagens (tempo real), fila de envio e o campo para responder. */
-function ChatView({ chat, timeZone, onBack, tags }: { chat: PrivateChat; timeZone: string; onBack: () => void; tags: CustomerTag[] }) {
+function ChatView({
+  chat,
+  timeZone,
+  onBack,
+  tags,
+  viewer,
+  onOwner,
+}: {
+  chat: PrivateChat;
+  timeZone: string;
+  onBack: () => void;
+  tags: CustomerTag[];
+  viewer: Viewer;
+  onOwner: (owner: string | null) => void;
+}) {
   const [messages, setMessages] = useState<PrivateMessage[] | null>(null);
   const [outgoing, setOutgoing] = useState<Outgoing[]>([]);
   const [text, setText] = useState('');
@@ -361,7 +381,7 @@ function ChatView({ chat, timeZone, onBack, tags }: { chat: PrivateChat; timeZon
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-3 border-b border-line px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-3">
         <button type="button" onClick={onBack} className="rounded-lg p-1 text-ink-2 hover:bg-surface-2 md:hidden" aria-label="Voltar para a lista">
           <ArrowLeft className="h-5 w-5" />
         </button>
@@ -374,6 +394,9 @@ function ChatView({ chat, timeZone, onBack, tags }: { chat: PrivateChat; timeZon
           <div className="mt-1">
             <TagEditor key={(chat.tags ?? []).join()} kind="private" targetId={chat.id} value={chat.tags ?? []} all={tags} canEdit />
           </div>
+        </div>
+        <div className="ml-auto shrink-0">
+          <OwnerControl chatId={chat.id} owner={chat.assigned_to} me={viewer.me} seesAll={viewer.seesAll} agents={viewer.agents} onChange={onOwner} />
         </div>
       </div>
 
@@ -615,11 +638,13 @@ export function PrivateInbox({
   selectedId,
   timeZone,
   tags = [],
+  viewer,
 }: {
   initialChats: PrivateChat[];
   selectedId: string | null;
   timeZone: string;
   tags?: CustomerTag[];
+  viewer: Viewer;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -628,6 +653,7 @@ export function PrivateInbox({
   const [q, setQ] = useState('');
   const [creating, setCreating] = useState(false);
   const [tagFilter, setTagFilter] = useState('');
+  const [tab, setTab] = useState<Tab>('all');
   const [lastInitial, setLastInitial] = useState(initialChats);
   // abriu outra conversa pelo endereço (aviso na tela, notificação): passa para ela
   const [lastSelectedId, setLastSelectedId] = useState(selectedId);
@@ -645,9 +671,16 @@ export function PrivateInbox({
     channel.on('postgres_changes', { event: '*', schema: 'public', table: 'private_chats' }, (payload) => {
       const c = payload.new as PrivateChat;
       if (!c?.id) return;
+      // conversa que outro usuário assumiu: sai da lista de quem não vê todas
+      if (!viewer.seesAll && c.assigned_to && c.assigned_to !== viewer.me) return setChats((prev) => prev.filter((x) => x.id !== c.id));
       setChats((prev) => [c, ...prev.filter((x) => x.id !== c.id)]);
     }),
   );
+  // quem assumiu outra conversa nem sempre chega pelo tempo real: confere a lista de tempos em tempos
+  useEffect(() => {
+    const t = setInterval(() => router.refresh(), 60_000);
+    return () => clearInterval(t);
+  }, [router]);
 
   const choose = useCallback(
     (id: string | null) => {
@@ -663,8 +696,16 @@ export function PrivateInbox({
   const list = [...chats]
     .filter((c) => !term || chatTitle(c).toLowerCase().includes(term) || (digits.length >= 3 && (c.phone ?? '').includes(digits)))
     .filter((c) => !tagFilter || (c.tags ?? []).includes(tagFilter))
+    .filter((c) => tab === 'all' || (tab === 'mine' ? c.assigned_to === viewer.me : !c.assigned_to))
     .sort((a, b) => ((b.last_message_at ?? '') > (a.last_message_at ?? '') ? 1 : -1));
   const current = chats.find((c) => c.id === selected) ?? null;
+  const unreadOf = (f: (c: PrivateChat) => boolean) => chats.filter((c) => f(c) && c.unread_count > 0).length;
+  const TABS: { key: Tab; label: string; unread: number }[] = [
+    { key: 'all', label: 'Todas', unread: unreadOf(() => true) },
+    { key: 'mine', label: 'Minhas', unread: unreadOf((c) => c.assigned_to === viewer.me) },
+    { key: 'queue', label: 'Sem responsável', unread: unreadOf((c) => !c.assigned_to) },
+  ];
+  const ownerName = (id: string) => viewer.agents.find((a) => a.id === id)?.name ?? 'outro usuário';
 
   return (
     <Card className="grid h-[calc(100vh-14rem)] min-h-[32rem] overflow-hidden md:grid-cols-[20rem_minmax(0,1fr)]">
@@ -677,6 +718,24 @@ export function PrivateInbox({
           <Button type="button" size="sm" onClick={() => setCreating(true)} aria-label="Nova conversa" title="Nova conversa">
             <MessageSquarePlus className="h-4 w-4" />
           </Button>
+        </div>
+        <div className="flex gap-1 border-b border-line px-3 py-2" role="tablist" aria-label="Quais conversas">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.key}
+              onClick={() => setTab(t.key)}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium',
+                tab === t.key ? 'btn-signal text-brand-ink' : 'bg-surface-2 text-ink-2 hover:text-ink',
+              )}
+            >
+              {t.label}
+              {t.unread > 0 && <span className="tabular rounded-full bg-good px-1.5 text-[10px] font-semibold text-white">{t.unread}</span>}
+            </button>
+          ))}
         </div>
         {tags.length > 0 && (
           <div className="border-b border-line px-3 py-2">
@@ -698,7 +757,7 @@ export function PrivateInbox({
         <ul className="min-h-0 flex-1 overflow-y-auto">
           {list.length === 0 && (
             <li className="p-6 text-center text-sm text-muted">
-              {term || tagFilter ? 'Nenhuma conversa encontrada.' : 'Nenhuma conversa ainda. As mensagens no privado aparecem aqui; use o botão + para iniciar uma.'}
+              {term || tagFilter || tab !== 'all' ? 'Nenhuma conversa encontrada.' : 'Nenhuma conversa ainda. As mensagens no privado aparecem aqui; use o botão + para iniciar uma.'}
             </li>
           )}
           {list.map((c) => {
@@ -728,8 +787,15 @@ export function PrivateInbox({
                         <span className="tabular shrink-0 rounded-full bg-good px-1.5 text-[10px] font-semibold text-white">{c.unread_count}</span>
                       )}
                     </span>
-                    {(c.tags?.length ?? 0) > 0 && (
-                      <span className="mt-0.5 block">
+                    {((c.tags?.length ?? 0) > 0 || c.assigned_to !== viewer.me) && (
+                      <span className="mt-0.5 flex flex-wrap items-center gap-1">
+                        {!c.assigned_to ? (
+                          <span className="rounded-full bg-warning/15 px-1.5 text-[10px] font-medium leading-4 text-warning-ink">sem responsável</span>
+                        ) : (
+                          c.assigned_to !== viewer.me && (
+                            <span className="rounded-full bg-surface-2 px-1.5 text-[10px] font-medium leading-4 text-ink-2">{ownerName(c.assigned_to)}</span>
+                          )
+                        )}
                         <TagChips ids={c.tags} all={tags} size="xs" />
                       </span>
                     )}
@@ -742,7 +808,21 @@ export function PrivateInbox({
       </div>
       <div className={cn('min-h-0', !current && 'hidden md:block')}>
         {current ? (
-          <ChatView key={current.id} chat={current} timeZone={timeZone} onBack={() => choose(null)} tags={tags} />
+          <ChatView
+            key={current.id}
+            chat={current}
+            timeZone={timeZone}
+            onBack={() => choose(null)}
+            tags={tags}
+            viewer={viewer}
+            onOwner={(owner) => {
+              // passou para outra pessoa (sem ver todas): a conversa sai da lista
+              if (owner && owner !== viewer.me && !viewer.seesAll) {
+                setChats((prev) => prev.filter((c) => c.id !== current.id));
+                choose(null);
+              } else setChats((prev) => prev.map((c) => (c.id === current.id ? { ...c, assigned_to: owner } : c)));
+            }}
+          />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted">
             <UserRound className="h-10 w-10" />
