@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { contactRow, isPrivateJid } from './private-jid.js';
+import { contactRow, isPrivateJid, realContactName } from './private-jid.js';
 
 test('conversa privada: pessoa (número ou LID), não grupo, status ou canal', () => {
   assert.equal(isPrivateJid('5511999998888@s.whatsapp.net'), true);
@@ -18,4 +18,18 @@ test('contato do WhatsApp vira linha de wa_contacts', () => {
   );
   assert.equal(contactRow('i', 'c', { id: '120363000000000000@g.us', name: 'Grupo' }), null);
   assert.equal(contactRow('i', 'c', { id: '5511999998888@s.whatsapp.net' })?.phone, '5511999998888');
+});
+
+test('nome do contato: número mascarado (ou só número) não é nome', () => {
+  assert.equal(realContactName('+55∙∙∙∙∙∙∙∙11'), null);
+  assert.equal(realContactName('+55········11'), null);
+  assert.equal(realContactName('+55 51 99999-8888'), null);
+  assert.equal(realContactName('  '), null);
+  assert.equal(realContactName('Lucas Leal'), 'Lucas Leal');
+  assert.equal(realContactName('Corá 🔥'), 'Corá 🔥');
+  assert.equal(realContactName('🔥'), '🔥');
+  assert.equal(realContactName('007'), '007');
+  const row = contactRow('i', 'c', { id: '123456789012345@lid', name: '+55∙∙∙∙∙∙∙∙11', notify: 'Filipe' });
+  assert.equal(row?.name, undefined);
+  assert.equal(row?.notify, 'Filipe');
 });

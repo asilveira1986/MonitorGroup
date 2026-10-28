@@ -200,7 +200,8 @@ begin
   (105, 'Conversas privadas por usuário (0114)', to_regprocedure('public.assign_private_chat(uuid,uuid)') is not null),
   (106, 'Dashboard mais rápido (0115)', to_regprocedure('public.dashboard_bundle(timestamptz,timestamptz,uuid,uuid,boolean)') is not null),
   (107, 'Assinatura no privado (0116)', to_regprocedure('public.private_sign_text(uuid,uuid,text)') is not null),
-  (108, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (108, 'Nome dos contatos sem número mascarado (0117)', to_regprocedure('public.contact_real_name(text)') is not null),
+  (109, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -209,7 +210,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -18407,6 +18408,68 @@ create trigger private_actions_sign before insert on public.private_actions
 $mig0116$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0117_masked_contact_names.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0117', $mig0117$
+-- =====================================================================
+-- Nome dos contatos: número mascarado não é nome.
+--
+--  * Para alguns contatos (os que o WhatsApp identifica só pelo
+--    identificador interno, o LID), ele manda como "nome salvo" o número
+--    mascarado (ex.: +55∙∙∙∙∙∙∙11). Isso era guardado como o nome e
+--    aparecia no lugar do nome da pessoa.
+--  * Agora "nome" que é só número (mascarado ou não) é descartado: vale o
+--    nome salvo na agenda quando o WhatsApp manda, senão o nome que a
+--    pessoa usa no WhatsApp.
+--  * Os nomes mascarados já gravados são apagados e as conversas
+--    privadas recebem de novo o nome certo.
+-- =====================================================================
+
+-- o nome, ou null se for só número / número mascarado
+create or replace function public.contact_real_name(p_name text)
+returns text language sql immutable as $$
+  select case
+    when nullif(btrim(coalesce(p_name, '')), '') is null then null
+    -- sem nenhuma letra e com cara de telefone (começa com + ou dígito e tem pelo menos 4 dígitos),
+    -- mascarado com qualquer símbolo
+    when p_name !~ '[[:alpha:]]' and btrim(p_name) ~ '^\+?[0-9]'
+         and length(regexp_replace(p_name, '\D', '', 'g')) >= 4 then null
+    else btrim(p_name)
+  end
+$$;
+
+create or replace function public.wa_contacts_clean_names()
+returns trigger language plpgsql as $$
+begin
+  new.name := public.contact_real_name(new.name);
+  new.notify := public.contact_real_name(new.notify);
+  return new;
+end;
+$$;
+drop trigger if exists wa_contacts_clean_names on public.wa_contacts;
+create trigger wa_contacts_clean_names before insert or update of name, notify on public.wa_contacts
+  for each row execute function public.wa_contacts_clean_names();
+
+-- limpa o que já foi gravado
+update public.wa_contacts set name = null
+ where name is not null and public.contact_real_name(name) is null;
+update public.wa_contacts set notify = null
+ where notify is not null and public.contact_real_name(notify) is null;
+-- conversas com o número mascarado no lugar do nome: o nome certo volta pela agenda (abaixo) ou pela
+-- próxima mensagem
+update public.private_chats set name = null
+ where name is not null and public.contact_real_name(name) is null and btrim(name) !~ '^[-+0-9 ()]+$';
+
+do $$
+declare
+  v_id uuid;
+begin
+  for v_id in select id from public.whatsapp_instances loop
+    perform public.link_wa_contacts(v_id);
+  end loop;
+end $$;
+$mig0117$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -18559,6 +18622,7 @@ from (values
   (105, 'Conversas privadas por usuário (0114)', to_regprocedure('public.assign_private_chat(uuid,uuid)') is not null),
   (106, 'Dashboard mais rápido (0115)', to_regprocedure('public.dashboard_bundle(timestamptz,timestamptz,uuid,uuid,boolean)') is not null),
   (107, 'Assinatura no privado (0116)', to_regprocedure('public.private_sign_text(uuid,uuid,text)') is not null),
-  (108, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (108, 'Nome dos contatos sem número mascarado (0117)', to_regprocedure('public.contact_real_name(text)') is not null),
+  (109, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
