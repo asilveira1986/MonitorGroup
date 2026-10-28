@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useRealtime } from '@/lib/use-realtime';
 import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
 import { Avatar } from '@/components/avatar';
+import { waFormat } from '@/components/wa-text';
 import { markPrivateChatRead, preparePrivateUpload, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
 import {
   PrivateEditor,
@@ -484,7 +485,7 @@ function ChatView({
                           {m.message_type !== 'text' && !m.media_path && (
                             <span className="text-ink-2">{TYPE_LABEL[m.message_type] ?? m.message_type} </span>
                           )}
-                          {m.body}
+                          {waFormat(m.body)}
                         </p>
                         )}
                       </>

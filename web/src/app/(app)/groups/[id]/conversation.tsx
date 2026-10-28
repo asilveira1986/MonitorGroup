@@ -2,7 +2,7 @@
 
 import { Check, CheckCheck, Clock, Forward, Loader2, Lock, MessageCircle, MessageSquareReply, Reply, UserCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { markMediaSeen, markSenderAsTeam } from '../../actions';
 import { Badge, EmptyState } from '@/components/ui';
@@ -20,6 +20,7 @@ import { MessageEditor, MessageMenu, type MessageMenuItem } from './message-menu
 import { startPrivateChat } from '../../private/actions';
 import { ShareDialog, type ShareMode, type ShareSource } from '@/components/share-dialog';
 import { useRealtime } from '@/lib/use-realtime';
+import { waFormat } from '@/components/wa-text';
 
 
 const TYPE_LABEL: Record<string, string> = {
@@ -150,9 +151,9 @@ function withoutSignature(body: string | null, senderName: string | null) {
  */
 function withMentions(text: string, nameOf: (digits: string) => string | null) {
   const parts = text.split(/(@\d{8,20})\b/g);
-  if (parts.length === 1) return text;
+  if (parts.length === 1) return waFormat(text);
   return parts.map((part, i) => {
-    if (i % 2 === 0) return part;
+    if (i % 2 === 0) return <Fragment key={i}>{waFormat(part)}</Fragment>;
     const digits = part.slice(1);
     const name = nameOf(digits);
     return (

@@ -1,4 +1,5 @@
 import { getContentType, normalizeMessageContent, type proto } from 'baileys';
+import { TEMPLATE_TYPES, templateText } from './template.js';
 
 /** Tipos de mensagem que não representam conteúdo real de conversa. */
 const IGNORED_TYPES = new Set<string>([
@@ -42,6 +43,11 @@ export function extractContent(message: proto.IMessage | null | undefined): { ty
   const content = normalizeMessageContent(message);
   const type = getContentType(content);
   if (!content || !type || IGNORED_TYPES.has(type)) return null;
+  // template e mensagens com botões/listas (WhatsApp Business): o texto montado, como mensagem de texto
+  if (TEMPLATE_TYPES.has(type)) {
+    const text = templateText(content);
+    return text ? { type: 'text', body: text } : { type: type.replace(/Message$/, ''), body: null };
+  }
 
   const body =
     content.conversation ??
