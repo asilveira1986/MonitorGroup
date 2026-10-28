@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Forward, Loader2, MessageSquarePlus, Mic, Paperclip, Search, Send, UserRound, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Forward, Loader2, MailOpen, MessageSquarePlus, Mic, Paperclip, Search, Send, UserRound, X } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -11,7 +11,7 @@ import { useRealtime } from '@/lib/use-realtime';
 import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
 import { Avatar } from '@/components/avatar';
 import { waFormat } from '@/components/wa-text';
-import { markPrivateChatRead, preparePrivateUpload, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
+import { markPrivateChatRead, markPrivateChatUnread, preparePrivateUpload, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
 import {
   PrivateEditor,
   PrivateMedia,
@@ -227,6 +227,7 @@ function ChatView({
   tags,
   viewer,
   onOwner,
+  onUnread,
 }: {
   chat: PrivateChat;
   timeZone: string;
@@ -234,6 +235,8 @@ function ChatView({
   tags: CustomerTag[];
   viewer: Viewer;
   onOwner: (owner: string | null) => void;
+  /** "Marcar como não lida" (0118): volta para a lista */
+  onUnread: () => void;
 }) {
   const [messages, setMessages] = useState<PrivateMessage[] | null>(null);
   const [outgoing, setOutgoing] = useState<Outgoing[]>([]);
@@ -400,7 +403,16 @@ function ChatView({
             </span>
           </div>
         </div>
-        <div className="ml-auto shrink-0">
+        <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onUnread}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface px-2 text-xs text-ink-2 hover:bg-surface-2 hover:text-ink sm:h-7"
+            title="Marcar como não lida"
+            aria-label="Marcar como não lida"
+          >
+            <MailOpen className="h-3.5 w-3.5" /> <span className="hidden lg:inline">Não lida</span>
+          </button>
           <OwnerControl chatId={chat.id} owner={chat.assigned_to} me={viewer.me} seesAll={viewer.seesAll} agents={viewer.agents} onChange={onOwner} />
         </div>
       </div>
@@ -818,6 +830,16 @@ export function PrivateInbox({
             chat={current}
             timeZone={timeZone}
             onBack={() => choose(null)}
+            onUnread={() => {
+              const id = current.id;
+              void markPrivateChatUnread(id).then((res) => {
+                if (!res.ok) return void toast.error(res.error);
+                setChats((prev) => prev.map((c) => (c.id === id ? { ...c, unread_count: Math.max(c.unread_count, 1) } : c)));
+                toast.success('Conversa marcada como não lida');
+              });
+              // fecha a conversa (aberta, ela seria marcada como lida de novo)
+              choose(null);
+            }}
             tags={tags}
             viewer={viewer}
             onOwner={(owner) => {

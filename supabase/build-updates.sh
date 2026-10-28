@@ -146,7 +146,8 @@ CHECKS=$(cat <<'SQL'
   (106, 'Dashboard mais rápido (0115)', to_regprocedure('public.dashboard_bundle(timestamptz,timestamptz,uuid,uuid,boolean)') is not null),
   (107, 'Assinatura no privado (0116)', to_regprocedure('public.private_sign_text(uuid,uuid,text)') is not null),
   (108, 'Nome dos contatos sem número mascarado (0117)', to_regprocedure('public.contact_real_name(text)') is not null),
-  (109, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (109, 'Marcar conversa como não lida (0118)', to_regprocedure('public.mark_private_chat_unread(uuid)') is not null),
+  (110, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

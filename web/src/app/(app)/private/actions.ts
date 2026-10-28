@@ -110,3 +110,13 @@ export async function assignPrivateChat(chatId: string, userId: string | null): 
   revalidatePath('/private');
   return { ok: true };
 }
+
+/** "Marcar como não lida" (0118): a conversa volta a contar como não lida. */
+export async function markPrivateChatUnread(chatId: string): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('mark_private_chat_unread', { p_chat_id: chatId });
+  if (error) return fail(error);
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
