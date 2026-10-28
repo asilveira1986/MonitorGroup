@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Building2, CalendarDays, ChevronDown, MessageCircle, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
+import { Bell, BookUser, Building2, CalendarDays, ChevronDown, MessageCircle, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -21,6 +21,8 @@ const NAV = [
   { href: '/groups', label: 'Grupos', icon: MessagesSquare },
   // conversas privadas (0069): só quem administra a plataforma, na empresa com o módulo ligado
   { href: '/private', label: 'Conversas privadas', icon: MessageCircle, badgeKey: 'private' as const },
+  // contatos (0112): agenda do WhatsApp + cadastros do sistema; mesmo acesso das conversas privadas
+  { href: '/contacts', label: 'Contatos', icon: BookUser },
   { href: '/alerts', label: 'Alertas', icon: Bell, badgeKey: 'alerts' as const },
   { href: '/reports', label: 'Relatórios', icon: FileBarChart },
   { href: '/settings', label: 'Configurações', icon: Settings },

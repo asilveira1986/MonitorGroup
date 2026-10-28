@@ -57,7 +57,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         hidden={[
           // a Agenda funciona sem as demandas (compromissos); só as Demandas somem
           ...(demandsEnabled(settings) ? [] : ['/demands']),
-          ...(privateOk ? [] : ['/private']),
+          ...(privateOk ? [] : ['/private', '/contacts']),
           ...MENU_ITEMS.filter(
             (i) =>
               !canSeeMenu(
