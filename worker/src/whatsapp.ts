@@ -1396,7 +1396,7 @@ export class WhatsAppManager {
         .update({ status: 'sending' })
         .eq('id', id)
         .eq('status', 'pending')
-        .select('id, action, new_body, emoji, message_id')
+        .select('*')
         .maybeSingle();
       if (!row) continue;
       try {
@@ -1410,7 +1410,8 @@ export class WhatsAppManager {
         const key = { remoteJid: jid, id: m.wa_message_id as string, fromMe: Boolean(m.from_me) };
         const now = new Date().toISOString();
         if (row.action === 'edit') {
-          await session.sock.sendMessage(jid, { text: row.new_body as string, edit: key });
+          // mensagem assinada (0116): o texto novo sai com a mesma assinatura; no painel, sem ela
+          await session.sock.sendMessage(jid, { text: ((row.text_to_send as string | null) ?? row.new_body) as string, edit: key });
           await db.from('private_messages').update({ body: row.new_body, edited_at: now, original_body: m.original_body ?? m.body }).eq('id', m.id);
         } else if (row.action === 'delete') {
           await session.sock.sendMessage(jid, { delete: key });
@@ -1505,7 +1506,9 @@ export class WhatsAppManager {
         const contextInfo = row.forwarded ? FORWARDED : undefined;
         const type = (row.message_type as string) || 'text';
         let sentSeconds: number | null = null;
-        const caption = (row.body as string | null) ?? undefined;
+        // com a assinatura do usuário (0116), quando houver; sem o script, o texto como foi escrito
+        const outText = (row.text_to_send as string | null) ?? (row.body as string | null);
+        const caption = outText ?? undefined;
         if (row.media_path) {
           // arquivo enviado pelo painel: está no Storage
           const file = await db.storage.from('media').download(row.media_path as string);
@@ -1516,7 +1519,7 @@ export class WhatsAppManager {
           const sent = await session.sock.sendMessage(to, { ...content, ...(contextInfo ? { contextInfo } : {}) } as AnyMessageContent, { messageId: waId, quoted });
           sentSeconds = Number(sent?.message?.audioMessage?.seconds ?? sent?.message?.videoMessage?.seconds) || null;
         } else {
-          await session.sock.sendMessage(to, { text: row.body as string, ...(contextInfo ? { contextInfo } : {}) }, { messageId: waId, quoted });
+          await session.sock.sendMessage(to, { text: outText as string, ...(contextInfo ? { contextInfo } : {}) }, { messageId: waId, quoted });
         }
         const now = new Date().toISOString();
         await db.from('private_outgoing').update({ status: 'sent', wa_message_id: waId, sent_at: now, error: null }).eq('id', id);

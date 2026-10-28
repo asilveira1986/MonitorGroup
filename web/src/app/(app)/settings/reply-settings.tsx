@@ -11,6 +11,8 @@ import { Row } from './demand-settings';
 export function ReplySettings({ settings, disabled }: { settings: AppSettings; disabled: boolean }) {
   const [enabled, setEnabled] = useState(settings.reply_enabled);
   const [signName, setSignName] = useState(settings.reply_sign_name);
+  // assinatura no privado (0116); sem o script, a opção não aparece
+  const [signPrivate, setSignPrivate] = useState(settings.private_sign_name ?? true);
   const [allowed, setAllowed] = useState<'all' | 'admin'>(settings.reply_allowed);
   const [pending, start] = useTransition();
 
@@ -65,6 +67,21 @@ export function ReplySettings({ settings, disabled }: { settings: AppSettings; d
             </div>
           </>
         )}
+        {settings.private_sign_name !== undefined && (
+          <Row
+            icon={PenLine}
+            title="Assinar também as mensagens no privado"
+            text={
+              <>
+                Nas conversas privadas, a mensagem enviada pelo painel começa com o nome de quem enviou, como nos grupos, ex.:{' '}
+                <code>*Ana Souza:*</code>.
+              </>
+            }
+            checked={signPrivate}
+            onChange={setSignPrivate}
+            disabled={disabled || pending}
+          />
+        )}
         {!disabled && (
           <div className="pt-4">
             <Button
@@ -72,7 +89,7 @@ export function ReplySettings({ settings, disabled }: { settings: AppSettings; d
               disabled={pending}
               onClick={() =>
                 start(async () => {
-                  const res = await saveReplySettings({ enabled, signName, allowed });
+                  const res = await saveReplySettings({ enabled, signName, allowed, signPrivate });
                   if (res.ok) toast.success('Configuração de respostas salva');
                   else toast.error(res.error);
                 })

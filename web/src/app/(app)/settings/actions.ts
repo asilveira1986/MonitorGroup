@@ -511,6 +511,8 @@ export async function saveReplySettings(values: {
   enabled: boolean;
   signName: boolean;
   allowed: 'all' | 'admin';
+  /** assinatura no privado (0116) */
+  signPrivate?: boolean;
 }): Promise<Result> {
   await requireAdmin();
   const supabase = await createClient();
@@ -520,6 +522,7 @@ export async function saveReplySettings(values: {
       reply_enabled: values.enabled,
       reply_sign_name: values.signName,
       reply_allowed: values.allowed === 'admin' ? 'admin' : 'all',
+      ...(values.signPrivate === undefined ? {} : { private_sign_name: values.signPrivate }),
       updated_at: new Date().toISOString(),
     })
     .eq('company_id', (await requireAdmin()).company_id);

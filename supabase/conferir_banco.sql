@@ -143,6 +143,7 @@ from (values
   (104, 'Contatos com nome e foto (0113)', exists (select 1 from pg_proc where proname = 'contact_directory' and prosrc like '%photo_jid%')),
   (105, 'Conversas privadas por usuário (0114)', to_regprocedure('public.assign_private_chat(uuid,uuid)') is not null),
   (106, 'Dashboard mais rápido (0115)', to_regprocedure('public.dashboard_bundle(timestamptz,timestamptz,uuid,uuid,boolean)') is not null),
-  (107, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (107, 'Assinatura no privado (0116)', to_regprocedure('public.private_sign_text(uuid,uuid,text)') is not null),
+  (108, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
