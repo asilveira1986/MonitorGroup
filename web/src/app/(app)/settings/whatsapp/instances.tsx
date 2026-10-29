@@ -1,15 +1,15 @@
 'use client';
 
-import { CheckCircle2, History, Loader2, LogOut, Plus, QrCode, RefreshCw, Smartphone, Trash2, WifiOff } from 'lucide-react';
+import { Building2, CheckCircle2, History, Loader2, LogOut, Plus, QrCode, RefreshCw, Smartphone, Trash2, WifiOff } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Badge, Button, Card, EmptyState, Input } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, Input, Select } from '@/components/ui';
 import { formatNumber, formatPhone, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import type { Instance } from '@/lib/types';
 import { useRealtime } from '@/lib/use-realtime';
-import { createInstance, deleteInstance, requestInstanceAction } from '../actions';
+import { createInstance, deleteInstance, requestInstanceAction, setInstanceSector } from '../actions';
 import { WorkerStatus } from './worker-status';
 
 const STATUS = {
@@ -19,7 +19,66 @@ const STATUS = {
   disconnected: { label: 'Desconectado', tone: 'critical' as const, icon: WifiOff },
 };
 
-export function InstancesPanel({ initial, isAdmin }: { initial: Instance[]; isAdmin: boolean }) {
+/**
+ * Setor do número (0121): as conversas privadas que chegam por ele ficam com o setor (quem é do setor
+ * vê e é avisado das que aguardam; o filtro da tela de conversas privadas usa o setor).
+ */
+function InstanceSector({ inst, sectors, isAdmin }: { inst: Instance; sectors: { id: string; name: string }[]; isAdmin: boolean }) {
+  const [value, setValue] = useState(inst.sector_id ?? '');
+  const [pending, start] = useTransition();
+  if (inst.sector_id === undefined) return null; // banco sem o script 0121
+  const name = sectors.find((s) => s.id === value)?.name;
+  if (!isAdmin) {
+    return (
+      <p className="text-sm text-ink-2">
+        <Building2 className="mr-1 inline h-4 w-4" />
+        Setor: {name ?? 'nenhum (conversas privadas para todos)'}
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <Building2 className="h-4 w-4 text-muted" />
+      <span className="text-ink-2">Setor das conversas privadas:</span>
+      <Select
+        value={value}
+        disabled={pending}
+        aria-label={`Setor do número ${inst.name}`}
+        className="h-9 w-auto min-w-48 sm:h-8"
+        onChange={(e) => {
+          const next = e.target.value;
+          const before = value;
+          setValue(next);
+          start(async () => {
+            const res = await setInstanceSector(inst.id, next || null);
+            if (!res.ok) {
+              setValue(before);
+              return void toast.error(res.error);
+            }
+            toast.success(next ? `Conversas deste número vão para o setor ${sectors.find((s) => s.id === next)?.name}` : 'Número sem setor: conversas para todos');
+          });
+        }}
+      >
+        <option value="">Nenhum (todos atendem)</option>
+        {sectors.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+      </Select>
+    </div>
+  );
+}
+
+export function InstancesPanel({
+  initial,
+  isAdmin,
+  sectors = [],
+}: {
+  initial: Instance[];
+  isAdmin: boolean;
+  sectors?: { id: string; name: string }[];
+}) {
   const [instances, setInstances] = useState(initial);
   const [pending, start] = useTransition();
   const [name, setName] = useState('');
@@ -121,6 +180,7 @@ export function InstancesPanel({ initial, isAdmin }: { initial: Instance[]; isAd
                     {formatPhone(inst.phone)} {inst.push_name && `· ${inst.push_name}`}
                   </p>
                 )}
+                <InstanceSector key={inst.sector_id ?? 'none'} inst={inst} sectors={sectors} isAdmin={isAdmin} />
                 {inst.status === 'connected' && (
                   <p className="text-xs text-muted">
                     Conectado {timeAgo(inst.connected_at)} · último sinal {timeAgo(inst.last_seen_at)}

@@ -59,6 +59,8 @@ export type Instance = {
   last_seen_at: string | null;
   connected_at: string | null;
   created_at: string;
+  /** setor do número (0121): conversas privadas dele vão para o setor */
+  sector_id?: string | null;
 };
 
 export type Group = {

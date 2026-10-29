@@ -570,6 +570,16 @@ export async function saveMessageAlertSettings(values: {
   return result(error);
 }
 
+/** Setor do número de WhatsApp (0121): as conversas privadas dele vão para o setor. */
+export async function setInstanceSector(instanceId: string, sectorId: string | null): Promise<Result> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('set_instance_sector', { p_instance: instanceId, p_sector: sectorId });
+  revalidatePath('/settings/whatsapp');
+  revalidatePath('/private');
+  return result(error);
+}
+
 /** Avisos em tela das conversas privadas (0120). */
 export async function savePrivateAlertSettings(values: { mine: boolean; queue: boolean; sound: boolean; voice: boolean }): Promise<Result> {
   const profile = await requireAdmin();

@@ -37,6 +37,8 @@ export type PrivateChat = {
   tags?: string[];
   /** responsável (0114); null = sem responsável */
   assigned_to?: string | null;
+  /** número de WhatsApp da conversa (o setor vem dele, 0121) */
+  instance_id?: string;
   /** atendimento finalizado (0119) */
   closed_at?: string | null;
 };
@@ -670,12 +672,15 @@ export function PrivateInbox({
   timeZone,
   tags = [],
   viewer,
+  sectors,
 }: {
   initialChats: PrivateChat[];
   selectedId: string | null;
   timeZone: string;
   tags?: CustomerTag[];
   viewer: Viewer;
+  /** setores dos números (0121): filtro e o setor de cada conversa; sem setor nos números, não aparece */
+  sectors?: { options: { id: string; name: string }[]; byInstance: Record<string, string | null> };
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -684,6 +689,10 @@ export function PrivateInbox({
   const [q, setQ] = useState('');
   const [creating, setCreating] = useState(false);
   const [tagFilter, setTagFilter] = useState('');
+  // '' = todos os setores; 'none' = números sem setor
+  const [sectorFilter, setSectorFilter] = useState('');
+  const sectorOf = (c: PrivateChat) => (c.instance_id ? (sectors?.byInstance[c.instance_id] ?? null) : null);
+  const sectorName = (id: string | null) => (id ? sectors?.options.find((s) => s.id === id)?.name : undefined);
   const [tab, setTab] = useState<Tab>('queue');
   const [lastInitial, setLastInitial] = useState(initialChats);
   // abriu outra conversa pelo endereço (aviso na tela, notificação): passa para ela
@@ -731,6 +740,7 @@ export function PrivateInbox({
   const list = [...chats]
     .filter((c) => !term || chatTitle(c).toLowerCase().includes(term) || (digits.length >= 3 && (c.phone ?? '').includes(digits)))
     .filter((c) => !tagFilter || (c.tags ?? []).includes(tagFilter))
+    .filter((c) => !sectorFilter || (sectorFilter === 'none' ? !sectorOf(c) : sectorOf(c) === sectorFilter))
     .filter((c) => inTab(c, tab))
     .sort((a, b) => ((b.last_message_at ?? '') > (a.last_message_at ?? '') ? 1 : -1));
   const current = chats.find((c) => c.id === selected) ?? null;
@@ -783,27 +793,46 @@ export function PrivateInbox({
             </button>
           ))}
         </div>
-        {tags.length > 0 && (
-          <div className="border-b border-line px-3 py-2">
-            <select
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
-              aria-label="Filtrar por etiqueta"
-              className="h-8 w-full rounded-lg border border-line bg-surface px-2 text-base text-ink outline-none focus:border-brand-line sm:text-xs"
-            >
-              <option value="">Todas as etiquetas</option>
-              {tags.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+        {(tags.length > 0 || sectors) && (
+          <div className="flex gap-2 border-b border-line px-3 py-2">
+            {/* setor do número da conversa (0121) */}
+            {sectors && (
+              <select
+                value={sectorFilter}
+                onChange={(e) => setSectorFilter(e.target.value)}
+                aria-label="Filtrar por setor"
+                className="h-8 min-w-0 flex-1 rounded-lg border border-line bg-surface px-2 text-base text-ink outline-none focus:border-brand-line sm:text-xs"
+              >
+                <option value="">Todos os setores</option>
+                {sectors.options.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+                <option value="none">Sem setor</option>
+              </select>
+            )}
+            {tags.length > 0 && (
+              <select
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+                aria-label="Filtrar por etiqueta"
+                className="h-8 min-w-0 flex-1 rounded-lg border border-line bg-surface px-2 text-base text-ink outline-none focus:border-brand-line sm:text-xs"
+              >
+                <option value="">Todas as etiquetas</option>
+                {tags.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         )}
         <ul className="min-h-0 flex-1 overflow-y-auto">
           {list.length === 0 && (
             <li className="p-6 text-center text-sm text-muted">
-              {term || tagFilter ? 'Nenhuma conversa encontrada.' : tab === 'queue' ? 'Nenhum atendimento aguardando.' : tab === 'mine' ? 'Você não está com nenhum atendimento em andamento.' : tab === 'closed' ? 'Nenhum atendimento finalizado.' : 'Nenhuma conversa ainda. As mensagens no privado aparecem aqui; use o botão + para iniciar uma.'}
+              {term || tagFilter || sectorFilter ? 'Nenhuma conversa encontrada.' : tab === 'queue' ? 'Nenhum atendimento aguardando.' : tab === 'mine' ? 'Você não está com nenhum atendimento em andamento.' : tab === 'closed' ? 'Nenhum atendimento finalizado.' : 'Nenhuma conversa ainda. As mensagens no privado aparecem aqui; use o botão + para iniciar uma.'}
             </li>
           )}
           {list.map((c) => {
@@ -833,7 +862,7 @@ export function PrivateInbox({
                         <span className="tabular shrink-0 rounded-full bg-good px-1.5 text-[10px] font-semibold text-white">{c.unread_count}</span>
                       )}
                     </span>
-                    {((c.tags?.length ?? 0) > 0 || c.assigned_to !== viewer.me || c.closed_at) && (
+                    {((c.tags?.length ?? 0) > 0 || c.assigned_to !== viewer.me || c.closed_at || sectorOf(c)) && (
                       <span className="mt-0.5 flex flex-wrap items-center gap-1">
                         {c.closed_at ? (
                           <span className="rounded-full bg-surface-2 px-1.5 text-[10px] font-medium leading-4 text-ink-2">
@@ -845,6 +874,9 @@ export function PrivateInbox({
                           c.assigned_to !== viewer.me && (
                             <span className="rounded-full bg-surface-2 px-1.5 text-[10px] font-medium leading-4 text-ink-2">{ownerName(c.assigned_to)}</span>
                           )
+                        )}
+                        {sectorOf(c) && !sectorFilter && (
+                          <span className="rounded-full bg-series-1/10 px-1.5 text-[10px] font-medium leading-4 text-series-1">{sectorName(sectorOf(c))}</span>
                         )}
                         <TagChips ids={c.tags} all={tags} size="xs" />
                       </span>

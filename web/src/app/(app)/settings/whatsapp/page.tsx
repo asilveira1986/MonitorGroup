@@ -8,16 +8,17 @@ import { InstancesPanel } from './instances';
 export default async function WhatsAppSettingsPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
-  const [{ data }, { data: settings }, { data: usage }] = await Promise.all([
+  const [{ data }, { data: settings }, { data: usage }, { data: sectors }] = await Promise.all([
     supabase.from('whatsapp_instances').select('*').order('created_at'),
     supabase.from('app_settings').select('*').single(),
     supabase.rpc('media_usage'),
+    supabase.from('sectors').select('id, name').order('name'),
   ]);
 
   return (
     <div className="space-y-4">
       {profile.role !== 'admin' && <AdminNotice />}
-      <InstancesPanel initial={(data ?? []) as Instance[]} isAdmin={profile.role === 'admin'} />
+      <InstancesPanel initial={(data ?? []) as Instance[]} isAdmin={profile.role === 'admin'} sectors={(sectors ?? []) as { id: string; name: string }[]} />
       {settings && (
         <MediaSettings settings={settings as AppSettings} usage={(usage as MediaUsage | null) ?? null} disabled={profile.role !== 'admin'} />
       )}

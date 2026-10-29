@@ -243,14 +243,20 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         if (window.location.pathname === '/private' && new URLSearchParams(window.location.search).get('c') === m.chat_id) return;
         const supabase = createClient();
         void Promise.all([
-          supabase.from('private_chats').select('name, phone, assigned_to').eq('id', m.chat_id).maybeSingle(),
+          supabase.from('private_chats').select('name, phone, assigned_to, instance_id').eq('id', m.chat_id).maybeSingle(),
           supabase.auth.getSession(),
-        ]).then(([{ data: c }, { data: auth }]) => {
-          const chat = c as { name: string | null; phone: string | null; assigned_to?: string | null } | null;
+        ]).then(async ([{ data: c }, { data: auth }]) => {
+          const chat = c as { name: string | null; phone: string | null; assigned_to?: string | null; instance_id?: string } | null;
           if (!chat || (chat.assigned_to && chat.assigned_to !== auth.session?.user.id)) return;
           const mine = Boolean(chat.assigned_to);
           const v = configRef.current;
           if (mine ? v.privateMine === false : v.privateQueue === false) return;
+          // aguardando num número com setor (0121): só quem é do setor (o administrador vê todas, mas só é
+          // avisado das do seu setor); sem o script, avisa
+          if (!mine && chat.instance_id) {
+            const { data: ok, error } = await supabase.rpc('private_instance_ok', { p_instance: chat.instance_id });
+            if (!error && ok === false) return;
+          }
           const who = chat?.name || m.sender_name || formatPhone(chat?.phone) || 'Contato';
           pushRef.current({
             sound: v.privateSound !== false,
