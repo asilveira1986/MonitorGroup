@@ -208,7 +208,8 @@ begin
   (113, 'Grupos no setor do número (0122)', exists (select 1 from pg_proc where proname = 'groups_default_sector' and prosrc like '%whatsapp_instances%')),
   (114, 'Troca de senha no primeiro acesso (0123)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'must_change_password')),
   (115, 'Conversas aguardando para todos (0124)', exists (select 1 from pg_proc where proname = 'private_instance_ok' and prosrc not like '%sector%')),
-  (116, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (116, 'Conversa assinada pelo WhatsApp fica com o usuário (0125)', exists (select 1 from pg_trigger where tgname = 'private_messages_signer_owner')),
+  (117, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -217,7 +218,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -19007,6 +19008,84 @@ $$;
 $mig0124$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0125_private_phone_signature_owner.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0125', $mig0125$
+-- =====================================================================
+-- Conversa privada respondida direto pelo WhatsApp (celular / WhatsApp
+-- Web) com a assinatura "*Nome:*" no começo: fica com o usuário do
+-- sistema que tem esse nome, como se tivesse respondido pelo painel.
+--
+--  * Só a conversa sem responsável (aguardando) ou a finalizada (reabre).
+--  * O nome é o do usuário no sistema (nome completo; ou só o primeiro
+--    nome, se for de um usuário só). Nome que não bate, ou que bate com
+--    mais de um usuário: a conversa continua como está.
+--  * Mensagem sem assinatura: não há como saber quem enviou.
+-- =====================================================================
+
+-- o usuário da empresa que assina com este nome (null se nenhum ou mais de um)
+create or replace function public.private_signer(p_company uuid, p_body text)
+returns uuid language plpgsql stable security definer set search_path = public as $$
+declare
+  v_name text := lower(btrim((regexp_match(coalesce(p_body, ''), '^\s*\*([^*\n]{2,80}):\*'))[1]));
+  v_ids uuid[];
+begin
+  if v_name is null or v_name = '' then
+    return null;
+  end if;
+  select array_agg(p.id) into v_ids from public.profiles p
+   where p.company_id = p_company and p.active and (p.platform_admin or p.role in ('admin', 'agent'))
+     and lower(btrim(public.user_display_name(p.id))) = v_name;
+  if coalesce(array_length(v_ids, 1), 0) = 0 then
+    -- só o primeiro nome ("*Lurian:*")
+    select array_agg(p.id) into v_ids from public.profiles p
+     where p.company_id = p_company and p.active and (p.platform_admin or p.role in ('admin', 'agent'))
+       and lower(split_part(btrim(public.user_display_name(p.id)), ' ', 1)) = v_name;
+  end if;
+  return case when array_length(v_ids, 1) = 1 then v_ids[1] end;
+end;
+$$;
+revoke all on function public.private_signer(uuid, text) from public, anon, authenticated;
+
+create or replace function public.private_messages_signer_owner()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_user uuid;
+begin
+  if not new.from_me or auth.uid() is not null then
+    return new;                                   -- só o que o worker registra
+  end if;
+  if not exists (select 1 from public.private_chats c
+                  where c.id = new.chat_id
+                    and ((c.assigned_to is null and c.closed_at is null) or (c.closed_at is not null and new.sent_at > c.closed_at))) then
+    return new;
+  end if;
+  v_user := public.private_signer(new.company_id, new.body);
+  if v_user is null then
+    return new;
+  end if;
+  update public.private_chats
+     set assigned_to = v_user, assigned_at = now(), closed_at = null, closed_by = null
+   where id = new.chat_id
+     and ((assigned_to is null and closed_at is null) or (closed_at is not null and new.sent_at > closed_at));
+  return new;
+end;
+$$;
+drop trigger if exists private_messages_signer_owner on public.private_messages;
+create trigger private_messages_signer_owner after insert on public.private_messages
+  for each row execute function public.private_messages_signer_owner();
+
+-- as que estão aguardando agora: a última mensagem da empresa, se assinada por um usuário
+update public.private_chats c
+   set assigned_to = s.user_id, assigned_at = now()
+  from (select distinct on (m.chat_id) m.chat_id, public.private_signer(m.company_id, m.body) as user_id
+          from public.private_messages m
+          join public.private_chats pc on pc.id = m.chat_id and pc.assigned_to is null and pc.closed_at is null
+         where m.from_me
+         order by m.chat_id, m.sent_at desc) s
+ where c.id = s.chat_id and s.user_id is not null and c.assigned_to is null and c.closed_at is null;
+$mig0125$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -19167,6 +19246,7 @@ from (values
   (113, 'Grupos no setor do número (0122)', exists (select 1 from pg_proc where proname = 'groups_default_sector' and prosrc like '%whatsapp_instances%')),
   (114, 'Troca de senha no primeiro acesso (0123)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'must_change_password')),
   (115, 'Conversas aguardando para todos (0124)', exists (select 1 from pg_proc where proname = 'private_instance_ok' and prosrc not like '%sector%')),
-  (116, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (116, 'Conversa assinada pelo WhatsApp fica com o usuário (0125)', exists (select 1 from pg_trigger where tgname = 'private_messages_signer_owner')),
+  (117, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

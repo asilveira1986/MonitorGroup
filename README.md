@@ -162,6 +162,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    122. `supabase/migrations/0122_groups_follow_instance_sector.sql`
    123. `supabase/migrations/0123_first_access_password.sql`
    124. `supabase/migrations/0124_private_queue_for_all.sql`
+   125. `supabase/migrations/0125_private_phone_signature_owner.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
