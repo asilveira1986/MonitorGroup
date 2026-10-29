@@ -102,10 +102,14 @@ export async function markPrivateChatRead(chatId: string): Promise<Result> {
 }
 
 /** Assumir, transferir (p_user) ou devolver para "Sem responsável" (null) uma conversa (0114). */
-export async function assignPrivateChat(chatId: string, userId: string | null): Promise<Result> {
+export async function assignPrivateChat(chatId: string, userId: string | null, note = ''): Promise<Result> {
   await requireProfile();
   const supabase = await createClient();
-  const { error } = await supabase.rpc('assign_private_chat', { p_chat: chatId, p_user: userId });
+  // observação para quem recebe (0119); sem o script, a transferência sem observação
+  let { error } = await supabase.rpc('assign_private_chat', { p_chat: chatId, p_user: userId, p_note: note || null });
+  if (error && /p_note|assign_private_chat/.test(error.message)) {
+    ({ error } = await supabase.rpc('assign_private_chat', { p_chat: chatId, p_user: userId }));
+  }
   if (error) return fail(error);
   revalidatePath('/private');
   return { ok: true };
@@ -116,6 +120,26 @@ export async function markPrivateChatUnread(chatId: string): Promise<Result> {
   await requireProfile();
   const supabase = await createClient();
   const { error } = await supabase.rpc('mark_private_chat_unread', { p_chat_id: chatId });
+  if (error) return fail(error);
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+/** Finalizar atendimento (0119): a conversa vai para "Finalizados". */
+export async function finishPrivateChat(chatId: string): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('finish_private_chat', { p_chat: chatId });
+  if (error) return fail(error);
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+/** Reabrir um atendimento finalizado, com quem reabriu. */
+export async function reopenPrivateChat(chatId: string): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('reopen_private_chat', { p_chat: chatId });
   if (error) return fail(error);
   revalidatePath('/', 'layout');
   return { ok: true };

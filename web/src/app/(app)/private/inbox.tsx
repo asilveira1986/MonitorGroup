@@ -37,10 +37,12 @@ export type PrivateChat = {
   tags?: string[];
   /** responsável (0114); null = sem responsável */
   assigned_to?: string | null;
+  /** atendimento finalizado (0119) */
+  closed_at?: string | null;
 };
 /** quem usa a tela: para as abas e o responsável (0114) */
 type Viewer = { me: string; seesAll: boolean; agents: ChatAgent[] };
-type Tab = 'all' | 'mine' | 'queue';
+type Tab = 'queue' | 'mine' | 'closed' | 'team';
 type PrivateMessage = PrivateMessageRow;
 type Outgoing = { id: string; chat_id: string; body: string | null; media_name?: string | null; message_type?: string; status: string; error: string | null; created_at: string; wa_message_id: string | null };
 /** contato da lista (0109): agenda do WhatsApp + conversas + equipe, uma linha por pessoa */
@@ -227,6 +229,7 @@ function ChatView({
   tags,
   viewer,
   onOwner,
+  onClosed,
   onUnread,
 }: {
   chat: PrivateChat;
@@ -235,6 +238,8 @@ function ChatView({
   tags: CustomerTag[];
   viewer: Viewer;
   onOwner: (owner: string | null) => void;
+  /** finalizado / reaberto (0119) */
+  onClosed: (closed: boolean, owner: string | null) => void;
   /** "Marcar como não lida" (0118): volta para a lista */
   onUnread: () => void;
 }) {
@@ -413,7 +418,16 @@ function ChatView({
           >
             <MailOpen className="h-3.5 w-3.5" /> <span className="hidden lg:inline">Não lida</span>
           </button>
-          <OwnerControl chatId={chat.id} owner={chat.assigned_to} me={viewer.me} seesAll={viewer.seesAll} agents={viewer.agents} onChange={onOwner} />
+          <OwnerControl
+            chatId={chat.id}
+            owner={chat.assigned_to}
+            closed={Boolean(chat.closed_at)}
+            me={viewer.me}
+            seesAll={viewer.seesAll}
+            agents={viewer.agents}
+            onChange={onOwner}
+            onClosed={onClosed}
+          />
         </div>
       </div>
 
@@ -670,7 +684,7 @@ export function PrivateInbox({
   const [q, setQ] = useState('');
   const [creating, setCreating] = useState(false);
   const [tagFilter, setTagFilter] = useState('');
-  const [tab, setTab] = useState<Tab>('all');
+  const [tab, setTab] = useState<Tab>('queue');
   const [lastInitial, setLastInitial] = useState(initialChats);
   // abriu outra conversa pelo endereço (aviso na tela, notificação): passa para ela
   const [lastSelectedId, setLastSelectedId] = useState(selectedId);
@@ -708,19 +722,26 @@ export function PrivateInbox({
     [pathname, router],
   );
 
+  const inTab = (c: PrivateChat, t: Tab) =>
+    t === 'closed'
+      ? Boolean(c.closed_at)
+      : !c.closed_at && (t === 'team' || (t === 'mine' ? c.assigned_to === viewer.me : !c.assigned_to));
   const term = q.trim().toLowerCase();
   const digits = term.replace(/\D/g, '');
   const list = [...chats]
     .filter((c) => !term || chatTitle(c).toLowerCase().includes(term) || (digits.length >= 3 && (c.phone ?? '').includes(digits)))
     .filter((c) => !tagFilter || (c.tags ?? []).includes(tagFilter))
-    .filter((c) => tab === 'all' || (tab === 'mine' ? c.assigned_to === viewer.me : !c.assigned_to))
+    .filter((c) => inTab(c, tab))
     .sort((a, b) => ((b.last_message_at ?? '') > (a.last_message_at ?? '') ? 1 : -1));
   const current = chats.find((c) => c.id === selected) ?? null;
   const unreadOf = (f: (c: PrivateChat) => boolean) => chats.filter((c) => f(c) && c.unread_count > 0).length;
-  const TABS: { key: Tab; label: string; unread: number }[] = [
-    { key: 'all', label: 'Todas', unread: unreadOf(() => true) },
-    { key: 'mine', label: 'Minhas', unread: unreadOf((c) => c.assigned_to === viewer.me) },
-    { key: 'queue', label: 'Sem responsável', unread: unreadOf((c) => !c.assigned_to) },
+  // aguardando (sem responsável), meus atendimentos, finalizados e, para administradores, todos em
+  // atendimento (0119)
+  const TABS: { key: Tab; label: string; unread: number; count?: number }[] = [
+    { key: 'queue', label: 'Aguardando', unread: unreadOf((c) => inTab(c, 'queue')), count: chats.filter((c) => inTab(c, 'queue')).length },
+    { key: 'mine', label: 'Meus atendimentos', unread: unreadOf((c) => inTab(c, 'mine')), count: chats.filter((c) => inTab(c, 'mine')).length },
+    { key: 'closed', label: 'Finalizados', unread: 0 },
+    ...(viewer.seesAll ? [{ key: 'team' as const, label: 'Todos', unread: unreadOf((c) => inTab(c, 'team')) }] : []),
   ];
   const ownerName = (id: string) => viewer.agents.find((a) => a.id === id)?.name ?? 'outro usuário';
 
@@ -736,7 +757,7 @@ export function PrivateInbox({
             <MessageSquarePlus className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex gap-1 border-b border-line px-3 py-2" role="tablist" aria-label="Quais conversas">
+        <div className="flex flex-wrap gap-1 border-b border-line px-3 py-2" role="tablist" aria-label="Quais conversas">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -750,7 +771,13 @@ export function PrivateInbox({
               )}
             >
               {t.label}
-              {t.unread > 0 && <span className="tabular rounded-full bg-good px-1.5 text-[10px] font-semibold text-white">{t.unread}</span>}
+              {t.unread > 0 ? (
+                <span className="tabular rounded-full bg-good px-1.5 text-[10px] font-semibold text-white" title="Não lidas">
+                  {t.unread}
+                </span>
+              ) : (
+                (t.count ?? 0) > 0 && <span className="tabular text-[10px] opacity-70">{t.count}</span>
+              )}
             </button>
           ))}
         </div>
@@ -774,7 +801,7 @@ export function PrivateInbox({
         <ul className="min-h-0 flex-1 overflow-y-auto">
           {list.length === 0 && (
             <li className="p-6 text-center text-sm text-muted">
-              {term || tagFilter || tab !== 'all' ? 'Nenhuma conversa encontrada.' : 'Nenhuma conversa ainda. As mensagens no privado aparecem aqui; use o botão + para iniciar uma.'}
+              {term || tagFilter ? 'Nenhuma conversa encontrada.' : tab === 'queue' ? 'Nenhum atendimento aguardando.' : tab === 'mine' ? 'Você não está com nenhum atendimento em andamento.' : tab === 'closed' ? 'Nenhum atendimento finalizado.' : 'Nenhuma conversa ainda. As mensagens no privado aparecem aqui; use o botão + para iniciar uma.'}
             </li>
           )}
           {list.map((c) => {
@@ -804,10 +831,14 @@ export function PrivateInbox({
                         <span className="tabular shrink-0 rounded-full bg-good px-1.5 text-[10px] font-semibold text-white">{c.unread_count}</span>
                       )}
                     </span>
-                    {((c.tags?.length ?? 0) > 0 || c.assigned_to !== viewer.me) && (
+                    {((c.tags?.length ?? 0) > 0 || c.assigned_to !== viewer.me || c.closed_at) && (
                       <span className="mt-0.5 flex flex-wrap items-center gap-1">
-                        {!c.assigned_to ? (
-                          <span className="rounded-full bg-warning/15 px-1.5 text-[10px] font-medium leading-4 text-warning-ink">sem responsável</span>
+                        {c.closed_at ? (
+                          <span className="rounded-full bg-surface-2 px-1.5 text-[10px] font-medium leading-4 text-ink-2">
+                            finalizado{c.assigned_to && c.assigned_to !== viewer.me ? ` · ${ownerName(c.assigned_to)}` : ''}
+                          </span>
+                        ) : !c.assigned_to ? (
+                          <span className="rounded-full bg-warning/15 px-1.5 text-[10px] font-medium leading-4 text-warning-ink">aguardando</span>
                         ) : (
                           c.assigned_to !== viewer.me && (
                             <span className="rounded-full bg-surface-2 px-1.5 text-[10px] font-medium leading-4 text-ink-2">{ownerName(c.assigned_to)}</span>
@@ -842,6 +873,13 @@ export function PrivateInbox({
             }}
             tags={tags}
             viewer={viewer}
+            onClosed={(closed, owner) =>
+              setChats((prev) =>
+                prev.map((c) =>
+                  c.id === current.id ? { ...c, closed_at: closed ? new Date().toISOString() : null, assigned_to: owner, unread_count: closed ? 0 : c.unread_count } : c,
+                ),
+              )
+            }
             onOwner={(owner) => {
               // passou para outra pessoa (sem ver todas): a conversa sai da lista
               if (owner && owner !== viewer.me && !viewer.seesAll) {
