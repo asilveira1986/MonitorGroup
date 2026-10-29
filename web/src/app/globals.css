@@ -349,10 +349,10 @@ h2,
 @keyframes msgalert-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--alert-glow, var(--brand)) 55%, transparent), 0 18px 45px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--alert-glow, var(--brand)) 55%, transparent), 0 10px 28px rgba(0, 0, 0, 0.28);
   }
   50% {
-    box-shadow: 0 0 0 10px color-mix(in srgb, var(--alert-glow, var(--brand)) 0%, transparent), 0 18px 45px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--alert-glow, var(--brand)) 0%, transparent), 0 10px 28px rgba(0, 0, 0, 0.28);
   }
 }
 @keyframes msgalert-ring {

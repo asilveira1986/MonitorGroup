@@ -265,7 +265,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
                 : undefined,
             key: `pm-${m.chat_id}`,
             tone: 'brand',
-            heading: mine ? 'Mensagem no seu atendimento' : 'Mensagem no privado (aguardando)',
+            heading: mine ? 'Seu atendimento' : 'Privado aguardando',
             icon: MessageCircle,
             group: who,
             who: chat?.name && chat.phone ? formatPhone(chat.phone) : null,
@@ -482,9 +482,9 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
 
   // canto inferior direito, sem bloquear a tela (e sem tirar o cursor de quem está digitando)
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-[calc(100%-2rem)] max-w-sm flex-col items-end gap-2 sm:bottom-5 sm:right-5">
+    <div className="pointer-events-none fixed bottom-3 right-3 z-[100] flex w-[13.5rem] flex-col items-end gap-1.5 sm:bottom-4 sm:right-4">
       {items.length > 1 && (
-        <span className="pointer-events-auto rounded-full bg-ink px-2.5 py-0.5 text-xs font-semibold text-surface shadow" aria-live="polite">
+        <span className="pointer-events-auto rounded-full bg-ink px-2 py-0.5 text-[10px] font-semibold text-surface shadow" aria-live="polite">
           +{items.length - 1} aviso(s) na fila
         </span>
       )}
@@ -494,51 +494,51 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         aria-modal="false"
         aria-labelledby="msgalert-title"
         style={{ ['--alert-glow' as string]: t.glow }}
-        className={cn('msgalert-box pointer-events-auto w-full overflow-hidden rounded-2xl border-[3px] bg-surface', t.border)}
+        className={cn('msgalert-box pointer-events-auto w-full overflow-hidden rounded-xl border-2 bg-surface', t.border)}
       >
-        <div className={cn('relative flex items-center gap-2.5 px-4 py-2.5', t.header)}>
-          <span className="msgalert-bell flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20">
-            <Icon className="h-4 w-4" aria-hidden />
+        <div className={cn('relative flex items-center gap-1.5 px-2.5 py-1.5', t.header)}>
+          <span className="msgalert-bell flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20">
+            <Icon className="h-3 w-3" aria-hidden />
           </span>
-          <p id="msgalert-title" className="min-w-0 flex-1 truncate text-sm font-extrabold uppercase tracking-wide">
+          <p id="msgalert-title" className="min-w-0 flex-1 truncate text-[10px] font-extrabold uppercase tracking-wide">
             {current.heading}
           </p>
           {config.autoClose > 0 && (
             <AutoClose key={current.key + current.at} seconds={config.autoClose} onDone={dismiss} />
           )}
-          <button type="button" onClick={dismiss} className="-mr-1 rounded-lg p-1 opacity-80 hover:bg-white/15 hover:opacity-100" aria-label="Fechar aviso">
-            <X className="h-4 w-4" />
+          <button type="button" onClick={dismiss} className="-mr-1 rounded-md p-0.5 opacity-80 hover:bg-white/15 hover:opacity-100" aria-label="Fechar aviso">
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        <div className="px-4 py-3">
-          <p className="truncate text-lg font-bold leading-tight text-ink">{current.group}</p>
+        <div className="px-2.5 py-2">
+          <p className="truncate text-sm font-bold leading-tight text-ink">{current.group}</p>
           {current.who && (
-            <p className="mt-0.5 truncate text-sm font-semibold text-ink-2">
+            <p className="mt-0.5 truncate text-[11px] font-semibold text-ink-2">
               {current.who}
               {current.phone && <span className="font-normal text-muted"> · {current.phone}</span>}
             </p>
           )}
           {current.text && (
-            <p className="mt-2 line-clamp-3 whitespace-pre-line rounded-xl bg-surface-2 px-3 py-2 text-sm text-ink">
+            <p className="mt-1.5 line-clamp-2 whitespace-pre-line rounded-lg bg-surface-2 px-2 py-1 text-[11px] leading-snug text-ink">
               {current.text}
             </p>
           )}
-          {current.note && <p className="mt-2 text-xs font-semibold text-critical-ink">{current.note}</p>}
+          {current.note && <p className="mt-1.5 text-[10px] font-semibold leading-snug text-critical-ink">{current.note}</p>}
         </div>
 
-        <div className="flex gap-2 border-t border-line bg-surface-2/60 px-4 py-2.5">
+        <div className="flex gap-1.5 border-t border-line bg-surface-2/60 px-2.5 py-1.5">
           <button
             type="button"
             onClick={go}
-            className={cn('flex-1 rounded-xl px-3 py-2 text-sm font-bold hover:opacity-90', t.button)}
+            className={cn('flex-1 rounded-lg px-2 py-1 text-[11px] font-bold hover:opacity-90', t.button)}
           >
             {current.action}
           </button>
           <button
             type="button"
             onClick={dismiss}
-            className="rounded-xl border border-line bg-surface px-3 py-2 text-sm font-medium text-ink-2 hover:text-ink"
+            className="rounded-lg border border-line bg-surface px-2 py-1 text-[11px] font-medium text-ink-2 hover:text-ink"
           >
             Fechar
           </button>
@@ -586,13 +586,13 @@ function AutoClose({ seconds, onDone }: { seconds: number; onDone: () => void })
   return (
     <>
       <span
-        className="ml-auto shrink-0 rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold tabular"
+        className="ml-auto shrink-0 rounded-full bg-white/20 px-1.5 py-px text-[9px] font-semibold tabular"
         title="Fecha sozinho (a contagem pausa com o mouse sobre o alerta)"
       >
-        fecha em {Math.ceil(left / 1000)}s
+        {Math.ceil(left / 1000)}s
       </span>
       {/* barra que esvazia, na base do cabeçalho */}
-      <span className="absolute inset-x-0 bottom-0 h-1.5 bg-black/20" aria-hidden>
+      <span className="absolute inset-x-0 bottom-0 h-1 bg-black/20" aria-hidden>
         <span
           className="block h-full bg-white/85 transition-[width] duration-100 ease-linear"
           style={{ width: `${(left / (seconds * 1000)) * 100}%` }}
