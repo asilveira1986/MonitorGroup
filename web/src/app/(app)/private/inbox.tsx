@@ -737,16 +737,17 @@ export function PrivateInbox({
   const unreadOf = (f: (c: PrivateChat) => boolean) => chats.filter((c) => f(c) && c.unread_count > 0).length;
   // aguardando (sem responsável), meus atendimentos, finalizados e, para administradores, todos em
   // atendimento (0119)
-  const TABS: { key: Tab; label: string; unread: number; count?: number }[] = [
-    { key: 'queue', label: 'Aguardando', unread: unreadOf((c) => inTab(c, 'queue')), count: chats.filter((c) => inTab(c, 'queue')).length },
-    { key: 'mine', label: 'Meus atendimentos', unread: unreadOf((c) => inTab(c, 'mine')), count: chats.filter((c) => inTab(c, 'mine')).length },
-    { key: 'closed', label: 'Finalizados', unread: 0 },
-    ...(viewer.seesAll ? [{ key: 'team' as const, label: 'Todos', unread: unreadOf((c) => inTab(c, 'team')) }] : []),
+  // rótulos curtos para caber numa linha; o nome completo fica na dica
+  const TABS: { key: Tab; label: string; title: string; unread: number; count?: number }[] = [
+    { key: 'queue', label: 'Aguardando', title: 'Aguardando atendimento (sem responsável)', unread: unreadOf((c) => inTab(c, 'queue')), count: chats.filter((c) => inTab(c, 'queue')).length },
+    { key: 'mine', label: 'Meus', title: 'Meus atendimentos', unread: unreadOf((c) => inTab(c, 'mine')), count: chats.filter((c) => inTab(c, 'mine')).length },
+    { key: 'closed', label: 'Finaliz.', title: 'Atendimentos finalizados', unread: 0 },
+    ...(viewer.seesAll ? [{ key: 'team' as const, label: 'Todos', title: 'Todos em atendimento na equipe', unread: unreadOf((c) => inTab(c, 'team')) }] : []),
   ];
   const ownerName = (id: string) => viewer.agents.find((a) => a.id === id)?.name ?? 'outro usuário';
 
   return (
-    <Card className="grid h-[calc(100vh-14rem)] min-h-[32rem] overflow-hidden md:grid-cols-[20rem_minmax(0,1fr)]">
+    <Card className="grid h-[calc(100vh-14rem)] min-h-[32rem] overflow-hidden md:grid-cols-[23rem_minmax(0,1fr)]">
       <div className={cn('flex min-h-0 flex-col border-line md:border-r', current && 'hidden md:flex')}>
         <div className="flex items-center gap-2 border-b border-line p-3">
           <div className="relative flex-1">
@@ -757,7 +758,7 @@ export function PrivateInbox({
             <MessageSquarePlus className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex flex-wrap gap-1 border-b border-line px-3 py-2" role="tablist" aria-label="Quais conversas">
+        <div className="flex gap-1 overflow-x-auto border-b border-line px-2 py-2 [scrollbar-width:none]" role="tablist" aria-label="Quais conversas">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -765,8 +766,9 @@ export function PrivateInbox({
               role="tab"
               aria-selected={tab === t.key}
               onClick={() => setTab(t.key)}
+              title={t.title}
               className={cn(
-                'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium',
+                'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-1 text-[11px] font-medium',
                 tab === t.key ? 'btn-signal text-brand-ink' : 'bg-surface-2 text-ink-2 hover:text-ink',
               )}
             >
