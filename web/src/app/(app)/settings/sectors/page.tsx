@@ -47,7 +47,9 @@ export default async function SectorsPage() {
         defaultSectorId={settings?.default_sector_id ?? null}
       />
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-surface px-5 py-3 text-sm">
-        <span className="text-ink-2">Grupos novos entram no setor</span>
+        <span className="text-ink-2" title="Número com setor (Configurações › WhatsApp): os grupos novos dele vão para o setor do número">
+          Grupos novos de número sem setor entram no setor
+        </span>
         <div className="w-full sm:w-72">
           <DefaultSector sectors={list} value={settings?.default_sector_id ?? null} />
         </div>

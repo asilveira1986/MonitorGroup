@@ -159,6 +159,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    119. `supabase/migrations/0119_private_chat_finish.sql`
    120. `supabase/migrations/0120_private_alert_settings.sql`
    121. `supabase/migrations/0121_instance_sector.sql`
+   122. `supabase/migrations/0122_groups_follow_instance_sector.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

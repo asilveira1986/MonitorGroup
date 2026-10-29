@@ -150,7 +150,8 @@ CHECKS=$(cat <<'SQL'
   (110, 'Finalizar e transferir atendimento no privado (0119)', to_regprocedure('public.finish_private_chat(uuid)') is not null),
   (111, 'Avisos das conversas privadas (0120)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'private_alert_mine')),
   (112, 'Setor do número de WhatsApp (0121)', to_regprocedure('public.set_instance_sector(uuid,uuid)') is not null),
-  (113, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (113, 'Grupos no setor do número (0122)', exists (select 1 from pg_proc where proname = 'groups_default_sector' and prosrc like '%whatsapp_instances%')),
+  (114, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

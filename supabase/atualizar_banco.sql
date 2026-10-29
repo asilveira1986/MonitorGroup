@@ -205,7 +205,8 @@ begin
   (110, 'Finalizar e transferir atendimento no privado (0119)', to_regprocedure('public.finish_private_chat(uuid)') is not null),
   (111, 'Avisos das conversas privadas (0120)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'private_alert_mine')),
   (112, 'Setor do número de WhatsApp (0121)', to_regprocedure('public.set_instance_sector(uuid,uuid)') is not null),
-  (113, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (113, 'Grupos no setor do número (0122)', exists (select 1 from pg_proc where proname = 'groups_default_sector' and prosrc like '%whatsapp_instances%')),
+  (114, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -214,7 +215,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -18853,6 +18854,85 @@ $$;
 $mig0121$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0122_groups_follow_instance_sector.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0122', $mig0122$
+-- =====================================================================
+-- Grupos no setor do número de WhatsApp.
+--
+--  * Grupo novo entra no setor do número pelo qual chegou (0121); número
+--    sem setor: o setor padrão da empresa, como antes.
+--  * Ao escolher o setor de um número, os grupos dele que estão no setor
+--    padrão (ou sem setor, ou no setor anterior do número) passam para o
+--    setor escolhido. Grupo colocado à mão em outro setor fica onde está.
+--  * Os números que já têm setor levam agora os seus grupos que estão no
+--    setor padrão.
+-- =====================================================================
+
+create or replace function public.groups_default_sector()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.sector_id is null then
+    select coalesce(
+             (select i.sector_id from public.whatsapp_instances i where i.id = new.instance_id),
+             (select s.default_sector_id from public.app_settings s where s.company_id = new.company_id))
+      into new.sector_id;
+  end if;
+  return new;
+end;
+$$;
+
+drop function if exists public.set_instance_sector(uuid, uuid);
+-- devolve quantos grupos foram para o setor
+create or replace function public.set_instance_sector(p_instance uuid, p_sector uuid)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  v_company uuid := public.current_company_id();
+  v_old uuid;
+  v_default uuid;
+  v_moved int := 0;
+begin
+  if not public.is_admin() then
+    raise exception 'Só administradores mudam o setor do número.' using errcode = '42501';
+  end if;
+  if p_sector is not null and not exists (select 1 from public.sectors where id = p_sector and company_id = v_company) then
+    raise exception 'Setor não encontrado.';
+  end if;
+  select sector_id into v_old from public.whatsapp_instances where id = p_instance and company_id = v_company;
+  if not found then
+    raise exception 'Conexão não encontrada.';
+  end if;
+  update public.whatsapp_instances set sector_id = p_sector where id = p_instance;
+  if p_sector is not null then
+    select default_sector_id into v_default from public.app_settings where company_id = v_company;
+    perform set_config('app.system_notice', 'on', true);
+    update public.groups g set sector_id = p_sector
+     where g.instance_id = p_instance and g.company_id = v_company
+       and (g.sector_id is null or g.sector_id = v_default or g.sector_id = v_old)
+       and g.sector_id is distinct from p_sector;
+    get diagnostics v_moved = row_count;
+    perform set_config('app.system_notice', 'off', true);
+  end if;
+  return v_moved;
+end;
+$$;
+revoke all on function public.set_instance_sector(uuid, uuid) from public, anon;
+grant execute on function public.set_instance_sector(uuid, uuid) to authenticated;
+
+-- números que já têm setor: os grupos deles que estão no setor padrão (ou sem setor) vão para o setor do número
+do $$
+begin
+  perform set_config('app.system_notice', 'on', true);
+  update public.groups g set sector_id = i.sector_id
+    from public.whatsapp_instances i
+    left join public.app_settings s on s.company_id = i.company_id
+   where g.instance_id = i.id and i.sector_id is not null
+     and (g.sector_id is null or g.sector_id = s.default_sector_id)
+     and g.sector_id is distinct from i.sector_id;
+  perform set_config('app.system_notice', 'off', true);
+end $$;
+$mig0122$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -19010,6 +19090,7 @@ from (values
   (110, 'Finalizar e transferir atendimento no privado (0119)', to_regprocedure('public.finish_private_chat(uuid)') is not null),
   (111, 'Avisos das conversas privadas (0120)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'private_alert_mine')),
   (112, 'Setor do número de WhatsApp (0121)', to_regprocedure('public.set_instance_sector(uuid,uuid)') is not null),
-  (113, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (113, 'Grupos no setor do número (0122)', exists (select 1 from pg_proc where proname = 'groups_default_sector' and prosrc like '%whatsapp_instances%')),
+  (114, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

@@ -20,8 +20,8 @@ const STATUS = {
 };
 
 /**
- * Setor do número (0121): as conversas privadas que chegam por ele ficam com o setor (quem é do setor
- * vê e é avisado das que aguardam; o filtro da tela de conversas privadas usa o setor).
+ * Setor do número (0121/0122): os grupos novos e as conversas privadas que chegam por ele ficam com o
+ * setor (quem é do setor vê e atende); ao escolher, os grupos dele que estão no setor padrão também vão.
  */
 function InstanceSector({ inst, sectors, isAdmin }: { inst: Instance; sectors: { id: string; name: string }[]; isAdmin: boolean }) {
   const [value, setValue] = useState(inst.sector_id ?? '');
@@ -32,14 +32,16 @@ function InstanceSector({ inst, sectors, isAdmin }: { inst: Instance; sectors: {
     return (
       <p className="text-sm text-ink-2">
         <Building2 className="mr-1 inline h-4 w-4" />
-        Setor do número: {name ?? 'nenhum (conversas privadas para todos)'}
+        Setor do número: {name ?? 'nenhum (setor padrão)'}
       </p>
     );
   }
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <Building2 className="h-4 w-4 text-muted" />
-      <span className="text-ink-2">Setor do número:</span>
+      <span className="text-ink-2" title="Os grupos novos e as conversas privadas deste número entram neste setor">
+        Setor do número:
+      </span>
       <Select
         value={value}
         disabled={pending}
@@ -55,11 +57,16 @@ function InstanceSector({ inst, sectors, isAdmin }: { inst: Instance; sectors: {
               setValue(before);
               return void toast.error(res.error);
             }
-            toast.success(next ? `Conversas deste número vão para o setor ${sectors.find((s) => s.id === next)?.name}` : 'Número sem setor: conversas para todos');
+            const sector = sectors.find((s) => s.id === next)?.name;
+            toast.success(next ? `Número no setor ${sector}` : 'Número sem setor', {
+              description: next
+                ? `Os grupos novos e as conversas privadas deste número vão para ${sector}.${res.moved ? ` ${res.moved} grupo(s) que estavam no setor padrão também foram.` : ''}`
+                : 'Conversas privadas para todos; grupos novos vão para o setor padrão.',
+            });
           });
         }}
       >
-        <option value="">Nenhum (todos atendem)</option>
+        <option value="">Nenhum (setor padrão)</option>
         {sectors.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name}

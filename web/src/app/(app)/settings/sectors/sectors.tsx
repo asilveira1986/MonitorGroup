@@ -149,7 +149,7 @@ export function SectorsList({
               <button type="button" onClick={() => setEditing(s.id)} className="min-w-0 flex-1 basis-48 text-left">
                 <p className="truncate text-sm font-medium hover:underline">
                   {s.name}
-                  {defaultSectorId === s.id && <span className="ml-2 text-[11px] font-normal text-muted">recebe os grupos novos</span>}
+                  {defaultSectorId === s.id && <span className="ml-2 text-[11px] font-normal text-muted">recebe os grupos novos (de número sem setor)</span>}
                 </p>
                 <p className="truncate text-xs text-muted">
                   {ids.length} pessoa(s) · {count} grupo(s)
