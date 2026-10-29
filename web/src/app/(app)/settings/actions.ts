@@ -844,6 +844,21 @@ const revalidatePeople = () => {
   revalidatePath('/', 'layout');
 };
 
+/** Setores do usuário (quem vê e atende os grupos de cada setor): deixa exatamente os escolhidos. */
+async function syncUserSectors(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, sectorIds: string[]): Promise<string | null> {
+  const ids = [...new Set(sectorIds.filter(Boolean))];
+  const del = supabase.from('sector_members').delete().eq('user_id', userId);
+  const { error: delError } = ids.length ? await del.not('sector_id', 'in', `(${ids.join(',')})`) : await del;
+  if (delError) return delError.message;
+  if (ids.length) {
+    const { error } = await supabase
+      .from('sector_members')
+      .upsert(ids.map((sector_id) => ({ sector_id, user_id: userId })), { onConflict: 'sector_id,user_id', ignoreDuplicates: true });
+    if (error) return error.message;
+  }
+  return null;
+}
+
 /**
  * Nova pessoa (0107): um cadastro só. "Atende nos grupos" cria o atendente (pelo telefone);
  * "entra no painel" cria o acesso (e-mail, perfil e senha). Os dois ficam ligados pelo e-mail.
@@ -874,6 +889,15 @@ export async function addPerson(form: FormData): Promise<Result> {
     });
     if (!res.ok) return { ok: false, error: friendlyDbError(res.error) };
     if (phone) await createAdminClient().from('profiles').update({ phone }).eq('email', email).eq('company_id', admin.company_id!);
+    // setores escolhidos no cadastro
+    const sectorIds = form.getAll('sectors').map(String);
+    if (sectorIds.length) {
+      const { data: created } = await createAdminClient().from('profiles').select('id').eq('email', email).eq('company_id', admin.company_id!).maybeSingle();
+      if (created?.id) {
+        const err = await syncUserSectors(supabase, created.id as string, sectorIds);
+        if (err) return { ok: false, error: `Pessoa cadastrada, mas os setores não foram salvos: ${friendlyDbError(err)}` };
+      }
+    }
   }
   if (attends) {
     const { error } = await supabase.from('team_members').insert({ name, phone, user_email: access ? email : null });
@@ -891,7 +915,14 @@ export async function addPerson(form: FormData): Promise<Result> {
 }
 
 /** Editar nome e telefone: vale para o acesso e para o atendente da pessoa. */
-export async function updatePerson(values: { profileId: string | null; memberId: string | null; name: string; phone: string }): Promise<Result> {
+export async function updatePerson(values: {
+  profileId: string | null;
+  memberId: string | null;
+  name: string;
+  phone: string;
+  /** setores do usuário (só quem tem acesso ao painel); undefined = não mexe */
+  sectorIds?: string[];
+}): Promise<Result> {
   const admin = await requireAdmin();
   const supabase = await createClient();
   const name = values.name.trim().replace(/\s+/g, ' ');
@@ -909,6 +940,10 @@ export async function updatePerson(values: { profileId: string | null; memberId:
       .eq('id', values.profileId)
       .eq('company_id', admin.company_id!);
     if (error) return result(error);
+    if (values.sectorIds) {
+      const err = await syncUserSectors(supabase, values.profileId, values.sectorIds);
+      if (err) return { ok: false, error: friendlyDbError(err) };
+    }
   }
   if (values.memberId) await recalcCompanyGroups(admin.company_id);
   revalidatePeople();

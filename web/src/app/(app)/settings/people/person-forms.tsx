@@ -1,6 +1,6 @@
 'use client';
 
-import { Copy, KeyRound, Pencil, Wand2, X } from 'lucide-react';
+import { Check, Copy, KeyRound, Pencil, Wand2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -17,11 +17,41 @@ function randomPassword() {
   return Array.from(buf, (n) => chars[n % chars.length]).join('');
 }
 
+export type SectorOption = { id: string; name: string };
+
+/** Setores da pessoa: marca/desmarca (quem é do setor vê e atende os grupos e as conversas dele). */
+function SectorPicker({ sectors, value, onChange }: { sectors: SectorOption[]; value: string[]; onChange: (ids: string[]) => void }) {
+  if (!sectors.length) return <p className="text-xs text-muted">Nenhum setor cadastrado (Configurações › Pessoas › Setores).</p>;
+  return (
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Setores">
+      {sectors.map((s) => {
+        const on = value.includes(s.id);
+        return (
+          <button
+            key={s.id}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(on ? value.filter((x) => x !== s.id) : [...value, s.id])}
+            className={
+              on
+                ? 'inline-flex items-center gap-1 rounded-full border border-brand-line bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand-text'
+                : 'inline-flex items-center gap-1 rounded-full border border-line px-2.5 py-1 text-xs text-ink-2 hover:text-ink'
+            }
+          >
+            {on && <Check className="h-3 w-3" />} {s.name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Nova pessoa (0107): o mesmo cadastro para quem atende nos grupos e para quem entra no painel. */
-function NewPersonForm({ onDone }: { onDone?: () => void }) {
+function NewPersonForm({ onDone, sectors }: { onDone?: () => void; sectors: SectorOption[] }) {
   const [attends, setAttends] = useState(true);
   const [access, setAccess] = useState(true);
   const [password, setPassword] = useState(randomPassword);
+  const [sectorIds, setSectorIds] = useState<string[]>([]);
   return (
     <ActionForm action={addPerson} success="Pessoa cadastrada" onDone={onDone} className="space-y-4">
       {(pending) => (
@@ -50,6 +80,12 @@ function NewPersonForm({ onDone }: { onDone?: () => void }) {
                     <option value="admin">Administrador - acesso total</option>
                   </Select>
                 </Field>
+                <Field label="Setores" hint="A pessoa vê e atende os grupos e as conversas privadas dos setores marcados.">
+                  <SectorPicker sectors={sectors} value={sectorIds} onChange={setSectorIds} />
+                </Field>
+                {sectorIds.map((id) => (
+                  <input key={id} type="hidden" name="sectors" value={id} />
+                ))}
                 <Field label="Senha inicial" hint="Já vem uma senha gerada; passe para a pessoa. Ela pode trocar depois.">
                   <div className="flex gap-2">
                     <Input name="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required autoComplete="new-password" />
@@ -70,24 +106,39 @@ function NewPersonForm({ onDone }: { onDone?: () => void }) {
   );
 }
 
-export function NewPersonDialog() {
+export function NewPersonDialog({ sectors = [] }: { sectors?: SectorOption[] }) {
   return (
     <FormDialog label="Nova pessoa" title="Nova pessoa" description="Quem atende nos grupos, quem entra no painel, ou os dois: um cadastro só.">
-      {(close) => <NewPersonForm onDone={close} />}
+      {(close) => <NewPersonForm onDone={close} sectors={sectors} />}
     </FormDialog>
   );
 }
 
-/** Editar nome e telefone (valem para o acesso e para o atendente). */
-export function EditPerson({ profileId, memberId, name, phone }: { profileId: string | null; memberId: string | null; name: string; phone: string | null }) {
+/** Editar nome, telefone (valem para o acesso e para o atendente) e os setores de quem entra no painel. */
+export function EditPerson({
+  profileId,
+  memberId,
+  name,
+  phone,
+  sectors = [],
+  sectorIds: initialSectors = [],
+}: {
+  profileId: string | null;
+  memberId: string | null;
+  name: string;
+  phone: string | null;
+  sectors?: SectorOption[];
+  sectorIds?: string[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [n, setN] = useState(name);
   const [p, setP] = useState(phone ?? '');
+  const [sectorIds, setSectorIds] = useState<string[]>(initialSectors);
   const [pending, start] = useTransition();
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="rounded-lg p-1.5 text-ink-2 hover:bg-surface-2" aria-label={`Editar ${name}`} title="Editar nome e telefone">
+      <button type="button" onClick={() => setOpen(true)} className="rounded-lg p-1.5 text-ink-2 hover:bg-surface-2" aria-label={`Editar ${name}`} title="Editar nome, telefone e setores">
         <Pencil className="h-4 w-4" />
       </button>
       {open && (
@@ -97,7 +148,7 @@ export function EditPerson({ profileId, memberId, name, phone }: { profileId: st
             onSubmit={(e) => {
               e.preventDefault();
               start(async () => {
-                const res = await updatePerson({ profileId, memberId, name: n, phone: p });
+                const res = await updatePerson({ profileId, memberId, name: n, phone: p, sectorIds: profileId ? sectorIds : undefined });
                 if (!res.ok) return void toast.error(res.error);
                 toast.success('Pessoa atualizada');
                 setOpen(false);
@@ -117,6 +168,13 @@ export function EditPerson({ profileId, memberId, name, phone }: { profileId: st
             <Field label="WhatsApp (com DDD)">
               <Input value={p} onChange={(e) => setP(e.target.value)} inputMode="tel" placeholder="51 99999-8888" required={Boolean(memberId)} />
             </Field>
+            {profileId ? (
+              <Field label="Setores" hint="Vê e atende os grupos e as conversas privadas dos setores marcados.">
+                <SectorPicker sectors={sectors} value={sectorIds} onChange={setSectorIds} />
+              </Field>
+            ) : (
+              <p className="text-xs text-muted">Setores valem para quem entra no painel: dê acesso a esta pessoa para escolher os setores.</p>
+            )}
             <div className="flex gap-2">
               <Button disabled={pending} className="flex-1">
                 {pending ? 'Salvando…' : 'Salvar'}

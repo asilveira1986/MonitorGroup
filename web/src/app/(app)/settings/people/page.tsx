@@ -1,4 +1,4 @@
-import { ChevronRight, Info, ShieldCheck, UserRound, Users } from 'lucide-react';
+import { Building2, ChevronRight, Info, ShieldCheck, UserRound, Users } from 'lucide-react';
 import { AdminNotice } from '@/components/admin-notice';
 import { RowMenu, type RowAction } from '@/components/disclosure';
 import { ImageUpload } from '@/components/image-upload';
@@ -26,12 +26,18 @@ export default async function PeoplePage() {
   const me = await requireProfile();
   const isAdmin = me.role === 'admin' || me.platform_admin;
   const supabase = await createClient();
-  const [{ data: profiles }, { data: allowed }, { data: team }, { data: groupRows }] = await Promise.all([
+  const [{ data: profiles }, { data: allowed }, { data: team }, { data: groupRows }, { data: sectorRows }, { data: memberRows }] = await Promise.all([
     isAdmin ? supabase.from('profiles').select('*').order('created_at') : Promise.resolve({ data: [] }),
     isAdmin ? supabase.from('allowed_emails').select('*').order('created_at') : Promise.resolve({ data: [] }),
     supabase.from('team_members').select('*').order('name'),
     supabase.from('groups').select('responsible_member_ids').is('removed_at', null),
+    // setores e quem é de cada um (administradores)
+    isAdmin ? supabase.from('sectors').select('id, name').order('name') : Promise.resolve({ data: [] }),
+    isAdmin ? supabase.from('sector_members').select('sector_id, user_id') : Promise.resolve({ data: [] }),
   ]);
+  const sectors = (sectorRows ?? []) as { id: string; name: string }[];
+  const sectorsOf = new Map<string, string[]>();
+  for (const r of (memberRows ?? []) as { sector_id: string; user_id: string }[]) sectorsOf.set(r.user_id, [...(sectorsOf.get(r.user_id) ?? []), r.sector_id]);
   // quem administra a plataforma e está aqui para suporte não aparece para a empresa
   const users = ((profiles ?? []) as Profile[]).filter((u) => me.platform_admin || !u.platform_admin);
   const members = (team ?? []) as TeamMember[];
@@ -108,7 +114,7 @@ export default async function PeoplePage() {
           action={
             <div className="flex flex-wrap items-center gap-1">
               {isAdmin && <RecalcButton />}
-              {isAdmin && <NewPersonDialog />}
+              {isAdmin && <NewPersonDialog sectors={sectors} />}
             </div>
           }
         />
@@ -160,6 +166,15 @@ export default async function PeoplePage() {
                       </Badge>
                     )}
                     {u && !u.active && <Badge tone="critical">Sem acesso</Badge>}
+                    {u &&
+                      (sectorsOf.get(u.id) ?? [])
+                        .map((id) => sectors.find((s) => s.id === id)?.name)
+                        .filter(Boolean)
+                        .map((name) => (
+                          <Badge key={name} tone="info">
+                            <Building2 className="h-3 w-3" /> {name}
+                          </Badge>
+                        ))}
                     {!u && <Badge tone="neutral">Sem acesso ao painel</Badge>}
                   </p>
                 </div>
@@ -177,7 +192,14 @@ export default async function PeoplePage() {
                   {isAdmin && m && !u && <GrantAccess member={m} />}
                   {isAdmin && u && !m && <MakeAttendantButton profileId={u.id} />}
                   {isAdmin && m && <AlertScope member={m} groups={groupsOf.get(m.id) ?? 0} />}
-                  {isAdmin && <EditPerson profileId={u?.id ?? null} memberId={m?.id ?? null} name={p.name} phone={p.phone} />}
+                  {isAdmin && <EditPerson
+                      profileId={u?.id ?? null}
+                      memberId={m?.id ?? null}
+                      name={p.name}
+                      phone={p.phone}
+                      sectors={sectors}
+                      sectorIds={u ? (sectorsOf.get(u.id) ?? []) : []}
+                    />}
                   {/* senha nova (a de quem administra a plataforma, só outro administrador da plataforma) */}
                   {isAdmin && u && (!u.platform_admin || me.platform_admin) && <GeneratePasswordButton profileId={u.id} name={p.name} />}
                   {menu.length > 0 && <RowMenu actions={menu} label={`Ações de ${p.name}`} />}
