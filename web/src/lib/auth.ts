@@ -34,6 +34,8 @@ const loadProfile = cache(async (): Promise<{ profile: Profile; company: Company
   }
   // empresa suspensa: ninguém dela entra (quem administra a plataforma continua entrando para dar suporte)
   if (!profile.platform_admin && !company?.active) redirect('/auth/pending?reason=suspended');
+  // primeiro acesso (senha inicial ou gerada pelo administrador): define a própria senha antes de seguir
+  if (profile.must_change_password) redirect('/auth/update-password');
   return { profile: profile as Profile, company };
 });
 

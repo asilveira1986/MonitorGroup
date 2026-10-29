@@ -12,6 +12,8 @@ export type Profile = {
   company_id: string | null;
   /** administra a plataforma: cadastra empresas e entra em qualquer uma para dar suporte */
   platform_admin: boolean;
+  /** senha inicial ou gerada pelo administrador: troca obrigatória no próximo acesso (0123) */
+  must_change_password?: boolean;
   /** desligou os avisos só para si (0058) */
   alerts_off?: boolean;
   /** Meu perfil (0085) */

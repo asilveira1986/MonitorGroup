@@ -383,6 +383,8 @@ export async function generateUserPassword(id: string): Promise<{ ok: true; pass
   const password = chars.join('');
   const { error } = await admin.auth.admin.updateUserById(id, { password });
   if (error) return { ok: false, error: friendlyDbError(error.message) };
+  // a senha gerada é provisória: no próximo acesso a pessoa define a dela (0123)
+  await admin.from('profiles').update({ must_change_password: true }).eq('id', id);
   // registro no log (sem a senha)
   await admin.from('activity_log').insert({
     company_id: user.company_id ?? me.company_id,

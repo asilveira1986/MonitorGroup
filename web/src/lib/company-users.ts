@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 
 /**
  * Cria o acesso de uma pessoa numa empresa: autoriza o e-mail na empresa (allowed_emails)
- * e cria o usuário já confirmado, com a senha inicial. Um e-mail pertence a uma empresa só.
+ * e cria o usuário já confirmado, com a senha inicial (trocada no primeiro acesso). Um e-mail pertence a uma empresa só.
  * Roda com a chave de serviço (só no servidor), depois que quem chama já conferiu a permissão.
  */
 export async function createCompanyUser(input: {
@@ -37,7 +37,7 @@ export async function createCompanyUser(input: {
   if (error) return { ok: false, error: serviceKeyHint(error.message) };
 
   if (!profile) {
-    const { error: createError } = await admin.auth.admin.createUser({
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
       password: input.password,
       email_confirm: true,
@@ -51,6 +51,8 @@ export async function createCompanyUser(input: {
           : serviceKeyHint(createError.message),
       };
     }
+    // a senha inicial é de quem cadastrou: no primeiro acesso a pessoa define a dela (0123)
+    if (created.user) await admin.from('profiles').update({ must_change_password: true }).eq('id', created.user.id);
   }
   return { ok: true };
 }

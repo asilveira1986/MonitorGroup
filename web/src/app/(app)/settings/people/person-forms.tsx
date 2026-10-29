@@ -278,7 +278,7 @@ export function GeneratePasswordButton({ profileId, name }: { profileId: string;
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
-            <p className="mt-3 text-xs text-muted">Recomende que a pessoa troque a senha depois do primeiro acesso.</p>
+            <p className="mt-3 text-xs text-muted">No primeiro acesso com esta senha, o sistema pede que a pessoa defina a dela.</p>
             <div className="mt-4 flex justify-end">
               <Button type="button" onClick={() => setPassword(null)}>
                 Pronto

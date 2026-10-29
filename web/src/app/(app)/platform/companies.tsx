@@ -61,7 +61,7 @@ export function NewCompanyForm() {
               <Field label="E-mail de acesso">
                 <Input name="admin_email" type="email" required placeholder="admin@empresa.com" />
               </Field>
-              <Field label="Senha inicial" hint="Envie à pessoa; ela pode trocar em “Esqueci minha senha”.">
+              <Field label="Senha inicial" hint="Envie à pessoa; no primeiro acesso ela define a própria senha.">
                 <Input name="admin_password" type="password" required minLength={8} autoComplete="new-password" placeholder="mínimo 8 caracteres" />
               </Field>
             </div>
