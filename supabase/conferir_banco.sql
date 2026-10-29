@@ -155,6 +155,7 @@ from (values
   (116, 'Conversa assinada pelo WhatsApp fica com o usuário (0125)', exists (select 1 from pg_trigger where tgname = 'private_messages_signer_owner')),
   (117, 'Assinatura sem diferenciar acentos (0126)', to_regprocedure('public.private_name_key(text)') is not null),
   (118, 'Assinatura em qualquer formato (0127)', to_regprocedure('public.private_signature(text)') is not null),
-  (119, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (119, 'Assinatura para todos os usuários (0128)', to_regprocedure('public.private_signer_names(uuid)') is not null),
+  (120, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

@@ -211,7 +211,8 @@ begin
   (116, 'Conversa assinada pelo WhatsApp fica com o usuário (0125)', exists (select 1 from pg_trigger where tgname = 'private_messages_signer_owner')),
   (117, 'Assinatura sem diferenciar acentos (0126)', to_regprocedure('public.private_name_key(text)') is not null),
   (118, 'Assinatura em qualquer formato (0127)', to_regprocedure('public.private_signature(text)') is not null),
-  (119, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (119, 'Assinatura para todos os usuários (0128)', to_regprocedure('public.private_signer_names(uuid)') is not null),
+  (120, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -220,7 +221,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -19189,6 +19190,76 @@ update public.private_chats c
 $mig0127$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0128_private_signer_all_users.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0128', $mig0128$
+-- =====================================================================
+-- Assinatura "*Nome:*" (0125-0127) para todos os usuários, sem precisar
+-- acertar cadastro:
+--
+--  * vale qualquer usuário ativo da empresa (qualquer perfil);
+--  * o nome pode ser o do usuário ou o da pessoa na equipe (Pessoas);
+--  * nome completo ou abreviado: "*Elen Regert:*" encontra "Elen Leticia
+--    Pergher Regert", e "*Elen Leticia Pergher Regert:*" encontra "Elen
+--    Regert" (mesmo primeiro nome e os outros nomes contidos no do outro);
+--  * só o primeiro nome, se for de um usuário só.
+-- Se mais de um usuário servir, a conversa continua aguardando.
+-- =====================================================================
+
+-- os nomes de cada usuário ativo da empresa (o do usuário e o da pessoa na equipe), em palavras
+create or replace function public.private_signer_names(p_company uuid)
+returns table (id uuid, words text[]) language sql stable security definer set search_path = public as $$
+  select distinct x.id, string_to_array(x.k, ' ')
+    from (select p.id, public.private_name_key(public.user_display_name(p.id)) as k
+            from public.profiles p where p.company_id = p_company and p.active
+          union
+          select p.id, public.private_name_key(t.name)
+            from public.team_members t
+            join public.profiles p on p.company_id = t.company_id and p.active and lower(p.email) = lower(t.user_email)
+           where t.company_id = p_company) x
+   where x.k is not null
+$$;
+revoke all on function public.private_signer_names(uuid) from public, anon, authenticated;
+
+create or replace function public.private_signer(p_company uuid, p_body text)
+returns uuid language plpgsql stable security definer set search_path = public as $$
+declare
+  v_name text := public.private_signature(p_body);
+  v_words text[];
+  v_ids uuid[];
+begin
+  if v_name is null then
+    return null;
+  end if;
+  v_words := string_to_array(v_name, ' ');
+
+  -- 1) nome igual
+  select array_agg(distinct id) into v_ids from public.private_signer_names(p_company) where words = v_words;
+  -- 2) mesmo primeiro nome e um nome contido no outro (abreviado ou completo)
+  if coalesce(array_length(v_ids, 1), 0) = 0 and array_length(v_words, 1) > 1 then
+    select array_agg(distinct id) into v_ids from public.private_signer_names(p_company)
+     where words[1] = v_words[1] and array_length(words, 1) > 1 and (words @> v_words or words <@ v_words);
+  end if;
+  -- 3) só o primeiro nome ("*Plinio:*")
+  if coalesce(array_length(v_ids, 1), 0) = 0 and array_length(v_words, 1) = 1 then
+    select array_agg(distinct id) into v_ids from public.private_signer_names(p_company) where words[1] = v_words[1];
+  end if;
+  return case when array_length(v_ids, 1) = 1 then v_ids[1] end;
+end;
+$$;
+revoke all on function public.private_signer(uuid, text) from public, anon, authenticated;
+
+-- as que estão aguardando agora: a última mensagem da empresa, se assinada por um usuário
+update public.private_chats c
+   set assigned_to = s.user_id, assigned_at = now()
+  from (select distinct on (m.chat_id) m.chat_id, public.private_signer(m.company_id, m.body) as user_id
+          from public.private_messages m
+          join public.private_chats pc on pc.id = m.chat_id and pc.assigned_to is null and pc.closed_at is null
+         where m.from_me
+         order by m.chat_id, m.sent_at desc) s
+ where c.id = s.chat_id and s.user_id is not null and c.assigned_to is null and c.closed_at is null;
+$mig0128$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -19352,6 +19423,7 @@ from (values
   (116, 'Conversa assinada pelo WhatsApp fica com o usuário (0125)', exists (select 1 from pg_trigger where tgname = 'private_messages_signer_owner')),
   (117, 'Assinatura sem diferenciar acentos (0126)', to_regprocedure('public.private_name_key(text)') is not null),
   (118, 'Assinatura em qualquer formato (0127)', to_regprocedure('public.private_signature(text)') is not null),
-  (119, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (119, 'Assinatura para todos os usuários (0128)', to_regprocedure('public.private_signer_names(uuid)') is not null),
+  (120, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
