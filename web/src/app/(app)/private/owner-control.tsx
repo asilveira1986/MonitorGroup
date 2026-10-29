@@ -175,7 +175,7 @@ export function OwnerControl({
     <div className="flex flex-wrap items-center gap-2 text-xs">
       {closed ? (
         <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 font-medium text-ink-2">
-          <CheckCircle2 className="h-3.5 w-3.5" /> Finalizado{owner ? ` · ${nameOf(owner)}` : ''}
+          <CheckCircle2 className="h-3.5 w-3.5" /> Finalizado
         </span>
       ) : owner ? (
         <span className="inline-flex items-center gap-1 rounded-full bg-good/15 px-2 py-0.5 font-medium text-good-ink">

@@ -862,25 +862,22 @@ export function PrivateInbox({
                         <span className="tabular shrink-0 rounded-full bg-good px-1.5 text-[10px] font-semibold text-white">{c.unread_count}</span>
                       )}
                     </span>
-                    {((c.tags?.length ?? 0) > 0 || c.assigned_to !== viewer.me || c.closed_at || sectorOf(c)) && (
-                      <span className="mt-0.5 flex flex-wrap items-center gap-1">
-                        {c.closed_at ? (
-                          <span className="rounded-full bg-surface-2 px-1.5 text-[10px] font-medium leading-4 text-ink-2">
-                            finalizado{c.assigned_to && c.assigned_to !== viewer.me ? ` · ${ownerName(c.assigned_to)}` : ''}
-                          </span>
-                        ) : !c.assigned_to ? (
-                          <span className="rounded-full bg-warning/15 px-1.5 text-[10px] font-medium leading-4 text-warning-ink">aguardando</span>
-                        ) : (
-                          c.assigned_to !== viewer.me && (
-                            <span className="rounded-full bg-surface-2 px-1.5 text-[10px] font-medium leading-4 text-ink-2">{ownerName(c.assigned_to)}</span>
-                          )
-                        )}
-                        {sectorOf(c) && !sectorFilter && (
-                          <span className="rounded-full bg-series-1/10 px-1.5 text-[10px] font-medium leading-4 text-series-1">{sectorName(sectorOf(c))}</span>
-                        )}
-                        <TagChips ids={c.tags} all={tags} size="xs" />
-                      </span>
-                    )}
+                    <span className="mt-0.5 flex flex-wrap items-center gap-1">
+                      {/* aguardando → quem está atendendo (ao responder ou assumir) → finalizado, sem o nome */}
+                      {c.closed_at ? (
+                        <span className="rounded-full bg-surface-2 px-1.5 text-[10px] font-medium leading-4 text-ink-2">finalizado</span>
+                      ) : !c.assigned_to ? (
+                        <span className="rounded-full bg-warning/15 px-1.5 text-[10px] font-medium leading-4 text-warning-ink">aguardando</span>
+                      ) : (
+                        <span className="rounded-full bg-good/15 px-1.5 text-[10px] font-medium leading-4 text-good-ink" title="Quem está atendendo">
+                          {ownerName(c.assigned_to)}
+                        </span>
+                      )}
+                      {sectorOf(c) && !sectorFilter && (
+                        <span className="rounded-full bg-series-1/10 px-1.5 text-[10px] font-medium leading-4 text-series-1">{sectorName(sectorOf(c))}</span>
+                      )}
+                      <TagChips ids={c.tags} all={tags} size="xs" />
+                    </span>
                   </span>
                 </button>
               </li>
