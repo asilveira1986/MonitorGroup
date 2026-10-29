@@ -32,14 +32,14 @@ function InstanceSector({ inst, sectors, isAdmin }: { inst: Instance; sectors: {
     return (
       <p className="text-sm text-ink-2">
         <Building2 className="mr-1 inline h-4 w-4" />
-        Setor: {name ?? 'nenhum (conversas privadas para todos)'}
+        Setor do número: {name ?? 'nenhum (conversas privadas para todos)'}
       </p>
     );
   }
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <Building2 className="h-4 w-4 text-muted" />
-      <span className="text-ink-2">Setor das conversas privadas:</span>
+      <span className="text-ink-2">Setor do número:</span>
       <Select
         value={value}
         disabled={pending}
