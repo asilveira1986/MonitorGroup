@@ -53,9 +53,12 @@ export default async function SectorsPage() {
         <div className="w-full sm:w-72">
           <DefaultSector sectors={list} value={settings?.default_sector_id ?? null} />
         </div>
+        <span className="w-full text-xs text-muted">
+          Quem é do setor padrão vê os grupos de todos os números conectados e todas as conversas privadas.
+        </span>
         {withoutSector.length > 0 && (
           <span className="text-xs text-warning-ink">
-            {withoutSector.length} grupo(s) sem setor (só administradores veem)
+            {withoutSector.length} grupo(s) sem setor (só administradores e o setor padrão veem)
           </span>
         )}
       </div>

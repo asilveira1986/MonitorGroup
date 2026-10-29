@@ -27,8 +27,10 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
     supabase.from('customer_tags').select('id, name, color').order('name'),
   ]);
   // responsável pelas conversas (0114): administradores veem todas; a lista de quem pode receber
-  const [{ data: seesAll }, { data: agents }, { data: instRows }, { data: sectorRows }] = await Promise.all([
+  const [{ data: seesAll }, { data: seesTeam, error: seesTeamError }, { data: agents }, { data: instRows }, { data: sectorRows }] = await Promise.all([
     supabase.rpc('private_sees_all'),
+    // vê as conversas de todos: administradores e quem é do setor padrão (0129)
+    supabase.rpc('private_sees_team'),
     supabase.rpc('private_chat_agents'),
     // setor de cada número (0121): filtro por setor
     supabase.from('whatsapp_instances').select('*'),
@@ -87,7 +89,12 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
             selectedId={typeof sp.c === 'string' ? sp.c : null}
             timeZone={settings?.timezone ?? 'America/Sao_Paulo'}
             tags={(tagRows ?? []) as CustomerTag[]}
-            viewer={{ me: profile.id, seesAll: Boolean(seesAll), agents: (agents ?? []) as ChatAgent[] }}
+            viewer={{
+              me: profile.id,
+              seesAll: Boolean(seesAll),
+              seesTeam: Boolean(seesTeamError ? seesAll : seesTeam),
+              agents: (agents ?? []) as ChatAgent[],
+            }}
             sectors={sectorFilter}
           />
         </>

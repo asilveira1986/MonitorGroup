@@ -43,7 +43,8 @@ export type PrivateChat = {
   closed_at?: string | null;
 };
 /** quem usa a tela: para as abas e o responsável (0114) */
-type Viewer = { me: string; seesAll: boolean; agents: ChatAgent[] };
+/** seesAll: muda o responsável de qualquer conversa (administradores); seesTeam: vê as de todos (0129). */
+type Viewer = { me: string; seesAll: boolean; seesTeam: boolean; agents: ChatAgent[] };
 type Tab = 'queue' | 'mine' | 'closed' | 'team';
 type PrivateMessage = PrivateMessageRow;
 type Outgoing = { id: string; chat_id: string; body: string | null; media_name?: string | null; message_type?: string; status: string; error: string | null; created_at: string; wa_message_id: string | null };
@@ -712,7 +713,7 @@ export function PrivateInbox({
       const c = payload.new as PrivateChat;
       if (!c?.id) return;
       // conversa que outro usuário assumiu: sai da lista de quem não vê todas
-      if (!viewer.seesAll && c.assigned_to && c.assigned_to !== viewer.me) return setChats((prev) => prev.filter((x) => x.id !== c.id));
+      if (!viewer.seesTeam && c.assigned_to && c.assigned_to !== viewer.me) return setChats((prev) => prev.filter((x) => x.id !== c.id));
       setChats((prev) => [c, ...prev.filter((x) => x.id !== c.id)]);
     }),
   );
@@ -752,7 +753,7 @@ export function PrivateInbox({
     { key: 'queue', label: 'Aguardando', title: 'Aguardando atendimento (sem responsável)', unread: unreadOf((c) => inTab(c, 'queue')), count: chats.filter((c) => inTab(c, 'queue')).length },
     { key: 'mine', label: 'Meus atend.', title: 'Meus atendimentos', unread: unreadOf((c) => inTab(c, 'mine')), count: chats.filter((c) => inTab(c, 'mine')).length },
     { key: 'closed', label: 'Finalizado', title: 'Atendimentos finalizados', unread: 0 },
-    ...(viewer.seesAll ? [{ key: 'team' as const, label: 'Todos', title: 'Todos em atendimento na equipe', unread: unreadOf((c) => inTab(c, 'team')) }] : []),
+    ...(viewer.seesTeam ? [{ key: 'team' as const, label: 'Todos', title: 'Todos em atendimento na equipe', unread: unreadOf((c) => inTab(c, 'team')) }] : []),
   ];
   const ownerName = (id: string) => viewer.agents.find((a) => a.id === id)?.name ?? 'outro usuário';
 
@@ -913,7 +914,7 @@ export function PrivateInbox({
             }
             onOwner={(owner) => {
               // passou para outra pessoa (sem ver todas): a conversa sai da lista
-              if (owner && owner !== viewer.me && !viewer.seesAll) {
+              if (owner && owner !== viewer.me && !viewer.seesTeam) {
                 setChats((prev) => prev.filter((c) => c.id !== current.id));
                 choose(null);
               } else setChats((prev) => prev.map((c) => (c.id === current.id ? { ...c, assigned_to: owner } : c)));
