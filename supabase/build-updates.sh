@@ -155,7 +155,8 @@ CHECKS=$(cat <<'SQL'
   (115, 'Conversas aguardando para todos (0124)', exists (select 1 from pg_proc where proname = 'private_instance_ok' and prosrc not like '%sector%')),
   (116, 'Conversa assinada pelo WhatsApp fica com o usuário (0125)', exists (select 1 from pg_trigger where tgname = 'private_messages_signer_owner')),
   (117, 'Assinatura sem diferenciar acentos (0126)', to_regprocedure('public.private_name_key(text)') is not null),
-  (118, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (118, 'Assinatura em qualquer formato (0127)', to_regprocedure('public.private_signature(text)') is not null),
+  (119, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

@@ -164,6 +164,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    124. `supabase/migrations/0124_private_queue_for_all.sql`
    125. `supabase/migrations/0125_private_phone_signature_owner.sql`
    126. `supabase/migrations/0126_private_signer_accents.sql`
+   127. `supabase/migrations/0127_private_signer_tolerant.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
