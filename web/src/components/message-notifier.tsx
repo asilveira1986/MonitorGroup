@@ -137,8 +137,9 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
     configRef.current = config;
   });
 
-  const push = (item: ScreenItem) => {
-    if (mutedHere() || configRef.current.userOff) return;
+  // force: o "Testar alerta" aparece mesmo com os avisos silenciados (e diz isso no próprio aviso)
+  const push = (item: ScreenItem, force = false) => {
+    if (!force && (mutedHere() || configRef.current.userOff)) return;
     setItems((prev) => [item, ...prev.filter((i) => i.key !== item.key)]);
     // com a voz falando: bipe curto e a fala; sem voz: o som do tipo do aviso
     // (mensagem recebida, informativo, atenção ou crítico)
@@ -153,21 +154,33 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
 
   // "Testar alerta" nas configurações
   useEffect(() => {
-    const test = () =>
-      pushRef.current({
-        key: 'teste',
-        tone: 'brand',
-        heading: 'Nova mensagem',
-        icon: Bell,
-        group: 'Grupo de exemplo',
-        who: 'Cliente',
-        phone: '+55 (11) 99999-9999',
-        text: 'Esta é uma mensagem de teste do alerta.',
-        href: null,
-        action: 'Abrir grupo',
-        at: Date.now(),
-        speech: renderTemplate(templateFor(configRef.current.voiceOptions, 'message'), sampleValues('message')),
-      });
+    const test = () => {
+      const muted = mutedHere();
+      const off = configRef.current.userOff;
+      pushRef.current(
+        {
+          key: 'teste',
+          tone: 'brand',
+          heading: 'Nova mensagem',
+          icon: Bell,
+          group: 'Grupo de exemplo',
+          who: 'Cliente',
+          phone: '+55 (11) 99999-9999',
+          text: 'Esta é uma mensagem de teste do alerta.',
+          href: null,
+          action: 'Abrir grupo',
+          at: Date.now(),
+          speech: muted || off ? undefined : renderTemplate(templateFor(configRef.current.voiceOptions, 'message'), sampleValues('message')),
+          // os avisos de verdade estão bloqueados: o teste mostra o motivo e onde reativar
+          note: off
+            ? 'Seus alertas estão desativados: os avisos reais não aparecem. Reative no sino com risco, no rodapé do menu.'
+            : muted
+              ? 'Os avisos estão silenciados neste navegador: os reais não aparecem. Reative no sino do rodapé do menu.'
+              : undefined,
+        },
+        true,
+      );
+    };
     window.addEventListener(TEST_EVENT, test);
     return () => window.removeEventListener(TEST_EVENT, test);
   }, []);
