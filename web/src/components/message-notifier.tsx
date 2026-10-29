@@ -488,7 +488,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
 
   // canto inferior direito, sem bloquear a tela (e sem tirar o cursor de quem está digitando)
   return (
-    <div className="pointer-events-none fixed bottom-3 right-3 z-[100] flex w-[13.5rem] flex-col items-end gap-1.5 sm:bottom-4 sm:right-4">
+    <div className="pointer-events-none fixed bottom-3 right-3 z-[100] flex w-[min(27rem,calc(100vw-1.5rem))] flex-col items-end gap-1.5 sm:bottom-4 sm:right-4">
       {items.length > 1 && (
         <span className="pointer-events-auto rounded-full bg-ink px-2 py-0.5 text-[10px] font-semibold text-surface shadow" aria-live="polite">
           +{items.length - 1} aviso(s) na fila
