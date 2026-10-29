@@ -1,13 +1,13 @@
 'use client';
 
-import { Pencil, Wand2, X } from 'lucide-react';
+import { Copy, KeyRound, Pencil, Wand2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { FormDialog } from '@/components/disclosure';
 import { ActionForm } from '@/components/form-action';
 import { Button, Field, Input, Select, Toggle } from '@/components/ui';
-import { addPerson, makeAttendant, updatePerson } from '../actions';
+import { addPerson, generateUserPassword, makeAttendant, updatePerson } from '../actions';
 
 /** Senha inicial aleatória, fácil de ditar (sem caracteres parecidos). */
 function randomPassword() {
@@ -154,5 +154,63 @@ export function MakeAttendantButton({ profileId }: { profileId: string }) {
     >
       + Atende nos grupos
     </Button>
+  );
+}
+
+/**
+ * Administrador: "Gerar nova senha" para o usuário. A senha aparece uma única vez, para copiar e passar
+ * para a pessoa (depois não dá para ver de novo: é só gerar outra).
+ */
+export function GeneratePasswordButton({ profileId, name }: { profileId: string; name: string }) {
+  const [pending, start] = useTransition();
+  const [password, setPassword] = useState<string | null>(null);
+  const copy = () => {
+    if (!password) return;
+    void navigator.clipboard?.writeText(password).then(() => toast.success('Senha copiada'));
+  };
+  return (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="whitespace-nowrap"
+        disabled={pending}
+        title="Gerar uma senha nova para este usuário"
+        onClick={() => {
+          if (!confirm(`Gerar uma senha nova para ${name}?\n\nA senha atual deixa de funcionar na hora.`)) return;
+          start(async () => {
+            const res = await generateUserPassword(profileId);
+            if (!res.ok) return void toast.error(res.error);
+            setPassword(res.password);
+          });
+        }}
+      >
+        <KeyRound className="h-3.5 w-3.5" /> Nova senha
+      </Button>
+      {password && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Senha gerada">
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="relative w-full max-w-sm rounded-2xl bg-surface p-5 shadow-2xl">
+            <h2 className="text-base font-semibold">Senha nova de {name}</h2>
+            <p className="mt-1 text-xs text-ink-2">Copie e passe para a pessoa. Ela não será mostrada de novo; se perder, gere outra.</p>
+            <div className="mt-4 flex items-center gap-2">
+              <code className="flex-1 select-all rounded-xl border border-line bg-surface-2 px-3 py-2.5 text-center font-mono text-lg tracking-wider text-ink">
+                {password}
+              </code>
+              <Button type="button" variant="secondary" onClick={copy} aria-label="Copiar senha">
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="mt-3 text-xs text-muted">Recomende que a pessoa troque a senha depois do primeiro acesso.</p>
+            <div className="mt-4 flex justify-end">
+              <Button type="button" onClick={() => setPassword(null)}>
+                Pronto
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

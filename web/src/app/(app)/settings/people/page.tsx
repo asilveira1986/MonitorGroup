@@ -13,7 +13,7 @@ import { AlertScope } from '../team/alert-scope';
 import { GrantAccess } from '../team/grant-access';
 import { RecalcButton } from '../team/recalc-button';
 import { RoleSelect } from '../users/role-select';
-import { EditPerson, MakeAttendantButton, NewPersonDialog } from './person-forms';
+import { EditPerson, GeneratePasswordButton, MakeAttendantButton, NewPersonDialog } from './person-forms';
 
 type Person = { key: string; name: string; email: string | null; phone: string | null; profile?: Profile; member?: TeamMember };
 
@@ -178,6 +178,8 @@ export default async function PeoplePage() {
                   {isAdmin && u && !m && <MakeAttendantButton profileId={u.id} />}
                   {isAdmin && m && <AlertScope member={m} groups={groupsOf.get(m.id) ?? 0} />}
                   {isAdmin && <EditPerson profileId={u?.id ?? null} memberId={m?.id ?? null} name={p.name} phone={p.phone} />}
+                  {/* senha nova (a de quem administra a plataforma, só outro administrador da plataforma) */}
+                  {isAdmin && u && (!u.platform_admin || me.platform_admin) && <GeneratePasswordButton profileId={u.id} name={p.name} />}
                   {menu.length > 0 && <RowMenu actions={menu} label={`Ações de ${p.name}`} />}
                 </div>
               </li>
