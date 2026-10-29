@@ -20,8 +20,9 @@ const STATUS = {
 };
 
 /**
- * Setor do número (0121/0122): os grupos novos e as conversas privadas que chegam por ele ficam com o
- * setor (quem é do setor vê e atende); ao escolher, os grupos dele que estão no setor padrão também vão.
+ * Setor do número (0121/0122): os grupos novos que chegam por ele ficam com o setor; ao escolher, os grupos
+ * dele que estão no setor padrão também vão. As conversas privadas aguardando são de todos (0124); o setor
+ * serve para filtrar.
  */
 function InstanceSector({ inst, sectors, isAdmin }: { inst: Instance; sectors: { id: string; name: string }[]; isAdmin: boolean }) {
   const [value, setValue] = useState(inst.sector_id ?? '');
@@ -39,7 +40,7 @@ function InstanceSector({ inst, sectors, isAdmin }: { inst: Instance; sectors: {
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <Building2 className="h-4 w-4 text-muted" />
-      <span className="text-ink-2" title="Os grupos novos e as conversas privadas deste número entram neste setor">
+      <span className="text-ink-2" title="Os grupos novos deste número entram neste setor; as conversas privadas dele aparecem no filtro do setor">
         Setor do número:
       </span>
       <Select
@@ -60,8 +61,8 @@ function InstanceSector({ inst, sectors, isAdmin }: { inst: Instance; sectors: {
             const sector = sectors.find((s) => s.id === next)?.name;
             toast.success(next ? `Número no setor ${sector}` : 'Número sem setor', {
               description: next
-                ? `Os grupos novos e as conversas privadas deste número vão para ${sector}.${res.moved ? ` ${res.moved} grupo(s) que estavam no setor padrão também foram.` : ''}`
-                : 'Conversas privadas para todos; grupos novos vão para o setor padrão.',
+                ? `Os grupos novos deste número vão para ${sector}.${res.moved ? ` ${res.moved} grupo(s) que estavam no setor padrão também foram.` : ''}`
+                : 'Grupos novos vão para o setor padrão.',
             });
           });
         }}
