@@ -210,11 +210,13 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
             });
           });
       })
-      // mensagem nova no privado (só chega para quem usa as conversas privadas e vê a conversa); avisa
-      // das conversas sem responsável e das do próprio usuário (0114), não das de outros usuários
+      // mensagem nova no privado (só chega para quem usa as conversas privadas e vê a conversa): avisa
+      // sempre das conversas que o usuário está atendendo (mesmo com o aviso de mensagem nova dos grupos
+      // desligado); das que aguardam atendimento, conforme esse aviso; das de outros usuários, não
+      // (0114)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'private_messages' }, (payload) => {
         const m = payload.new as { chat_id: string; from_me: boolean; sender_name: string | null; message_type: string; body: string | null; sent_at: string };
-        if (m.from_me || !configRef.current.enabled || configRef.current.userOff) return;
+        if (m.from_me || configRef.current.userOff) return;
         // a sincronização de conversas antigas não gera aviso
         if (Date.now() - new Date(m.sent_at).getTime() > 10 * 60_000) return;
         // já está com essa conversa aberta na tela: não precisa avisar
@@ -226,6 +228,8 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         ]).then(([{ data: c }, { data: auth }]) => {
           const chat = c as { name: string | null; phone: string | null; assigned_to?: string | null } | null;
           if (!chat || (chat.assigned_to && chat.assigned_to !== auth.session?.user.id)) return;
+          const mine = Boolean(chat.assigned_to);
+          if (!mine && !configRef.current.enabled) return;
           const who = chat?.name || m.sender_name || formatPhone(chat?.phone) || 'Contato';
           const v = configRef.current;
           pushRef.current({
@@ -240,7 +244,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
                 : undefined,
             key: `pm-${m.chat_id}`,
             tone: 'brand',
-            heading: 'Mensagem no privado',
+            heading: mine ? 'Mensagem no seu atendimento' : 'Mensagem no privado (aguardando)',
             icon: MessageCircle,
             group: who,
             who: chat?.name && chat.phone ? formatPhone(chat.phone) : null,
