@@ -148,7 +148,8 @@ CHECKS=$(cat <<'SQL'
   (108, 'Nome dos contatos sem número mascarado (0117)', to_regprocedure('public.contact_real_name(text)') is not null),
   (109, 'Marcar conversa como não lida (0118)', to_regprocedure('public.mark_private_chat_unread(uuid)') is not null),
   (110, 'Finalizar e transferir atendimento no privado (0119)', to_regprocedure('public.finish_private_chat(uuid)') is not null),
-  (111, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (111, 'Avisos das conversas privadas (0120)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'private_alert_mine')),
+  (112, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

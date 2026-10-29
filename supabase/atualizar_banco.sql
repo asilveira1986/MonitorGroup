@@ -203,7 +203,8 @@ begin
   (108, 'Nome dos contatos sem número mascarado (0117)', to_regprocedure('public.contact_real_name(text)') is not null),
   (109, 'Marcar conversa como não lida (0118)', to_regprocedure('public.mark_private_chat_unread(uuid)') is not null),
   (110, 'Finalizar e transferir atendimento no privado (0119)', to_regprocedure('public.finish_private_chat(uuid)') is not null),
-  (111, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (111, 'Avisos das conversas privadas (0120)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'private_alert_mine')),
+  (112, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -212,7 +213,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -18653,6 +18654,29 @@ grant execute on function public.private_chat_agents() to authenticated;
 $mig0119$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0120_private_alert_settings.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0120', $mig0120$
+-- =====================================================================
+-- Avisos das conversas privadas com configuração própria.
+--
+--  * Configurações › Monitoramento › Avisos em tela e voz › Conversas
+--    privadas (administradores):
+--    - aviso das conversas que o usuário está atendendo;
+--    - aviso das conversas aguardando atendimento (antes seguia o aviso
+--      de mensagem nova dos grupos);
+--    - som e voz próprios do privado.
+--  * Tudo começa ligado. A notificação no celular continua em Meu perfil
+--    (cada usuário).
+-- =====================================================================
+
+alter table public.app_settings
+  add column if not exists private_alert_mine boolean not null default true,
+  add column if not exists private_alert_queue boolean not null default true,
+  add column if not exists private_alert_sound boolean not null default true,
+  add column if not exists private_alert_voice boolean not null default true;
+$mig0120$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -18808,6 +18832,7 @@ from (values
   (108, 'Nome dos contatos sem número mascarado (0117)', to_regprocedure('public.contact_real_name(text)') is not null),
   (109, 'Marcar conversa como não lida (0118)', to_regprocedure('public.mark_private_chat_unread(uuid)') is not null),
   (110, 'Finalizar e transferir atendimento no privado (0119)', to_regprocedure('public.finish_private_chat(uuid)') is not null),
-  (111, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (111, 'Avisos das conversas privadas (0120)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'private_alert_mine')),
+  (112, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

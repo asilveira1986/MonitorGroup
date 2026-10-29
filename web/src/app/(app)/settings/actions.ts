@@ -570,6 +570,24 @@ export async function saveMessageAlertSettings(values: {
   return result(error);
 }
 
+/** Avisos em tela das conversas privadas (0120). */
+export async function savePrivateAlertSettings(values: { mine: boolean; queue: boolean; sound: boolean; voice: boolean }): Promise<Result> {
+  const profile = await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('app_settings')
+    .update({
+      private_alert_mine: values.mine,
+      private_alert_queue: values.queue,
+      private_alert_sound: values.sound,
+      private_alert_voice: values.voice,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('company_id', profile.company_id);
+  revalidatePath('/', 'layout');
+  return result(error);
+}
+
 // ---------------------------------------------------------------------
 // Setores (somente admin): grupos e usuários de cada setor e as permissões
 // ---------------------------------------------------------------------

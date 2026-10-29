@@ -32,6 +32,11 @@ export type AlertConfig = {
   voiceOptions?: VoiceOptions;
   /** o usuário desligou os avisos para si (Meus alertas) */
   userOff?: boolean;
+  /** conversas privadas (0120): aviso das que o usuário atende, das que aguardam, som e voz */
+  privateMine?: boolean;
+  privateQueue?: boolean;
+  privateSound?: boolean;
+  privateVoice?: boolean;
 };
 
 const STORAGE_KEY = 'notify-messages';
@@ -79,6 +84,8 @@ type ScreenItem = {
   at: number;
   /** frase do aviso por voz */
   speech?: string;
+  /** toca o som (padrão: a configuração geral) */
+  sound?: boolean;
 };
 
 /** som de cada tipo de aviso quando não há fala */
@@ -144,7 +151,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
     // com a voz falando: bipe curto e a fala; sem voz: o som do tipo do aviso
     // (mensagem recebida, informativo, atenção ou crítico)
     const speaking = configRef.current.voice !== false && Boolean(item.speech);
-    if (configRef.current.sound) playAlertSound(speaking ? 'voice' : TONE_SOUND[item.tone]);
+    if (item.sound ?? configRef.current.sound) playAlertSound(speaking ? 'voice' : TONE_SOUND[item.tone]);
     if (speaking) speak(item.speech!, configRef.current.voiceOptions, configRef.current.sound ? 450 : 0);
   };
   const pushRef = useRef(push);
@@ -224,9 +231,9 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
           });
       })
       // mensagem nova no privado (só chega para quem usa as conversas privadas e vê a conversa): avisa
-      // sempre das conversas que o usuário está atendendo (mesmo com o aviso de mensagem nova dos grupos
-      // desligado); das que aguardam atendimento, conforme esse aviso; das de outros usuários, não
-      // (0114)
+      // das conversas que o usuário está atendendo e das que aguardam atendimento, cada uma com a sua
+      // opção, com som e voz próprios (Configurações › Avisos › Conversas privadas, 0120); das de
+      // outros usuários, não
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'private_messages' }, (payload) => {
         const m = payload.new as { chat_id: string; from_me: boolean; sender_name: string | null; message_type: string; body: string | null; sent_at: string };
         if (m.from_me || configRef.current.userOff) return;
@@ -242,12 +249,13 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
           const chat = c as { name: string | null; phone: string | null; assigned_to?: string | null } | null;
           if (!chat || (chat.assigned_to && chat.assigned_to !== auth.session?.user.id)) return;
           const mine = Boolean(chat.assigned_to);
-          if (!mine && !configRef.current.enabled) return;
-          const who = chat?.name || m.sender_name || formatPhone(chat?.phone) || 'Contato';
           const v = configRef.current;
+          if (mine ? v.privateMine === false : v.privateQueue === false) return;
+          const who = chat?.name || m.sender_name || formatPhone(chat?.phone) || 'Contato';
           pushRef.current({
+            sound: v.privateSound !== false,
             speech:
-              v.voiceMessages !== false
+              v.privateVoice !== false
                 ? renderTemplate(templateFor(v.voiceOptions, 'message'), {
                     grupo: 'conversa privada',
                     remetente: who,

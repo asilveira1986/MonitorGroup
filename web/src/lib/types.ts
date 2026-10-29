@@ -257,6 +257,11 @@ export type AppSettings = {
   reply_sign_name: boolean;
   /** assinatura no privado (0116) */
   private_sign_name?: boolean;
+  /** avisos em tela das conversas privadas (0120) */
+  private_alert_mine?: boolean;
+  private_alert_queue?: boolean;
+  private_alert_sound?: boolean;
+  private_alert_voice?: boolean;
   /** alerta de nova mensagem no canto da tela */
   msg_alert_enabled: boolean;
   /** 0 = fica até fechar; senão, segundos até fechar sozinho */

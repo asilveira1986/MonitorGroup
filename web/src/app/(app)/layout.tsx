@@ -16,9 +16,8 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', ['aberta', 'em_andamento']),
     supabase
       .from('app_settings')
-      .select(
-        'demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, demand_commitment_enabled, msg_alert_enabled, msg_alert_auto_close, msg_alert_sound, msg_alert_alerts, msg_alert_voice, msg_alert_voice_messages, msg_alert_voice_sla, msg_alert_voice_templates, msg_alert_voice_name, msg_alert_voice_rate, msg_alert_voice_pitch, menu_access',
-      )
+      // tudo da linha: coluna nova que ainda não existe no banco não derruba a consulta
+      .select('*')
       .maybeSingle(),
     currentCompany(),
     // quem administra a plataforma troca de empresa pelo topo
@@ -113,6 +112,11 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
             pitch: settings?.msg_alert_voice_pitch,
           },
           userOff: Boolean(profile.alerts_off),
+          // conversas privadas (0120); sem o script, tudo ligado
+          privateMine: (settings as { private_alert_mine?: boolean } | null)?.private_alert_mine ?? true,
+          privateQueue: (settings as { private_alert_queue?: boolean } | null)?.private_alert_queue ?? true,
+          privateSound: (settings as { private_alert_sound?: boolean } | null)?.private_alert_sound ?? true,
+          privateVoice: (settings as { private_alert_voice?: boolean } | null)?.private_alert_voice ?? true,
         }}
       />
       <div className="transition-[padding] duration-200 lg:pl-60 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
