@@ -199,6 +199,7 @@ export default async function PeoplePage() {
                       phone={p.phone}
                       sectors={sectors}
                       sectorIds={u ? (sectorsOf.get(u.id) ?? []) : []}
+                      email={u && (!u.platform_admin || me.platform_admin) ? u.email : null}
                     />}
                   {/* senha nova (a de quem administra a plataforma, só outro administrador da plataforma) */}
                   {isAdmin && u && (!u.platform_admin || me.platform_admin) && <GeneratePasswordButton profileId={u.id} name={p.name} />}

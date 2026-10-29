@@ -844,6 +844,52 @@ const revalidatePeople = () => {
   revalidatePath('/', 'layout');
 };
 
+/**
+ * Troca o e-mail de acesso de um usuário em todos os lugares: o login (Supabase Auth, já confirmado), o
+ * perfil, a autorização de acesso e o atendente ligado pelo e-mail. A senha continua a mesma.
+ * Devolve a mensagem de erro, ou null.
+ */
+async function changeUserEmail(me: Awaited<ReturnType<typeof requireAdmin>>, userId: string, rawEmail: string): Promise<string | null> {
+  const email = rawEmail.trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return 'E-mail inválido.';
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return 'Configure SUPABASE_SERVICE_ROLE_KEY no servidor para trocar o e-mail.';
+  const admin = createAdminClient();
+  const { data: user } = await admin.from('profiles').select('id, email, full_name, company_id, platform_admin').eq('id', userId).maybeSingle();
+  if (!user || (!me.platform_admin && user.company_id !== me.company_id)) return 'Usuário não encontrado.';
+  const old = String(user.email ?? '').toLowerCase();
+  if (email === old) return null;
+  if (user.platform_admin && !me.platform_admin) return 'O e-mail de quem administra a plataforma só ele mesmo pode trocar.';
+  const { data: taken } = await admin.from('profiles').select('id').ilike('email', email.replace(/[\\%_]/g, (c) => `\\${c}`)).neq('id', userId).limit(1);
+  if (taken?.length) return 'Este e-mail já é de outro usuário.';
+  const { error } = await admin.auth.admin.updateUserById(userId, { email, email_confirm: true });
+  if (error) return /already|registered|exists/i.test(error.message) ? 'Este e-mail já é de outro usuário.' : friendlyDbError(error.message);
+  await admin.from('profiles').update({ email }).eq('id', userId);
+  // autorização de acesso: a do e-mail antigo passa para o novo (se o novo já tinha uma, fica a nova)
+  const { data: newAllowed } = await admin.from('allowed_emails').select('email').eq('email', email).maybeSingle();
+  if (newAllowed) await admin.from('allowed_emails').delete().eq('email', old);
+  else await admin.from('allowed_emails').update({ email }).eq('email', old);
+  // atendente ligado pelo e-mail (e-mail exato, sem diferenciar maiúsculas)
+  if (user.company_id) {
+    await admin
+      .from('team_members')
+      .update({ user_email: email })
+      .eq('company_id', user.company_id)
+      .ilike('user_email', old.replace(/[\\%_]/g, (c) => `\\${c}`));
+  }
+  await admin.from('activity_log').insert({
+    company_id: user.company_id ?? me.company_id,
+    user_id: me.id,
+    user_email: me.email,
+    user_name: me.full_name || me.email,
+    category: 'usuarios',
+    action: 'trocou e-mail',
+    entity: 'profiles',
+    entity_id: userId,
+    summary: `Trocou o e-mail de ${user.full_name || old} de ${old} para ${email}`,
+  });
+  return null;
+}
+
 /** Setores do usuário (quem vê e atende os grupos de cada setor): deixa exatamente os escolhidos. */
 async function syncUserSectors(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, sectorIds: string[]): Promise<string | null> {
   const ids = [...new Set(sectorIds.filter(Boolean))];
@@ -922,11 +968,17 @@ export async function updatePerson(values: {
   phone: string;
   /** setores do usuário (só quem tem acesso ao painel); undefined = não mexe */
   sectorIds?: string[];
+  /** novo e-mail de acesso; undefined (ou igual ao atual) = não mexe */
+  email?: string;
 }): Promise<Result> {
   const admin = await requireAdmin();
   const supabase = await createClient();
   const name = values.name.trim().replace(/\s+/g, ' ');
   if (!name) return { ok: false, error: 'Informe o nome.' };
+  if (values.profileId && values.email !== undefined) {
+    const err = await changeUserEmail(admin, values.profileId, values.email);
+    if (err) return { ok: false, error: err };
+  }
   const phone = brPhone(values.phone);
   if (values.memberId) {
     // o atendente; o acesso ligado a ele acompanha (0107)

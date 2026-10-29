@@ -122,6 +122,7 @@ export function EditPerson({
   phone,
   sectors = [],
   sectorIds: initialSectors = [],
+  email = null,
 }: {
   profileId: string | null;
   memberId: string | null;
@@ -129,16 +130,19 @@ export function EditPerson({
   phone: string | null;
   sectors?: SectorOption[];
   sectorIds?: string[];
+  /** e-mail de acesso (quem entra no painel) */
+  email?: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [n, setN] = useState(name);
   const [p, setP] = useState(phone ?? '');
   const [sectorIds, setSectorIds] = useState<string[]>(initialSectors);
+  const [mail, setMail] = useState(email ?? '');
   const [pending, start] = useTransition();
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="rounded-lg p-1.5 text-ink-2 hover:bg-surface-2" aria-label={`Editar ${name}`} title="Editar nome, telefone e setores">
+      <button type="button" onClick={() => setOpen(true)} className="rounded-lg p-1.5 text-ink-2 hover:bg-surface-2" aria-label={`Editar ${name}`} title="Editar nome, e-mail, telefone e setores">
         <Pencil className="h-4 w-4" />
       </button>
       {open && (
@@ -148,7 +152,16 @@ export function EditPerson({
             onSubmit={(e) => {
               e.preventDefault();
               start(async () => {
-                const res = await updatePerson({ profileId, memberId, name: n, phone: p, sectorIds: profileId ? sectorIds : undefined });
+                const emailChanged = Boolean(profileId && email && mail.trim().toLowerCase() !== email.toLowerCase());
+                if (emailChanged && !confirm(`Trocar o e-mail de acesso para ${mail.trim()}?\n\nA pessoa passa a entrar com o e-mail novo (a senha continua a mesma).`)) return;
+                const res = await updatePerson({
+                  profileId,
+                  memberId,
+                  name: n,
+                  phone: p,
+                  sectorIds: profileId ? sectorIds : undefined,
+                  email: emailChanged ? mail : undefined,
+                });
                 if (!res.ok) return void toast.error(res.error);
                 toast.success('Pessoa atualizada');
                 setOpen(false);
@@ -168,6 +181,11 @@ export function EditPerson({
             <Field label="WhatsApp (com DDD)">
               <Input value={p} onChange={(e) => setP(e.target.value)} inputMode="tel" placeholder="51 99999-8888" required={Boolean(memberId)} />
             </Field>
+            {profileId && email && (
+              <Field label="E-mail de acesso" hint="É com ele que a pessoa entra no painel. A senha continua a mesma.">
+                <Input value={mail} onChange={(e) => setMail(e.target.value)} type="email" required autoComplete="off" />
+              </Field>
+            )}
             {profileId ? (
               <Field label="Setores" hint="Vê e atende os grupos e as conversas privadas dos setores marcados.">
                 <SectorPicker sectors={sectors} value={sectorIds} onChange={setSectorIds} />
