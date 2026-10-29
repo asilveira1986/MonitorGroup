@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertOctagon, AlertTriangle, Bell, BellOff, BellRing, CalendarDays, Clock, Info, MessageCircle } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, Bell, BellOff, BellRing, CalendarDays, Clock, Info, MessageCircle, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -121,7 +121,7 @@ async function inMyAlertScope(groupId: string | null | undefined): Promise<boole
 }
 
 /**
- * Avisos grandes no centro da tela, todos no mesmo formato:
+ * Avisos no canto inferior direito da tela, todos no mesmo formato:
  *  - NOVA MENSAGEM: cliente escreveu (grupo, quem enviou e a mensagem);
  *  - SLA EXCEDIDO: a mensagem do cliente passou do tempo de resposta do grupo;
  *  - alertas do sistema (cliente sem resposta, palavra-chave, desconexão...).
@@ -459,62 +459,65 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
   };
   const Icon = current.icon;
 
+  // canto inferior direito, sem bloquear a tela (e sem tirar o cursor de quem está digitando)
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
-      onClick={dismiss}
-      role="presentation"
-    >
+    <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-[calc(100%-2rem)] max-w-sm flex-col items-end gap-2 sm:bottom-5 sm:right-5">
+      {items.length > 1 && (
+        <span className="pointer-events-auto rounded-full bg-ink px-2.5 py-0.5 text-xs font-semibold text-surface shadow" aria-live="polite">
+          +{items.length - 1} aviso(s) na fila
+        </span>
+      )}
       <div
         key={current.key + current.at}
         role="alertdialog"
-        aria-modal="true"
+        aria-modal="false"
         aria-labelledby="msgalert-title"
-        onClick={(e) => e.stopPropagation()}
         style={{ ['--alert-glow' as string]: t.glow }}
-        className={cn('msgalert-box w-full max-w-lg overflow-hidden rounded-3xl border-4 bg-surface', t.border)}
+        className={cn('msgalert-box pointer-events-auto w-full overflow-hidden rounded-2xl border-[3px] bg-surface', t.border)}
       >
-        <div className={cn('relative flex items-center gap-3 px-5 py-3.5', t.header)}>
-          <span className="msgalert-bell flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20">
-            <Icon className="h-5 w-5" aria-hidden />
+        <div className={cn('relative flex items-center gap-2.5 px-4 py-2.5', t.header)}>
+          <span className="msgalert-bell flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20">
+            <Icon className="h-4 w-4" aria-hidden />
           </span>
-          <p id="msgalert-title" className="text-xl font-extrabold uppercase tracking-wide">
+          <p id="msgalert-title" className="min-w-0 flex-1 truncate text-sm font-extrabold uppercase tracking-wide">
             {current.heading}
           </p>
           {config.autoClose > 0 && (
             <AutoClose key={current.key + current.at} seconds={config.autoClose} onDone={dismiss} />
           )}
+          <button type="button" onClick={dismiss} className="-mr-1 rounded-lg p-1 opacity-80 hover:bg-white/15 hover:opacity-100" aria-label="Fechar aviso">
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
-        <div className="px-5 py-4">
-          <p className="text-2xl font-bold leading-tight text-ink">{current.group}</p>
+        <div className="px-4 py-3">
+          <p className="truncate text-lg font-bold leading-tight text-ink">{current.group}</p>
           {current.who && (
-            <p className="mt-1 text-base font-semibold text-ink-2">
+            <p className="mt-0.5 truncate text-sm font-semibold text-ink-2">
               {current.who}
               {current.phone && <span className="font-normal text-muted"> · {current.phone}</span>}
             </p>
           )}
           {current.text && (
-            <p className="mt-3 line-clamp-5 whitespace-pre-line rounded-xl bg-surface-2 px-4 py-3 text-base text-ink">
+            <p className="mt-2 line-clamp-3 whitespace-pre-line rounded-xl bg-surface-2 px-3 py-2 text-sm text-ink">
               {current.text}
             </p>
           )}
-          {current.note && <p className="mt-3 text-sm font-semibold text-critical-ink">{current.note}</p>}
+          {current.note && <p className="mt-2 text-xs font-semibold text-critical-ink">{current.note}</p>}
         </div>
 
-        <div className="flex gap-2 border-t border-line bg-surface-2/60 px-5 py-3">
+        <div className="flex gap-2 border-t border-line bg-surface-2/60 px-4 py-2.5">
           <button
             type="button"
             onClick={go}
-            autoFocus
-            className={cn('flex-1 rounded-xl px-4 py-3 text-base font-bold hover:opacity-90', t.button)}
+            className={cn('flex-1 rounded-xl px-3 py-2 text-sm font-bold hover:opacity-90', t.button)}
           >
             {current.action}
           </button>
           <button
             type="button"
             onClick={dismiss}
-            className="rounded-xl border border-line bg-surface px-4 py-3 text-base font-medium text-ink-2 hover:text-ink"
+            className="rounded-xl border border-line bg-surface px-3 py-2 text-sm font-medium text-ink-2 hover:text-ink"
           >
             Fechar
           </button>

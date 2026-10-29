@@ -257,7 +257,7 @@ export type AppSettings = {
   reply_sign_name: boolean;
   /** assinatura no privado (0116) */
   private_sign_name?: boolean;
-  /** alerta de nova mensagem no centro da tela */
+  /** alerta de nova mensagem no canto da tela */
   msg_alert_enabled: boolean;
   /** 0 = fica até fechar; senão, segundos até fechar sozinho */
   msg_alert_auto_close: number;
@@ -273,7 +273,7 @@ export type AppSettings = {
   msg_alert_voice_name?: string | null;
   msg_alert_voice_rate?: number | string | null;
   msg_alert_voice_pitch?: number | string | null;
-  /** alertas do sistema e SLA excedido também abrem no centro da tela */
+  /** alertas do sistema e SLA excedido também abrem no canto da tela */
   msg_alert_alerts: boolean;
   reply_allowed: 'all' | 'admin';
 };

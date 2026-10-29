@@ -331,27 +331,28 @@ h2,
   scrollbar-color: var(--border) transparent;
 }
 
-/* Alerta de nova mensagem: entrada com "pulo", brilho pulsando e sino balançando */
+/* Alerta de nova mensagem (canto inferior direito): sobe da borda da tela, brilho pulsando e sino
+   balançando */
 @keyframes msgalert-in {
   0% {
     opacity: 0;
-    transform: scale(0.85);
+    transform: translateY(110%);
   }
-  60% {
+  70% {
     opacity: 1;
-    transform: scale(1.03);
+    transform: translateY(-4px);
   }
   100% {
-    transform: scale(1);
+    transform: translateY(0);
   }
 }
 @keyframes msgalert-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--alert-glow, var(--brand)) 55%, transparent), 0 25px 60px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--alert-glow, var(--brand)) 55%, transparent), 0 18px 45px rgba(0, 0, 0, 0.3);
   }
   50% {
-    box-shadow: 0 0 0 14px color-mix(in srgb, var(--alert-glow, var(--brand)) 0%, transparent), 0 25px 60px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 0 0 10px color-mix(in srgb, var(--alert-glow, var(--brand)) 0%, transparent), 0 18px 45px rgba(0, 0, 0, 0.3);
   }
 }
 @keyframes msgalert-ring {
@@ -373,8 +374,8 @@ h2,
 }
 .msgalert-box {
   animation:
-    msgalert-in 0.35s ease-out,
-    msgalert-glow 1.6s ease-in-out 0.35s infinite;
+    msgalert-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1),
+    msgalert-glow 1.6s ease-in-out 0.45s infinite;
 }
 .msgalert-bell {
   animation: msgalert-ring 1.4s ease-in-out infinite;

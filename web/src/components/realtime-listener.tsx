@@ -57,7 +57,7 @@ export function RealtimeListener() {
 
   useRealtime('app-realtime', (channel) =>
     channel
-      // alertas novos abrem no centro da tela (MessageNotifier); aqui só atualizam os contadores
+      // alertas novos abrem no canto da tela (MessageNotifier); aqui só atualizam os contadores
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'alerts' }, refresh)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'groups' }, refresh)
       // configuração de indicadores alterada por um admin: vale na hora para todos

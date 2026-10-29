@@ -26,13 +26,13 @@ export function MessageAlertSettings({ settings, disabled }: { settings: AppSett
     <Card>
       <CardHeader
         title="Alertas em tela"
-        description="Avisos grandes no centro da tela: nova mensagem de cliente, SLA excedido e os alertas do sistema. Vale para todos os usuários; cada um ainda pode silenciar no próprio navegador pelo sino do topo. O aviso por voz tem a seção própria ao lado."
+        description="Avisos que sobem no canto inferior direito da tela: nova mensagem de cliente, SLA excedido e os alertas do sistema. Vale para todos os usuários; cada um ainda pode silenciar no próprio navegador pelo sino do topo. O aviso por voz tem a seção própria ao lado."
       />
       <div className="divide-y divide-line px-4 pb-4 sm:px-5">
         <Row
           icon={BellRing}
           title="Mostrar o alerta de nova mensagem"
-          text="Abre o aviso no centro da tela com o nome do grupo, quem enviou e a mensagem."
+          text="Abre o aviso no canto inferior direito da tela com o nome do grupo, quem enviou e a mensagem."
           checked={enabled}
           onChange={setEnabled}
           disabled={disabled || pending}
@@ -40,7 +40,7 @@ export function MessageAlertSettings({ settings, disabled }: { settings: AppSett
         <Row
           icon={AlarmClock}
           title="Abrir também os alertas (SLA excedido e alertas do sistema)"
-          text="Quando a mensagem de um cliente passa do tempo de resposta (SLA do grupo ou o padrão) e quando o sistema cria um alerta (cliente sem resposta, palavra-chave, WhatsApp desconectado…), o aviso abre no centro da tela no mesmo formato. Desligado, os alertas aparecem só como um aviso pequeno no canto."
+          text="Quando a mensagem de um cliente passa do tempo de resposta (SLA do grupo ou o padrão) e quando o sistema cria um alerta (cliente sem resposta, palavra-chave, WhatsApp desconectado…), o aviso abre no canto da tela no mesmo formato. Desligado, os alertas aparecem só como um aviso pequeno, sem som."
           checked={alerts}
           onChange={setAlerts}
           disabled={disabled || pending}

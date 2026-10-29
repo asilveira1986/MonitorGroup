@@ -322,7 +322,7 @@ O SLA segue a mesma regra dos indicadores (tempo útil, se essa opção estiver 
 
 ## Alertas em tela
 
-Com o painel aberto, os avisos abrem **grandes, no centro da tela**, todos no mesmo formato (fundo escurecido, borda pulsando, ícone balançando, bipe e título da aba piscando), com o grupo e a mensagem e os botões **Abrir grupo** e **Fechar** (ou Esc):
+Com o painel aberto, os avisos sobem no **canto inferior direito da tela**, sem bloquear o que você está fazendo, todos no mesmo formato (borda pulsando, ícone balançando, bipe e título da aba piscando), com o grupo e a mensagem e os botões **Abrir grupo** e **Fechar** (ou Esc):
 
 | Aviso | Cor | Quando |
 |---|---|---|
