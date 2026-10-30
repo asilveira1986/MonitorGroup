@@ -751,14 +751,14 @@ export function PrivateInbox({
   // rótulos curtos para caber numa linha; o nome completo fica na dica
   const TABS: { key: Tab; label: string; title: string; unread: number; count?: number }[] = [
     { key: 'queue', label: 'Aguardando', title: 'Aguardando atendimento (sem responsável)', unread: unreadOf((c) => inTab(c, 'queue')), count: chats.filter((c) => inTab(c, 'queue')).length },
-    { key: 'mine', label: 'Meus atend.', title: 'Meus atendimentos', unread: unreadOf((c) => inTab(c, 'mine')), count: chats.filter((c) => inTab(c, 'mine')).length },
+    { key: 'mine', label: 'Meus atendimentos', title: 'Meus atendimentos', unread: unreadOf((c) => inTab(c, 'mine')), count: chats.filter((c) => inTab(c, 'mine')).length },
     { key: 'closed', label: 'Finalizado', title: 'Atendimentos finalizados', unread: 0 },
     ...(viewer.seesTeam ? [{ key: 'team' as const, label: 'Todos', title: 'Todos em atendimento na equipe', unread: unreadOf((c) => inTab(c, 'team')) }] : []),
   ];
   const ownerName = (id: string) => viewer.agents.find((a) => a.id === id)?.name ?? 'outro usuário';
 
   return (
-    <Card className="grid h-[calc(100vh-14rem)] min-h-[32rem] overflow-hidden md:grid-cols-[26rem_minmax(0,1fr)]">
+    <Card className="grid h-[calc(100vh-14rem)] min-h-[32rem] overflow-hidden md:grid-cols-[30rem_minmax(0,1fr)]">
       <div className={cn('flex min-h-0 flex-col border-line md:border-r', current && 'hidden md:flex')}>
         <div className="flex items-center gap-2 border-b border-line p-3">
           <div className="relative flex-1">
