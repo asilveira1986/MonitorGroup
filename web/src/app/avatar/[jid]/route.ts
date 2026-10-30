@@ -24,7 +24,10 @@ export async function GET(_request: Request, ctx: { params: Promise<{ jid: strin
     visible.data?.length || jid.endsWith('@g.us')
       ? null
       : (await supabase.from('wa_contacts').select('jid').eq('jid', jid).limit(1)).data?.length ||
-        (await supabase.from('private_chats').select('id').eq('jid', jid).limit(1)).data?.length;
+        (await supabase.from('private_chats').select('id').eq('jid', jid).limit(1)).data?.length ||
+        // conversa pelo identificador novo do WhatsApp (@lid) com a foto guardada pelo número
+        (jid.endsWith('@s.whatsapp.net') &&
+          (await supabase.from('private_chats').select('id').eq('phone', jid.split('@')[0]).limit(1)).data?.length);
   if (!visible.data?.length && !contact) return new Response('Sem foto', { status: 404 });
 
   const { data, error } = await createAdminClient().storage.from('media').createSignedUrl(avatar.path, LINK_SECONDS);

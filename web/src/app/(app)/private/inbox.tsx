@@ -234,8 +234,11 @@ function ChatView({
   onOwner,
   onClosed,
   onUnread,
+  photo,
 }: {
   chat: PrivateChat;
+  /** foto do contato (jid com foto guardada) */
+  photo?: string | null;
   timeZone: string;
   onBack: () => void;
   tags: CustomerTag[];
@@ -398,9 +401,7 @@ function ChatView({
         <button type="button" onClick={onBack} className="rounded-lg p-1 text-ink-2 hover:bg-surface-2 md:hidden" aria-label="Voltar para a lista">
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-sm font-semibold text-brand-text">
-          {initials(title)}
-        </span>
+        <Avatar jid={photo} hasPhoto={Boolean(photo)} name={title} fallback={initials(title)} className="h-10 w-10 rounded-full bg-brand-soft text-sm text-brand-text" />
         <div className="min-w-0">
           <p className="truncate font-semibold">{title}</p>
           <p className="truncate text-xs text-muted">{chat.phone ? formatPhone(chat.phone) : 'número não informado pelo WhatsApp'}</p>
@@ -674,6 +675,7 @@ export function PrivateInbox({
   tags = [],
   viewer,
   sectors,
+  photos = {},
 }: {
   initialChats: PrivateChat[];
   selectedId: string | null;
@@ -682,6 +684,8 @@ export function PrivateInbox({
   viewer: Viewer;
   /** setores dos números (0121): filtro e o setor de cada conversa; sem setor nos números, não aparece */
   sectors?: { options: { id: string; name: string }[]; byInstance: Record<string, string | null> };
+  /** foto de cada conversa: id da conversa -> jid com foto guardada */
+  photos?: Record<string, string>;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -846,9 +850,13 @@ export function PrivateInbox({
                   onClick={() => choose(c.id)}
                   className={cn('flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-surface-2', c.id === selected && 'bg-brand-soft/60')}
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
-                    {initials(title)}
-                  </span>
+                  <Avatar
+                    jid={photos[c.id]}
+                    hasPhoto={Boolean(photos[c.id])}
+                    name={title}
+                    fallback={initials(title)}
+                    className="h-10 w-10 rounded-full bg-brand-soft text-xs text-brand-text"
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
                       <span className={cn('min-w-0 flex-1 truncate text-sm', c.unread_count ? 'font-semibold' : 'font-medium')}>{title}</span>
@@ -892,6 +900,7 @@ export function PrivateInbox({
           <ChatView
             key={current.id}
             chat={current}
+            photo={photos[current.id]}
             timeZone={timeZone}
             onBack={() => choose(null)}
             onUnread={() => {

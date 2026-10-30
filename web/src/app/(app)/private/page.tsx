@@ -26,6 +26,19 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
     // etiquetas de clientes (0103)
     supabase.from('customer_tags').select('id, name, color').order('name'),
   ]);
+  // foto de cada conversa (guardada pelo worker): pelo identificador da conversa ou, sem foto nele, pelo número
+  const chatRows = (chats ?? []) as PrivateChat[];
+  const phoneJid = (c: PrivateChat) => (c.phone ? `${c.phone}@s.whatsapp.net` : null);
+  const photoJids = [...new Set(chatRows.flatMap((c) => [c.jid, phoneJid(c)]).filter((j): j is string => Boolean(j)))];
+  const { data: avatarRows } = photoJids.length
+    ? await supabase.from('contact_avatars').select('jid').in('jid', photoJids).not('path', 'is', null)
+    : { data: [] };
+  const withPhoto = new Set(((avatarRows ?? []) as { jid: string }[]).map((a) => a.jid));
+  const photos: Record<string, string> = {};
+  for (const c of chatRows) {
+    const jid = [c.jid, phoneJid(c)].find((j) => j && withPhoto.has(j));
+    if (jid) photos[c.id] = jid;
+  }
   // responsável pelas conversas (0114): administradores veem todas; a lista de quem pode receber
   const [{ data: seesAll }, { data: seesTeam, error: seesTeamError }, { data: agents }, { data: instRows }, { data: sectorRows }] = await Promise.all([
     supabase.rpc('private_sees_all'),
@@ -96,6 +109,7 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
               agents: (agents ?? []) as ChatAgent[],
             }}
             sectors={sectorFilter}
+            photos={photos}
           />
         </>
       )}
