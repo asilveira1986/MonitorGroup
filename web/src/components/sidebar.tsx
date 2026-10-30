@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, BookUser, Building2, CalendarDays, ChevronDown, MessageCircle, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
+import { Activity, Bell, BookUser, Building2, CalendarDays, ChevronDown, MessageCircle, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -155,6 +155,8 @@ export function Sidebar({
         ...(platformAdmin
           ? [
               { href: '/platform', label: 'Empresas', icon: Building2, badgeKey: undefined },
+              // uso da plataforma por empresa (0135)
+              { href: '/acompanhamento', label: 'Acompanhamento', icon: Activity, badgeKey: undefined },
               // log de atividades dos usuários: só quem administra a plataforma
               { href: '/logs', label: 'Log', icon: ScrollText, badgeKey: undefined },
             ]

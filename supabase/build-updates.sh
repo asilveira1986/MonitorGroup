@@ -165,7 +165,8 @@ CHECKS=$(cat <<'SQL'
   (123, 'Recalcular grupos em etapas (0132)', to_regprocedure('public.recalc_company_rebuild(uuid,uuid[])') is not null),
   (124, 'Outro número da empresa conta como empresa (0133)', coalesce(pg_get_functiondef('public.recalc_company_reclassify(uuid)'::regprocedure) like '%0133%', false)),
   (125, 'Privado por setor de novo (0134)', exists (select 1 from pg_proc where proname = 'private_instance_ok' and prosrc like '%in_general_sector%')),
-  (126, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (126, 'Acompanhamento da plataforma (0135)', to_regprocedure('public.platform_monitor()') is not null),
+  (127, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

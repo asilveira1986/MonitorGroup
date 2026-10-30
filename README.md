@@ -172,6 +172,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    132. `supabase/migrations/0132_recalc_in_steps.sql`
    133. `supabase/migrations/0133_company_numbers_are_team.sql`
    134. `supabase/migrations/0134_private_by_sector.sql`
+   135. `supabase/migrations/0135_platform_monitor.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

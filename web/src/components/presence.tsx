@@ -15,6 +15,15 @@ const OnlineContext = createContext<Set<string>>(new Set());
 export function PresenceProvider({ companyId, userId, children }: { companyId: string | null; userId: string; children: ReactNode }) {
   const [online, setOnline] = useState<Set<string>>(() => new Set());
 
+  // último acesso (0135): com o sistema aberto, avisa o banco a cada 2 minutos (acompanhamento da plataforma)
+  useEffect(() => {
+    const supabase = createClient();
+    const touch = () => void supabase.rpc('touch_last_seen').then(() => {});
+    touch();
+    const t = setInterval(touch, 120_000);
+    return () => clearInterval(t);
+  }, [userId]);
+
   useEffect(() => {
     if (!companyId) return;
     const supabase = createClient();
