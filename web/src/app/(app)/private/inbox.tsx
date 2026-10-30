@@ -799,10 +799,10 @@ export function PrivateInbox({
             </button>
           ))}
         </div>
-        {(tags.length > 0 || sectors) && (
+        {(tags.length > 0 || (sectors && viewer.seesAll)) && (
           <div className="flex gap-2 border-b border-line px-3 py-2">
-            {/* setor do número da conversa (0121) */}
-            {sectors && (
+            {/* setor do número da conversa (0121): filtro só para administradores; os demais já veem só o seu setor (0134) */}
+            {sectors && viewer.seesAll && (
               <select
                 value={sectorFilter}
                 onChange={(e) => setSectorFilter(e.target.value)}

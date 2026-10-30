@@ -210,7 +210,7 @@ begin
   (112, 'Setor do número de WhatsApp (0121)', to_regprocedure('public.set_instance_sector(uuid,uuid)') is not null),
   (113, 'Grupos no setor do número (0122)', exists (select 1 from pg_proc where proname = 'groups_default_sector' and prosrc like '%whatsapp_instances%')),
   (114, 'Troca de senha no primeiro acesso (0123)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'must_change_password')),
-  (115, 'Conversas aguardando para todos (0124)', exists (select 1 from pg_proc where proname = 'private_instance_ok' and prosrc not like '%sector%')),
+  (115, 'Conversas aguardando para todos (0124)', exists (select 1 from pg_proc where proname = 'private_instance_ok' and (prosrc not like '%sector%' or prosrc like '%in_general_sector%'))),
   (116, 'Conversa assinada pelo WhatsApp fica com o usuário (0125)', exists (select 1 from pg_trigger where tgname = 'private_messages_signer_owner')),
   (117, 'Assinatura sem diferenciar acentos (0126)', to_regprocedure('public.private_name_key(text)') is not null),
   (118, 'Assinatura em qualquer formato (0127)', to_regprocedure('public.private_signature(text)') is not null),
@@ -220,7 +220,8 @@ begin
   (122, 'Dashboard mais rápido (0131)', to_regprocedure('public.ind_responses_calc(jsonb)') is not null),
   (123, 'Recalcular grupos em etapas (0132)', to_regprocedure('public.recalc_company_rebuild(uuid,uuid[])') is not null),
   (124, 'Outro número da empresa conta como empresa (0133)', coalesce(pg_get_functiondef('public.recalc_company_reclassify(uuid)'::regprocedure) like '%0133%', false)),
-  (125, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (125, 'Privado por setor de novo (0134)', exists (select 1 from pg_proc where proname = 'private_instance_ok' and prosrc like '%in_general_sector%')),
+  (126, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -229,7 +230,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -3743,6 +3744,78 @@ end $fix$;
 $mig0133$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0134_private_by_sector.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0134', $mig0134$
+-- =====================================================================
+-- Conversas privadas por setor (de novo, depois da 0124).
+--
+--  * A conversa que aguarda atendimento aparece e avisa só para quem é do
+--    setor do número por onde ela chegou (Configurações › WhatsApp ›
+--    Setor do número). Número sem setor: todos.
+--  * Administradores e quem é do setor padrão ("Geral", 0129) veem todas.
+--  * A conversa que já está com o usuário continua com ele, de qualquer
+--    setor.
+--  * Na tela, só os administradores filtram por setor.
+-- =====================================================================
+
+-- o usuário pode ver e atender as conversas que aguardam neste número?
+create or replace function public.private_instance_ok(p_instance uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.is_admin() or public.in_general_sector() or coalesce((
+    select i.sector_id is null
+        or exists (select 1 from public.sector_members m where m.sector_id = i.sector_id and m.user_id = auth.uid())
+      from public.whatsapp_instances i where i.id = p_instance), true)
+$$;
+revoke all on function public.private_instance_ok(uuid) from public, anon;
+grant execute on function public.private_instance_ok(uuid) to authenticated;
+
+-- aviso no celular: a que aguarda num número com setor vai para o setor (e o setor padrão e os
+-- administradores); sem setor, para todos; a assumida, para o responsável
+create or replace function public.private_messages_push()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  c public.private_chats%rowtype;
+  v_sector uuid;
+  v_general uuid;
+  v_title text;
+  v_body text;
+begin
+  if new.from_me or new.sent_at < now() - interval '10 minutes' then
+    return new;
+  end if;
+  select * into c from public.private_chats where id = new.chat_id;
+  if not coalesce((select private_chats_enabled from public.companies where id = new.company_id), false) then
+    return new;
+  end if;
+  v_title := '💬 ' || coalesce(nullif(btrim(c.name), ''), nullif(btrim(new.sender_name), ''), c.phone, 'Conversa privada');
+  v_body := case new.message_type when 'text' then left(coalesce(new.body, ''), 160)
+                                  when 'audio' then '🎤 Áudio' when 'image' then '📷 Imagem'
+                                  when 'document' then '📄 Documento' when 'video' then '🎬 Vídeo'
+                                  else coalesce(left(new.body, 160), 'Nova mensagem') end;
+  select sector_id into v_sector from public.whatsapp_instances where id = c.instance_id;
+  v_general := public.general_sector_id(new.company_id);
+  if c.assigned_to is null and v_sector is not null then
+    perform public.queue_push(new.company_id, 'private', 'users', v_title, v_body,
+      '/private?c=' || new.chat_id, null,
+      array(select distinct p.id from public.profiles p
+             where p.company_id = new.company_id and p.active and (p.platform_admin or p.role in ('admin', 'agent'))
+               and (p.role = 'admin' or p.platform_admin
+                    or exists (select 1 from public.sector_members m
+                                where m.user_id = p.id and (m.sector_id = v_sector or m.sector_id = v_general)))),
+      'private:' || new.chat_id);
+  elsif c.assigned_to is null then
+    perform public.queue_push(new.company_id, 'private', 'private', v_title, v_body,
+      '/private?c=' || new.chat_id, null, '{}', 'private:' || new.chat_id);
+  else
+    perform public.queue_push(new.company_id, 'private', 'users', v_title, v_body,
+      '/private?c=' || new.chat_id, null, array[c.assigned_to], 'private:' || new.chat_id);
+  end if;
+  return new;
+end;
+$$;
+$mig0134$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -3904,7 +3977,7 @@ from (values
   (112, 'Setor do número de WhatsApp (0121)', to_regprocedure('public.set_instance_sector(uuid,uuid)') is not null),
   (113, 'Grupos no setor do número (0122)', exists (select 1 from pg_proc where proname = 'groups_default_sector' and prosrc like '%whatsapp_instances%')),
   (114, 'Troca de senha no primeiro acesso (0123)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'must_change_password')),
-  (115, 'Conversas aguardando para todos (0124)', exists (select 1 from pg_proc where proname = 'private_instance_ok' and prosrc not like '%sector%')),
+  (115, 'Conversas aguardando para todos (0124)', exists (select 1 from pg_proc where proname = 'private_instance_ok' and (prosrc not like '%sector%' or prosrc like '%in_general_sector%'))),
   (116, 'Conversa assinada pelo WhatsApp fica com o usuário (0125)', exists (select 1 from pg_trigger where tgname = 'private_messages_signer_owner')),
   (117, 'Assinatura sem diferenciar acentos (0126)', to_regprocedure('public.private_name_key(text)') is not null),
   (118, 'Assinatura em qualquer formato (0127)', to_regprocedure('public.private_signature(text)') is not null),
@@ -3914,6 +3987,7 @@ from (values
   (122, 'Dashboard mais rápido (0131)', to_regprocedure('public.ind_responses_calc(jsonb)') is not null),
   (123, 'Recalcular grupos em etapas (0132)', to_regprocedure('public.recalc_company_rebuild(uuid,uuid[])') is not null),
   (124, 'Outro número da empresa conta como empresa (0133)', coalesce(pg_get_functiondef('public.recalc_company_reclassify(uuid)'::regprocedure) like '%0133%', false)),
-  (125, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (125, 'Privado por setor de novo (0134)', exists (select 1 from pg_proc where proname = 'private_instance_ok' and prosrc like '%in_general_sector%')),
+  (126, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
