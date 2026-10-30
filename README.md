@@ -167,6 +167,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    127. `supabase/migrations/0127_private_signer_tolerant.sql`
    128. `supabase/migrations/0128_private_signer_all_users.sql`
    129. `supabase/migrations/0129_general_sector_sees_all.sql`
+   130. `supabase/migrations/0130_private_dashboard.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

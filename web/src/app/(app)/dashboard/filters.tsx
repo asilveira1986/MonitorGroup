@@ -24,6 +24,8 @@ export function DashboardFilters({
   extra,
   today,
   defaultPeriod = '7d',
+  origin,
+  privateAgents,
 }: {
   groups: { id: string; name: string }[];
   members: { id: string; name: string }[];
@@ -32,6 +34,9 @@ export function DashboardFilters({
   defaultPeriod?: string;
   /** ação ao lado do filtro de grupo (ex.: Modo TV) */
   extra?: ReactNode;
+  /** Grupos | Privado (0130): sem privateAgents, a escolha não aparece */
+  origin?: 'grupos' | 'privado';
+  privateAgents?: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -50,6 +55,15 @@ export function DashboardFilters({
     else next.delete(key);
     return `${pathname}?${next.toString()}`;
   };
+  // trocar entre grupos e privado: mantém o período, limpa os filtros do outro
+  const hrefOrigin = (value: 'grupos' | 'privado') => {
+    const next = new URLSearchParams(params);
+    for (const key of ['group', 'member', 'user']) next.delete(key);
+    if (value === 'privado') next.set('origem', 'privado');
+    else next.delete('origem');
+    return `${pathname}?${next.toString()}`;
+  };
+  const isPrivate = origin === 'privado';
   const hrefDayless = (value: string) => {
     const next = new URLSearchParams(params);
     next.delete('date');
@@ -66,6 +80,23 @@ export function DashboardFilters({
         extra ? 'min-[1600px]:w-auto' : 'sm:w-auto',
       )}
     >
+      {privateAgents && (
+        <div className="flex w-full rounded-xl border border-line bg-surface p-1 sm:inline-flex sm:w-auto sm:shrink-0" aria-label="Grupos ou privado">
+          {(['grupos', 'privado'] as const).map((o) => (
+            <Link
+              key={o}
+              href={hrefOrigin(o)}
+              aria-current={(origin ?? 'grupos') === o ? 'page' : undefined}
+              className={cn(
+                'flex-1 rounded-lg px-3 py-2 text-center text-xs font-medium transition sm:flex-none sm:py-1.5',
+                (origin ?? 'grupos') === o ? 'bg-brand text-brand-ink' : 'text-ink-2 hover:text-ink',
+              )}
+            >
+              {o === 'grupos' ? 'Grupos' : 'Privado'}
+            </Link>
+          ))}
+        </div>
+      )}
       <div className="flex w-full rounded-xl border border-line bg-surface p-1 sm:inline-flex sm:w-auto sm:shrink-0">
         {PERIODS.map((p) => (
           <Link
@@ -80,7 +111,24 @@ export function DashboardFilters({
           </Link>
         ))}
       </div>
-      <div className="flex w-full items-center gap-2 sm:w-auto">
+      {isPrivate && (
+        <div className="w-full sm:w-60 xl:w-72">
+          <Select
+            className="sm:h-9 sm:text-xs"
+            value={params.get('user') ?? ''}
+            onChange={(e) => router.push(hrefWith('user', e.target.value))}
+            aria-label="Filtrar por usuário"
+          >
+            <option value="">Todos os usuários</option>
+            {(privateAgents ?? []).map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
+      <div className={cn('flex w-full items-center gap-2 sm:w-auto', isPrivate && 'hidden')}>
         <div className="min-w-0 flex-1 sm:w-60 sm:flex-none xl:w-72">
           <Select
             className="sm:h-9 sm:text-xs"
@@ -97,7 +145,7 @@ export function DashboardFilters({
           </Select>
         </div>
       </div>
-      {members.length > 0 && (
+      {members.length > 0 && !isPrivate && (
         <div className="w-full sm:w-52 xl:w-60">
           <Select
             className="sm:h-9 sm:text-xs"

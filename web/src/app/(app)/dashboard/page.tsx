@@ -8,12 +8,32 @@ import { requireMenu } from '@/lib/auth';
 import { loadIndicatorFilters } from '@/lib/indicator-filters';
 import type { IndicatorValue, KpiData } from '@/lib/indicators';
 import { DashboardFilters } from './filters';
+import { PrivateDashboard } from './private-dashboard';
 
 export default async function DashboardPage({ searchParams }: PageProps<'/dashboard'>) {
   const profile = await requireMenu('/dashboard');
-  const { supabase, tz, filters, comparison, today, groups, members, periodLabel, period } = await loadIndicatorFilters(await searchParams, {
+  const sp = await searchParams;
+  const { supabase, tz, filters, comparison, today, groups, members, periodLabel, period } = await loadIndicatorFilters(sp, {
     defaultPeriod: 'today',
   });
+  // Grupos | Privado (0130): o privado só para quem usa as conversas privadas
+  const { data: privateAllowed } = await supabase.rpc('can_use_private_chats');
+  const { data: agentRows } = privateAllowed ? await supabase.rpc('private_chat_agents') : { data: null };
+  const privateAgents = privateAllowed ? ((agentRows ?? []) as { id: string; name: string }[]) : undefined;
+  if (privateAllowed && sp.origem === 'privado') {
+    const user = typeof sp.user === 'string' && /^[0-9a-f-]{36}$/i.test(sp.user) ? sp.user : null;
+    return (
+      <PrivateDashboard
+        filters={filters}
+        comparison={comparison}
+        tz={tz}
+        user={user}
+        header={
+          <DashboardFilters groups={groups} members={members} today={today} defaultPeriod="today" origin="privado" privateAgents={privateAgents} />
+        }
+      />
+    );
+  }
 
   // o dashboard só conhece o catálogo: calcula os indicadores ativos, na ordem configurada
   // e, junto, o mesmo cálculo no intervalo de comparação (dia anterior no mesmo horário)
@@ -66,6 +86,8 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
             members={members}
             today={today}
             defaultPeriod="today"
+            origin="grupos"
+            privateAgents={privateAgents}
             extra={
               <Link
                 href="/tv"
