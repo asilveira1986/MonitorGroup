@@ -19,7 +19,7 @@ import makeWASocket, {
 } from 'baileys';
 import { onClientMessage, resolveDisconnectAlerts } from './alerts.js';
 import { clearAuthState, hasAuthState, usePostgresAuthState } from './auth-state.js';
-import { closingTemplate, findTeamMember, getSettings, isCompanyActive } from './cache.js';
+import { closingTemplate, findCompanyNumber, findTeamMember, getSettings, isCompanyActive } from './cache.js';
 import { isClosingMessage } from './closing.js';
 import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
@@ -1790,35 +1790,37 @@ export class WhatsAppManager {
     const participantAlt =
       (keyAlt && keyAlt !== participant ? keyAlt : null) ??
       (fromMe ? null : await this.phoneJidForLid(session, msg.key.remoteJid, participant));
-    const member = fromMe ? null : await findTeamMember(session.companyId, participant, participantAlt);
+    // outro número conectado da empresa no mesmo grupo: é a empresa, mesmo sem cadastro em Pessoas
+    const company = fromMe ? null : await findCompanyNumber(session.companyId, participant, participantAlt);
+    const member = fromMe || company ? null : await findTeamMember(session.companyId, participant, participantAlt);
+    const team = fromMe || Boolean(company) || Boolean(member);
     const settings = await getSettings(session.companyId);
     return {
       fromMe,
       participant,
       member,
-      fromTeam: fromMe || Boolean(member),
+      fromTeam: team,
       senderPhone: phoneFromJid(participant) ?? phoneFromJid(participantAlt),
       senderName: fromMe
         ? (session.outbox.get(msg.key.id ?? '') ?? session.sock.user?.name ?? 'Número conectado')
-        : (member?.name ?? msg.pushName ?? session.lidNames.get(participant ?? '') ?? null),
+        : (company?.name ?? member?.name ?? msg.pushName ?? session.lidNames.get(participant ?? '') ?? null),
       sentAtSeconds: toSeconds(msg.messageTimestamp),
       opensPending: !(
         settings.ignore_acknowledgements &&
         (isAcknowledgement(content.type, content.body, settings.ignore_phrases) ||
           // agradecimento/confirmação logo depois da equipe: encerra o assunto (só volta a pedir
           // resposta se vier pergunta, pedido ou dúvida)
-          (!fromMe &&
-            !member &&
+          (!team &&
             isThanksAfterTeam(content.type, content.body) &&
             // respondendo (citando) uma mensagem da equipe, ou logo depois da equipe
             ((await this.quotedIsTeam(session, msg)) || (await this.lastWasTeam(session, msg)))))
       ),
       // figurinha/emoji do cliente não conta como a última mensagem dele
       ignoredAsLast:
-        !fromMe && !member && settings.ignore_stickers_emoji !== false && isStickerOrEmoji(content.type, content.body),
+        !team && settings.ignore_stickers_emoji !== false && isStickerOrEmoji(content.type, content.body),
       // \fechamento: encerra a conversa (marcado no envio pelo painel ou reconhecido pelo texto)
       closes:
-        (fromMe || Boolean(member)) &&
+        team &&
         (session.closingOutbox.has(msg.key.id ?? '') ||
           isClosingMessage(content.body, await closingTemplate(session.companyId))),
     };
