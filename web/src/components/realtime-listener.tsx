@@ -12,6 +12,9 @@ const MIN_INTERVAL_MS = 10_000;
 // telas de indicadores (cálculo pesado no banco): no máximo uma vez por minuto
 const HEAVY_PAGES = ['/dashboard', '/reports'];
 const HEAVY_INTERVAL_MS = 60_000;
+// telas que mostram dados dos grupos: as outras (configurações, contatos, privado, log...) só precisam
+// dos contadores do menu, uma vez por minuto basta (cada atualização refaz as consultas da página no banco)
+const GROUP_PAGES = ['/panel', '/pending', '/groups', '/alerts', '/demands', '/agenda'];
 
 export function RealtimeListener() {
   const router = useRouter();
@@ -28,8 +31,10 @@ export function RealtimeListener() {
       return;
     }
     if (timer.current) return;
-    const heavy = HEAVY_PAGES.some((p) => window.location.pathname.startsWith(p));
-    const wait = Math.max(1500, (heavy ? HEAVY_INTERVAL_MS : MIN_INTERVAL_MS) - (Date.now() - last.current));
+    const path = window.location.pathname;
+    // a conversa de um grupo (/groups/[id]) já se atualiza sozinha pelo tempo real
+    const slow = HEAVY_PAGES.some((p) => path.startsWith(p)) || !GROUP_PAGES.some((p) => path === p || (p !== '/groups' && path.startsWith(p)));
+    const wait = Math.max(1500, (slow ? HEAVY_INTERVAL_MS : MIN_INTERVAL_MS) - (Date.now() - last.current));
     timer.current = setTimeout(() => {
       timer.current = null;
       last.current = Date.now();

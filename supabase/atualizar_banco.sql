@@ -120,7 +120,9 @@ begin
       where table_schema = 'public' and table_name = 'contact_avatars' and column_name = 'full_path')),
   (39, 'Busca de palavras-chave mais rápida (0046)',
       coalesce(obj_description('public.match_keyword(text,jsonb)'::regprocedure, 'pg_proc'), '') like '%0046%'
-      or exists (select 1 from pg_proc where proname = 'match_keyword' and prolang = (select oid from pg_language where lanname = 'plpgsql'))),
+      or exists (select 1 from pg_proc where proname = 'match_keyword' and prolang = (select oid from pg_language where lanname = 'plpgsql'))
+      -- 0115 refez a busca (padrão das palavras guardado no carregamento)
+      or to_regprocedure('public.kw_pattern(jsonb)') is not null),
   (40, 'Nome e telefone do cliente na conversa (0047)', coalesce(pg_get_functiondef('public.group_members(uuid)'::regprocedure) like '%p.lid,%', false)),
   (41, 'Sem mensagens técnicas do WhatsApp (0048)', not exists (select 1 from public.messages
       where message_type in ('secretEncrypted', 'encEventResponse', 'encComment', 'pollResultSnapshot', 'placeholder', 'statusMention'))),
@@ -214,7 +216,8 @@ begin
   (119, 'Assinatura para todos os usuários (0128)', to_regprocedure('public.private_signer_names(uuid)') is not null),
   (120, 'Setor padrão vê tudo (0129)', to_regprocedure('public.private_sees_team()') is not null),
   (121, 'Dashboard do privado (0130)', to_regprocedure('public.private_dashboard(timestamptz,timestamptz,uuid,boolean)') is not null),
-  (122, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (122, 'Dashboard mais rápido (0131)', to_regprocedure('public.ind_responses_calc(jsonb)') is not null),
+  (123, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -223,7 +226,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -19617,6 +19620,175 @@ grant execute on function public.private_dashboard(timestamptz, timestamptz, uui
 $mig0130$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0131_dashboard_speed_2.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0131', $mig0131$
+-- =====================================================================
+-- Dashboard e Painel de grupos mais rápidos (volume alto de mensagens).
+--
+-- Medido com ~50 mil mensagens de grupo (30 dias no dashboard):
+--  * reply_signal (classifica cada mensagem do cliente: pergunta, pedido,
+--    agradecimento...) levava ~0,4 ms por mensagem: 3,5 s só nas
+--    conversas. Agora em plpgsql, normalizando o texto uma vez e só
+--    testando as palavras (sem procurar qual delas bateu): ~14x mais
+--    rápido, mesmo resultado.
+--  * team_close_kind: o mesmo.
+--  * ind_responses (respostas da equipe com o tempo em horário comercial)
+--    era recalculada por cada indicador que a usa (e, dentro da consulta,
+--    mais de uma vez): agora é calculada uma vez por carregamento e
+--    reaproveitada, como as conversas (0115).
+-- =====================================================================
+
+create or replace function public.reply_signal(p_body text, p_type text, p jsonb)
+returns text language plpgsql immutable set search_path = public as $$
+declare
+  n text;
+  pat text;
+begin
+  if p_type in ('sticker', 'reaction') then
+    return 'closing';
+  end if;
+  if p_type = 'audio' then
+    return 'audio';
+  end if;
+  if nullif(btrim(coalesce(p_body, '')), '') is null then
+    return case when p_type in ('image', 'video', 'document') then 'media' else 'plain' end;
+  end if;
+  n := public.norm_text(btrim(p_body));
+  pat := public.kw_pattern(p->'urgent_keywords');
+  if pat is not null and n ~ pat then
+    return 'urgent';
+  end if;
+  if p_body ~ '[?¿]'
+     or n ~ ('^(quem|qual|quais|quando|onde|como|quanto|quantos|quantas|por que|porque|pq|'
+             || 'sera que|alguem|voces|vcs|tem como|teria como|consegue|conseguem|poderia|poderiam|pode(?! deixar)|podem|'
+             || 'da pra|da para|e possivel|seria possivel|existe|ha como|tem previsao)([^[:alnum:]]|$)') then
+    return 'question';
+  end if;
+  pat := public.kw_pattern(p->'request_keywords');
+  if pat is not null and n ~ pat then
+    return 'request';
+  end if;
+  if n ~ ('^(bom dia|boa tarde|boa noite|oi+|ola|opa|e ai|salve|oie)'
+          || '([ ,!.]+(pessoal|a todos|todos|gente|galera|tudo bem|tudo bom|como vai))*[ !.,]*$') then
+    return 'greeting';
+  end if;
+  pat := public.kw_pattern(p->'closing_keywords');
+  if pat is not null and n ~ pat and length(btrim(p_body)) <= 80 then
+    return 'closing';
+  end if;
+  -- só emojis/pontuação
+  if p_body !~ '[[:alnum:]]' then
+    return 'closing';
+  end if;
+  -- risadas
+  if n ~ '^((k|ha|he|hi|rs|ks)+[ !.]*)+$' then
+    return 'social';
+  end if;
+  return 'plain';
+end;
+$$;
+
+create or replace function public.team_close_kind(p_body text, p jsonb)
+returns text language plpgsql immutable set search_path = public as $$
+declare
+  n text;
+  pat text;
+begin
+  if nullif(btrim(coalesce(p_body, '')), '') is null then
+    return null;
+  end if;
+  n := public.norm_text(p_body);
+  pat := public.kw_pattern(p->'commitment_keywords');
+  if pat is not null and n ~ pat then
+    return 'compromisso';
+  end if;
+  pat := public.kw_pattern(p->'team_closing_keywords');
+  if pat is not null and n ~ pat then
+    return 'encerramento';
+  end if;
+  return null;
+end;
+$$;
+
+-- ------------------------------------------------ respostas da equipe: uma vez por carregamento
+-- o cálculo de antes, com outro nome
+create or replace function public.ind_responses_calc(f jsonb)
+returns table (
+  id uuid, group_id uuid, group_name text, responder text, team_member_id uuid, sent_at timestamptz,
+  response_time_seconds int, business_seconds int, sla_seconds int, client_name text, question text,
+  asked_at timestamptz, asked_in_business boolean
+)
+language sql stable set search_path = public
+as $$
+  select r.id, r.group_id, r.group_name,
+         coalesce(tm.name, r.sender_name, case when r.from_me then 'Número conectado' end, 'Equipe'),
+         r.team_member_id, r.sent_at, r.response_time_seconds,
+         public.business_seconds(r.sent_at - make_interval(secs => r.response_time_seconds), r.sent_at, f),
+         r.sla_seconds,
+         coalesce(q.sender_name, q.sender_phone, 'Cliente'), q.body,
+         r.sent_at - make_interval(secs => r.response_time_seconds),
+         public.is_business_time(r.sent_at - make_interval(secs => r.response_time_seconds), f)
+  from public.ind_scope(f) r
+  left join public.team_members tm on tm.id = r.team_member_id
+  left join public.messages q on q.id = r.answered_message_id
+  where r.from_team and r.response_time_seconds is not null
+    and ((f->>'member_id') is null or r.team_member_id = (f->>'member_id')::uuid)
+$$;
+
+create or replace function public.ind_responses(f jsonb)
+returns table (
+  id uuid, group_id uuid, group_name text, responder text, team_member_id uuid, sent_at timestamptz,
+  response_time_seconds int, business_seconds int, sla_seconds int, client_name text, question text,
+  asked_at timestamptz, asked_in_business boolean
+)
+language plpgsql stable set search_path = public as $$
+declare
+  -- guardada só durante o carregamento (transação) de quem pediu
+  v_key text := 'mgresp.k' || md5(f::text || '|' || coalesce(auth.uid()::text, ''));
+  v text := current_setting(v_key, true);
+begin
+  if v is null or v = '' then
+    select coalesce(jsonb_agg(to_jsonb(c)), '[]'::jsonb)::text into v from public.ind_responses_calc(f) c;
+    perform set_config(v_key, v, true);
+  end if;
+  return query
+    select * from jsonb_to_recordset(v::jsonb) as x(
+      id uuid, group_id uuid, group_name text, responder text, team_member_id uuid, sent_at timestamptz,
+      response_time_seconds int, business_seconds int, sla_seconds int, client_name text, question text,
+      asked_at timestamptz, asked_in_business boolean);
+end;
+$$;
+
+-- ------------------------------------------------ "SLA só no horário comercial": lido uma vez por carregamento
+-- (nos indicadores ela entra no cálculo de cada resposta; lida a cada linha, eram ~0,5 ms por resposta)
+create or replace function public.sla_business_time_only()
+returns boolean language plpgsql stable set search_path = public as $$
+declare
+  v_key text := 'mgsla.u' || replace(coalesce(auth.uid()::text, 'x'), '-', '');
+  v text := current_setting(v_key, true);
+begin
+  if v is null or v = '' then
+    v := coalesce((select (params->>'business_time_only')::boolean from public.my_indicators where key = 'taxa_resposta_sla'), true)::text;
+    perform set_config(v_key, v, true);
+  end if;
+  return v::boolean;
+end;
+$$;
+
+-- ------------------------------------------------ conversas privadas
+-- quem enviou cada mensagem (dashboard do privado, 0130) e as exclusões em cascata da conversa
+create index if not exists private_outgoing_chat_wa_idx on public.private_outgoing (chat_id, wa_message_id);
+create index if not exists private_actions_chat_idx on public.private_actions (chat_id);
+
+-- ------------------------------------------------ demandas: "minhas pessoas da equipe" calculado uma vez por consulta
+drop policy if exists demands_read on public.demands;
+create policy demands_read on public.demands for select
+  using (group_id in (select unnest(public.visible_group_ids()))
+         or (company_id = (select public.current_company_id())
+             and assignee_id in (select unnest(public.my_team_member_ids()))));
+$mig0131$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -19689,7 +19861,9 @@ from (values
       where table_schema = 'public' and table_name = 'contact_avatars' and column_name = 'full_path')),
   (39, 'Busca de palavras-chave mais rápida (0046)',
       coalesce(obj_description('public.match_keyword(text,jsonb)'::regprocedure, 'pg_proc'), '') like '%0046%'
-      or exists (select 1 from pg_proc where proname = 'match_keyword' and prolang = (select oid from pg_language where lanname = 'plpgsql'))),
+      or exists (select 1 from pg_proc where proname = 'match_keyword' and prolang = (select oid from pg_language where lanname = 'plpgsql'))
+      -- 0115 refez a busca (padrão das palavras guardado no carregamento)
+      or to_regprocedure('public.kw_pattern(jsonb)') is not null),
   (40, 'Nome e telefone do cliente na conversa (0047)', coalesce(pg_get_functiondef('public.group_members(uuid)'::regprocedure) like '%p.lid,%', false)),
   (41, 'Sem mensagens técnicas do WhatsApp (0048)', not exists (select 1 from public.messages
       where message_type in ('secretEncrypted', 'encEventResponse', 'encComment', 'pollResultSnapshot', 'placeholder', 'statusMention'))),
@@ -19783,6 +19957,7 @@ from (values
   (119, 'Assinatura para todos os usuários (0128)', to_regprocedure('public.private_signer_names(uuid)') is not null),
   (120, 'Setor padrão vê tudo (0129)', to_regprocedure('public.private_sees_team()') is not null),
   (121, 'Dashboard do privado (0130)', to_regprocedure('public.private_dashboard(timestamptz,timestamptz,uuid,boolean)') is not null),
-  (122, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (122, 'Dashboard mais rápido (0131)', to_regprocedure('public.ind_responses_calc(jsonb)') is not null),
+  (123, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

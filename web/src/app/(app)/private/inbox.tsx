@@ -719,7 +719,8 @@ export function PrivateInbox({
   );
   // quem assumiu outra conversa nem sempre chega pelo tempo real: confere a lista de tempos em tempos
   useEffect(() => {
-    const t = setInterval(() => router.refresh(), 60_000);
+    // só com a aba visível: em segundo plano não refaz as consultas à toa
+    const t = setInterval(() => document.visibilityState === 'visible' && router.refresh(), 60_000);
     return () => clearInterval(t);
   }, [router]);
 

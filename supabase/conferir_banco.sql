@@ -64,7 +64,9 @@ from (values
       where table_schema = 'public' and table_name = 'contact_avatars' and column_name = 'full_path')),
   (39, 'Busca de palavras-chave mais rápida (0046)',
       coalesce(obj_description('public.match_keyword(text,jsonb)'::regprocedure, 'pg_proc'), '') like '%0046%'
-      or exists (select 1 from pg_proc where proname = 'match_keyword' and prolang = (select oid from pg_language where lanname = 'plpgsql'))),
+      or exists (select 1 from pg_proc where proname = 'match_keyword' and prolang = (select oid from pg_language where lanname = 'plpgsql'))
+      -- 0115 refez a busca (padrão das palavras guardado no carregamento)
+      or to_regprocedure('public.kw_pattern(jsonb)') is not null),
   (40, 'Nome e telefone do cliente na conversa (0047)', coalesce(pg_get_functiondef('public.group_members(uuid)'::regprocedure) like '%p.lid,%', false)),
   (41, 'Sem mensagens técnicas do WhatsApp (0048)', not exists (select 1 from public.messages
       where message_type in ('secretEncrypted', 'encEventResponse', 'encComment', 'pollResultSnapshot', 'placeholder', 'statusMention'))),
@@ -158,6 +160,7 @@ from (values
   (119, 'Assinatura para todos os usuários (0128)', to_regprocedure('public.private_signer_names(uuid)') is not null),
   (120, 'Setor padrão vê tudo (0129)', to_regprocedure('public.private_sees_team()') is not null),
   (121, 'Dashboard do privado (0130)', to_regprocedure('public.private_dashboard(timestamptz,timestamptz,uuid,boolean)') is not null),
-  (122, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (122, 'Dashboard mais rápido (0131)', to_regprocedure('public.ind_responses_calc(jsonb)') is not null),
+  (123, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
