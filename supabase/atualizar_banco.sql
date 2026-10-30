@@ -129,7 +129,7 @@ begin
   (42, 'Arquivos e vídeos + equipe com acesso (0049)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'team_members' and column_name = 'user_email')),
   (43, 'Log de atividades (0050)', to_regprocedure('public.platform_activity_log(timestamptz,timestamptz,uuid,text,text,integer,integer)') is not null),
-  (44, 'Equipe reconhecida pelo LID (0051)', exists (select 1 from pg_proc where proname in ('recalc_company_groups', 'recalc_company_groups_core')
+  (44, 'Equipe reconhecida pelo LID (0051)', exists (select 1 from pg_proc where proname in ('recalc_company_groups', 'recalc_company_groups_core', 'recalc_company_reclassify')
       and pronamespace = 'public'::regnamespace and prosrc like '%gp.lid = m.sender_jid%')),
   (45, 'Silenciar grupo retirado (0053)', to_regclass('public.group_mutes') is null and not exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'sectors' and column_name = 'can_mute')),
@@ -165,7 +165,7 @@ begin
   (69, 'Mensagens sem remetente (0078)', to_regprocedure('public.set_message_sender(uuid,uuid)') is not null),
   (70, 'Membros × atendentes e agenda (0079)', exists (select 1 from pg_proc where proname = 'group_members' and prosrc like '%phone_key%')),
   (71, 'Remetente pela citação (0080)', to_regprocedure('public.identify_message_sender(uuid,text,text,text,uuid,boolean)') is not null),
-  (72, 'Remetente pelos membros do grupo (0081)', exists (select 1 from pg_proc where proname in ('recalc_company_groups', 'recalc_company_groups_core') and prosrc like '%0081%')),
+  (72, 'Remetente pelos membros do grupo (0081)', exists (select 1 from pg_proc where proname in ('recalc_company_groups', 'recalc_company_groups_core', 'recalc_company_reclassify') and prosrc like '%0081%')),
   (73, 'Log do quem enviou? (0082)', exists (select 1 from pg_proc where proname = 'set_message_sender' and prosrc like '%activity_log%')),
   (74, 'Logo da empresa e foto dos atendentes (0083)', to_regprocedure('public.set_company_logo(text)') is not null),
   (75, 'Revisão só dos grupos que mudaram (0084)', to_regprocedure('public.recalc_company_senders(uuid)') is not null),
@@ -20263,7 +20263,7 @@ from (values
   (42, 'Arquivos e vídeos + equipe com acesso (0049)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'team_members' and column_name = 'user_email')),
   (43, 'Log de atividades (0050)', to_regprocedure('public.platform_activity_log(timestamptz,timestamptz,uuid,text,text,integer,integer)') is not null),
-  (44, 'Equipe reconhecida pelo LID (0051)', exists (select 1 from pg_proc where proname in ('recalc_company_groups', 'recalc_company_groups_core')
+  (44, 'Equipe reconhecida pelo LID (0051)', exists (select 1 from pg_proc where proname in ('recalc_company_groups', 'recalc_company_groups_core', 'recalc_company_reclassify')
       and pronamespace = 'public'::regnamespace and prosrc like '%gp.lid = m.sender_jid%')),
   (45, 'Silenciar grupo retirado (0053)', to_regclass('public.group_mutes') is null and not exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'sectors' and column_name = 'can_mute')),
@@ -20299,7 +20299,7 @@ from (values
   (69, 'Mensagens sem remetente (0078)', to_regprocedure('public.set_message_sender(uuid,uuid)') is not null),
   (70, 'Membros × atendentes e agenda (0079)', exists (select 1 from pg_proc where proname = 'group_members' and prosrc like '%phone_key%')),
   (71, 'Remetente pela citação (0080)', to_regprocedure('public.identify_message_sender(uuid,text,text,text,uuid,boolean)') is not null),
-  (72, 'Remetente pelos membros do grupo (0081)', exists (select 1 from pg_proc where proname in ('recalc_company_groups', 'recalc_company_groups_core') and prosrc like '%0081%')),
+  (72, 'Remetente pelos membros do grupo (0081)', exists (select 1 from pg_proc where proname in ('recalc_company_groups', 'recalc_company_groups_core', 'recalc_company_reclassify') and prosrc like '%0081%')),
   (73, 'Log do quem enviou? (0082)', exists (select 1 from pg_proc where proname = 'set_message_sender' and prosrc like '%activity_log%')),
   (74, 'Logo da empresa e foto dos atendentes (0083)', to_regprocedure('public.set_company_logo(text)') is not null),
   (75, 'Revisão só dos grupos que mudaram (0084)', to_regprocedure('public.recalc_company_senders(uuid)') is not null),
