@@ -553,7 +553,7 @@ Criou o usuário antes de rodar os scripts? Basta executar o `0004`: ele cria os
 
 ## Atualizar o banco depois de uma nova versão
 
-Em vez de rodar os scripts um a um, execute no SQL Editor do Supabase o arquivo **`supabase/atualizar_banco.sql`**. Ele junta todos os scripts a partir do 0002, na ordem certa, e pode ser executado quantas vezes quiser: o que já existe é mantido e o que falta é criado. Erros como `function public.business_seconds(...) does not exist` acontecem quando um script é rodado antes de outro anterior; o arquivo único evita isso.
+Em vez de rodar os scripts um a um, execute no SQL Editor do Supabase o arquivo **`supabase/atualizar_banco.sql`**. O SQL Editor corta o texto colado perto de 1 MB (aparece `syntax error at end of input`): por isso o mesmo conteúdo também vem dividido em **`supabase/atualizar_banco_parte1.sql`**, **`parte2`**…, para executar na ordem, uma depois da outra. Ele junta todos os scripts a partir do 0002, na ordem certa, e pode ser executado quantas vezes quiser: o que já existe é mantido e o que falta é criado. Erros como `function public.business_seconds(...) does not exist` acontecem quando um script é rodado antes de outro anterior; o arquivo único evita isso.
 
 > O banco guarda quais scripts já foram aplicados (tabela `schema_migrations`): a cada execução só rodam os que faltam, então as tabelas quase não são travadas. Se mesmo assim alguma estiver ocupada pelo worker ou pelo painel (`deadlock detected` ou trava demorada), aquela parte espera e é repetida sozinha, até 5 vezes. Se ainda falhar, o que já foi gravado fica e basta executar de novo.
 

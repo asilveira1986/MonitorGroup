@@ -166,6 +166,9 @@ CHECKS=$(cat <<'SQL'
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+# cabeçalho: controle dos scripts aplicados (vai no arquivo completo e em cada parte)
 {
   echo "-- ====================================================================="
   echo "-- ATUALIZAÇÃO COMPLETA DO BANCO (gerado por supabase/build-updates.sh)"
@@ -246,9 +249,12 @@ SQL
   end if;
 end \$seed\$;
 SQL
-  for f in migrations/0*.sql; do
-    case "$f" in migrations/0001_*) continue ;; esac
-    v=$(basename "$f" | cut -c1-4)
+} > "$TMP/head.sql"
+# cada script, no seu trecho
+for f in migrations/0*.sql; do
+  case "$f" in migrations/0001_*) continue ;; esac
+  v=$(basename "$f" | cut -c1-4)
+  {
     echo ""
     echo "-- >>>>>>>>>>>>>>>>>>>> $(basename "$f") <<<<<<<<<<<<<<<<<<<<"
     echo "select public._apply_migration('$v', \$mig$v\$"
@@ -256,7 +262,10 @@ SQL
     echo "\$mig$v\$);"
     # grava ao fim de cada script: as travas das tabelas duram só aquele trecho
     echo "commit;"
-  done
+  } > "$TMP/m$v.sql"
+done
+# fim: trava de acesso, recarga da API e conferência
+{
   echo ""
   echo "-- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima"
   echo "do \$lock\$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end \$lock\$;"
@@ -277,7 +286,39 @@ SQL
 ) as t(ord, item, ok)
 order by ord;
 SQL
-} > atualizar_banco.sql
+} > "$TMP/tail.sql"
+cat "$TMP/head.sql" "$TMP"/m*.sql "$TMP/tail.sql" > atualizar_banco.sql
+
+# O SQL Editor do Supabase corta o texto colado perto de 1 MB: o arquivo completo também é
+# gerado em partes menores (atualizar_banco_parte1.sql, parte2...), para rodar uma depois da outra.
+LIMIT=800000
+rm -f atualizar_banco_parte*.sql
+n=1
+size=0
+for f in "$TMP"/m*.sql; do
+  sz=$(wc -c < "$f")
+  if [ "$size" -gt 0 ] && [ $((size + sz)) -gt "$LIMIT" ]; then
+    n=$((n + 1))
+    size=0
+  fi
+  echo "$f" >> "$TMP/parte$n.list"
+  size=$((size + sz))
+done
+i=1
+while [ "$i" -le "$n" ]; do
+  {
+    sed "s/^-- ATUALIZAÇÃO COMPLETA DO BANCO (gerado por supabase\/build-updates.sh)/-- ATUALIZAÇÃO DO BANCO, PARTE $i DE $n (gerado por supabase\/build-updates.sh)\n-- Rode as partes na ordem (1, 2...). Cada uma pode ser repetida./" "$TMP/head.sql"
+    cat $(cat "$TMP/parte$i.list")
+    if [ "$i" -lt "$n" ]; then
+      echo ""
+      echo "notify pgrst, 'reload schema';"
+      echo "select 'Parte $i de $n concluída. Agora rode a parte $((i + 1)): supabase/atualizar_banco_parte$((i + 1)).sql' as \"Próximo passo\";"
+    else
+      cat "$TMP/tail.sql"
+    fi
+  } > "atualizar_banco_parte$i.sql"
+  i=$((i + 1))
+done
 # só a conferência, para checar o banco sem executar tudo de novo
 sed -n '/^-- Conferência/,$p' atualizar_banco.sql | sed '1i -- ---------------------------------------------------------------------' > conferir_banco.sql
-echo "gerado: supabase/atualizar_banco.sql e supabase/conferir_banco.sql"
+echo "gerado: supabase/atualizar_banco.sql (e em $n partes: atualizar_banco_parte1..$n.sql) e supabase/conferir_banco.sql"
