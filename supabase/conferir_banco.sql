@@ -161,6 +161,7 @@ from (values
   (120, 'Setor padrão vê tudo (0129)', to_regprocedure('public.private_sees_team()') is not null),
   (121, 'Dashboard do privado (0130)', to_regprocedure('public.private_dashboard(timestamptz,timestamptz,uuid,boolean)') is not null),
   (122, 'Dashboard mais rápido (0131)', to_regprocedure('public.ind_responses_calc(jsonb)') is not null),
-  (123, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (123, 'Recalcular grupos em etapas (0132)', to_regprocedure('public.recalc_company_rebuild(uuid,uuid[])') is not null),
+  (124, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

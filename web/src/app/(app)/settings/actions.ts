@@ -266,7 +266,63 @@ export async function deleteQuickReply(id: string): Promise<Result> {
   return result(error);
 }
 
-/** Botão "Recalcular grupos" (Configurações › Atendentes). */
+/**
+ * Botão "Recalcular grupos", em etapas curtas (0132): com muitas mensagens, numa operação só passava do
+ * limite de tempo do Supabase. 1) separa equipe x cliente e devolve os grupos; 2) a tela manda os grupos
+ * em lotes; 3) resolve os alertas e registra no log. Roda com a chave de serviço, depois de conferir que
+ * quem pede administra a empresa.
+ */
+export async function recalcGroupsStart(): Promise<
+  { ok: true; ids: string[]; reclass: number; unmark: number; before: number } | { ok: false; error: string }
+> {
+  const admin = await requireAdmin();
+  if (!admin.company_id) return { ok: false, error: 'Empresa não encontrada.' };
+  const db = createAdminClient();
+  const { data, error } = await db.rpc('recalc_company_reclassify', { p_company_id: admin.company_id });
+  if (error) return { ok: false, error: /recalc_company_reclassify/.test(error.message) ? 'Rode o atualizar_banco no Supabase (script 0132).' : friendlyDbError(error.message) };
+  const { data: groups } = await db.from('groups').select('id').eq('company_id', admin.company_id);
+  const r = data as { reclass: number; unmark: number; before: number };
+  return { ok: true, ids: ((groups ?? []) as { id: string }[]).map((g) => g.id), reclass: r.reclass, unmark: r.unmark, before: r.before };
+}
+
+export async function recalcGroupsBatch(ids: string[]): Promise<Result & { done?: number }> {
+  const admin = await requireAdmin();
+  const { data, error } = await createAdminClient().rpc('recalc_company_rebuild', { p_company_id: admin.company_id, p_ids: ids.slice(0, 100) });
+  if (error) return { ok: false, error: friendlyDbError(error.message) };
+  return { ok: true, done: data as number };
+}
+
+export async function recalcGroupsFinish(partial: { reclass: number; unmark: number; before: number; groups: number }): Promise<Result & { summary?: RecalcSummary }> {
+  const admin = await requireAdmin();
+  const db = createAdminClient();
+  const { data, error } = await db.rpc('recalc_company_finish', { p_company_id: admin.company_id });
+  if (error) return { ok: false, error: friendlyDbError(error.message) };
+  const f = data as { after: number; alerts: number };
+  const summary: RecalcSummary = {
+    mensagens_reclassificadas: partial.reclass + partial.unmark,
+    mensagens_da_equipe: partial.reclass,
+    mensagens_de_cliente: partial.unmark,
+    grupos_recalculados: partial.groups,
+    aguardando_antes: partial.before,
+    aguardando_depois: f.after,
+    alertas_resolvidos: f.alerts,
+  };
+  await db.from('activity_log').insert({
+    company_id: admin.company_id,
+    user_id: admin.id,
+    user_email: admin.email,
+    user_name: admin.full_name || admin.email,
+    category: 'equipe',
+    action: 'recalculou',
+    entity: 'groups',
+    summary: `Recalculou os grupos (aguardando: ${summary.aguardando_antes} → ${summary.aguardando_depois})`,
+    details: summary,
+  });
+  revalidatePath('/', 'layout');
+  return { ok: true, summary };
+}
+
+/** Recalcular numa operação só (banco sem o script 0132). */
 export async function recalcGroups(): Promise<Result & { summary?: RecalcSummary }> {
   await requireAdmin();
   const supabase = await createClient();
