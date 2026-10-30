@@ -88,7 +88,7 @@ export function GroupMembers({
             {shown.map((m) => {
               const label = m.is_me ? 'Número conectado' : m.name || formatPhone(m.phone) || 'Sem nome';
               return (
-                <li key={m.jid} className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 hover:bg-surface-2/60">
+                <li key={m.jid} className="flex items-center gap-2 rounded-lg px-1.5 py-1.5 hover:bg-surface-2/60">
                   <Avatar
                     jid={m.jid}
                     hasPhoto={m.has_avatar}
@@ -102,8 +102,9 @@ export function GroupMembers({
                     }
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1 truncate text-[13px] font-medium leading-snug">
-                      <span className="truncate">{label}</span>
+                    {/* nome e número inteiros (quebram linha em vez de cortar) */}
+                    <p className="flex flex-wrap items-center gap-x-1 text-[13px] font-medium leading-snug">
+                      <span className="break-words">{label}</span>
                       {m.role === 'superadmin' && <Crown className="h-3.5 w-3.5 shrink-0 text-warning-ink" aria-label="Criador do grupo" />}
                       {m.role === 'admin' && <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-brand-text" aria-label="Admin do grupo" />}
                       {isResponsible(m) && (
@@ -117,9 +118,9 @@ export function GroupMembers({
                         </Headset>
                       )}
                     </p>
-                    <p className="truncate text-[10.5px] text-muted" suppressHydrationWarning>
+                    <p className="break-words text-[10.5px] text-muted" suppressHydrationWarning>
                       {isResponsible(m) && <span className="font-semibold text-brand-text">responsável · </span>}
-                      {m.phone && (m.name || m.is_me) ? `${formatPhone(m.phone)} · ` : ''}
+                      {m.phone && (m.name || m.is_me) && <span className="whitespace-nowrap">{formatPhone(m.phone)} · </span>}
                       {m.messages_30d
                         ? `${m.messages_30d} msg em 30 dias · última ${timeAgo(m.last_message_at)}`
                         : m.is_me
@@ -128,7 +129,7 @@ export function GroupMembers({
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-0.5">
-                    {canPrivate && !m.is_me && <CallPrivateButton jid={m.jid} phone={m.phone} name={m.name} />}
+                    {canPrivate && !m.is_me && <CallPrivateButton jid={m.jid} phone={m.phone} name={m.name} compact className="p-1" />}
                     {m.role !== 'member' && !m.team && (
                       <span className="text-[10px] text-muted">{m.role === 'superadmin' ? 'criador' : 'admin'}</span>
                     )}

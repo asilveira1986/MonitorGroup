@@ -243,8 +243,9 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
         </Card>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-4">
-        <div className="grid grid-cols-2 gap-4 lg:col-span-1 lg:grid-cols-1 lg:content-start">
+      {/* coluna da esquerda com largura fixa: os nomes e números dos membros cabem inteiros */}
+      <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-1 lg:content-start">
           {[
             { label: 'Msgs de clientes (30d)', value: formatNumber(st.received) },
             { label: 'Msgs da equipe (30d)', value: formatNumber(st.sent) },
@@ -261,7 +262,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
           </div>
         </div>
 
-        <Card className="lg:col-span-3">
+        <Card className="min-w-0">
           <CardHeader
             title="Conversa"
             description="Role para cima para ver as anteriores · azul = cliente, verde = equipe"
