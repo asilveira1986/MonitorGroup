@@ -13,6 +13,7 @@ import { AlertScope } from '../team/alert-scope';
 import { GrantAccess } from '../team/grant-access';
 import { RecalcButton } from '../team/recalc-button';
 import { RoleSelect } from '../users/role-select';
+import { OnlineDot } from '@/components/presence';
 import { EditPerson, GeneratePasswordButton, MakeAttendantButton, NewPersonDialog } from './person-forms';
 
 type Person = { key: string; name: string; email: string | null; phone: string | null; profile?: Profile; member?: TeamMember };
@@ -125,32 +126,35 @@ export default async function PeoplePage() {
             const menu = isAdmin ? actionsFor(p) : [];
             return (
               <li key={p.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
-                {m ? (
-                  <ImageUpload
-                    compact
-                    round
-                    size="h-9 w-9"
-                    label={`Foto de ${p.name}`}
-                    src={m.photo_path ? `/team-photo/${m.id}` : null}
-                    prepare={prepareImageUpload.bind(null, 'team')}
-                    save={saveTeamPhoto.bind(null, m.id)}
-                    disabled={me.role === 'viewer'}
-                    fallback={
-                      <span className="flex h-full w-full items-center justify-center bg-brand-soft text-xs font-semibold text-brand-text">
-                        {p.name.slice(0, 2).toUpperCase()}
-                      </span>
-                    }
-                  />
-                ) : (
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-2 text-ink-2">
-                    {u?.photo_path ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={`/profile-photo/${u.id}`} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <UserRound className="h-4 w-4" />
-                    )}
-                  </span>
-                )}
+                <span className="relative shrink-0">
+                  {m ? (
+                    <ImageUpload
+                      compact
+                      round
+                      size="h-9 w-9"
+                      label={`Foto de ${p.name}`}
+                      src={m.photo_path ? `/team-photo/${m.id}` : null}
+                      prepare={prepareImageUpload.bind(null, 'team')}
+                      save={saveTeamPhoto.bind(null, m.id)}
+                      disabled={me.role === 'viewer'}
+                      fallback={
+                        <span className="flex h-full w-full items-center justify-center bg-brand-soft text-xs font-semibold text-brand-text">
+                          {p.name.slice(0, 2).toUpperCase()}
+                        </span>
+                      }
+                    />
+                  ) : (
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-2 text-ink-2">
+                      {u?.photo_path ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={`/profile-photo/${u.id}`} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <UserRound className="h-4 w-4" />
+                      )}
+                    </span>
+                  )}
+                  <OnlineDot userId={u?.id} />
+                </span>
                 <div className="min-w-0 flex-1 basis-56">
                   <p className="truncate text-sm font-medium">
                     {p.name} {u?.id === me.id && <span className="font-normal text-muted">(você)</span>}

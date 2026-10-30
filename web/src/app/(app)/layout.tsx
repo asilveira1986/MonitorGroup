@@ -1,4 +1,5 @@
 import { MessageNotifier } from '@/components/message-notifier';
+import { PresenceProvider } from '@/components/presence';
 import { RealtimeListener } from '@/components/realtime-listener';
 import { Sidebar } from '@/components/sidebar';
 import { currentCompany, requireProfile } from '@/lib/auth';
@@ -121,7 +122,12 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
       />
       <div className="transition-[padding] duration-200 lg:pl-60 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
 
-        <main className="mx-auto max-w-7xl px-4 pb-10 pt-5 sm:px-8 sm:py-8 has-[[data-wide]]:max-w-none">{children}</main>
+        <main className="mx-auto max-w-7xl px-4 pb-10 pt-5 sm:px-8 sm:py-8 has-[[data-wide]]:max-w-none">
+          {/* quem está online agora (bolinha verde na foto dos usuários) */}
+          <PresenceProvider companyId={company?.id ?? profile.company_id ?? null} userId={profile.id}>
+            {children}
+          </PresenceProvider>
+        </main>
       </div>
     </div>
   );

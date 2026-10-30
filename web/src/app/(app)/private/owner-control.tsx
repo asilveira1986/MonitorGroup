@@ -3,6 +3,7 @@
 import { ArrowRightLeft, CheckCircle2, Loader2, RotateCcw, Search, UserCheck, UserRound, X } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
+import { OnlineDot } from '@/components/presence';
 import { Button, Textarea } from '@/components/ui';
 import { cn } from '@/lib/format';
 import { assignPrivateChat, finishPrivateChat, reopenPrivateChat } from './actions';
@@ -71,7 +72,10 @@ function TransferDialog({
                 onClick={() => setTo(a.id)}
                 className={cn('flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-surface-2', to === a.id && 'bg-brand-soft/70')}
               >
-                <UserRound className="h-4 w-4 text-muted" />
+                <span className="relative">
+                  <UserRound className="h-4 w-4 text-muted" />
+                  <OnlineDot userId={a.id} className="-bottom-0.5 -right-0.5 h-2 w-2" />
+                </span>
                 <span className="flex-1">
                   {a.id === me ? `${a.name} (você)` : a.name}
                   {/* nome repetido: o e-mail diferencia */}
