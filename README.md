@@ -15,7 +15,7 @@ Sistema web que acompanha as mensagens recebidas e enviadas nos grupos de WhatsA
 ## Arquitetura
 
 ```
- Navegador ──► Painel web (Next.js · Vercel) ──► Supabase (Postgres + Auth + Realtime)
+ Navegador ──► Painel web (Next.js · Cloudflare) ──► Supabase (Postgres + Auth + Realtime)
                                                      ▲
  WhatsApp ◄──► Worker (Node.js + Baileys · Railway) ─┘
 ```
@@ -24,7 +24,7 @@ Sistema web que acompanha as mensagens recebidas e enviadas nos grupos de WhatsA
 |---|---|---|
 | `supabase/migrations` | Banco de dados: tabelas, segurança (RLS), métricas e regras de negócio | Supabase |
 | `worker` | Conecta ao WhatsApp, grava as mensagens dos grupos e dispara os alertas | Railway (ou qualquer serviço que rode Docker 24h) |
-| `web` | Painel: login, dashboard, fila, grupos, alertas e configurações | Vercel |
+| `web` | Painel: login, dashboard, fila, grupos, alertas e configurações | Cloudflare |
 
 **Como uma conversa é avaliada:** cada mensagem de um grupo é classificada como *cliente* ou *equipe*. Mensagens enviadas pelo número conectado e pelos atendentes cadastrados em **Configurações › Pessoas** contam como equipe. Quando um cliente escreve, o grupo entra na fila de pendências. Quando a equipe responde, a pendência fecha e o sistema registra o tempo de resposta, contado a partir da **última** mensagem do cliente antes da resposta. A fila de pendências e os alertas de "sem resposta" continuam contando a espera desde a primeira mensagem não respondida. Mensagens curtas de agradecimento ("ok", "obrigado", 👍) não abrem uma nova pendência (essa opção pode ser desligada).
 
@@ -178,8 +178,8 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    - `anon public` key
    - `service_role` key (é secreta: nunca coloque no navegador nem a compartilhe)
 4. Depois do passo 3 (Vercel), volte em **Authentication › URL Configuration** (usado pelo link de "Esqueci minha senha"):
-   - **Site URL**: `https://seu-painel.vercel.app`
-   - **Redirect URLs**: `https://seu-painel.vercel.app/**`
+   - **Site URL**: `https://seu-painel.workers.dev`
+   - **Redirect URLs**: `https://seu-painel.workers.dev/**`
 
 ### 2. Worker do WhatsApp (Railway)
 
@@ -193,7 +193,7 @@ O worker precisa ficar ligado 24 horas por dia, porque mantém a conexão com o 
    |---|---|
    | `SUPABASE_URL` | Project URL do Supabase |
    | `SUPABASE_SERVICE_ROLE_KEY` | service_role key |
-   | `APP_URL` | endereço do painel (ex.: `https://seu-painel.vercel.app`), usado nos links dos alertas |
+   | `APP_URL` | endereço do painel (ex.: `https://seu-painel.workers.dev`), usado nos links dos alertas |
    | `RESEND_API_KEY` | *(opcional)* chave do [Resend](https://resend.com) para os alertas por e-mail |
    | `ALERT_EMAIL_FROM` | *(opcional)* remetente, ex.: `Monitor <alertas@suaempresa.com>` |
    | `ANTHROPIC_API_KEY` | *(opcional)* chave da API do Claude, usada só se a origem "IA" de demandas for ligada |
@@ -205,19 +205,24 @@ O worker precisa ficar ligado 24 horas por dia, porque mantém a conexão com o 
 >
 > Prefere outra plataforma? O worker é um contêiner Docker comum: funciona no Render (plano pago, que não hiberna), no Fly.io, no Google Cloud Run (com instância mínima = 1) ou numa VPS.
 
-### 3. Painel web (Vercel)
+### 3. Painel web (Cloudflare Workers)
 
-1. Em [vercel.com](https://vercel.com), clique em **Add New › Project** e importe este repositório.
-2. Em **Root Directory**, escolha `web`.
-3. Em **Environment Variables**, cadastre:
+O painel roda como Worker do Cloudflare, usando o adapter [OpenNext](https://opennext.js.org/cloudflare).
+
+1. No [dash.cloudflare.com](https://dash.cloudflare.com), abra **Workers & Pages › Create › Import a repository** e escolha este repositório.
+2. Em **Root directory**, informe `web`.
+3. **Build command**: `npx opennextjs-cloudflare build` · **Deploy command**: `npx opennextjs-cloudflare deploy`.
+4. Em **Variables and Secrets**, cadastre (as `NEXT_PUBLIC_*` também precisam existir como variáveis de *build*):
 
    | Variável | Valor |
    |---|---|
    | `NEXT_PUBLIC_SUPABASE_URL` | Project URL |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon public key |
-   | `SUPABASE_SERVICE_ROLE_KEY` | service_role key (usada só no servidor, para criar usuários com senha) |
+   | `SUPABASE_SERVICE_ROLE_KEY` | service_role key (cadastre como **Secret**; usada só no servidor) |
 
-4. Clique em **Deploy**. Depois, volte ao passo 1.4 e cadastre a URL gerada no Supabase.
+5. Faça o deploy. Depois, volte ao passo 1.4 e cadastre a URL gerada (`https://monitorgroup-web.SEU-SUBDOMINIO.workers.dev` ou seu domínio) no Supabase.
+
+Deploy manual pelo terminal: `cd web && npx wrangler login && npm run deploy`. Para testar localmente: copie `.dev.vars.example` para `.dev.vars` e rode `npm run preview`.
 
 ### 4. Primeiro acesso
 
@@ -506,7 +511,7 @@ A mesma pessoa que vem pelo número e pelo identificador interno do WhatsApp (LI
 
 ## Modo TV (monitor na parede)
 
-No **Dashboard**, clique em **Modo TV**, ou abra `https://SEU-PAINEL.vercel.app/tv` no navegador do monitor ou da TV, logado com um usuário do sistema.
+No **Dashboard**, clique em **Modo TV**, ou abra `https://SEU-PAINEL.workers.dev/tv` no navegador do monitor ou da TV, logado com um usuário do sistema.
 
 - Ocupa a tela inteira, sem menu e sem rolagem, e se ajusta ao tamanho da tela (de notebook a TV 4K).
 - **Topo:** situação do WhatsApp, alertas abertos, período, relógio e horário da última atualização.
@@ -545,7 +550,7 @@ A tela de login mostra o motivo do erro. Os casos mais comuns:
 
 | Mensagem | O que fazer |
 |---|---|
-| *Configuração incompleta* | Cadastre `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` na Vercel e faça **Redeploy** (variáveis novas só valem após um novo deploy). |
+| *Configuração incompleta* | Cadastre `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` no Cloudflare e faça um novo deploy (variáveis novas só valem após um novo deploy). |
 | *E-mail ou senha incorretos* | Confira os dados ou recrie o usuário em **Authentication › Users** marcando *Auto confirm user*. |
 | *E-mail ainda não confirmado* | Em **Authentication › Users**, confirme o usuário ou recrie com *Auto confirm user*. |
 | *Não foi possível conectar ao Supabase* | URL errada ou projeto pausado (projetos gratuitos pausam após 7 dias sem uso; reative no painel do Supabase). |
@@ -612,7 +617,7 @@ Além disso continuam o prazo dos arquivos das mensagens (*WhatsApp › Conexão
 - O sistema usa o WhatsApp Web de forma **não oficial** (biblioteca [Baileys](https://github.com/WhiskeySockets/Baileys)). Ele **só lê** os grupos e envia apenas as notificações de alerta que você configurar. Mesmo assim, o WhatsApp pode restringir números com comportamento suspeito. Use um número da empresa e não use o sistema para disparos em massa.
 - Todas as tabelas usam *Row Level Security*. Só usuários autorizados (ativos) leem os dados, e só administradores alteram as conexões, as regras e os usuários. A sessão do WhatsApp só é acessível ao worker.
 - O acesso é só por e-mail e senha. Um usuário desativado vê a tela *"Acesso não liberado"* e não consegue ler nenhum dado.
-- Guarde a `service_role` key apenas nas variáveis de ambiente do Railway e da Vercel.
+- Guarde a `service_role` key apenas nas variáveis de ambiente do Railway e do Cloudflare.
 
 ## Desenvolvimento local (opcional)
 
