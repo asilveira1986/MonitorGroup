@@ -283,12 +283,12 @@ export function GroupsPanel({
           (responsible === 'none' ? !g.responsible_ids?.length : Boolean(g.responsible_ids?.includes(responsible)))),
     );
     if (sector !== 'all') return filtered;
-    // em "Todos" o mesmo grupo do WhatsApp (mesmo jid) aparece uma só vez, mesmo que esteja em vários setores/números
+    // em "Todos" o mesmo grupo do WhatsApp (mesmo jid ou mesmo nome) aparece uma só vez, mesmo que esteja em vários setores/números
     const seen = new Set<string>();
     return filtered.filter((g) => {
-      if (!g.jid) return true;
-      if (seen.has(g.jid)) return false;
-      seen.add(g.jid);
+      const keys = [g.jid ? `jid:${g.jid}` : null, `name:${g.name.trim().replace(/\s+/g, ' ').toLowerCase()}`].filter(Boolean) as string[];
+      if (keys.some((k) => seen.has(k))) return false;
+      keys.forEach((k) => seen.add(k));
       return true;
     });
   }, [allGroups, sector, responsible]);
