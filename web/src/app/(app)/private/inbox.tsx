@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Forward, Loader2, MailOpen, MessageSquarePlus, Mic, Paperclip, Search, Send, UserRound, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Eye, Forward, Loader2, MailOpen, MessageSquarePlus, Mic, Paperclip, Search, Send, UserRound, X } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -234,6 +234,7 @@ function ChatView({
   onOwner,
   onClosed,
   onUnread,
+  silent,
   photo,
 }: {
   chat: PrivateChat;
@@ -248,6 +249,8 @@ function ChatView({
   onClosed: (closed: boolean, owner: string | null) => void;
   /** "Marcar como não lida" (0118): volta para a lista */
   onUnread: () => void;
+  /** modo supervisão (só administradores): abrir a conversa não a marca como lida para a equipe */
+  silent?: boolean;
 }) {
   const [messages, setMessages] = useState<PrivateMessage[] | null>(null);
   const [outgoing, setOutgoing] = useState<Outgoing[]>([]);
@@ -280,7 +283,9 @@ function ChatView({
       setOutgoing((o.data ?? []) as Outgoing[]);
       setReactions(new Map(((r.data ?? []) as PrivateReaction[]).map((x) => [x.id, x])));
     });
-    void markPrivateChatRead(chat.id);
+    if (!silent) void markPrivateChatRead(chat.id);
+    // só ao abrir outra conversa
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat.id]);
 
   useRealtime(`private-chat-${chat.id}`, (channel) =>
@@ -294,7 +299,7 @@ function ChatView({
           const next = i >= 0 ? list.map((x) => (x.id === m.id ? m : x)) : [...list, m];
           return next.sort((a, b) => (a.sent_at < b.sent_at ? -1 : 1));
         });
-        if (!m.from_me) void markPrivateChatRead(chat.id);
+        if (!m.from_me && !silent) void markPrivateChatRead(chat.id);
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'private_outgoing', filter: `chat_id=eq.${chat.id}` }, (payload) => {
         const o = payload.new as Outgoing;
@@ -735,6 +740,28 @@ export function PrivateInbox({
   const sectorOf = (c: PrivateChat) => (c.instance_id ? (sectors?.byInstance[c.instance_id] ?? null) : null);
   const sectorName = (id: string | null) => (id ? sectors?.options.find((s) => s.id === id)?.name : undefined);
   const [tab, setTab] = useState<Tab>('queue');
+  // modo supervisão (só administradores): ver as conversas sem marcá-las como lidas para a equipe
+  const [supervise, setSupervise] = useState(false);
+  useEffect(() => {
+    const load = () => {
+      try {
+        if (viewer.seesAll && localStorage.getItem('private-supervise') === '1') setSupervise(true);
+      } catch {
+        /* sem armazenamento local */
+      }
+    };
+    load();
+  }, [viewer.seesAll]);
+  const silent = viewer.seesAll && supervise;
+  const toggleSupervise = () => {
+    const next = !supervise;
+    setSupervise(next);
+    try {
+      localStorage.setItem('private-supervise', next ? '1' : '0');
+    } catch {
+      /* sem armazenamento local */
+    }
+  };
   const [lastInitial, setLastInitial] = useState(initialChats);
   // abriu outra conversa pelo endereço (aviso na tela, notificação): passa para ela
   const [lastSelectedId, setLastSelectedId] = useState(selectedId);
@@ -767,10 +794,10 @@ export function PrivateInbox({
   const choose = useCallback(
     (id: string | null) => {
       setSelected(id);
-      if (id) setChats((prev) => prev.map((c) => (c.id === id ? { ...c, unread_count: 0 } : c)));
+      if (id && !silent) setChats((prev) => prev.map((c) => (c.id === id ? { ...c, unread_count: 0 } : c)));
       router.replace(id ? `${pathname}?c=${id}` : pathname, { scroll: false });
     },
-    [pathname, router],
+    [pathname, router, silent],
   );
 
   const inTab = (c: PrivateChat, t: Tab) =>
@@ -806,6 +833,19 @@ export function PrivateInbox({
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar conversa" className="pl-9" aria-label="Buscar conversa" />
           </div>
+          {viewer.seesAll && (
+            <Button
+              type="button"
+              size="sm"
+              variant={supervise ? 'primary' : 'secondary'}
+              onClick={toggleSupervise}
+              aria-pressed={supervise}
+              aria-label="Modo supervisão"
+              title={supervise ? 'Modo supervisão ligado: abrir a conversa não marca como lida para a equipe' : 'Modo supervisão: ver conversas sem marcar como lidas'}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+          )}
           <Button type="button" size="sm" onClick={() => setCreating(true)} aria-label="Nova conversa" title="Nova conversa">
             <MessageSquarePlus className="h-4 w-4" />
           </Button>
@@ -939,6 +979,7 @@ export function PrivateInbox({
             photo={photos[current.id]}
             timeZone={timeZone}
             onBack={() => choose(null)}
+            silent={silent}
             onUnread={() => {
               const id = current.id;
               void markPrivateChatUnread(id).then((res) => {
