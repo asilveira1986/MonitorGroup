@@ -11,6 +11,7 @@ import { useRealtime } from '@/lib/use-realtime';
 import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
 import { Avatar } from '@/components/avatar';
 import { waFormat } from '@/components/wa-text';
+import { ContactCards } from '@/components/contact-cards';
 import { markPrivateChatRead, markPrivateChatUnread, preparePrivateUpload, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
 import {
   PrivateEditor,
@@ -554,6 +555,7 @@ function ChatView({
                           </div>
                         )}
                         <PrivateMedia message={m} />
+                        {m.message_type === 'contact' && !m.deleted_at && <ContactCards cards={m.contact_cards ?? []} />}
                         {/* documento guardado: o nome já aparece no cartão do arquivo */}
                         {!(m.message_type === 'document' && m.media_path) && (
                         <p className="whitespace-pre-wrap break-words">

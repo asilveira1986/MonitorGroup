@@ -103,6 +103,8 @@ export type Group = {
 };
 
 export type Message = {
+  /** contatos compartilhados: nome e telefone (0137) */
+  contact_cards?: { name: string | null; phone: string }[] | null;
   /** encaminhada no WhatsApp (0105) */
   forwarded?: boolean;
   /** editada (no painel ou no WhatsApp) e o texto antes da 1ª edição (0066) */

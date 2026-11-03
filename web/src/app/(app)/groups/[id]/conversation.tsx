@@ -21,6 +21,7 @@ import { startPrivateChat } from '../../private/actions';
 import { ShareDialog, type ShareMode, type ShareSource } from '@/components/share-dialog';
 import { useRealtime } from '@/lib/use-realtime';
 import { waFormat } from '@/components/wa-text';
+import { ContactCards } from '@/components/contact-cards';
 
 
 const TYPE_LABEL: Record<string, string> = {
@@ -650,6 +651,7 @@ export function Conversation({
                         </p>
                       )}
                       <MessageMedia message={m} onViewed={() => markViewed(m)} />
+                      {m.message_type === 'contact' && !m.deleted_at && <ContactCards cards={m.contact_cards ?? []} canStart={canPrivate} />}
                       <p className="whitespace-pre-wrap break-words text-ink">
                         {m.message_type !== 'text' && !m.media_path && (
                           <span className="text-ink-2">{TYPE_LABEL[m.message_type] ?? m.message_type} </span>

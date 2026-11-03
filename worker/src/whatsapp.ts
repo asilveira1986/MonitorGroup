@@ -25,7 +25,7 @@ import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
 import { AvatarQueue } from './avatars.js';
 import { storeMessageMedia, storePrivateMedia } from './media.js';
-import { extractContent, isAcknowledgement, isForwarded, isStickerOrEmoji, isThanksAfterTeam, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
+import { contactCardsOf, extractContent, isAcknowledgement, isForwarded, isStickerOrEmoji, isThanksAfterTeam, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
 import { selfReadIds } from './receipts.js';
@@ -1054,6 +1054,15 @@ export class WhatsAppManager {
     void this.identifyByQuote(session, group.id, msg).catch((err) => logger.warn({ err }, 'falha ao identificar pela citação'));
     // citação para a conversa mostrar como no WhatsApp (0090)
     if (result.inserted && result.message_id) void this.saveQuote(result.message_id, msg);
+    // contato compartilhado: guarda o telefone para o painel iniciar a conversa (0137)
+    if (result.inserted && result.message_id && content.type === 'contact') void this.saveContactCards('messages', result.message_id, msg);
+  }
+
+  /** Guarda os contatos (nome e telefone) de um cartão de contato recebido (0137; sem o script, falha calada). */
+  private async saveContactCards(table: 'messages' | 'private_messages', id: string, msg: WAMessage) {
+    const cards = contactCardsOf(msg.message);
+    if (!cards.length) return;
+    await db.from(table).update({ contact_cards: cards }).eq('id', id);
   }
 
   /** Guarda a mensagem citada pela resposta (0090; sem o script, a gravação falha calada). */
@@ -1312,6 +1321,7 @@ export class WhatsAppManager {
         .maybeSingle();
       if (q) await db.from('private_messages').update({ quoted_message_id: q.id }).eq('id', r.message_id);
     }
+    if (r?.inserted && r.message_id && content.type === 'contact') void this.saveContactCards('private_messages', r.message_id, msg);
     if (!fromHistory && r?.inserted && r.message_id && r.chat_id) {
       void storePrivateMedia({
         sock: session.sock,
