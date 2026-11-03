@@ -40,6 +40,7 @@ export default async function PanelPage() {
   const groups = ((data ?? []) as PanelGroup[]).map((g) => ({
     ...g,
     sector_id: infoOf.get(g.id)?.sector_id ?? null,
+    jid: infoOf.get(g.id)?.jid ?? null,
     responsible_ids: responsiblesOf(infoOf.get(g.id)),
     closed_at: infoOf.get(g.id)?.closed_at ?? null,
     responsible_names: responsiblesOf(infoOf.get(g.id)).map((id) => teamName.get(id) ?? 'Responsável'),
