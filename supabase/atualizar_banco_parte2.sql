@@ -222,7 +222,8 @@ begin
   (124, 'Outro número da empresa conta como empresa (0133)', coalesce(pg_get_functiondef('public.recalc_company_reclassify(uuid)'::regprocedure) like '%0133%', false)),
   (125, 'Privado por setor de novo (0134)', exists (select 1 from pg_proc where proname = 'private_instance_ok' and prosrc like '%in_general_sector%')),
   (126, 'Acompanhamento da plataforma (0135)', to_regprocedure('public.platform_monitor()') is not null),
-  (127, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (127, 'Anexar arquivos nos grupos (0136)', exists (select 1 from pg_proc where proname = 'send_group_message' and prosrc like '%O arquivo passa de 50 MB%')),
+  (128, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -231,7 +232,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -3913,6 +3914,113 @@ grant execute on function public.platform_monitor() to authenticated;
 $mig0135$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0136_group_send_files.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0136', $mig0136$
+-- =====================================================================
+-- Grupos: anexar arquivos (imagem, vídeo, áudio, documento) nas respostas pelo painel,
+-- como já é nas conversas privadas (0071).
+--
+--  * O painel sobe o arquivo para o Storage (media/<empresa>/<grupo>/...) e o worker envia pelo
+--    número conectado, com legenda (assinada como o texto, quando a assinatura está ligada).
+--  * Até 50 MB (o áudio segue com o limite de 16 MB). O áudio não leva legenda nem assinatura.
+-- =====================================================================
+
+alter table public.outgoing_messages
+  add column if not exists media_name text;
+
+-- grupo: texto, ou arquivo (p_media = {path, mime, size, type?, name?, voice?}) com legenda opcional
+create or replace function public.send_group_message(
+  p_group_id uuid, p_body text, p_quoted_message_id uuid default null, p_closes boolean default false, p_media jsonb default null
+)
+returns public.outgoing_messages
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_settings public.app_settings%rowtype;
+  v_group    public.groups%rowtype;
+  v_name     text;
+  v_body     text := btrim(coalesce(p_body, ''));
+  v_path     text;
+  v_type     text := 'text';
+  v_row      public.outgoing_messages;
+begin
+  if not public.is_active_user() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  select * into v_settings from public.app_settings
+   where company_id = (select company_id from public.groups where id = p_group_id);
+  if not v_settings.reply_enabled then
+    raise exception 'Responder pelo sistema está desligado. Um administrador pode ativar em Configurações › Geral.';
+  end if;
+  if v_settings.reply_allowed = 'admin' and not public.is_admin() then
+    raise exception 'Só administradores podem responder pelo sistema.' using errcode = '42501';
+  end if;
+
+  select * into v_group from public.groups where id = p_group_id;
+  if not found then
+    raise exception 'Grupo não encontrado.';
+  end if;
+  if p_media is not null then
+    v_path := p_media->>'path';
+    v_type := coalesce(nullif(p_media->>'type', ''),
+                       case when coalesce(p_media->>'mime', '') like 'audio/%' then 'audio' else 'document' end);
+    if v_type not in ('image', 'video', 'audio', 'document') then
+      raise exception 'Tipo de arquivo inválido.';
+    end if;
+    -- o arquivo precisa estar na pasta deste grupo
+    if v_path is null or v_path not like v_group.company_id::text || '/' || v_group.id::text || '/%' then
+      raise exception 'Arquivo inválido.';
+    end if;
+    if v_type = 'audio' then
+      if coalesce((p_media->>'size')::bigint, 0) > 16 * 1024 * 1024 then
+        raise exception 'O áudio passa de 16 MB.';
+      end if;
+      v_body := '';
+    elsif coalesce((p_media->>'size')::bigint, 0) > 50 * 1024 * 1024 then
+      raise exception 'O arquivo passa de 50 MB.';
+    end if;
+  elsif v_body = '' then
+    raise exception 'Escreva a mensagem.';
+  end if;
+  if length(v_body) > 4000 then
+    raise exception 'A mensagem passa de 4000 caracteres.';
+  end if;
+  if v_group.removed_at is not null then
+    raise exception 'O número conectado não participa mais deste grupo.';
+  end if;
+  if not v_group.monitored then
+    raise exception 'Ative o monitoramento do grupo para responder por aqui.';
+  end if;
+  if p_quoted_message_id is not null
+     and not exists (select 1 from public.messages where id = p_quoted_message_id and group_id = p_group_id) then
+    raise exception 'Mensagem citada não pertence a este grupo.';
+  end if;
+
+  select coalesce(nullif(btrim(full_name), ''), split_part(email, '@', 1)) into v_name
+  from public.profiles where id = auth.uid();
+
+  insert into public.outgoing_messages
+    (group_id, instance_id, body, text_to_send, quoted_message_id, sender_name, created_by, closes_conversation,
+     message_type, media_path, media_mime, media_size, media_name, voice)
+  values
+    (p_group_id, v_group.instance_id, v_body,
+     case when v_type = 'audio' or (v_path is not null and v_body = '') then ''
+          when v_settings.reply_sign_name then '*' || v_name || ':*' || E'\n' || v_body
+          else v_body end,
+     p_quoted_message_id, v_name, auth.uid(), coalesce(p_closes, false),
+     v_type, v_path, p_media->>'mime', (p_media->>'size')::bigint, left(p_media->>'name', 200),
+     v_type = 'audio' and coalesce((p_media->>'voice')::boolean, false))
+  returning * into v_row;
+  return v_row;
+end;
+$$;
+revoke all on function public.send_group_message(uuid, text, uuid, boolean, jsonb) from public, anon;
+grant execute on function public.send_group_message(uuid, text, uuid, boolean, jsonb) to authenticated;
+
+notify pgrst, 'reload schema';
+$mig0136$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -4086,6 +4194,7 @@ from (values
   (124, 'Outro número da empresa conta como empresa (0133)', coalesce(pg_get_functiondef('public.recalc_company_reclassify(uuid)'::regprocedure) like '%0133%', false)),
   (125, 'Privado por setor de novo (0134)', exists (select 1 from pg_proc where proname = 'private_instance_ok' and prosrc like '%in_general_sector%')),
   (126, 'Acompanhamento da plataforma (0135)', to_regprocedure('public.platform_monitor()') is not null),
-  (127, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (127, 'Anexar arquivos nos grupos (0136)', exists (select 1 from pg_proc where proname = 'send_group_message' and prosrc like '%O arquivo passa de 50 MB%')),
+  (128, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

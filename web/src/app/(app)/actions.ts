@@ -175,13 +175,15 @@ export async function getIndicatorDetails(
 // Responder pelo painel (a fila é enviada pelo worker)
 // ---------------------------------------------------------------------
 export type GroupAudio = { path: string; mime: string; size: number; voice: boolean };
+/** Arquivo anexado numa resposta de grupo (0136): imagem, vídeo, áudio ou documento, com legenda opcional. */
+export type GroupFile = { path: string; type: 'image' | 'video' | 'audio' | 'document'; mime: string; name: string; size: number };
 
 export async function sendGroupMessage(
   groupId: string,
   body: string,
   quotedMessageId: string | null,
   closes = false,
-  media: GroupAudio | null = null,
+  media: GroupAudio | GroupFile | null = null,
 ): Promise<Result> {
   await requireProfile();
   const supabase = await createClient();
@@ -214,6 +216,27 @@ export async function prepareGroupAudioUpload(
   const path = `${group.company_id}/${group.id}/out-${crypto.randomUUID()}.${ext}`;
   const { data, error } = await createAdminClient().storage.from('media').createSignedUploadUrl(path);
   if (error || !data) return { ok: false, error: error?.message ?? 'Não foi possível preparar o envio do áudio.' };
+  return { ok: true, data: { path, token: data.token } };
+}
+
+/**
+ * Prepara o envio de um arquivo no grupo (0136): confere o grupo (com a sessão do usuário) e devolve um link
+ * de upload direto para o Storage, na pasta do grupo (o arquivo não passa pelo servidor).
+ */
+export async function prepareGroupUpload(
+  groupId: string,
+  file: { name: string; mime: string; size: number },
+): Promise<{ ok: true; data: { path: string; token: string } } | { ok: false; error: string }> {
+  await requireProfile();
+  if (file.size > 50 * 1024 * 1024) return { ok: false, error: 'O arquivo passa de 50 MB.' };
+  const supabase = await createClient();
+  const { data: group } = await supabase.from('groups').select('id, company_id').eq('id', groupId).maybeSingle();
+  if (!group) return { ok: false, error: 'Grupo não encontrado.' };
+  const ext =
+    (file.name.includes('.') ? file.name.split('.').pop()! : (file.mime.split('/')[1] ?? 'bin')).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) || 'bin';
+  const path = `${group.company_id}/${group.id}/out-${crypto.randomUUID()}.${ext}`;
+  const { data, error } = await createAdminClient().storage.from('media').createSignedUploadUrl(path);
+  if (error || !data) return { ok: false, error: error?.message ?? 'Não foi possível preparar o envio do arquivo.' };
   return { ok: true, data: { path, token: data.token } };
 }
 

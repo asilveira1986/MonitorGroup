@@ -303,6 +303,8 @@ export type OutgoingMessage = {
   sent_at: string | null;
   /** áudio gravado no painel (0074) */
   message_type?: string;
+  /** nome do arquivo anexado (0136) */
+  media_name?: string | null;
 };
 
 export type PendingItem = {
