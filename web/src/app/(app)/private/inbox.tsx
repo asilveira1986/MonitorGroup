@@ -257,6 +257,9 @@ function ChatView({
   const [reactions, setReactions] = useState<Map<string, PrivateReaction>>(new Map());
   const [editing, setEditing] = useState<string | null>(null);
   const [showDeleted, setShowDeleted] = useState<Set<string>>(new Set());
+  // histórico completo da conversa (inclui o que foi atendido por outras pessoas): carrega em lotes de 200
+  const [hasOlder, setHasOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
 
   useEffect(() => {
     if (loadedFor.current === chat.id) return;
@@ -273,6 +276,7 @@ function ChatView({
       supabase.from('private_reactions').select('id, message_id, reactor_jid, from_me, emoji').eq('chat_id', chat.id),
     ]).then(([m, o, r]) => {
       setMessages(((m.data ?? []) as PrivateMessage[]).reverse());
+      setHasOlder((m.data ?? []).length >= 200);
       setOutgoing((o.data ?? []) as Outgoing[]);
       setReactions(new Map(((r.data ?? []) as PrivateReaction[]).map((x) => [x.id, x])));
     });
@@ -389,6 +393,26 @@ function ChatView({
     return true;
   };
 
+  const loadOlder = async () => {
+    const first = messages?.[0];
+    if (!first || loadingOlder) return;
+    setLoadingOlder(true);
+    const { data } = await createClient()
+      .from('private_messages')
+      .select('*')
+      .eq('chat_id', chat.id)
+      .lt('sent_at', first.sent_at)
+      .order('sent_at', { ascending: false })
+      .limit(200);
+    const older = ((data ?? []) as PrivateMessage[]).reverse();
+    setMessages((prev) => {
+      const ids = new Set((prev ?? []).map((x) => x.id));
+      return [...older.filter((x) => !ids.has(x.id)), ...(prev ?? [])];
+    });
+    setHasOlder((data ?? []).length >= 200);
+    setLoadingOlder(false);
+  };
+
   const byId = useMemo(() => new Map((messages ?? []).map((m) => [m.id, m])), [messages]);
   const sentIds = useMemo(() => new Set((messages ?? []).map((m) => m.wa_message_id)), [messages]);
   const queue = outgoing.filter((o) => !o.wa_message_id || !sentIds.has(o.wa_message_id));
@@ -437,6 +461,18 @@ function ChatView({
 
       <div className="chat-wallpaper flex min-h-0 flex-1 flex-col-reverse overflow-y-auto p-3 sm:p-5">
         <div className="space-y-2">
+          {hasOlder && (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => void loadOlder()}
+                disabled={loadingOlder}
+                className="rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-ink-2 hover:text-ink disabled:opacity-60"
+              >
+                {loadingOlder ? 'Carregando…' : 'Carregar mensagens anteriores'}
+              </button>
+            </div>
+          )}
           {messages === null ? (
             <p className="flex items-center justify-center gap-2 py-6 text-sm text-muted">
               <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
