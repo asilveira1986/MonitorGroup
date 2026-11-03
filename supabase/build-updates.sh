@@ -167,7 +167,9 @@ CHECKS=$(cat <<'SQL'
   (125, 'Privado por setor de novo (0134)', exists (select 1 from pg_proc where proname = 'private_instance_ok' and prosrc like '%in_general_sector%')),
   (126, 'Acompanhamento da plataforma (0135)', to_regprocedure('public.platform_monitor()') is not null),
   (127, 'Anexar arquivos nos grupos (0136)', exists (select 1 from pg_proc where proname = 'send_group_message' and prosrc like '%O arquivo passa de 50 MB%')),
-  (128, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (128, 'Contato compartilhado clicável (0137)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'messages' and column_name = 'contact_cards')),
+  (129, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

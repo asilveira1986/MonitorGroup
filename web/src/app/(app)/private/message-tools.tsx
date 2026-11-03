@@ -10,6 +10,8 @@ import { cn } from '@/lib/format';
 import { requestPrivateAction } from './actions';
 
 export type PrivateMessageRow = {
+  /** contatos compartilhados: nome e telefone (0137) */
+  contact_cards?: { name: string | null; phone: string }[] | null;
   id: string;
   chat_id: string;
   wa_message_id: string;

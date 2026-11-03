@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isWithinBusinessHours } from './business-hours.js';
-import { extractContent, findKeyword, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, reactionOf, samePhone } from './text.js';
+import { contactCardsOf, extractContent, findKeyword, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, reactionOf, samePhone } from './text.js';
 
 test('findKeyword ignora acentos e maiúsculas e respeita palavra inteira', () => {
   assert.equal(findKeyword('Isso é URGENTE!!', ['urgente']), 'urgente');
@@ -119,4 +119,16 @@ test('isForwarded reconhece a mensagem encaminhada', async () => {
   assert.equal(isForwarded({ extendedTextMessage: { text: 'oi', contextInfo: { isForwarded: true, forwardingScore: 1 } } }), true);
   assert.equal(isForwarded({ conversation: 'oi' }), false);
   assert.equal(isForwarded({ imageMessage: { caption: 'x', contextInfo: { isForwarded: true } } }), true);
+});
+
+test('contactCardsOf lê o telefone do cartão de contato (waid ou TEL)', () => {
+  const vcard = 'BEGIN:VCARD\nVERSION:3.0\nFN:Maria Silva\nTEL;type=CELL;type=VOICE;waid=5551999998888:+55 51 99999-8888\nEND:VCARD';
+  assert.deepEqual(contactCardsOf({ contactMessage: { displayName: 'Maria', vcard } }), [{ name: 'Maria', phone: '5551999998888' }]);
+  const semWaid = 'BEGIN:VCARD\nFN:João\nitem1.TEL:(51) 3333-4444\nEND:VCARD';
+  assert.deepEqual(contactCardsOf({ contactMessage: { vcard: semWaid } }), [{ name: 'João', phone: '5133334444' }]);
+  assert.deepEqual(
+    contactCardsOf({ contactsArrayMessage: { contacts: [{ displayName: 'A', vcard }, { displayName: 'B', vcard: 'BEGIN:VCARD\nFN:B\nEND:VCARD' }] } }),
+    [{ name: 'A', phone: '5551999998888' }],
+  );
+  assert.deepEqual(contactCardsOf({ conversation: 'oi' }), []);
 });

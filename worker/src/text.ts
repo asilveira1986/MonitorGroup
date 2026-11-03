@@ -66,6 +66,30 @@ export function extractContent(message: proto.IMessage | null | undefined): { ty
   return { type: TYPE_LABELS[type] ?? type.replace(/Message$/, ''), body: body || null };
 }
 
+export type ContactCard = { name: string | null; phone: string };
+
+/** Telefone e nome de um cartão de contato (vCard): o `waid` do WhatsApp, ou o primeiro TEL. */
+function parseVCard(vcard: string | null | undefined, displayName: string | null | undefined): ContactCard | null {
+  const text = vcard ?? '';
+  const waid = /waid=(\d{8,15})/i.exec(text)?.[1];
+  const tel = /^(?:item\d+\.)?TEL[^:\r\n]*:([^\r\n]+)/im.exec(text)?.[1];
+  const phone = waid ?? (tel ? tel.replace(/\D/g, '') : '');
+  if (phone.length < 8 || phone.length > 15) return null;
+  const fn = /^FN[^:\r\n]*:([^\r\n]+)/im.exec(text)?.[1]?.trim();
+  return { name: displayName?.trim() || fn || null, phone };
+}
+
+/** Contatos compartilhados na mensagem (um ou vários), para o painel iniciar a conversa com eles. */
+export function contactCardsOf(message: proto.IMessage | null | undefined): ContactCard[] {
+  const content = normalizeMessageContent(message);
+  if (!content) return [];
+  const list = [
+    ...(content.contactMessage ? [content.contactMessage] : []),
+    ...(content.contactsArrayMessage?.contacts ?? []),
+  ];
+  return list.map((c) => parseVCard(c.vcard, c.displayName)).filter((c): c is ContactCard => Boolean(c));
+}
+
 /** Reação a uma mensagem: o id da mensagem reagida e o emoji ('' = reação retirada). */
 export function reactionOf(message: proto.IMessage | null | undefined): { targetId: string; emoji: string } | null {
   const r = normalizeMessageContent(message)?.reactionMessage;
