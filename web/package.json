@@ -6,19 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "lint": "eslint"
   },
   "dependencies": {
-    "@opennextjs/cloudflare": "^1.20.15",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.49.0",
-    "next": "^16.4.3",
+    "next": "16.3.8",
     "qrcode.react": "^4.2.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -32,9 +28,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "^16.4.3",
+    "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "wrangler": "^4.156.1"
+    "typescript": "^5"
   }
 }
