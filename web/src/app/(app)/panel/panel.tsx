@@ -14,6 +14,8 @@ export type PanelGroup = {
   id: string;
   name: string;
   sector_id?: string | null;
+  /** identificador do grupo no WhatsApp (o mesmo grupo pode existir em mais de um número/setor) */
+  jid?: string | null;
   /** responsável pelo grupo (pessoa da equipe) */
   responsible_ids?: string[];
   responsible_names?: string[];
@@ -273,16 +275,23 @@ export function GroupsPanel({
       /* sem armazenamento local */
     }
   };
-  const groups = useMemo(
-    () =>
-      allGroups.filter(
-        (g) =>
-          (sector === 'all' || (sector === 'none' ? !g.sector_id : g.sector_id === sector)) &&
-          (responsible === 'all' ||
-            (responsible === 'none' ? !g.responsible_ids?.length : Boolean(g.responsible_ids?.includes(responsible)))),
-      ),
-    [allGroups, sector, responsible],
-  );
+  const groups = useMemo(() => {
+    const filtered = allGroups.filter(
+      (g) =>
+        (sector === 'all' || (sector === 'none' ? !g.sector_id : g.sector_id === sector)) &&
+        (responsible === 'all' ||
+          (responsible === 'none' ? !g.responsible_ids?.length : Boolean(g.responsible_ids?.includes(responsible)))),
+    );
+    if (sector !== 'all') return filtered;
+    // em "Todos" o mesmo grupo do WhatsApp (mesmo jid ou mesmo nome) aparece uma só vez, mesmo que esteja em vários setores/números
+    const seen = new Set<string>();
+    return filtered.filter((g) => {
+      const keys = [g.jid ? `jid:${g.jid}` : null, `name:${g.name.trim().replace(/\s+/g, ' ').toLowerCase()}`].filter(Boolean) as string[];
+      if (keys.some((k) => seen.has(k))) return false;
+      keys.forEach((k) => seen.add(k));
+      return true;
+    });
+  }, [allGroups, sector, responsible]);
   const [query, setQuery] = useState('');
 
   // ao voltar de um grupo, o painel reabre com os mesmos filtros (situação, setor e busca)
