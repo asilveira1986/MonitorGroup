@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, Check, CheckCircle2, Clock, Loader2, Lock, Mic, RotateCcw, SendHorizontal, Trash2, X, Zap } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Clock, Loader2, Lock, Mic, Paperclip, RotateCcw, SendHorizontal, Trash2, X, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -9,7 +9,7 @@ import { cn, formatPhone } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import { findShortcutTrigger, greeting, matchQuickReplies, renderQuickReply, type QuickReply } from '@/lib/quick-replies';
 import type { Message, OutgoingMessage } from '@/lib/types';
-import { discardGroupMessage, prepareGroupAudioUpload, retryGroupMessage, sendGroupMessage } from '../../actions';
+import { discardGroupMessage, prepareGroupAudioUpload, prepareGroupUpload, retryGroupMessage, sendGroupMessage, type GroupFile } from '../../actions';
 
 export type ReplyConfig = {
   enabled: boolean;
@@ -25,6 +25,8 @@ export type ReplyConfig = {
 };
 
 const MAX = 4000;
+const MAX_FILE = 50 * 1024 * 1024;
+const sizeLabel = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 const quoteLabel = (m: Message) => m.sender_name || formatPhone(m.sender_phone) || (m.from_me ? 'Número conectado' : 'Cliente');
 
@@ -50,6 +52,14 @@ export function Composer({
   // a resposta usou a mensagem de fechamento: ao enviar, a conversa do grupo é encerrada
   const [closing, setClosing] = useState(false);
   const [recording, setRecording] = useState(false);
+  // arquivo anexado (imagem, vídeo, áudio ou documento): vai com o texto como legenda
+  const [file, setFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const pickFile = (f: File | null | undefined) => {
+    if (!f) return;
+    if (f.size > MAX_FILE) return void toast.error('O arquivo passa de 50 MB.');
+    setFile(f);
+  };
   const closingShortcut = config.closingShortcut || 'fechamento';
   const quick = useMemo(() => config.quickReplies ?? [], [config.quickReplies]);
   const options = useMemo(() => (trigger ? matchQuickReplies(quick, trigger.query) : []), [quick, trigger]);
@@ -111,9 +121,27 @@ export function Composer({
 
   const send = () => {
     const body = text.trim();
-    if (!body || pending) return;
+    if ((!body && !file) || pending) return;
+    const sending = file;
     start(async () => {
-      const res = await sendGroupMessage(groupId, body, replyTo?.id ?? null, closing);
+      let media: GroupFile | null = null;
+      if (sending) {
+        // o arquivo vai direto para o Storage (link de upload do grupo) e o worker envia
+        const mime = sending.type || 'application/octet-stream';
+        const prep = await prepareGroupUpload(groupId, { name: sending.name, mime, size: sending.size });
+        if (!prep.ok) {
+          toast.error(prep.error);
+          return;
+        }
+        const up = await createClient().storage.from('media').uploadToSignedUrl(prep.data.path, prep.data.token, sending, { contentType: mime });
+        if (up.error) {
+          toast.error('Não foi possível enviar o arquivo', { description: up.error.message });
+          return;
+        }
+        const type = mime.startsWith('image/') && !mime.includes('svg') ? 'image' : mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'document';
+        media = { path: prep.data.path, type, mime, name: sending.name, size: sending.size };
+      }
+      const res = await sendGroupMessage(groupId, body, replyTo?.id ?? null, closing, media);
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -121,6 +149,7 @@ export function Composer({
       if (closing) toast.success('Conversa encerrada', { description: 'A próxima mensagem do cliente inicia uma nova conversa.' });
       setClosing(false);
       setText('');
+      setFile(null);
       onClearReply();
       router.refresh();
       ref.current?.focus();
@@ -162,6 +191,18 @@ export function Composer({
           </button>
         </div>
       )}
+      {file && (
+        <div className="mb-2 flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-1.5 text-xs">
+          <Paperclip className="h-4 w-4 shrink-0 text-muted" />
+          <span className="min-w-0 flex-1 truncate">
+            {file.name} <span className="text-muted">· {sizeLabel(file.size)}</span>
+          </span>
+          <span className="shrink-0 text-muted">{text.trim() ? 'com legenda' : 'escreva uma legenda (opcional)'}</span>
+          <button type="button" onClick={() => setFile(null)} disabled={pending} className="rounded p-0.5 text-muted hover:text-ink" aria-label="Tirar o arquivo">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
       {closing && (
         <div className="mb-2 flex items-center gap-2 rounded-xl border border-good/40 bg-good/10 px-3 py-1.5 text-xs text-good-ink">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -179,7 +220,23 @@ export function Composer({
           </button>
         </div>
       )}
-      <div className="relative flex items-end gap-2">
+      <div
+        className="relative flex items-end gap-2"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          pickFile(e.dataTransfer.files?.[0]);
+        }}
+      >
+        <input
+          ref={fileInput}
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            pickFile(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
         {open && (
           <div
             className="absolute bottom-full left-0 right-14 z-20 mb-2 overflow-hidden rounded-xl border border-line bg-surface shadow-lg"
@@ -220,6 +277,16 @@ export function Composer({
         )}
         {!recording && (
           <>
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              disabled={pending}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line text-ink-2 transition hover:border-brand-line hover:text-brand-text disabled:opacity-40"
+              aria-label="Anexar arquivo"
+              title="Anexar imagem, vídeo, áudio ou documento (até 50 MB)"
+            >
+              <Paperclip className="h-5 w-5" />
+            </button>
             <textarea
               ref={ref}
               value={text}
@@ -230,6 +297,14 @@ export function Composer({
                 detect(value, e.target.selectionStart ?? value.length);
               }}
               onSelect={(e) => detect(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
+              onPaste={(e) => {
+                // colar uma imagem (print) anexa o arquivo
+                const f = [...(e.clipboardData?.files ?? [])][0];
+                if (f) {
+                  e.preventDefault();
+                  pickFile(f);
+                }
+              }}
               onBlur={() => setTrigger(null)}
               onKeyDown={(e) => {
                 if (open) {
@@ -256,7 +331,7 @@ export function Composer({
                 }
               }}
               rows={Math.min(6, Math.max(1, text.split('\n').length))}
-              placeholder="Mensagem para o grupo…"
+              placeholder={file ? 'Legenda (opcional)' : 'Mensagem para o grupo…'}
               aria-label="Mensagem para o grupo"
               disabled={pending}
               className="max-h-40 min-h-11 w-full resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-base text-ink outline-none transition placeholder:text-muted focus:border-brand-line focus:ring-2 focus:ring-brand-soft sm:text-sm"
@@ -276,12 +351,12 @@ export function Composer({
           </>
         )}
         {/* sem texto, o botão é o microfone (como no WhatsApp) */}
-        {recording || !text.trim() ? (
+        {recording || (!text.trim() && !file) ? (
           <VoiceRecorder onSend={sendVoice} onActiveChange={setRecording} disabled={pending} />
         ) : (
           <button
             onClick={send}
-            disabled={pending || !text.trim()}
+            disabled={pending || (!text.trim() && !file)}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-ink transition hover:opacity-90 disabled:opacity-40"
             aria-label="Enviar"
             title="Enviar (Enter)"
@@ -292,7 +367,7 @@ export function Composer({
       </div>
       <p className="mt-1.5 text-[11px] text-muted">
         Sai pelo número conectado e aparece também no celular
-        {config.signName ? ` · assinada como *${config.userName}:*` : ''} · Enter envia, Shift+Enter quebra a linha · 🎤 grava um áudio
+        {config.signName ? ` · assinada como *${config.userName}:*` : ''} · Enter envia, Shift+Enter quebra a linha · 📎 anexa um arquivo · 🎤 grava um áudio
         {quick.length > 0 ? ' · \\ + atalho insere uma mensagem rápida' : ''}
       </p>
     </div>
@@ -305,6 +380,8 @@ const STATUS = {
   sent: { icon: Check, label: 'Enviada', cls: 'text-good-ink' },
   failed: { icon: AlertCircle, label: 'Não enviada', cls: 'text-critical-ink' },
 } as const;
+
+const FILE_LABEL: Record<string, string> = { image: 'Imagem', video: 'Vídeo', document: 'Documento' };
 
 /** Resposta do painel que ainda não voltou pelo WhatsApp (na fila, enviando ou com falha). */
 export function OutgoingBubble({ item, quoted }: { item: OutgoingMessage; quoted?: Message }) {
@@ -337,7 +414,14 @@ export function OutgoingBubble({ item, quoted }: { item: OutgoingMessage; quoted
             <Mic className="h-4 w-4" /> Áudio
           </p>
         ) : (
-          <p className="whitespace-pre-wrap break-words text-ink">{item.body}</p>
+          <>
+            {item.message_type && item.message_type !== 'text' && (
+              <p className="mb-0.5 flex items-center gap-1.5 text-ink-2">
+                <Paperclip className="h-4 w-4 shrink-0" /> <span className="truncate">{item.media_name || FILE_LABEL[item.message_type] || 'Arquivo'}</span>
+              </p>
+            )}
+            {item.body && <p className="whitespace-pre-wrap break-words text-ink">{item.body}</p>}
+          </>
         )}
         <div className={cn('mt-1 flex items-center justify-end gap-1 text-[11px]', s.cls)}>
           <s.icon className={cn('h-3 w-3', item.status === 'sending' && 'animate-spin')} aria-hidden />
