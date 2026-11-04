@@ -1,10 +1,10 @@
 'use client';
 
-import { Moon, Save } from 'lucide-react';
+import { Moon, Save, Send } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Card, CardHeader, Field, Input, Select } from '@/components/ui';
-import { saveAfterHoursAlertGroup } from '../actions';
+import { saveAfterHoursAlertGroup, testAfterHoursAlertGroup, testAfterHoursAlertGroupStatus } from '../actions';
 
 /**
  * Grupo de alertas fora do expediente (0139): quando o tempo de resposta (SLA) de um grupo estoura fora
@@ -24,6 +24,28 @@ export function AfterHoursGroup({
   const [value, setValue] = useState(current ?? '');
   const [minutes, setMinutes] = useState(currentMinutes ? String(currentMinutes) : '');
   const [pending, start] = useTransition();
+  const [testing, setTesting] = useState(false);
+  // manda uma mensagem de teste pela fila de envio e acompanha até o worker enviar (ou falhar)
+  const test = async () => {
+    setTesting(true);
+    try {
+      const sent = await testAfterHoursAlertGroup();
+      if (!sent.ok || !sent.id) return void toast.error(sent.ok ? 'Não foi possível enviar o teste.' : sent.error);
+      toast.message('Teste na fila de envio…');
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 2500));
+        const st = await testAfterHoursAlertGroupStatus(sent.id);
+        if (!st.ok) return void toast.error(st.error);
+        if (st.status === 'sent') return void toast.success('Mensagem de teste enviada: confira no grupo de alertas.');
+        if (st.status === 'failed') return void toast.error('Não foi possível enviar o teste', { description: st.error ?? undefined });
+      }
+      toast.error('O teste continua na fila', {
+        description: 'O serviço do WhatsApp (worker) pode estar parado ou o número desconectado. Confira em Configurações › WhatsApp.',
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
   const save = () =>
     start(async () => {
       const res = await saveAfterHoursAlertGroup(value || null, minutes.trim() ? Number(minutes) : null);
@@ -68,9 +90,16 @@ export function AfterHoursGroup({
           />
         </Field>
         {isAdmin && (
+          <div className="flex flex-wrap gap-2">
           <Button onClick={save} disabled={pending || (value === (current ?? '') && minutes.trim() === (currentMinutes ? String(currentMinutes) : ''))}>
             <Save className="h-4 w-4" /> Salvar
           </Button>
+          {current && (
+            <Button variant="secondary" onClick={() => void test()} disabled={testing || pending} title="Envia uma mensagem de teste no grupo salvo, pelo número conectado">
+              <Send className="h-4 w-4" /> {testing ? 'Enviando…' : 'Enviar mensagem de teste'}
+            </Button>
+          )}
+          </div>
         )}
       </div>
     </Card>

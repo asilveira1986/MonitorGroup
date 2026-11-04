@@ -304,14 +304,24 @@ async function checkRecurrence(companyId: string, rules: AlertRule[], businessHo
  * Grupo de alertas fora do expediente (0139): avisa no grupo escolhido quando o SLA de um grupo estoura
  * fora do horário de trabalho. Uma vez por pendência.
  */
+let afterHoursMissingWarned = false;
+
 async function checkAfterHoursSla(companyId: string) {
   const { data, error } = await db.rpc('after_hours_sla_candidates', { p_company_id: companyId });
-  // sem o script do banco (0139) a verificação não existe: segue sem avisar
   if (error) {
-    if (!/after_hours_sla_candidates/.test(error.message)) logger.warn({ err: error.message, companyId }, 'falha ao buscar SLAs estourados fora do expediente');
+    // sem o script do banco (0139/0140) a verificação não existe: avisa no log (uma vez) e segue
+    if (/after_hours_sla_candidates/.test(error.message)) {
+      if (!afterHoursMissingWarned) {
+        afterHoursMissingWarned = true;
+        logger.warn('grupo de alertas fora do expediente: falta rodar o script do banco (supabase/atualizar_banco_parte2.sql, itens 0139 e 0140)');
+      }
+    } else {
+      logger.warn({ err: error.message, companyId }, 'falha ao buscar SLAs estourados fora do expediente');
+    }
     return;
   }
   const rows = (data ?? []) as AfterHoursRow[];
+  if (rows.length) logger.info({ companyId, pendencias: rows.length }, 'SLA estourado fora do expediente: avisando o grupo de alertas');
   await notifyAfterHours(companyId, rows, {
     appUrl: env.appUrl,
     send: sendWhatsAppToGroup,
@@ -320,6 +330,7 @@ async function checkAfterHoursSla(companyId: string) {
     },
     onError: (err, r) => logger.warn({ err, group: r.group_name }, 'falha ao avisar o grupo de alertas fora do expediente'),
   });
+
 }
 
 let running = false;
