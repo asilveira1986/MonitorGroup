@@ -519,7 +519,9 @@ function ChatView({
                       </span>
                     )}
                     {m.from_me && m.sender_name && <p className="mb-0.5 text-[11px] font-semibold text-brand-text">{m.sender_name}</p>}
-                    {editing === m.id ? (
+                    {m.deleted_at ? (
+                      <p className="italic text-ink-2">🚫 Mensagem apagada</p>
+                    ) : editing === m.id ? (
                       <PrivateEditor message={m} onClose={() => setEditing(null)} />
                     ) : (
                       <>

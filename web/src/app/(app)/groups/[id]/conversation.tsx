@@ -577,7 +577,9 @@ export function Conversation({
                       );
                     })()}
                   </div>
-                  {editing === m.id ? (
+                  {m.deleted_at ? (
+                    <p className="italic text-ink-2">🚫 Mensagem apagada</p>
+                  ) : editing === m.id ? (
                     <MessageEditor
                       message={m}
                       initial={withoutSignature(m.body, m.sender_name) ?? ''}
