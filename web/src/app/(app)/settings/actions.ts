@@ -707,6 +707,25 @@ export async function savePrivateAlertSettings(values: { mine: boolean; queue: b
   return result(error);
 }
 
+/**
+ * Grupo de alertas fora do expediente (0139): o worker avisa nele quando o SLA de um grupo estoura
+ * fora do horário de trabalho. null desliga.
+ */
+export async function saveAfterHoursAlertGroup(groupId: string | null): Promise<Result> {
+  const profile = await requireAdmin();
+  const supabase = await createClient();
+  if (groupId) {
+    const { data: group } = await supabase.from('groups').select('id, removed_at').eq('id', groupId).maybeSingle();
+    if (!group || group.removed_at) return { ok: false, error: 'Escolha um grupo em que o número conectado ainda participa.' };
+  }
+  const { error } = await supabase
+    .from('app_settings')
+    .update({ after_hours_alert_group_id: groupId, updated_at: new Date().toISOString() })
+    .eq('company_id', profile.company_id);
+  revalidatePath('/settings/alerts');
+  return result(error);
+}
+
 // ---------------------------------------------------------------------
 // Setores (somente admin): grupos e usuários de cada setor e as permissões
 // ---------------------------------------------------------------------

@@ -7,7 +7,7 @@ import { db } from './db.js';
 import { env } from './env.js';
 import { logger } from './logger.js';
 import { applyMessageRetention, cleanupExpiredMedia } from './media.js';
-import { setWhatsAppSender } from './notify.js';
+import { setGroupSender, setWhatsAppSender } from './notify.js';
 import { extendAgendaSeries, pushStatus, startPush } from './push.js';
 import { startTeamWhatsApp } from './team-whatsapp.js';
 import { runDailyCleanup } from './cleanup.js';
@@ -135,6 +135,7 @@ async function main() {
   setInterval(() => void heartbeat(manager).catch(() => {}), HEARTBEAT_MS);
 
   setWhatsAppSender((companyId, phone, text) => manager.sendText(companyId, phone, text));
+  setGroupSender((companyId, groupId, text) => manager.sendToGroup(companyId, groupId, text));
   // notificações push nos aparelhos (0098): não dependem da conexão do WhatsApp
   void startPush();
   await manager.init();

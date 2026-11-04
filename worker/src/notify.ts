@@ -21,6 +21,20 @@ export function setWhatsAppSender(sender: WhatsAppSender) {
   whatsappSender = sender;
 }
 
+/** envia para um grupo do WhatsApp (grupo de alertas fora do expediente, 0139) */
+type GroupSender = (companyId: string, groupId: string, text: string) => Promise<void>;
+let groupSender: GroupSender | null = null;
+
+export function setGroupSender(sender: GroupSender) {
+  groupSender = sender;
+}
+
+/** Texto num grupo do WhatsApp, pelo número conectado que participa dele. */
+export async function sendWhatsAppToGroup(companyId: string, groupId: string, text: string) {
+  if (!groupSender) throw new Error('WhatsApp ainda não está pronto');
+  await groupSender(companyId, groupId, text);
+}
+
 /** Texto pelo WhatsApp conectado da empresa (avisos da equipe, 0106). */
 export async function sendWhatsApp(companyId: string, phone: string, text: string) {
   if (!whatsappSender) throw new Error('WhatsApp ainda não está pronto');

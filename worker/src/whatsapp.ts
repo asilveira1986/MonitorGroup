@@ -241,6 +241,20 @@ export class WhatsAppManager {
     await session.sock.sendMessage(to, { text });
   }
 
+  /** Envia um texto para um grupo (grupo de alertas fora do expediente, 0139), pelo número que participa dele. */
+  async sendToGroup(companyId: string, groupId: string, text: string) {
+    const { data: group } = await db
+      .from('groups')
+      .select('jid, instance_id, removed_at')
+      .eq('id', groupId)
+      .eq('company_id', companyId)
+      .maybeSingle();
+    if (!group || group.removed_at) throw new Error('O grupo de alertas não existe mais ou o número saiu dele.');
+    const session = this.sessions.get(group.instance_id as string);
+    if (!session || !session.sock.user || session.stopped) throw new Error('O WhatsApp do grupo de alertas não está conectado.');
+    await session.sock.sendMessage(group.jid as string, { text });
+  }
+
   /** Atende os comandos enviados pelo painel (conectar / desconectar). */
   private async poll() {
     try {
