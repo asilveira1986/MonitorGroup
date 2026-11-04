@@ -170,6 +170,8 @@ from (values
       where table_schema = 'public' and table_name = 'messages' and column_name = 'contact_cards')),
   (129, 'Mensagem apagada sem o texto (0138)', to_regprocedure('public.messages_deleted_scrub()') is not null),
   (130, 'Grupo de alertas fora do expediente (0139)', to_regprocedure('public.after_hours_sla_candidates(uuid)') is not null),
-  (131, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (131, 'Minutos para avisar fora do expediente (0140)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'after_hours_alert_minutes')),
+  (132, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
