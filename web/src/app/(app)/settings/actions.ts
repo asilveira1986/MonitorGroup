@@ -729,6 +729,48 @@ export async function saveAfterHoursAlertGroup(groupId: string | null, minutes: 
   return result(error);
 }
 
+/**
+ * Mensagem de teste no grupo de alertas: entra na mesma fila de envio das respostas do painel e o worker
+ * manda pelo número conectado. O resultado (enviada ou o motivo da falha) vem de `testAfterHoursAlertGroupStatus`.
+ */
+export async function testAfterHoursAlertGroup(): Promise<Result & { id?: string }> {
+  const profile = await requireAdmin();
+  const supabase = await createClient();
+  const { data: settings } = await supabase.from('app_settings').select('*').eq('company_id', profile.company_id).maybeSingle();
+  const groupId = (settings as { after_hours_alert_group_id?: string | null } | null)?.after_hours_alert_group_id;
+  if (!groupId) return { ok: false, error: 'Escolha o grupo de alertas e salve antes de testar.' };
+  const { data: group } = await supabase.from('groups').select('id, name, instance_id, removed_at').eq('id', groupId).maybeSingle();
+  if (!group || group.removed_at) return { ok: false, error: 'O número conectado não participa mais desse grupo. Escolha outro.' };
+  const text = '✅ Teste do grupo de alertas fora do expediente: se você está lendo isto, os avisos de SLA vão chegar aqui.';
+  const { data, error } = await createAdminClient()
+    .from('outgoing_messages')
+    .insert({
+      group_id: group.id,
+      instance_id: group.instance_id,
+      body: text,
+      text_to_send: text,
+      sender_name: profile.full_name || 'Monitor Group',
+      created_by: profile.id,
+    })
+    .select('id')
+    .single();
+  if (error) return { ok: false, error: friendlyDbError(error.message) };
+  return { ok: true, id: data.id as string };
+}
+
+/** Situação da mensagem de teste: na fila, enviando, enviada ou o motivo da falha. */
+export async function testAfterHoursAlertGroupStatus(
+  id: string,
+): Promise<{ ok: true; status: 'pending' | 'sending' | 'sent' | 'failed'; error: string | null } | { ok: false; error: string }> {
+  const profile = await requireAdmin();
+  const admin = createAdminClient();
+  const { data } = await admin.from('outgoing_messages').select('status, error, groups!inner(company_id)').eq('id', id).maybeSingle();
+  const row = data as { status: 'pending' | 'sending' | 'sent' | 'failed'; error: string | null; groups: { company_id: string } | { company_id: string }[] } | null;
+  const company = Array.isArray(row?.groups) ? row?.groups[0]?.company_id : row?.groups?.company_id;
+  if (!row || company !== profile.company_id) return { ok: false, error: 'Mensagem de teste não encontrada.' };
+  return { ok: true, status: row.status, error: row.error };
+}
+
 // ---------------------------------------------------------------------
 // Setores (somente admin): grupos e usuários de cada setor e as permissões
 // ---------------------------------------------------------------------
