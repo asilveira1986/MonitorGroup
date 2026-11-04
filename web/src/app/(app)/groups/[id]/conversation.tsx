@@ -578,7 +578,7 @@ export function Conversation({
                     })()}
                   </div>
                   {m.deleted_at ? (
-                    <p className="italic text-ink-2">🚫 Mensagem apagada</p>
+                    <p className="italic text-ink-2">{m.from_me ? '🚫 Você apagou esta mensagem' : '🚫 Esta mensagem foi apagada'}</p>
                   ) : editing === m.id ? (
                     <MessageEditor
                       message={m}
@@ -625,7 +625,7 @@ export function Conversation({
                             title={orig ? 'Ir para a mensagem respondida' : undefined}
                           >
                             <span className={cn('block font-semibold', team ? 'text-brand-text' : 'text-series-1')}>{qWho}</span>
-                            <span className="line-clamp-2 text-ink-2">{orig?.deleted_at ? '🚫 Mensagem apagada' : qText}</span>
+                            <span className="line-clamp-2 text-ink-2">{orig?.deleted_at ? '🚫 Esta mensagem foi apagada' : qText}</span>
                           </button>
                         );
                       })()}

@@ -210,7 +210,7 @@ function Quoted({ target }: { target: PrivateMessage | undefined }) {
       {target ? (
         <>
           <p className="font-semibold text-brand-text">{target.from_me ? 'Você' : target.sender_name || 'Contato'}</p>
-          <p className="line-clamp-2 text-ink-2">{target.deleted_at ? '🚫 Mensagem apagada' : target.body || TYPE_LABEL[target.message_type] || target.message_type}</p>
+          <p className="line-clamp-2 text-ink-2">{target.deleted_at ? '🚫 Esta mensagem foi apagada' : target.body || TYPE_LABEL[target.message_type] || target.message_type}</p>
         </>
       ) : (
         <p className="italic text-muted">Mensagem citada (mais antiga)</p>
@@ -520,7 +520,7 @@ function ChatView({
                     )}
                     {m.from_me && m.sender_name && <p className="mb-0.5 text-[11px] font-semibold text-brand-text">{m.sender_name}</p>}
                     {m.deleted_at ? (
-                      <p className="italic text-ink-2">🚫 Mensagem apagada</p>
+                      <p className="italic text-ink-2">{m.from_me ? '🚫 Você apagou esta mensagem' : '🚫 Esta mensagem foi apagada'}</p>
                     ) : editing === m.id ? (
                       <PrivateEditor message={m} onClose={() => setEditing(null)} />
                     ) : (
