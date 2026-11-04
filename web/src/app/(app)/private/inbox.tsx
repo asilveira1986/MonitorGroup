@@ -260,7 +260,6 @@ function ChatView({
   const loadedFor = useRef<string | null>(null);
   const [reactions, setReactions] = useState<Map<string, PrivateReaction>>(new Map());
   const [editing, setEditing] = useState<string | null>(null);
-  const [showDeleted, setShowDeleted] = useState<Set<string>>(new Set());
   // histórico completo da conversa (inclui o que foi atendido por outras pessoas): carrega em lotes de 200
   const [hasOlder, setHasOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -486,7 +485,7 @@ function ChatView({
           ) : messages.length === 0 && queue.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted">Nenhuma mensagem ainda. Escreva abaixo para iniciar a conversa.</p>
           ) : null}
-          {(messages ?? []).filter((m) => !m.hidden_at).map((m, i, all) => {
+          {(messages ?? []).filter((m) => !m.hidden_at && !m.deleted_at).map((m, i, all) => {
             const day = dayFormat.format(new Date(m.sent_at));
             const showDay = i === 0 || day !== dayFormat.format(new Date(all[i - 1].sent_at));
             return (
@@ -520,24 +519,7 @@ function ChatView({
                       </span>
                     )}
                     {m.from_me && m.sender_name && <p className="mb-0.5 text-[11px] font-semibold text-brand-text">{m.sender_name}</p>}
-                    {m.deleted_at ? (
-                      <div className="text-ink-2">
-                        <p className="italic">🚫 Mensagem apagada</p>
-                        {showDeleted.has(m.id) ? (
-                          <p className="mt-1 whitespace-pre-wrap break-words rounded-lg bg-surface-2 px-2 py-1 text-xs">
-                            {m.body || (TYPE_LABEL[m.message_type] ?? m.message_type)}
-                          </p>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setShowDeleted((prev) => new Set(prev).add(m.id))}
-                            className="mt-0.5 text-[11px] text-muted underline-offset-2 hover:text-ink hover:underline"
-                          >
-                            ver o que foi apagado
-                          </button>
-                        )}
-                      </div>
-                    ) : editing === m.id ? (
+                    {editing === m.id ? (
                       <PrivateEditor message={m} onClose={() => setEditing(null)} />
                     ) : (
                       <>
