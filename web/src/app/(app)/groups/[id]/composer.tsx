@@ -26,6 +26,8 @@ export type ReplyConfig = {
 
 const MAX = 4000;
 const MAX_FILE = 50 * 1024 * 1024;
+/** quantos arquivos cabem numa vez */
+const MAX_FILES = 10;
 const sizeLabel = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 const quoteLabel = (m: Message) => m.sender_name || formatPhone(m.sender_phone) || (m.from_me ? 'Número conectado' : 'Cliente');
@@ -52,13 +54,19 @@ export function Composer({
   // a resposta usou a mensagem de fechamento: ao enviar, a conversa do grupo é encerrada
   const [closing, setClosing] = useState(false);
   const [recording, setRecording] = useState(false);
-  // arquivo anexado (imagem, vídeo, áudio ou documento): vai com o texto como legenda
-  const [file, setFile] = useState<File | null>(null);
+  // arquivos anexados (imagem, vídeo, áudio ou documento), um ou vários: vão em sequência e o texto é a legenda do primeiro
+  const [files, setFiles] = useState<File[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
-  const pickFile = (f: File | null | undefined) => {
-    if (!f) return;
-    if (f.size > MAX_FILE) return void toast.error('O arquivo passa de 50 MB.');
-    setFile(f);
+  const addFiles = (list: ArrayLike<File> | null | undefined) => {
+    const picked = Array.from(list ?? []);
+    if (!picked.length) return;
+    const fits = picked.filter((f) => f.size <= MAX_FILE);
+    if (fits.length < picked.length) toast.error('Arquivo acima de 50 MB não foi anexado.');
+    setFiles((prev) => {
+      const next = [...prev, ...fits];
+      if (next.length > MAX_FILES) toast.error(`No máximo ${MAX_FILES} arquivos por vez.`);
+      return next.slice(0, MAX_FILES);
+    });
   };
   const closingShortcut = config.closingShortcut || 'fechamento';
   const quick = useMemo(() => config.quickReplies ?? [], [config.quickReplies]);
@@ -121,36 +129,57 @@ export function Composer({
 
   const send = () => {
     const body = text.trim();
-    if ((!body && !file) || pending) return;
-    const sending = file;
+    if ((!body && !files.length) || pending) return;
+    const queue = [...files];
     start(async () => {
-      let media: GroupFile | null = null;
-      if (sending) {
-        // o arquivo vai direto para o Storage (link de upload do grupo) e o worker envia
+      if (!queue.length) {
+        const res = await sendGroupMessage(groupId, body, replyTo?.id ?? null, closing, null);
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        if (closing) toast.success('Conversa encerrada', { description: 'A próxima mensagem do cliente inicia uma nova conversa.' });
+        setClosing(false);
+        setText('');
+        onClearReply();
+        router.refresh();
+        ref.current?.focus();
+        return;
+      }
+      // cada arquivo vai direto para o Storage (link de upload do grupo) e o worker envia, na ordem:
+      // o texto e a citação ficam no primeiro; a mensagem que encerra a conversa, no último
+      for (let i = 0; i < queue.length; i++) {
+        const sending = queue[i];
+        const first = i === 0;
         const mime = sending.type || 'application/octet-stream';
         const prep = await prepareGroupUpload(groupId, { name: sending.name, mime, size: sending.size });
         if (!prep.ok) {
           toast.error(prep.error);
-          return;
+          break;
         }
         const up = await createClient().storage.from('media').uploadToSignedUrl(prep.data.path, prep.data.token, sending, { contentType: mime });
         if (up.error) {
           toast.error('Não foi possível enviar o arquivo', { description: up.error.message });
-          return;
+          break;
         }
         const type = mime.startsWith('image/') && !mime.includes('svg') ? 'image' : mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'document';
-        media = { path: prep.data.path, type, mime, name: sending.name, size: sending.size };
+        const media: GroupFile = { path: prep.data.path, type, mime, name: sending.name, size: sending.size };
+        const res = await sendGroupMessage(groupId, first ? body : '', first ? (replyTo?.id ?? null) : null, closing && i === queue.length - 1, media);
+        if (!res.ok) {
+          toast.error(res.error);
+          break;
+        }
+        if (first) {
+          setText('');
+          onClearReply();
+        }
+        // o que já foi enviado sai da lista: se algo falhar, o resto continua para tentar de novo
+        setFiles((prev) => prev.slice(1));
+        if (closing && i === queue.length - 1) {
+          toast.success('Conversa encerrada', { description: 'A próxima mensagem do cliente inicia uma nova conversa.' });
+          setClosing(false);
+        }
       }
-      const res = await sendGroupMessage(groupId, body, replyTo?.id ?? null, closing, media);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      if (closing) toast.success('Conversa encerrada', { description: 'A próxima mensagem do cliente inicia uma nova conversa.' });
-      setClosing(false);
-      setText('');
-      setFile(null);
-      onClearReply();
       router.refresh();
       ref.current?.focus();
     });
@@ -191,16 +220,27 @@ export function Composer({
           </button>
         </div>
       )}
-      {file && (
-        <div className="mb-2 flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-1.5 text-xs">
-          <Paperclip className="h-4 w-4 shrink-0 text-muted" />
-          <span className="min-w-0 flex-1 truncate">
-            {file.name} <span className="text-muted">· {sizeLabel(file.size)}</span>
-          </span>
-          <span className="shrink-0 text-muted">{text.trim() ? 'com legenda' : 'escreva uma legenda (opcional)'}</span>
-          <button type="button" onClick={() => setFile(null)} disabled={pending} className="rounded p-0.5 text-muted hover:text-ink" aria-label="Tirar o arquivo">
-            <X className="h-4 w-4" />
-          </button>
+      {files.length > 0 && (
+        <div className="mb-2 space-y-1">
+          {files.map((f, i) => (
+            <div key={`${f.name}-${f.size}-${f.lastModified}-${i}`} className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-1.5 text-xs">
+              <Paperclip className="h-4 w-4 shrink-0 text-muted" />
+              <span className="min-w-0 flex-1 truncate">
+                {f.name} <span className="text-muted">· {sizeLabel(f.size)}</span>
+              </span>
+              {i === 0 && <span className="shrink-0 text-muted">{text.trim() ? 'com legenda' : 'escreva uma legenda (opcional)'}</span>}
+              <button
+                type="button"
+                onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                disabled={pending}
+                className="rounded p-0.5 text-muted hover:text-ink"
+                aria-label={`Tirar ${f.name}`}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+          {files.length > 1 && <p className="px-1 text-[11px] text-muted">Os {files.length} arquivos vão em mensagens separadas, na ordem; o texto é a legenda do primeiro.</p>}
         </div>
       )}
       {closing && (
@@ -225,15 +265,16 @@ export function Composer({
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
-          pickFile(e.dataTransfer.files?.[0]);
+          addFiles(e.dataTransfer.files);
         }}
       >
         <input
           ref={fileInput}
           type="file"
+          multiple
           className="hidden"
           onChange={(e) => {
-            pickFile(e.target.files?.[0]);
+            addFiles(e.target.files);
             e.target.value = '';
           }}
         />
@@ -283,7 +324,7 @@ export function Composer({
               disabled={pending}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line text-ink-2 transition hover:border-brand-line hover:text-brand-text disabled:opacity-40"
               aria-label="Anexar arquivo"
-              title="Anexar imagem, vídeo, áudio ou documento (até 50 MB)"
+              title="Anexar imagem, vídeo, áudio ou documentos (até 50 MB cada, vários de uma vez)"
             >
               <Paperclip className="h-5 w-5" />
             </button>
@@ -299,10 +340,10 @@ export function Composer({
               onSelect={(e) => detect(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
               onPaste={(e) => {
                 // colar uma imagem (print) anexa o arquivo
-                const f = [...(e.clipboardData?.files ?? [])][0];
-                if (f) {
+                const pasted = [...(e.clipboardData?.files ?? [])];
+                if (pasted.length) {
                   e.preventDefault();
-                  pickFile(f);
+                  addFiles(pasted);
                 }
               }}
               onBlur={() => setTrigger(null)}
@@ -331,7 +372,7 @@ export function Composer({
                 }
               }}
               rows={Math.min(6, Math.max(1, text.split('\n').length))}
-              placeholder={file ? 'Legenda (opcional)' : 'Mensagem para o grupo…'}
+              placeholder={files.length ? 'Legenda (opcional)' : 'Mensagem para o grupo…'}
               aria-label="Mensagem para o grupo"
               disabled={pending}
               className="max-h-40 min-h-11 w-full resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-base text-ink outline-none transition placeholder:text-muted focus:border-brand-line focus:ring-2 focus:ring-brand-soft sm:text-sm"
@@ -351,12 +392,12 @@ export function Composer({
           </>
         )}
         {/* sem texto, o botão é o microfone (como no WhatsApp) */}
-        {recording || (!text.trim() && !file) ? (
+        {recording || (!text.trim() && !files.length) ? (
           <VoiceRecorder onSend={sendVoice} onActiveChange={setRecording} disabled={pending} />
         ) : (
           <button
             onClick={send}
-            disabled={pending || (!text.trim() && !file)}
+            disabled={pending || (!text.trim() && !files.length)}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-ink transition hover:opacity-90 disabled:opacity-40"
             aria-label="Enviar"
             title="Enviar (Enter)"
