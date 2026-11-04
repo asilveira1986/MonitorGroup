@@ -45,7 +45,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
   const recentlySent = minutesAgo(5);
-  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }, { data: closingCfg }, { data: groupPhoto }, { data: canPrivate }, { data: tagRows }] = await Promise.all([
+  const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: canAlertsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }, { data: closingCfg }, { data: groupPhoto }, { data: canPrivate }, { data: tagRows }] = await Promise.all([
     supabase.from('team_members').select('id, name, active').order('name'),
     supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
     // respostas do painel que ainda não voltaram pelo WhatsApp
@@ -58,6 +58,8 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     // permissões do setor do grupo para este usuário (administrador: todas)
     supabase.rpc('has_group_permission', { p_group_id: id, p_permission: 'reply' }),
     supabase.rpc('has_group_permission', { p_group_id: id, p_permission: 'demands' }),
+    // tratar alertas: "Marcar como respondida" resolve os alertas de falta de resposta do grupo
+    supabase.rpc('has_group_permission', { p_group_id: id, p_permission: 'alerts' }),
     supabase.from('sectors').select('id, name').order('name'),
     // membros do grupo (lista do WhatsApp)
     supabase.rpc('group_members', { p_group_id: id }),
@@ -237,9 +239,12 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
               <strong>{g.pending_count} mensagem(ns)</strong> de cliente aguardando resposta {timeAgo(g.pending_since)}.
             </span>
           </p>
-          <ActionButton action={markGroupAnswered.bind(null, g.id)} success="Marcada como respondida">
-            <CheckCheck className="h-3.5 w-3.5" /> Marcar como respondida
-          </ActionButton>
+          {/* só quem pode alterar dados e tratar alertas do setor do grupo (o banco recusa os demais) */}
+          {!viewer && canAlertsHere !== false && (
+            <ActionButton action={markGroupAnswered.bind(null, g.id)} success="Marcada como respondida">
+              <CheckCheck className="h-3.5 w-3.5" /> Marcar como respondida
+            </ActionButton>
+          )}
         </Card>
       )}
 
