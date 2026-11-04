@@ -21,6 +21,8 @@ function explain(message: string): string {
     return 'Cadastro de novos usuários desativado no Supabase. Ative "Allow new users to sign up" em Authentication › Sign In / Providers.';
   if (m.includes('database error saving new user'))
     return 'Erro no banco ao criar o usuário. Verifique se os scripts SQL (0001 a 0004) foram executados no Supabase.';
+  if (m.includes('rate limit') || m.includes('too many requests') || m.includes('security purposes'))
+    return 'Muitos e-mails enviados em pouco tempo. Aguarde cerca de 1 hora e tente de novo, ou peça a um administrador para gerar uma nova senha em Configurações › Usuários.';
   if (m.includes('redirect') || m.includes('code verifier') || m.includes('pkce'))
     return 'Falha no retorno do login. No Supabase, em Authentication › URL Configuration, coloque o endereço do painel em Site URL e em Redirect URLs (com /** no final). Abra o login sempre pelo mesmo endereço.';
   return message;
