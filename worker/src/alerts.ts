@@ -2,7 +2,8 @@ import { activeCompanyIds, getSettings, isCompanyActive } from './cache.js';
 import { check, db, type AlertRule, type GroupRow } from './db.js';
 import { isWithinBusinessHours } from './business-hours.js';
 import { logger } from './logger.js';
-import { sendNotifications } from './notify.js';
+import { env } from './env.js';
+import { sendNotifications, sendWhatsAppToGroup } from './notify.js';
 import { alertRecipients, type RecipientMember } from './recipients.js';
 import { findKeyword } from './text.js';
 
@@ -298,6 +299,49 @@ async function checkRecurrence(companyId: string, rules: AlertRule[], businessHo
   }
 }
 
+/**
+ * Grupo de alertas fora do expediente (0139): avisa no grupo escolhido quando o SLA de um grupo estoura
+ * fora do horário de trabalho. Uma vez por pendência.
+ */
+async function checkAfterHoursSla(companyId: string) {
+  const { data, error } = await db.rpc('after_hours_sla_candidates', { p_company_id: companyId });
+  // sem o script do banco (0139) a verificação não existe: segue sem avisar
+  if (error) {
+    if (!/after_hours_sla_candidates/.test(error.message)) logger.warn({ err: error.message, companyId }, 'falha ao buscar SLAs estourados fora do expediente');
+    return;
+  }
+  const rows = (data ?? []) as {
+    alert_group_id: string;
+    group_id: string;
+    group_name: string;
+    pending_since: string;
+    pending_count: number;
+    sla_seconds: number;
+    waiting_seconds: number;
+    who: string | null;
+    body: string | null;
+    message_type: string | null;
+  }[];
+  for (const r of rows) {
+    const preview = r.body ? `\n${r.who ?? 'Cliente'}: "${r.body}"` : r.message_type && r.message_type !== 'text' ? `\n${r.who ?? 'Cliente'}: [${r.message_type}]` : '';
+    const text = [
+      '🚨 SLA estourado fora do expediente',
+      `Grupo: ${r.group_name}`,
+      `Sem resposta há ${formatDuration(r.waiting_seconds)} (SLA de ${formatDuration(r.sla_seconds)}) · ${r.pending_count} mensagem(ns)${preview}`,
+      env.appUrl ? `${env.appUrl}/groups/${r.group_id}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+    try {
+      await sendWhatsAppToGroup(companyId, r.alert_group_id, text);
+      await db.from('after_hours_sla_notices').upsert({ group_id: r.group_id, pending_since: r.pending_since });
+      logger.info({ group: r.group_name }, 'SLA estourado fora do expediente avisado no grupo de alertas');
+    } catch (err) {
+      logger.warn({ err, group: r.group_name }, 'falha ao avisar o grupo de alertas fora do expediente');
+    }
+  }
+}
+
 let running = false;
 
 export async function runPeriodicChecks() {
@@ -307,6 +351,7 @@ export async function runPeriodicChecks() {
     // cada empresa ativa com as suas regras, horário comercial e grupos
     for (const companyId of await activeCompanyIds()) {
       try {
+        await checkAfterHoursSla(companyId);
         const rules = await loadRules(companyId);
         if (!rules.length) continue;
         const businessHours = await inBusinessHours(companyId);

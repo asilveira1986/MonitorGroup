@@ -225,7 +225,8 @@ begin
   (128, 'Contato compartilhado clicável (0137)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'messages' and column_name = 'contact_cards')),
   (129, 'Mensagem apagada sem o texto (0138)', to_regprocedure('public.messages_deleted_scrub()') is not null),
-  (130, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (130, 'Grupo de alertas fora do expediente (0139)', to_regprocedure('public.after_hours_sla_candidates(uuid)') is not null),
+  (131, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -234,7 +235,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -20529,6 +20530,81 @@ notify pgrst, 'reload schema';
 $mig0138$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0139_after_hours_alert_group.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0139', $mig0139$
+-- =====================================================================
+-- Grupo de alertas fora do expediente.
+--
+--  * Em Configurações › Regras de alerta, o administrador escolhe um grupo do WhatsApp (o número
+--    conectado precisa participar dele). Sempre que o tempo de resposta (SLA) de um grupo estoura
+--    FORA do horário de trabalho, o sistema avisa nesse grupo, uma vez por pendência.
+--  * "Estoura fora do horário": o SLA conta em tempo corrido a partir da mensagem do cliente
+--    (mensagem + SLA do grupo, ou o padrão) e o instante em que ele vence cai fora do expediente,
+--    dos dias úteis ou dos feriados cadastrados. Não depende de a empresa contar o SLA só em
+--    horário comercial, porque o aviso existe justamente para quando ninguém está olhando.
+--  * after_hours_sla_notices guarda o que já foi avisado (uma linha por pendência).
+-- =====================================================================
+
+alter table public.app_settings
+  add column if not exists after_hours_alert_group_id uuid references public.groups(id) on delete set null;
+
+create table if not exists public.after_hours_sla_notices (
+  group_id      uuid not null references public.groups(id) on delete cascade,
+  pending_since timestamptz not null,
+  notified_at   timestamptz not null default now(),
+  primary key (group_id, pending_since)
+);
+-- só o worker (chave de serviço) lê e grava
+alter table public.after_hours_sla_notices enable row level security;
+
+-- grupos com o SLA vencido fora do expediente que ainda não foram avisados
+create or replace function public.after_hours_sla_candidates(p_company_id uuid)
+returns table (
+  alert_group_id uuid, group_id uuid, group_name text, pending_since timestamptz, pending_count int,
+  sla_seconds int, waiting_seconds int, who text, body text, message_type text
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_f     jsonb;
+  v_alert uuid;
+begin
+  perform set_config('app.company_id', p_company_id::text, true);
+  select s.after_hours_alert_group_id into v_alert from public.app_settings s where s.company_id = p_company_id;
+  if v_alert is null then
+    return;
+  end if;
+  v_f := public.indicator_filters(now(), now(), null, null);
+  if v_f is null then
+    return;
+  end if;
+  return query
+  select v_alert, g.id, g.name, g.pending_since, g.pending_count,
+         (coalesce(g.sla_minutes, s.default_sla_minutes) * 60)::int,
+         extract(epoch from now() - g.pending_since)::int,
+         coalesce(pm.sender_name, pm.sender_phone, 'Cliente'), left(pm.body, 200), pm.message_type
+    from public.groups g
+    join public.app_settings s on s.company_id = g.company_id
+    left join public.messages pm on pm.id = g.pending_message_id
+   where g.company_id = p_company_id and g.monitored and g.removed_at is null
+     and g.id <> v_alert
+     and g.pending_since is not null
+     -- o SLA venceu agora há pouco (evita avisar pendências antigas, por exemplo na primeira execução)...
+     and g.pending_since + make_interval(secs => coalesce(g.sla_minutes, s.default_sla_minutes) * 60) <= now()
+     and g.pending_since + make_interval(secs => coalesce(g.sla_minutes, s.default_sla_minutes) * 60) >= now() - interval '6 hours'
+     -- ...e o instante em que venceu foi fora do expediente
+     and not public.is_business_time(
+           g.pending_since + make_interval(secs => coalesce(g.sla_minutes, s.default_sla_minutes) * 60), v_f)
+     and not exists (select 1 from public.after_hours_sla_notices n where n.group_id = g.id and n.pending_since = g.pending_since)
+   order by g.pending_since;
+end;
+$$;
+revoke all on function public.after_hours_sla_candidates(uuid) from public, anon, authenticated;
+grant execute on function public.after_hours_sla_candidates(uuid) to service_role;
+
+notify pgrst, 'reload schema';
+$mig0139$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -20706,6 +20782,7 @@ from (values
   (128, 'Contato compartilhado clicável (0137)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'messages' and column_name = 'contact_cards')),
   (129, 'Mensagem apagada sem o texto (0138)', to_regprocedure('public.messages_deleted_scrub()') is not null),
-  (130, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (130, 'Grupo de alertas fora do expediente (0139)', to_regprocedure('public.after_hours_sla_candidates(uuid)') is not null),
+  (131, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

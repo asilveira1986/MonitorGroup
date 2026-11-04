@@ -176,6 +176,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    136. `supabase/migrations/0136_group_send_files.sql`
    137. `supabase/migrations/0137_contact_cards.sql`
    138. `supabase/migrations/0138_deleted_messages_scrub.sql`
+   139. `supabase/migrations/0139_after_hours_alert_group.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
