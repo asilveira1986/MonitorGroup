@@ -333,42 +333,60 @@ function ChatView({
     return map;
   }, [reactions]);
 
-  const [file, setFile] = useState<File | null>(null);
+  // arquivos anexados, um ou vários: vão em sequência e o texto é a legenda do primeiro
+  const [files, setFiles] = useState<File[]>([]);
   const [recording, setRecording] = useState(false);
   const [replyTo, setReplyTo] = useState<PrivateMessage | null>(null);
   // encaminhar / responder num grupo (0105)
   const [share, setShare] = useState<{ source: ShareSource; mode: ShareMode } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const pickFile = (f: File | null | undefined) => {
-    if (!f) return;
-    if (f.size > 50 * 1024 * 1024) return void toast.error('O arquivo passa de 50 MB.');
-    setFile(f);
+  const addFiles = (list: ArrayLike<File> | null | undefined) => {
+    const picked = Array.from(list ?? []);
+    if (!picked.length) return;
+    const fits = picked.filter((f) => f.size <= 50 * 1024 * 1024);
+    if (fits.length < picked.length) toast.error('Arquivo acima de 50 MB não foi anexado.');
+    setFiles((prev) => {
+      const next = [...prev, ...fits];
+      if (next.length > 10) toast.error('No máximo 10 arquivos por vez.');
+      return next.slice(0, 10);
+    });
   };
   const send = () => {
     const body = text.trim();
-    if (!body && !file) return;
-    const sending = file;
+    if (!body && !files.length) return;
+    const queue = [...files];
     const quotedId = replyTo?.id ?? null;
     setText('');
-    setFile(null);
+    setFiles([]);
     setReplyTo(null);
     start(async () => {
-      let media: PrivateMediaInput | null = null;
-      if (sending) {
-        // o arquivo vai direto para o Storage (link de upload da conversa) e o worker envia
+      if (!queue.length) {
+        const res = await sendPrivateMessage(chat.id, body, { quotedId, media: null });
+        if (!res.ok) {
+          setText(body);
+          toast.error(res.error);
+        }
+        return;
+      }
+      // cada arquivo vai direto para o Storage (link de upload da conversa) e o worker envia, na ordem;
+      // o texto e a citação ficam no primeiro
+      for (let i = 0; i < queue.length; i++) {
+        const sending = queue[i];
+        const fail = (message: string, description?: string) => {
+          // o que não foi enviado volta para a caixa, para tentar de novo
+          setFiles(queue.slice(i));
+          if (i === 0) setText(body);
+          toast.error(message, description ? { description } : undefined);
+        };
         const mime = sending.type || 'application/octet-stream';
         const prep = await preparePrivateUpload(chat.id, { name: sending.name, mime, size: sending.size });
-        if (!prep.ok) return void toast.error(prep.error);
+        if (!prep.ok) return void fail(prep.error);
         const up = await createClient().storage.from('media').uploadToSignedUrl(prep.data!.path, prep.data!.token, sending, { contentType: mime });
-        if (up.error) return void toast.error('Não foi possível enviar o arquivo', { description: up.error.message });
+        if (up.error) return void fail('Não foi possível enviar o arquivo', up.error.message);
         const type = mime.startsWith('image/') && !mime.includes('svg') ? 'image' : mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'document';
-        media = { path: prep.data!.path, type, mime, name: sending.name, size: sending.size };
-      }
-      const res = await sendPrivateMessage(chat.id, body, { quotedId, media });
-      if (!res.ok) {
-        setText(body);
-        setFile(sending);
-        toast.error(res.error);
+        const media: PrivateMediaInput = { path: prep.data!.path, type, mime, name: sending.name, size: sending.size };
+        const res = await sendPrivateMessage(chat.id, i === 0 ? body : '', { quotedId: i === 0 ? quotedId : null, media });
+        if (!res.ok) return void fail(res.error);
       }
     });
   };
@@ -598,7 +616,7 @@ function ChatView({
         </div>
       </div>
 
-      {(replyTo || file) && (
+      {(replyTo || files.length > 0) && (
         <div className="space-y-1.5 border-t border-line bg-surface-2/50 px-3 pt-2">
           {replyTo && (
             <div className="flex items-start gap-2 rounded-lg border-l-4 border-brand bg-surface px-2.5 py-1.5 text-xs">
@@ -611,18 +629,19 @@ function ChatView({
               </button>
             </div>
           )}
-          {file && (
-            <div className="flex items-center gap-2 rounded-lg bg-surface px-2.5 py-1.5 text-xs">
+          {files.map((f, i) => (
+            <div key={`${f.name}-${f.size}-${f.lastModified}-${i}`} className="flex items-center gap-2 rounded-lg bg-surface px-2.5 py-1.5 text-xs">
               <Paperclip className="h-4 w-4 shrink-0 text-muted" />
               <span className="min-w-0 flex-1 truncate">
-                {file.name} <span className="text-muted">· {file.size >= 1048576 ? `${(file.size / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1024))} KB`}</span>
+                {f.name} <span className="text-muted">· {f.size >= 1048576 ? `${(f.size / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(f.size / 1024))} KB`}</span>
               </span>
-              <span className="text-muted">{text.trim() ? 'com legenda' : 'escreva uma legenda (opcional)'}</span>
-              <button type="button" onClick={() => setFile(null)} className="text-muted hover:text-ink" aria-label="Tirar o arquivo">
+              {i === 0 && <span className="text-muted">{text.trim() ? 'com legenda' : 'escreva uma legenda (opcional)'}</span>}
+              <button type="button" onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))} className="text-muted hover:text-ink" aria-label={`Tirar ${f.name}`}>
                 <X className="h-4 w-4" />
               </button>
             </div>
-          )}
+          ))}
+          {files.length > 1 && <p className="px-1 pb-1 text-[11px] text-muted">Os {files.length} arquivos vão em mensagens separadas, na ordem; o texto é a legenda do primeiro.</p>}
         </div>
       )}
       <form
@@ -634,21 +653,22 @@ function ChatView({
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
-          pickFile(e.dataTransfer.files?.[0]);
+          addFiles(e.dataTransfer.files);
         }}
       >
         <input
           ref={fileInput}
           type="file"
+          multiple
           className="hidden"
           onChange={(e) => {
-            pickFile(e.target.files?.[0]);
+            addFiles(e.target.files);
             e.target.value = '';
           }}
         />
         {!recording && (
           <>
-            <Button type="button" variant="ghost" onClick={() => fileInput.current?.click()} aria-label="Anexar arquivo" title="Anexar imagem, vídeo, áudio ou documento (até 50 MB)">
+            <Button type="button" variant="ghost" onClick={() => fileInput.current?.click()} aria-label="Anexar arquivo" title="Anexar imagem, vídeo, áudio ou documentos (até 50 MB cada, vários de uma vez)">
               <Paperclip className="h-4 w-4" />
             </Button>
             <Textarea
@@ -663,22 +683,22 @@ function ChatView({
               }}
               onPaste={(e) => {
                 // colar uma imagem (print) anexa o arquivo
-                const f = [...(e.clipboardData?.files ?? [])][0];
-                if (f) {
+                const pasted = [...(e.clipboardData?.files ?? [])];
+                if (pasted.length) {
                   e.preventDefault();
-                  pickFile(f);
+                  addFiles(pasted);
                 }
               }}
               rows={1}
               maxLength={4000}
-              placeholder={file ? 'Legenda (opcional)' : 'Mensagem'}
+              placeholder={files.length ? 'Legenda (opcional)' : 'Mensagem'}
               aria-label="Mensagem"
               className="max-h-40 min-h-10 flex-1 resize-none"
             />
           </>
         )}
         {/* sem texto nem arquivo, o botão é o microfone (como no WhatsApp) */}
-        {recording || (!text.trim() && !file) ? (
+        {recording || (!text.trim() && !files.length) ? (
           <VoiceRecorder onSend={sendVoice} onActiveChange={setRecording} disabled={pending} />
         ) : (
           <Button type="submit" disabled={pending} aria-label="Enviar">
