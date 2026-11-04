@@ -233,7 +233,6 @@ export function Conversation({
     });
   };
   const [editing, setEditing] = useState<string | null>(null);
-  const [showDeleted, setShowDeleted] = useState<Set<string>>(new Set());
   const [hasMore, setHasMore] = useState(initial.length >= PAGE_SIZE);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -247,7 +246,7 @@ export function Conversation({
       const m = byId.get(id);
       if (m) byId.set(id, { ...m, ...p });
     }
-    return [...byId.values()].filter((m) => !TECHNICAL_TYPES.has(m.message_type) && !m.hidden_at).sort(newerFirst);
+    return [...byId.values()].filter((m) => !TECHNICAL_TYPES.has(m.message_type) && !m.hidden_at && !m.deleted_at).sort(newerFirst);
   }, [initial, older, patches, arrived]);
 
   // reações (0062): carregadas para as mensagens na tela e atualizadas em tempo real
@@ -578,24 +577,7 @@ export function Conversation({
                       );
                     })()}
                   </div>
-                  {m.deleted_at ? (
-                    <div className="text-ink-2">
-                      <p className="italic">🚫 Mensagem apagada</p>
-                      {showDeleted.has(m.id) ? (
-                        <p className="mt-1 whitespace-pre-wrap break-words rounded-lg bg-surface-2 px-2 py-1 text-xs text-ink-2">
-                          {withoutSignature(m.body, m.from_me ? m.sender_name : null) || (TYPE_LABEL[m.message_type] ?? m.message_type)}
-                        </p>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setShowDeleted((prev) => new Set(prev).add(m.id))}
-                          className="mt-0.5 text-[11px] text-muted underline-offset-2 hover:text-ink hover:underline"
-                        >
-                          ver o que foi apagado
-                        </button>
-                      )}
-                    </div>
-                  ) : editing === m.id ? (
+                  {editing === m.id ? (
                     <MessageEditor
                       message={m}
                       initial={withoutSignature(m.body, m.sender_name) ?? ''}
