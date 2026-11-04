@@ -485,7 +485,7 @@ function ChatView({
           ) : messages.length === 0 && queue.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted">Nenhuma mensagem ainda. Escreva abaixo para iniciar a conversa.</p>
           ) : null}
-          {(messages ?? []).filter((m) => !m.hidden_at).map((m, i, all) => {
+          {(messages ?? []).filter((m) => !m.hidden_at && !m.deleted_at).map((m, i, all) => {
             const day = dayFormat.format(new Date(m.sent_at));
             const showDay = i === 0 || day !== dayFormat.format(new Date(all[i - 1].sent_at));
             return (
