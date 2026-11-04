@@ -327,7 +327,7 @@ async function checkAfterHoursSla(companyId: string) {
     const text = [
       '🚨 SLA estourado fora do expediente',
       `Grupo: ${r.group_name}`,
-      `Sem resposta há ${formatDuration(r.waiting_seconds)} (SLA de ${formatDuration(r.sla_seconds)}) · ${r.pending_count} mensagem(ns)${preview}`,
+      `Sem resposta há ${formatDuration(r.waiting_seconds)} (limite de ${formatDuration(r.sla_seconds)}) · ${r.pending_count} mensagem(ns)${preview}`,
       env.appUrl ? `${env.appUrl}/groups/${r.group_id}` : '',
     ]
       .filter(Boolean)

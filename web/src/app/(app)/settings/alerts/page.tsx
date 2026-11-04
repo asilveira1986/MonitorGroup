@@ -22,11 +22,12 @@ export default async function AlertRulesPage({ searchParams }: PageProps<'/setti
     // sem o script do banco (0139) a coluna não existe: segue sem o grupo escolhido
     supabase.from('app_settings').select('*').maybeSingle(),
   ]);
-  const afterHours = ((settings ?? {}) as { after_hours_alert_group_id?: string | null }).after_hours_alert_group_id ?? null;
+  const afterHoursSettings = (settings ?? {}) as { after_hours_alert_group_id?: string | null; after_hours_alert_minutes?: number | null };
+  const afterHours = afterHoursSettings.after_hours_alert_group_id ?? null;
   return (
     <div className="space-y-4">
       {!isAdmin && <AdminNotice />}
-      <AfterHoursGroup groups={allGroups ?? []} current={afterHours} isAdmin={isAdmin} />
+      <AfterHoursGroup groups={allGroups ?? []} current={afterHours} currentMinutes={afterHoursSettings.after_hours_alert_minutes ?? null} isAdmin={isAdmin} />
       <RulesPanel rules={(rules ?? []) as AlertRule[]} groups={groups ?? []} isAdmin={isAdmin} />
     </div>
   );
