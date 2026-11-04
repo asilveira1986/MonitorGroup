@@ -168,6 +168,7 @@ from (values
   (127, 'Anexar arquivos nos grupos (0136)', exists (select 1 from pg_proc where proname = 'send_group_message' and prosrc like '%O arquivo passa de 50 MB%')),
   (128, 'Contato compartilhado clicável (0137)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'messages' and column_name = 'contact_cards')),
-  (129, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (129, 'Mensagem apagada sem o texto (0138)', to_regprocedure('public.messages_deleted_scrub()') is not null),
+  (130, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

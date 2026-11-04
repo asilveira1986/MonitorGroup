@@ -224,7 +224,8 @@ begin
   (127, 'Anexar arquivos nos grupos (0136)', exists (select 1 from pg_proc where proname = 'send_group_message' and prosrc like '%O arquivo passa de 50 MB%')),
   (128, 'Contato compartilhado clicável (0137)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'messages' and column_name = 'contact_cards')),
-  (129, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (129, 'Mensagem apagada sem o texto (0138)', to_regprocedure('public.messages_deleted_scrub()') is not null),
+  (130, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -233,7 +234,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -20480,6 +20481,54 @@ notify pgrst, 'reload schema';
 $mig0137$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0138_deleted_messages_scrub.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0138', $mig0138$
+-- =====================================================================
+-- Mensagem apagada para todos: o texto não aparece mais em lugar nenhum do painel, como no WhatsApp.
+--
+--  * A lista de grupos mostrava como "última mensagem" o texto que foi apagado: passa a mostrar
+--    "🚫 Mensagem apagada" (como a lista do privado, 0070).
+--  * As respostas que citavam a mensagem apagada guardavam o texto citado: passa a valer o aviso.
+--  * O texto original continua guardado em messages.body (indicadores e histórico); só deixa de
+--    ser mostrado.
+-- =====================================================================
+
+create or replace function public.messages_deleted_scrub()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  -- era a última mensagem do grupo: a lista mostra o aviso no lugar do texto
+  update public.groups
+     set last_message_preview = '🚫 Mensagem apagada'
+   where id = new.group_id and last_message_at = new.sent_at;
+  -- respostas que citam a mensagem apagada
+  update public.messages
+     set quoted_body = '🚫 Mensagem apagada', quoted_type = null
+   where group_id = new.group_id and quoted_wa_id = new.wa_message_id and quoted_body is distinct from '🚫 Mensagem apagada';
+  return null;
+end;
+$$;
+revoke all on function public.messages_deleted_scrub() from public, anon, authenticated;
+
+drop trigger if exists messages_deleted_scrub on public.messages;
+create trigger messages_deleted_scrub after update of deleted_at on public.messages
+  for each row when (old.deleted_at is null and new.deleted_at is not null)
+  execute function public.messages_deleted_scrub();
+
+-- o que já foi apagado antes desta atualização
+update public.groups g
+   set last_message_preview = '🚫 Mensagem apagada'
+ where g.last_message_at is not null
+   and exists (select 1 from public.messages m where m.group_id = g.id and m.sent_at = g.last_message_at and m.deleted_at is not null);
+
+update public.messages q
+   set quoted_body = '🚫 Mensagem apagada', quoted_type = null
+ where q.quoted_wa_id is not null and q.quoted_body is distinct from '🚫 Mensagem apagada'
+   and exists (select 1 from public.messages m where m.group_id = q.group_id and m.wa_message_id = q.quoted_wa_id and m.deleted_at is not null);
+
+notify pgrst, 'reload schema';
+$mig0138$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -20656,6 +20705,7 @@ from (values
   (127, 'Anexar arquivos nos grupos (0136)', exists (select 1 from pg_proc where proname = 'send_group_message' and prosrc like '%O arquivo passa de 50 MB%')),
   (128, 'Contato compartilhado clicável (0137)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'messages' and column_name = 'contact_cards')),
-  (129, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (129, 'Mensagem apagada sem o texto (0138)', to_regprocedure('public.messages_deleted_scrub()') is not null),
+  (130, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
