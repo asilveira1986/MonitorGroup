@@ -485,7 +485,7 @@ function ChatView({
           ) : messages.length === 0 && queue.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted">Nenhuma mensagem ainda. Escreva abaixo para iniciar a conversa.</p>
           ) : null}
-          {(messages ?? []).filter((m) => !m.hidden_at && !m.deleted_at).map((m, i, all) => {
+          {(messages ?? []).filter((m) => !m.hidden_at).map((m, i, all) => {
             const day = dayFormat.format(new Date(m.sent_at));
             const showDay = i === 0 || day !== dayFormat.format(new Date(all[i - 1].sent_at));
             return (
@@ -519,7 +519,9 @@ function ChatView({
                       </span>
                     )}
                     {m.from_me && m.sender_name && <p className="mb-0.5 text-[11px] font-semibold text-brand-text">{m.sender_name}</p>}
-                    {editing === m.id ? (
+                    {m.deleted_at ? (
+                      <p className="italic text-ink-2">🚫 Mensagem apagada</p>
+                    ) : editing === m.id ? (
                       <PrivateEditor message={m} onClose={() => setEditing(null)} />
                     ) : (
                       <>

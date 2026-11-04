@@ -246,7 +246,7 @@ export function Conversation({
       const m = byId.get(id);
       if (m) byId.set(id, { ...m, ...p });
     }
-    return [...byId.values()].filter((m) => !TECHNICAL_TYPES.has(m.message_type) && !m.hidden_at && !m.deleted_at).sort(newerFirst);
+    return [...byId.values()].filter((m) => !TECHNICAL_TYPES.has(m.message_type) && !m.hidden_at).sort(newerFirst);
   }, [initial, older, patches, arrived]);
 
   // reações (0062): carregadas para as mensagens na tela e atualizadas em tempo real
@@ -577,7 +577,9 @@ export function Conversation({
                       );
                     })()}
                   </div>
-                  {editing === m.id ? (
+                  {m.deleted_at ? (
+                    <p className="italic text-ink-2">🚫 Mensagem apagada</p>
+                  ) : editing === m.id ? (
                     <MessageEditor
                       message={m}
                       initial={withoutSignature(m.body, m.sender_name) ?? ''}
