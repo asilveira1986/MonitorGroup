@@ -113,6 +113,16 @@ export function validateRuleInput(input: RuleInput, opts: { creating: boolean })
   return { ok: true, value: out };
 }
 
+/** Grupos escolhidos para receber a mesma regra: de 1 a 500, sem repetir. */
+export function validateGroupIds(ids: unknown): Validation<string[]> {
+  if (!Array.isArray(ids)) return { ok: false, error: 'Escolha ao menos um grupo do cliente.' };
+  const unique = [...new Set(ids)];
+  if (!unique.length) return { ok: false, error: 'Escolha ao menos um grupo do cliente.' };
+  if (unique.length > 500) return { ok: false, error: 'Escolha no máximo 500 grupos por vez.' };
+  if (!unique.every((id) => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id))) return { ok: false, error: 'Grupos inválidos.' };
+  return { ok: true, value: unique as string[] };
+}
+
 /** Só os dígitos; vale com DDI + DDD + número (pelo menos 12 dígitos) e no máximo 15. */
 export function normalizePhone(raw: string): string | null {
   const digits = String(raw ?? '').replace(/\D/g, '');

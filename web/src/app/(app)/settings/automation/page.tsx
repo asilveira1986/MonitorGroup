@@ -16,13 +16,14 @@ export default async function AutomationPage() {
   const profile = await requireProfile();
   const isAdmin = profile.role === 'admin' || profile.platform_admin;
   const supabase = await createClient();
-  const [settings, rules, pending, metrics, groups, team] = await Promise.all([
+  const [settings, rules, pending, metrics, groups, sectors, team] = await Promise.all([
     // sem o script do banco (0145) a coluna não existe: a chave geral aparece desligada
     supabase.from('app_settings').select('*').maybeSingle(),
-    supabase.from('automation_rules').select('*, groups(name)').order('created_at'),
+    supabase.from('automation_rules').select('*, groups(name, sector_id)').order('created_at'),
     supabase.from('automation_pending').select('*, groups(name)').is('resolved_at', null).order('received_at'),
     supabase.rpc('automation_metrics', { p_days: 30 }),
-    supabase.from('groups').select('id, name, jid').is('removed_at', null).order('name'),
+    supabase.from('groups').select('id, name, jid, sector_id').is('removed_at', null).order('name'),
+    supabase.from('sectors').select('id, name').order('name'),
     supabase.from('team_members').select('id, name, phone, jid').eq('active', true).order('name'),
   ]);
 
@@ -52,7 +53,8 @@ export default async function AutomationPage() {
         rules={(rules.data ?? []) as unknown as RuleItem[]}
         pending={(pending.data ?? []) as unknown as PendingItem[]}
         metrics={(metrics.data ?? null) as AutomationMetrics | null}
-        groups={(groups.data ?? []) as { id: string; name: string; jid: string }[]}
+        groups={(groups.data ?? []) as { id: string; name: string; jid: string; sector_id: string | null }[]}
+        sectors={(sectors.data ?? []) as { id: string; name: string }[]}
         members={members}
       />
     </div>

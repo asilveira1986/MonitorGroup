@@ -505,6 +505,8 @@ Garante que nenhuma mensagem de cliente fique sem resposta, sem depender de algu
 
 **Nunca dispara** por mensagens no grupo interno (qualquer grupo usado como grupo interno de uma regra), mensagens fora de grupos, histórico e sincronizações, reações, exclusões e mensagens de protocolo, nem por agradecimentos e confirmações ("ok", "obrigado") que o sistema já ignora.
 
+**Várias regras e setores:** crie quantas regras quiser. Ao criar, escolha os grupos do cliente (busca, marcação grupo a grupo ou **"Selecionar todos" de um setor**) e o **grupo interno** que recebe os avisos deles: assim cada setor pode mandar para um grupo interno diferente (a regra é gravada em cada grupo escolhido; grupos que já têm regra são atualizados). A lista de regras é agrupada por setor; marque grupos (ou o setor inteiro) para **editar, ligar, desligar ou remover de uma vez**. Grupos que já são o grupo interno de alguma regra não entram como grupos de cliente.
+
 **Horário de atendimento:** dias da semana e início/fim de cada regra, no fuso da empresa (padrão America/Sao_Paulo, sem depender do fuso do servidor); o início vale e o fim não. Feriados cadastrados em *Dados da empresa* não entram nesta conta.
 
 **Para ligar:**
