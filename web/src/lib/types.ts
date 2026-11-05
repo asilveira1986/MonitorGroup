@@ -207,7 +207,8 @@ export type AlertRule = {
 export type Alert = {
   id: string;
   rule_id: string | null;
-  type: AlertType;
+  /** tipos das regras e os da automação de atendimento (0144: new_message e no_reply, sem regra) */
+  type: AlertType | 'new_message' | 'no_reply';
   severity: Severity;
   group_id: string | null;
   instance_id: string | null;
