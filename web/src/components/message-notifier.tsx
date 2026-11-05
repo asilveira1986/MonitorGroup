@@ -9,6 +9,7 @@ import { ALERT_TYPE_LABEL, cn, formatDuration, formatPhone } from '@/lib/format'
 import { createClient } from '@/lib/supabase/client';
 import type { Alert, Message } from '@/lib/types';
 import { playAlertSound, type AlertSound } from '@/lib/sounds';
+import { pageOutOfSight, showSystemNotice } from '@/lib/system-notice';
 import { useRealtime } from '@/lib/use-realtime';
 import { renderTemplate, sampleValues, speak, spokenDuration, templateFor, type VoiceOptions } from '@/lib/voice';
 
@@ -86,6 +87,8 @@ type ScreenItem = {
   speech?: string;
   /** toca o som (padrão: a configuração geral) */
   sound?: boolean;
+  /** o servidor também manda este aviso por push (alertas e privado): não repete na notificação do computador */
+  serverPushed?: boolean;
 };
 
 /** som de cada tipo de aviso quando não há fala */
@@ -153,6 +156,20 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
     const speaking = configRef.current.voice !== false && Boolean(item.speech);
     if (item.sound ?? configRef.current.sound) playAlertSound(speaking ? 'voice' : TONE_SOUND[item.tone]);
     if (speaking) speak(item.speech!, configRef.current.voiceOptions, configRef.current.sound ? 450 : 0);
+    // página fora da vista (outra aba, minimizada, outro programa): também como notificação do computador
+    if (!force && pageOutOfSight()) {
+      void showSystemNotice(
+        {
+          title: `${item.heading} · ${item.group}`,
+          body: [item.who, item.text, item.note].filter(Boolean).join('\n'),
+          tag: `screen-${item.key}`,
+          url: item.href,
+          // "0 = fica na tela até alguém fechar" vale também aqui
+          keep: configRef.current.autoClose === 0,
+        },
+        { skipIfPushed: item.serverPushed, onClick: () => item.href && router.push(item.href) },
+      );
+    }
   };
   const pushRef = useRef(push);
   useEffect(() => {
@@ -264,6 +281,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
                   })
                 : undefined,
             key: `pm-${m.chat_id}`,
+            serverPushed: true,
             tone: 'brand',
             heading: mine ? 'Seu atendimento' : 'Privado aguardando',
             icon: MessageCircle,
@@ -308,6 +326,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
                   }),
               // "cliente sem resposta" e "SLA excedido" do mesmo grupo viram um aviso só
               key: a.type === 'no_response' && a.group_id ? `late-${a.group_id}` : `alert-${a.id}`,
+              serverPushed: true,
               tone,
               heading: ALERT_TYPE_LABEL[a.type] ?? 'Alerta',
               icon: a.severity === 'critical' ? AlertOctagon : a.severity === 'warning' ? AlertTriangle : Info,
