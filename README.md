@@ -183,6 +183,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    143. `supabase/migrations/0143_after_hours_alert_enabled.sql`
    144. `supabase/migrations/0144_automation.sql`
    145. `supabase/migrations/0145_automation_enabled.sql`
+   146. `supabase/migrations/0146_automation_rule_delete.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -505,7 +506,7 @@ Garante que nenhuma mensagem de cliente fique sem resposta, sem depender de algu
 
 **Nunca dispara** por mensagens no grupo interno (qualquer grupo usado como grupo interno de uma regra), mensagens fora de grupos, histórico e sincronizações, reações, exclusões e mensagens de protocolo, nem por agradecimentos e confirmações ("ok", "obrigado") que o sistema já ignora.
 
-**Várias regras e setores:** crie quantas regras quiser. Ao criar, escolha os grupos do cliente (busca, marcação grupo a grupo ou **"Selecionar todos" de um setor**) e o **grupo interno** que recebe os avisos deles: assim cada setor pode mandar para um grupo interno diferente (a regra é gravada em cada grupo escolhido; grupos que já têm regra são atualizados). A lista de regras é agrupada por setor; marque grupos (ou o setor inteiro) para **editar, ligar, desligar ou remover de uma vez**. Grupos que já são o grupo interno de alguma regra não entram como grupos de cliente.
+**Várias regras e setores:** crie quantas regras quiser. Ao criar, escolha os grupos do cliente (busca, marcação grupo a grupo ou **"Selecionar todos" de um setor**) e o **grupo interno** que recebe os avisos deles: assim cada setor pode mandar para um grupo interno diferente (a regra é gravada em cada grupo escolhido; grupos que já têm regra são atualizados). A lista de regras é agrupada por setor; marque grupos (ou o setor inteiro) para **editar, ligar, desligar ou remover de uma vez**. Grupos que já são o grupo interno de alguma regra não entram como grupos de cliente. **Excluir a regra:** botão **Excluir** em cada regra, dentro do formulário de edição e na barra de lote; a demanda aberta daquele grupo é encerrada ("regra excluída") e os alertas da automação saem da tela. As demandas já encerradas continuam nas métricas.
 
 **Horário de atendimento:** dias da semana e início/fim de cada regra, no fuso da empresa (padrão America/Sao_Paulo, sem depender do fuso do servidor); o início vale e o fim não. Feriados cadastrados em *Dados da empresa* não entram nesta conta.
 

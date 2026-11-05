@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select, Textarea, Toggle } from '@/components/ui';
 import { formatDuration, timeAgo } from '@/lib/format';
 import {
+  deleteAutomationRule,
   deleteAutomationRules,
   resolveAutomationPending,
   saveAutomationRule,
@@ -258,6 +259,17 @@ function RuleForm({
       onClose();
     });
 
+  const remove = () => {
+    const what = targetIds.length > 1 ? `as regras de ${targetIds.length} grupos` : `a regra de "${rule?.groups?.name ?? 'este grupo'}"`;
+    if (!confirm(`Excluir ${what}? A automação deixa de agir ${targetIds.length > 1 ? 'nesses grupos' : 'neste grupo'} e as demandas abertas dele são encerradas.`)) return;
+    startTransition(async () => {
+      const res = await deleteAutomationRules(targetIds);
+      if (!res.ok) return void toast.error(res.error);
+      toast.success(targetIds.length > 1 ? 'Regras excluídas' : 'Regra excluída');
+      onClose();
+    });
+  };
+
   const title = creating
     ? 'Nova regra de automação'
     : targetIds.length === 1
@@ -368,13 +380,18 @@ function RuleForm({
           )}
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button onClick={save} disabled={pending}>
-            <Save className="h-4 w-4" /> {rule ? 'Salvar a regra' : 'Criar a regra'}
+            <Save className="h-4 w-4" /> {creating ? 'Criar a regra' : 'Salvar a regra'}
           </Button>
           <Button variant="ghost" onClick={onClose} disabled={pending}>
             Cancelar
           </Button>
+          {!creating && (
+            <Button variant="danger" className="ml-auto" onClick={remove} disabled={pending}>
+              <Trash2 className="h-4 w-4" /> {targetIds.length > 1 ? `Excluir ${targetIds.length} regras` : 'Excluir regra'}
+            </Button>
+          )}
         </div>
       </div>
     </Card>
@@ -537,7 +554,7 @@ export function AutomationPanel({
       <Card>
         <CardHeader
           title="Regras por grupo"
-          description="A automação só age nos grupos que têm regra. Crie quantas regras quiser: cada uma pode valer para vários grupos (por exemplo, todos de um setor) e mandar os avisos para um grupo interno diferente. Marque grupos na lista para ligar, desligar, editar ou remover de uma vez."
+          description="A automação só age nos grupos que têm regra. Crie quantas regras quiser: cada uma pode valer para vários grupos (por exemplo, todos de um setor) e mandar os avisos para um grupo interno diferente. Marque grupos na lista para ligar, desligar, editar ou excluir de uma vez."
           action={
             isAdmin && !editing ? (
               <Button size="sm" onClick={() => setEditing('new')}>
@@ -574,12 +591,12 @@ export function AutomationPanel({
                 variant="ghost"
                 disabled={busy}
                 onClick={() => {
-                  if (confirm(`Remover a regra de ${selected.size} grupo(s)? A automação deixa de agir neles.`)) {
-                    run(() => deleteAutomationRules([...selected]), 'Regras removidas', true);
+                  if (confirm(`Excluir a regra de ${selected.size} grupo(s)? A automação deixa de agir neles e as demandas abertas são encerradas.`)) {
+                    run(() => deleteAutomationRules([...selected]), 'Regras excluídas', true);
                   }
                 }}
               >
-                <Trash2 className="h-3.5 w-3.5" /> Remover
+                <Trash2 className="h-3.5 w-3.5" /> Excluir
               </Button>
               <button type="button" onClick={() => setSelected(new Set())} className="ml-auto text-xs text-muted underline-offset-2 hover:text-ink hover:underline">
                 Limpar seleção
@@ -637,9 +654,24 @@ export function AutomationPanel({
                             label={<span className="text-xs">{r.enabled ? 'Ligada' : 'Desligada'}</span>}
                           />
                           {isAdmin && (
-                            <Button variant="secondary" size="sm" disabled={Boolean(editing)} onClick={() => setEditing([r])}>
-                              <Pencil className="h-3.5 w-3.5" /> Editar
-                            </Button>
+                            <>
+                              <Button variant="secondary" size="sm" disabled={Boolean(editing)} onClick={() => setEditing([r])}>
+                                <Pencil className="h-3.5 w-3.5" /> Editar
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={busy}
+                                title="Excluir a regra deste grupo"
+                                onClick={() => {
+                                  if (confirm(`Excluir a regra de "${r.groups?.name ?? 'este grupo'}"? A automação deixa de agir nele e a demanda aberta é encerrada.`)) {
+                                    run(() => deleteAutomationRule(r.group_id), 'Regra excluída');
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Excluir
+                              </Button>
+                            </>
                           )}
                         </li>
                       ))}

@@ -181,7 +181,8 @@ CHECKS=$(cat <<'SQL'
       and to_regprocedure('public.resolve_automation_pending(uuid)') is not null),
   (136, 'Chave geral da automação de atendimento (0145)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'automation_enabled')),
-  (137, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (137, 'Excluir regra encerra a demanda aberta (0146)', to_regprocedure('public.automation_rule_deleted()') is not null),
+  (138, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)
