@@ -25,6 +25,8 @@ import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
 import { AvatarQueue } from './avatars.js';
 import { storeMessageMedia, storePrivateMedia } from './media.js';
+import { messagePreview, type AutomationService } from './automation/service.js';
+import type { SockLike } from './automation/types.js';
 import { contactCardsOf, extractContent, isAcknowledgement, isForwarded, isStickerOrEmoji, isThanksAfterTeam, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
@@ -239,6 +241,19 @@ export class WhatsAppManager {
     if (found && !found.exists) throw new Error('Este número não tem WhatsApp.');
     if (found?.jid) to = jidNormalizedUser(found.jid);
     await session.sock.sendMessage(to, { text });
+  }
+
+  /** Automação de atendimento (0144): ligada pelo index.ts; acuse, alerta, aviso, demanda e cobrança. */
+  private automation: AutomationService | null = null;
+
+  setAutomation(automation: AutomationService) {
+    this.automation = automation;
+  }
+
+  /** Conexão ativa de uma instância (a automação não guarda o socket: ele muda a cada reconexão). */
+  getSock(instanceId: string): SockLike | undefined {
+    const session = this.sessions.get(instanceId);
+    return session && !session.stopped ? (session.sock as unknown as SockLike) : undefined;
   }
 
   /** Envia um texto para um grupo (grupo de alertas fora do expediente, 0139), pelo número que participa dele. */
@@ -679,7 +694,7 @@ export class WhatsAppManager {
       if (type !== 'notify' && type !== 'append') return;
       for (const msg of messages) {
         session.queue = session.queue
-          .then(() => this.handleMessage(session, msg))
+          .then(() => this.handleMessage(session, msg, type))
           .catch((err) => log.error({ err, id: msg.key.id }, 'falha ao processar mensagem'));
       }
     });
@@ -972,9 +987,11 @@ export class WhatsAppManager {
     return this.upsertGroup(session, meta);
   }
 
-  private async handleMessage(session: Session, msg: WAMessage) {
+  private async handleMessage(session: Session, msg: WAMessage, upsertType?: string) {
     const jid = msg.key.remoteJid;
     if (!jid || !msg.message) return;
+    // mensagem enviada pela própria automação (acuse, aviso, cobrança): não entra como resposta da equipe
+    if (this.automation?.isBotMessage(msg.key.id)) return;
     if (!isJidGroup(jid)) {
       if (isPrivateJid(jid)) await this.handlePrivateMessage(session, msg, false);
       return;
@@ -1062,6 +1079,29 @@ export class WhatsAppManager {
           });
         })
         .catch((err) => logger.error({ err, id: messageId }, 'falha nos avisos/demandas da mensagem'));
+    }
+
+    // automação de atendimento (0144): na fila da conexão, na ordem das mensagens e sem atrasar a próxima
+    if (this.automation && result.inserted && !result.stale && messageId && (fromTeam || !result.ignored)) {
+      const automation = this.automation;
+      session.sideQueue = (session.sideQueue ?? Promise.resolve())
+        .then(() =>
+          automation.handleMessage({
+            companyId: session.companyId,
+            instanceId: session.instanceId,
+            group: { id: group.id, jid: group.jid, name: group.name },
+            waMessageId: msg.key.id!,
+            messageId,
+            fromTeam,
+            senderName,
+            text: messagePreview(content.type, content.body),
+            sentAt: new Date(ts * 1000),
+            opensPending,
+            isNotify: upsertType === 'notify',
+            quoted: msg,
+          }),
+        )
+        .catch((err) => logger.error({ err, id: messageId }, 'falha na automação de atendimento'));
     }
 
     // resposta citando uma mensagem gravada sem remetente: a citação diz quem a escreveu (0080)
