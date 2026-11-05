@@ -41,8 +41,14 @@ export function DesktopNoticeSettings() {
         body: 'Se você está vendo esta notificação, os avisos chegam mesmo com o sistema em segundo plano.',
         tag: 'screen-test',
         url: '/settings/avisos',
-      }).then((ok) => {
-        if (!ok) toast.error('Não foi possível mostrar a notificação. Confira a permissão do navegador.');
+      }).then((res) => {
+        if (!res.ok) return void toast.error('Não foi possível mostrar a notificação', { description: res.reason });
+        // o navegador aceitou: se não apareceu na tela, quem esconde é o computador
+        toast.success('O navegador enviou a notificação', {
+          description:
+            'Se ela não apareceu, o computador está escondendo: confira as notificações do navegador nas configurações do Windows ou do macOS e o modo "Não incomodar".',
+          duration: 12_000,
+        });
       });
     }, 5000);
   };

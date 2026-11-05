@@ -41,42 +41,67 @@ export async function enableSystemNotices(): Promise<SystemNoticeState> {
   return permission;
 }
 
+export type SystemNoticeResult = { ok: true; via: 'service-worker' | 'navegador' } | { ok: false; reason: string };
+
+/** Registro do service worker já ativo (registra se preciso e espera a ativação por alguns segundos). */
+async function activeRegistration(): Promise<ServiceWorkerRegistration | undefined> {
+  if (!('serviceWorker' in navigator)) return undefined;
+  try {
+    let reg = await navigator.serviceWorker.getRegistration('/');
+    if (!reg) reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    if (reg.active) return reg;
+    const ready = await Promise.race([navigator.serviceWorker.ready, new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000))]);
+    return ready ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
- * Mostra a notificação. Com o aparelho já inscrito nas notificações push, os avisos que o servidor também
- * envia por push (skipIfPushed) não são repetidos aqui.
+ * Mostra a notificação: pelo service worker (o clique traz o painel para a frente) e, se ele não estiver
+ * pronto ou falhar, pela notificação simples do navegador. Com o aparelho já inscrito nas notificações
+ * push, os avisos que o servidor também envia por push (skipIfPushed) não são repetidos aqui.
  */
 export async function showSystemNotice(
   notice: SystemNotice,
   opts: { skipIfPushed?: boolean; onClick?: () => void } = {},
-): Promise<boolean> {
-  try {
-    if (systemNoticeState() !== 'granted') return false;
-    const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration('/') : undefined;
-    if (opts.skipIfPushed && reg && (await reg.pushManager.getSubscription())) return false;
-    const body = notice.body.slice(0, 240);
-    if (reg) {
+): Promise<SystemNoticeResult> {
+  const state = systemNoticeState();
+  if (state === 'unsupported') return { ok: false, reason: 'Este navegador não mostra notificações do computador.' };
+  if (state !== 'granted') return { ok: false, reason: 'O navegador ainda não permitiu as notificações. Clique em "Ativar avisos fora da tela".' };
+  const body = notice.body.slice(0, 240);
+  // renotify (avisa de novo no mesmo assunto) existe nos navegadores, mas não nos tipos do TypeScript
+  const options: NotificationOptions & { renotify?: boolean } = {
+    body,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: notice.tag,
+    renotify: true,
+    requireInteraction: Boolean(notice.keep),
+    data: { url: notice.url || '/dashboard' },
+  };
+  let swError = '';
+  const reg = await activeRegistration();
+  if (reg) {
+    try {
+      if (opts.skipIfPushed && (await reg.pushManager.getSubscription())) return { ok: true, via: 'service-worker' };
       // o clique é tratado pelo service worker (sw.js): traz o painel para a frente e abre a tela do aviso
-      // renotify (avisa de novo no mesmo assunto) existe nos navegadores, mas não nos tipos do TypeScript
-      const options: NotificationOptions & { renotify?: boolean } = {
-        body,
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
-        tag: notice.tag,
-        renotify: true,
-        requireInteraction: Boolean(notice.keep),
-        data: { url: notice.url || '/dashboard' },
-      };
       await reg.showNotification(notice.title, options);
-      return true;
+      return { ok: true, via: 'service-worker' };
+    } catch (err) {
+      swError = err instanceof Error ? err.message : String(err);
     }
+  }
+  try {
     const n = new Notification(notice.title, { body, icon: '/icon-192.png', tag: notice.tag, requireInteraction: Boolean(notice.keep) });
     n.onclick = () => {
       window.focus();
       opts.onClick?.();
       n.close();
     };
-    return true;
-  } catch {
-    return false;
+    return { ok: true, via: 'navegador' };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: `O navegador recusou a notificação (${swError || detail}).` };
   }
 }
