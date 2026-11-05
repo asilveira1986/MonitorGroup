@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select, Textarea, Toggle } from '@/components/ui';
 import { formatDuration, timeAgo } from '@/lib/format';
-import { deleteAutomationRule, resolveAutomationPending, saveAutomationRule } from './actions';
+import { deleteAutomationRule, resolveAutomationPending, saveAutomationRule, setAutomationEnabled } from './actions';
 
 export type RuleItem = {
   id: string;
@@ -243,6 +243,7 @@ function RuleForm({
 
 export function AutomationPanel({
   isAdmin,
+  enabled,
   rules,
   pending,
   metrics,
@@ -250,15 +251,26 @@ export function AutomationPanel({
   members,
 }: {
   isAdmin: boolean;
+  /** chave geral da empresa (0145): desligada, a automação não age */
+  enabled: boolean;
   rules: RuleItem[];
   pending: PendingItem[];
   metrics: AutomationMetrics | null;
   groups: GroupOption[];
   members: MemberOption[];
 }) {
+  const [on, setOn] = useState(enabled);
   const [editing, setEditing] = useState<RuleItem | 'new' | null>(null);
   const [busy, startTransition] = useTransition();
   const takenGroupIds = new Set(rules.map((r) => r.group_id));
+
+  const toggleAll = (next: boolean) =>
+    startTransition(async () => {
+      const res = await setAutomationEnabled(next);
+      if (!res.ok) return void toast.error(res.error);
+      setOn(next);
+      toast.success(next ? 'Automação de atendimento ligada' : 'Automação de atendimento desligada');
+    });
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) =>
     startTransition(async () => {
@@ -278,6 +290,22 @@ export function AutomationPanel({
           }
           description="Quando um cliente escreve num grupo com a automação ligada, o sistema responde com um acuse de recebimento, mostra o alerta na tela, avisa o grupo interno e cobra a equipe enquanto a mensagem ficar sem resposta. Uma mensagem da equipe no grupo encerra a demanda."
         />
+        <div className="space-y-2 px-4 pt-3 sm:px-5">
+          <Toggle
+            checked={on}
+            onChange={toggleAll}
+            disabled={!isAdmin || busy}
+            label={<span className="text-sm font-medium">{on ? 'Automação ligada' : 'Automação desligada'}</span>}
+          />
+          {!on && (
+            <p className="rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning-ink">
+              Desligada: o sistema não responde aos clientes, não avisa o grupo interno nem cobra a equipe. As regras e as demandas abertas ficam guardadas, e uma resposta da equipe no grupo ainda encerra a demanda. Ligue quando quiser começar.
+            </p>
+          )}
+          {on && rules.length === 0 && (
+            <p className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-ink-2">Ligada, mas ainda sem regras: crie a regra de um grupo abaixo para a automação começar a agir.</p>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-2 px-4 pb-4 pt-3 sm:grid-cols-5 sm:px-5 sm:pb-5">
           <Metric label="Demandas abertas" value={String(metrics?.open ?? pending.length)} />
           <Metric label={`Resolvidas (${metrics?.days ?? 30} dias)`} value={String(metrics?.resolved ?? 0)} />

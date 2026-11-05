@@ -68,6 +68,8 @@ export type OpenPending = {
 
 /** Acesso ao banco. Em produção é o Supabase (store.ts); nos testes, uma versão em memória. */
 export interface AutomationStore {
+  /** chave geral da empresa (app_settings.automation_enabled): desligada, a automação não age */
+  isEnabled(companyId: string): Promise<boolean>;
   getRule(groupId: string): Promise<AutomationRule | null>;
   /** todos os grupos internos em uso (a automação nunca dispara por mensagens neles) */
   listNotifyJids(): Promise<string[]>;

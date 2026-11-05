@@ -182,6 +182,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    142. `supabase/migrations/0142_after_hours_one_notice.sql`
    143. `supabase/migrations/0143_after_hours_alert_enabled.sql`
    144. `supabase/migrations/0144_automation.sql`
+   145. `supabase/migrations/0145_automation_enabled.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -490,7 +491,7 @@ Ative em **Configurações › WhatsApp › Respostas e mensagens** (somente adm
 
 ## Automação de atendimento (acuse, alerta, aviso e cobrança)
 
-Garante que nenhuma mensagem de cliente fique sem resposta, sem depender de alguém acompanhando os grupos. Fica em **Configurações › Atendimento › Automação de atendimento** (administradores criam e editam as regras; todos veem as demandas abertas). **Começa desligada:** só age nos grupos que têm regra.
+Garante que nenhuma mensagem de cliente fique sem resposta, sem depender de alguém acompanhando os grupos. Fica em **Configurações › Atendimento › Automação de atendimento** (administradores criam e editam as regras; todos veem as demandas abertas). **Começa desligada:** há uma **chave geral** no topo da tela (*Automação ligada/desligada*, só administradores) e, além dela, só age nos grupos que têm regra. Com a chave **desligada** o sistema não responde aos clientes, não avisa o grupo interno nem cobra; as regras e as demandas abertas ficam guardadas, e uma resposta da equipe no grupo ainda encerra a demanda aberta. Dá para ligar e desligar quando quiser (a mudança vale em até 30 segundos).
 
 **Quando um cliente escreve num grupo com regra ligada**, o worker:
 1. **Responde no próprio grupo** (acuse de recebimento), citando a mensagem do cliente, com "digitando…". Dentro do horário de atendimento usa o texto *Acuse dentro do horário*; fora dele, *Acuse fora do horário*. Não repete o acuse dentro do *Intervalo entre acuses* (padrão 30 min).
@@ -507,9 +508,9 @@ Garante que nenhuma mensagem de cliente fique sem resposta, sem depender de algu
 **Horário de atendimento:** dias da semana e início/fim de cada regra, no fuso da empresa (padrão America/Sao_Paulo, sem depender do fuso do servidor); o início vale e o fim não. Feriados cadastrados em *Dados da empresa* não entram nesta conta.
 
 **Para ligar:**
-1. Rode o script do banco (`supabase/atualizar_banco_parte2.sql`, item 0144) e reinicie o worker com a versão nova (o log mostra `[automation] verificador de cobranças iniciado`).
+1. Rode o script do banco (`supabase/atualizar_banco_parte2.sql`, itens 0144 e 0145) e reinicie o worker com a versão nova (o log mostra `[automation] verificador de cobranças iniciado`).
 2. O número conectado precisa participar do grupo do cliente **e** do grupo interno.
-3. Em Configurações › Atendimento › Automação de atendimento, crie a regra do grupo, escolha o grupo interno e quem será marcado na cobrança (as pessoas precisam ter telefone cadastrado em *Pessoas*).
+3. Em Configurações › Atendimento › Automação de atendimento, **ligue a chave geral**, crie a regra do grupo, escolha o grupo interno e quem será marcado na cobrança (as pessoas precisam ter telefone cadastrado em *Pessoas*).
 
 **Variáveis do worker** (opcionais): `PANEL_URL` (endereço do painel nos avisos; sem ela usa `APP_URL`), `SEND_MIN_INTERVAL_MS` (intervalo mínimo entre as mensagens da automação, padrão 1500) e `TZ_ATENDIMENTO` (fuso quando a empresa não tem um, padrão America/Sao_Paulo).
 

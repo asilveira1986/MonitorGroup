@@ -179,7 +179,9 @@ CHECKS=$(cat <<'SQL'
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'after_hours_alert_enabled')),
   (135, 'Automação de atendimento: acuse, alerta, aviso e cobrança (0144)', to_regclass('public.automation_rules') is not null
       and to_regprocedure('public.resolve_automation_pending(uuid)') is not null),
-  (136, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (136, 'Chave geral da automação de atendimento (0145)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'app_settings' and column_name = 'automation_enabled')),
+  (137, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

@@ -14,6 +14,8 @@ import type { AutomationRule, AutomationStore, PendingReply } from './types.js';
  * Cobrança (a cada minuto): sem resposta depois de escalateAfterMin, avisa o grupo interno com menção,
  * repete a cada repeatEveryMin até maxEscalations. Fora do horário só cobra com escalateOffHours.
  * Encerramento: mensagem da equipe (ou do número conectado) no grupo encerra as demandas abertas.
+ * Chave geral (app_settings.automation_enabled, começa desligada): desligada, não responde, não avisa nem cobra;
+ * a resposta da equipe ainda encerra a demanda aberta.
  * As mensagens do próprio bot não contam como resposta (ids guardados no BotRegistry).
  */
 
@@ -160,6 +162,7 @@ export function createAutomation(deps: AutomationDeps) {
   const panelUrl = (deps.panelUrl ?? '').replace(/\/$/, '');
 
   const ruleCache = new Map<string, { rule: AutomationRule | null; at: number }>();
+  const enabledCache = new Map<string, { on: boolean; at: number }>();
   let notifyJids: { set: Set<string>; at: number } | null = null;
   let timer: ReturnType<typeof setInterval> | null = null;
   let firstCheck: ReturnType<typeof setTimeout> | null = null;
@@ -171,7 +174,7 @@ export function createAutomation(deps: AutomationDeps) {
     if (isMissingSchema(err)) {
       if (!missingSchemaWarned) {
         missingSchemaWarned = true;
-        logger.warn('[automation] falta rodar o script do banco (supabase/atualizar_banco_parte2.sql, item 0144): a automação de atendimento está parada');
+        logger.warn('[automation] falta rodar o script do banco (supabase/atualizar_banco_parte2.sql, itens 0144 e 0145): a automação de atendimento está parada');
       }
       return;
     }
@@ -187,6 +190,16 @@ export function createAutomation(deps: AutomationDeps) {
     const rule = await store.getRule(groupId);
     ruleCache.set(groupId, { rule, at: t });
     return rule;
+  };
+
+  /** A chave geral da empresa está ligada? (lida no máximo a cada ruleCacheMs) */
+  const isEnabled = async (companyId: string) => {
+    const t = now().getTime();
+    const hit = enabledCache.get(companyId);
+    if (hit && t - hit.at < ruleCacheMs) return hit.on;
+    const on = await store.isEnabled(companyId);
+    enabledCache.set(companyId, { on, at: t });
+    return on;
   };
 
   /** o grupo é um dos internos (notifyGroupJid de alguma regra)? Nunca dispara por mensagens nele. */
@@ -302,6 +315,8 @@ export function createAutomation(deps: AutomationDeps) {
       }
 
       if (!m.isNotify || !m.opensPending) return;
+      // chave geral desligada: não abre demanda, não responde nem avisa
+      if (!(await isEnabled(m.companyId))) return;
       const rule = await getRule(m.group.id);
       if (!rule || !rule.enabled) return;
       const open = await store.getOpenPending(m.group.id);
@@ -368,6 +383,8 @@ export function createAutomation(deps: AutomationDeps) {
       for (const { pending, rule, groupStillPending } of await store.listOpenPending().catch((err) => (failed(err, '[automation] falha ao listar as demandas abertas'), []))) {
         try {
           if (!rule || !rule.enabled) continue;
+          // chave geral desligada: as demandas ficam guardadas, sem cobrança
+          if (!(await isEnabled(pending.companyId))) continue;
           const age = at.getTime() - pending.receivedAt.getTime();
           // o grupo foi respondido por outro caminho (Marcar como respondida, por exemplo): encerra a demanda
           if (!groupStillPending && age > GRACE_MS) {
@@ -412,6 +429,7 @@ export function createAutomation(deps: AutomationDeps) {
   /** Esquece as regras em memória (a próxima mensagem lê do banco). A equipe vem do cache do worker, sem cópia aqui. */
   const reloadRules = () => {
     ruleCache.clear();
+    enabledCache.clear();
     notifyJids = null;
   };
 
