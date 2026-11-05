@@ -62,6 +62,9 @@ export const ALERT_TYPE_LABEL: Record<string, string> = {
   deadline_missed: 'Prazo prometido vencido',
   rework: 'Retrabalho',
   recurrence: 'Reincidência sem resposta',
+  // automação de atendimento (0144)
+  new_message: 'Nova mensagem',
+  no_reply: 'Sem resposta',
 };
 
 export const DEMAND_STATUS_LABEL: Record<string, string> = {
