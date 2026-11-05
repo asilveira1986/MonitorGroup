@@ -40,6 +40,8 @@ export type AlertConfig = {
   privateVoice?: boolean;
 };
 
+/** alertas da automação de atendimento (0144): um cartão por grupo, que a cobrança (crítica) substitui */
+const AUTOMATION_TYPES = ['new_message', 'no_reply'];
 const STORAGE_KEY = 'notify-messages';
 /** Evento do botão "Testar alerta" das configurações. */
 export const TEST_EVENT = 'msg-alert-test';
@@ -165,7 +167,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
           tag: `screen-${item.key}`,
           url: item.href,
           // "0 = fica na tela até alguém fechar" vale também aqui
-          keep: configRef.current.autoClose === 0,
+          keep: configRef.current.autoClose === 0 || item.tone === 'critical',
         },
         { skipIfPushed: item.serverPushed, onClick: () => item.href && router.push(item.href) },
       );
@@ -325,7 +327,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
                     descricao: a.description,
                   }),
               // "cliente sem resposta" e "SLA excedido" do mesmo grupo viram um aviso só
-              key: a.type === 'no_response' && a.group_id ? `late-${a.group_id}` : `alert-${a.id}`,
+              key: AUTOMATION_TYPES.includes(a.type) && a.group_id ? `auto-${a.group_id}` : a.type === 'no_response' && a.group_id ? `late-${a.group_id}` : `alert-${a.id}`,
               serverPushed: true,
               tone,
               heading: ALERT_TYPE_LABEL[a.type] ?? 'Alerta',
@@ -345,8 +347,58 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
             show((g as { name: string } | null)?.name ?? null, (r as { voice?: boolean } | null)?.voice !== false),
           );
         });
+      })
+      // alerta da automação atualizado (nova mensagem do cliente) ou encerrado (equipe respondeu): atualiza ou tira o cartão
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'alerts' }, (payload) => {
+        const a = payload.new as Alert;
+        if (!AUTOMATION_TYPES.includes(a.type) || !a.group_id) return;
+        const key = `auto-${a.group_id}`;
+        if (a.status === 'resolved') return setItems((prev) => prev.filter((i) => i.key !== key));
+        if (a.type === 'new_message') setItems((prev) => prev.map((i) => (i.key === key && i.heading === ALERT_TYPE_LABEL.new_message ? { ...i, text: a.description } : i)));
       }),
   );
+
+  // ao carregar a tela, mostra o que já está aberto (sem som nem voz: a pessoa acabou de chegar)
+  useEffect(() => {
+    let stop = false;
+    void (async () => {
+      const { data } = await createClient()
+        .from('alerts')
+        .select('type, group_id, description, created_at, groups(name)')
+        .in('type', AUTOMATION_TYPES)
+        .eq('status', 'open')
+        .order('created_at');
+      if (stop || !Array.isArray(data)) return;
+      const latest = new Map<string, (typeof data)[number]>();
+      for (const a of data) {
+        if (!a.group_id) continue;
+        // a cobrança (sem resposta) não é substituída por uma nova mensagem
+        if (latest.get(a.group_id)?.type === 'no_reply' && a.type === 'new_message') continue;
+        latest.set(a.group_id, a);
+      }
+      for (const a of latest.values()) {
+        if (stop || !(await inMyAlertScope(a.group_id))) continue;
+        const critical = a.type === 'no_reply';
+        const groups = a.groups as { name: string } | { name: string }[] | null;
+        pushRef.current({
+          key: `auto-${a.group_id}`,
+          tone: critical ? 'critical' : 'warning',
+          heading: ALERT_TYPE_LABEL[a.type] ?? 'Alerta',
+          icon: critical ? AlertOctagon : AlertTriangle,
+          group: (Array.isArray(groups) ? groups[0]?.name : groups?.name) ?? 'Grupo',
+          who: null,
+          text: a.description,
+          href: `/groups/${a.group_id}`,
+          action: 'Abrir grupo',
+          at: Date.now(),
+          sound: false,
+        });
+      }
+    })();
+    return () => {
+      stop = true;
+    };
+  }, []);
 
   // Agenda: aviso das demandas para entregar hoje (e atrasadas) e dos compromissos do dia. Uma vez por dia neste navegador,
   // e de novo quando aumentam; confere a cada 10 min.
@@ -477,7 +529,11 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
     let on = false;
     const id = setInterval(() => {
       on = !on;
-      document.title = on ? `🔔 ${items[0]?.heading ?? 'Aviso'} (${items.length})` : original;
+      document.title = on
+        ? items.some((i) => i.key.startsWith('auto-'))
+          ? `🚨 (${items.length}) SEM RESPOSTA`
+          : `🔔 ${items[0]?.heading ?? 'Aviso'} (${items.length})`
+        : original;
     }, 1000);
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setItems((prev) => prev.slice(1));
     document.addEventListener('keydown', onKey);

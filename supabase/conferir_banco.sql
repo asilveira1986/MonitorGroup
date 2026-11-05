@@ -176,6 +176,8 @@ from (values
   (133, 'Um só aviso por grupo fora do expediente (0142)', coalesce(pg_get_functiondef('public.after_hours_sla_candidates(uuid)'::regprocedure) like '%group_jid%', false)),
   (134, 'Liga/desliga do aviso fora do expediente (0143)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'after_hours_alert_enabled')),
-  (135, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (135, 'Automação de atendimento: acuse, alerta, aviso e cobrança (0144)', to_regclass('public.automation_rules') is not null
+      and to_regprocedure('public.resolve_automation_pending(uuid)') is not null),
+  (136, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

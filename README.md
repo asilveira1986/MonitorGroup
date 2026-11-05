@@ -181,6 +181,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    141. `supabase/migrations/0141_after_hours_overdue_now.sql`
    142. `supabase/migrations/0142_after_hours_one_notice.sql`
    143. `supabase/migrations/0143_after_hours_alert_enabled.sql`
+   144. `supabase/migrations/0144_automation.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -486,6 +487,37 @@ Ative em **Configurações › WhatsApp › Respostas e mensagens** (somente adm
 - **Assinar com o nome** (ligado por padrão): a mensagem começa com `*Nome:*`, para o cliente saber quem respondeu. No painel e nos indicadores, a resposta conta para quem a escreveu.
 - **Quem pode responder**: todos os usuários ou só administradores. A regra é conferida no banco.
 - A tela mostra o andamento de cada envio: na fila, enviando, enviada ou não enviada. Se o envio falhar, há as opções **Tentar de novo** e **Descartar**. Mensagens que não saírem em 10 minutos (WhatsApp desconectado) são marcadas como não enviadas, para não chegarem atrasadas ao cliente.
+
+## Automação de atendimento (acuse, alerta, aviso e cobrança)
+
+Garante que nenhuma mensagem de cliente fique sem resposta, sem depender de alguém acompanhando os grupos. Fica em **Configurações › Atendimento › Automação de atendimento** (administradores criam e editam as regras; todos veem as demandas abertas). **Começa desligada:** só age nos grupos que têm regra.
+
+**Quando um cliente escreve num grupo com regra ligada**, o worker:
+1. **Responde no próprio grupo** (acuse de recebimento), citando a mensagem do cliente, com "digitando…". Dentro do horário de atendimento usa o texto *Acuse dentro do horário*; fora dele, *Acuse fora do horário*. Não repete o acuse dentro do *Intervalo entre acuses* (padrão 30 min).
+2. **Mostra o alerta na tela** (tipo *Nova mensagem*, amarelo): chega como os demais avisos em tela, com som, título da aba piscando e notificação do computador.
+3. **Avisa o grupo interno** (por exemplo, o Trabalhista) com o nome do grupo, o cliente, um trecho da mensagem e o link do grupo no painel.
+4. **Abre uma demanda.** Com a demanda aberta, novas mensagens do cliente não geram novo acuse nem novo aviso: só atualizam o alerta em tela.
+
+**Cobrança** (verificada a cada minuto; o estado fica no banco, então reiniciar o worker não perde nada): sem resposta depois de *Cobrar depois de* (padrão 15 min), o grupo interno recebe **"⏰🚨 SEM RESPOSTA há X min"** com as pessoas marcadas, e o alerta em tela vira **vermelho (crítico)** e fica fixo. Repete a cada *Repetir a cada* (padrão 30 min), até *Máximo de cobranças* (padrão 3). **Fora do horário de atendimento** só cobra se *Cobrar também fora do horário* estiver ligado; senão, a cobrança sai quando o expediente abrir.
+
+**Encerramento:** uma mensagem da equipe (atendente cadastrado ou outro número da empresa) ou do próprio número conectado, no grupo do cliente, encerra a demanda: registra quem respondeu e em quantos segundos e tira o alerta da tela. Também encerra quem usar **Marcar como respondida** ou o botão **Encerrar** da lista de demandas abertas. **As mensagens enviadas pela própria automação (acuse, aviso e cobrança) não contam como resposta.**
+
+**Nunca dispara** por mensagens no grupo interno (qualquer grupo usado como grupo interno de uma regra), mensagens fora de grupos, histórico e sincronizações, reações, exclusões e mensagens de protocolo, nem por agradecimentos e confirmações ("ok", "obrigado") que o sistema já ignora.
+
+**Horário de atendimento:** dias da semana e início/fim de cada regra, no fuso da empresa (padrão America/Sao_Paulo, sem depender do fuso do servidor); o início vale e o fim não. Feriados cadastrados em *Dados da empresa* não entram nesta conta.
+
+**Para ligar:**
+1. Rode o script do banco (`supabase/atualizar_banco_parte2.sql`, item 0144) e reinicie o worker com a versão nova (o log mostra `[automation] verificador de cobranças iniciado`).
+2. O número conectado precisa participar do grupo do cliente **e** do grupo interno.
+3. Em Configurações › Atendimento › Automação de atendimento, crie a regra do grupo, escolha o grupo interno e quem será marcado na cobrança (as pessoas precisam ter telefone cadastrado em *Pessoas*).
+
+**Variáveis do worker** (opcionais): `PANEL_URL` (endereço do painel nos avisos; sem ela usa `APP_URL`), `SEND_MIN_INTERVAL_MS` (intervalo mínimo entre as mensagens da automação, padrão 1500) e `TZ_ATENDIMENTO` (fuso quando a empresa não tem um, padrão America/Sao_Paulo).
+
+**Onde roda:** o acuse, o aviso e a cobrança dependem da conexão do WhatsApp (Baileys) e do verificador de cobranças, que ficam no **worker (Railway)**, que precisa estar sempre ligado. O painel (Vercel) só configura as regras e mostra os alertas; ele não envia nada. Não coloque o worker em hospedagem *serverless*.
+
+**Convivência com o que já existe:** as *Regras de alerta* (cliente sem resposta, palavra-chave...), o *grupo de alertas fora do expediente* e os avisos em tela continuam funcionando. Num grupo com a automação ligada, o aviso *Nova mensagem* e a cobrança da automação somam-se ao alerta "cliente sem resposta" da regra de alerta; para não receber o mesmo assunto duas vezes, desligue essa regra de alerta (ou limite os grupos dela) nos grupos que usam a automação. Sem o script do banco (0144), o worker registra no log `falta rodar o script do banco` e a automação fica parada, sem afetar o resto.
+
+**Métricas** (no topo da tela, últimos 30 dias): demandas abertas e resolvidas, tempo médio e mediana de resposta e quantas precisaram de cobrança.
 
 ## Avisos no WhatsApp da equipe
 
