@@ -191,7 +191,7 @@ export function Conversation({
   /** participantes do grupo (a conta dos tiques: entregue/lida por todos, menos o número conectado) */
   participantsCount?: number;
   /** participantes do grupo: completa nome e telefone de quem só veio com um dos dois (ou com LID) */
-  contacts?: { jid: string; lid?: string | null; phone: string | null; name: string | null }[];
+  contacts?: { jid: string; lid?: string | null; phone: string | null; name: string | null; is_me?: boolean }[];
   reply: ReplyConfig;
   /** respostas do painel ainda na fila, enviando, com falha ou recém-enviadas */
   outgoing: OutgoingMessage[];
@@ -416,6 +416,8 @@ export function Conversation({
     }
     return map;
   }, [contacts]);
+  // participantes que podem ser marcados com @ (sem o próprio número conectado)
+  const mentionMembers = useMemo(() => (contacts ?? []).filter((c) => c.jid && !c.is_me), [contacts]);
   const byWaId = useMemo(() => new Map(messages.map((x) => [x.wa_message_id, x])), [messages]);
   const teamNames = useMemo(() => new Map(demands.members.map((t) => [t.id, t.name])), [demands.members]);
   // nome de quem leu (tiques): membros do grupo por jid ou LID
@@ -689,11 +691,11 @@ export function Conversation({
         })}
 
         {queued.map((o) => (
-          <OutgoingBubble key={o.id} item={o} quoted={o.quoted_message_id ? byId.get(o.quoted_message_id) : undefined} />
+          <OutgoingBubble key={o.id} item={o} quoted={o.quoted_message_id ? byId.get(o.quoted_message_id) : undefined} renderText={(t) => withMentions(t, mentionName)} />
         ))}
       </div>
     </div>
-      <Composer groupId={groupId} config={reply} replyTo={replyTo} onClearReply={() => setReplyTo(null)} />
+      <Composer groupId={groupId} config={reply} replyTo={replyTo} onClearReply={() => setReplyTo(null)} members={mentionMembers} />
       {share && (
         <ShareDialog source={share.source} mode={share.mode} canPrivate={canPrivate} canGroup={reply.enabled} onClose={() => setShare(null)} />
       )}

@@ -276,7 +276,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             groupId={g.id}
             participantsCount={g.participants_count}
             canPrivate={Boolean(canPrivate)}
-            contacts={(groupMembers ?? []) as { jid: string; lid?: string | null; phone: string | null; name: string | null }[]}
+            contacts={(groupMembers ?? []) as { jid: string; lid?: string | null; phone: string | null; name: string | null; is_me?: boolean }[]}
             initial={(msgs ?? []) as Message[]}
             timeZone={tz}
             slaSeconds={sla}

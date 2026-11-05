@@ -184,6 +184,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    144. `supabase/migrations/0144_automation.sql`
    145. `supabase/migrations/0145_automation_enabled.sql`
    146. `supabase/migrations/0146_automation_rule_delete.sql`
+   147. `supabase/migrations/0147_group_mentions.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
@@ -490,6 +491,8 @@ Ative em **Configurações › WhatsApp › Respostas e mensagens** (somente adm
 - **Quem pode responder**: todos os usuários ou só administradores. A regra é conferida no banco.
 - A tela mostra o andamento de cada envio: na fila, enviando, enviada ou não enviada. Se o envio falhar, há as opções **Tentar de novo** e **Descartar**. Mensagens que não saírem em 10 minutos (WhatsApp desconectado) são marcadas como não enviadas, para não chegarem atrasadas ao cliente.
 
+
+**Mencionar pessoas (@):** na caixa de resposta do grupo, digite **@** para abrir a lista dos participantes do grupo (a busca aceita nome sem acento ou parte do telefone). Use as setas, **Enter** ou **Tab** para escolher e **Esc** para fechar. O nome entra no texto como no WhatsApp (`@Maria Silva`) e, no envio, o sistema marca a pessoa de verdade: ela é avisada e o WhatsApp mostra o nome. Vale também na legenda de arquivos e na mensagem de fechamento. Se você apagar ou editar o `@Nome` depois de escolher, a pessoa deixa de ser marcada. Até 50 pessoas por mensagem. Precisa do script do banco (item 0147) e do worker atualizado.
 ## Automação de atendimento (acuse, alerta, aviso e cobrança)
 
 Garante que nenhuma mensagem de cliente fique sem resposta, sem depender de alguém acompanhando os grupos. Fica em **Configurações › Atendimento › Automação de atendimento** (administradores criam e editam as regras; todos veem as demandas abertas). **Começa desligada:** há uma **chave geral** no topo da tela (*Automação ligada/desligada*, só administradores) e, além dela, só age nos grupos que têm regra. Com a chave **desligada** o sistema não responde aos clientes, não avisa o grupo interno nem cobra; as regras e as demandas abertas ficam guardadas, e uma resposta da equipe no grupo ainda encerra a demanda aberta. Dá para ligar e desligar quando quiser (a mudança vale em até 30 segundos).

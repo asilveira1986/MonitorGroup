@@ -90,6 +90,15 @@ export function contactCardsOf(message: proto.IMessage | null | undefined): Cont
   return list.map((c) => parseVCard(c.vcard, c.displayName)).filter((c): c is ContactCard => Boolean(c));
 }
 
+/**
+ * Pessoas marcadas (@) na mensagem: o WhatsApp só mostra o nome e avisa a pessoa quando o envio leva a lista de
+ * identificadores. Sem ninguém marcado, o conteúdo segue como estava.
+ */
+export function withMentions<T extends object>(content: T, mentions: string[] | null | undefined): T | (T & { mentions: string[] }) {
+  const list = [...new Set((mentions ?? []).filter((j) => /^\d{5,20}@(s\.whatsapp\.net|lid)$/.test(j)))];
+  return list.length ? { ...content, mentions: list } : content;
+}
+
 /** Reação a uma mensagem: o id da mensagem reagida e o emoji ('' = reação retirada). */
 export function reactionOf(message: proto.IMessage | null | undefined): { targetId: string; emoji: string } | null {
   const r = normalizeMessageContent(message)?.reactionMessage;

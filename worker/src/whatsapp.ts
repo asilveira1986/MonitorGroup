@@ -27,7 +27,7 @@ import { AvatarQueue } from './avatars.js';
 import { storeMessageMedia, storePrivateMedia } from './media.js';
 import { messagePreview, type AutomationService } from './automation/service.js';
 import type { SockLike } from './automation/types.js';
-import { contactCardsOf, extractContent, isAcknowledgement, isForwarded, isStickerOrEmoji, isThanksAfterTeam, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
+import { contactCardsOf, extractContent, withMentions as withMentionList, isAcknowledgement, isForwarded, isStickerOrEmoji, isThanksAfterTeam, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
 import { selfReadIds } from './receipts.js';
@@ -108,6 +108,8 @@ type OutgoingRow = {
   media_path?: string | null;
   media_mime?: string | null;
   voice?: boolean;
+  // pessoas marcadas com @ (0147)
+  mentions?: string[] | null;
   // encaminhar e responder citando o privado (0105)
   media_name?: string | null;
   forwarded?: boolean;
@@ -478,9 +480,9 @@ export class WhatsAppManager {
           fileName: row.media_name,
           voice: row.voice,
         });
-        await session.sock.sendMessage(group.jid, { ...content, ...(contextInfo ? { contextInfo } : {}) } as AnyMessageContent, { messageId: waId, quoted });
+        await session.sock.sendMessage(group.jid, withMentionList({ ...content, ...(contextInfo ? { contextInfo } : {}) }, row.mentions) as AnyMessageContent, { messageId: waId, quoted });
       } else {
-        await session.sock.sendMessage(group.jid, { text: row.text_to_send, ...(contextInfo ? { contextInfo } : {}) }, { messageId: waId, quoted });
+        await session.sock.sendMessage(group.jid, withMentionList({ text: row.text_to_send, ...(contextInfo ? { contextInfo } : {}) }, row.mentions), { messageId: waId, quoted });
       }
       await db
         .from('outgoing_messages')

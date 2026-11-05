@@ -2,11 +2,19 @@
 
 import { AlertCircle, Check, CheckCircle2, Clock, Loader2, Lock, Mic, Paperclip, RotateCcw, SendHorizontal, Trash2, X, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useMemo, useRef, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
 import { cn, formatPhone } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
+import {
+  applyMentions,
+  filterMentionMembers,
+  findMentionTrigger,
+  mentionLabel,
+  type MentionMember,
+  type PickedMention,
+} from '@/lib/mentions';
 import { findShortcutTrigger, greeting, matchQuickReplies, renderQuickReply, type QuickReply } from '@/lib/quick-replies';
 import type { Message, OutgoingMessage } from '@/lib/types';
 import { discardGroupMessage, prepareGroupAudioUpload, prepareGroupUpload, retryGroupMessage, sendGroupMessage, type GroupFile } from '../../actions';
@@ -38,11 +46,14 @@ export function Composer({
   config,
   replyTo,
   onClearReply,
+  members = [],
 }: {
   groupId: string;
   config: ReplyConfig;
   replyTo: Message | null;
   onClearReply: () => void;
+  /** participantes do grupo: "@" abre a lista para marcar alguém */
+  members?: MentionMember[];
 }) {
   const router = useRouter();
   const [text, setText] = useState('');
@@ -51,6 +62,11 @@ export function Composer({
   // mensagens rápidas: "\" + atalho antes do cursor abre a lista
   const [trigger, setTrigger] = useState<{ start: number; query: string } | null>(null);
   const [active, setActive] = useState(0);
+  // menções: "@" antes do cursor abre a lista dos participantes do grupo
+  const [mentionTrigger, setMentionTrigger] = useState<{ start: number; query: string } | null>(null);
+  const [mentionActive, setMentionActive] = useState(0);
+  // quem foi escolhido na lista (o "@Nome" que ficou no texto e a quem ele se refere)
+  const [picked, setPicked] = useState<PickedMention[]>([]);
   // a resposta usou a mensagem de fechamento: ao enviar, a conversa do grupo é encerrada
   const [closing, setClosing] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -72,11 +88,33 @@ export function Composer({
   const quick = useMemo(() => config.quickReplies ?? [], [config.quickReplies]);
   const options = useMemo(() => (trigger ? matchQuickReplies(quick, trigger.query) : []), [quick, trigger]);
   const open = Boolean(trigger) && quick.length > 0;
+  const mentionOptions = useMemo(() => (mentionTrigger ? filterMentionMembers(members, mentionTrigger.query) : []), [members, mentionTrigger]);
+  const mentionOpen = Boolean(mentionTrigger) && members.length > 0;
 
   const detect = (value: string, caret: number) => {
     const t = findShortcutTrigger(value, caret);
     setTrigger(t);
     if (!t || t.query !== trigger?.query) setActive(0);
+    const mt = findMentionTrigger(value, caret);
+    setMentionTrigger(mt);
+    if (!mt || mt.query !== mentionTrigger?.query) setMentionActive(0);
+  };
+
+  /** Escolheu alguém na lista: o "@Nome" entra no texto no lugar do que foi digitado depois do "@". */
+  const insertMention = (m: MentionMember) => {
+    const el = ref.current;
+    if (!mentionTrigger) return;
+    const caret = el?.selectionStart ?? text.length;
+    const token = `@${mentionLabel(m)}`;
+    const next = (text.slice(0, mentionTrigger.start) + token + ' ' + text.slice(caret)).slice(0, MAX);
+    setText(next);
+    setPicked((prev) => [...prev, { token, jid: m.jid }]);
+    setMentionTrigger(null);
+    const pos = Math.min(MAX, mentionTrigger.start + token.length + 1);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+    });
   };
 
   const insertQuick = (r: QuickReply) => {
@@ -128,12 +166,14 @@ export function Composer({
   }
 
   const send = () => {
-    const body = text.trim();
-    if ((!body && !files.length) || pending) return;
+    const typed = text.trim();
+    if ((!typed && !files.length) || pending) return;
+    // "@Nome" vira "@número" e as pessoas marcadas vão na lista de menções da mensagem
+    const { text: body, mentions } = applyMentions(typed, picked);
     const queue = [...files];
     start(async () => {
       if (!queue.length) {
-        const res = await sendGroupMessage(groupId, body, replyTo?.id ?? null, closing, null);
+        const res = await sendGroupMessage(groupId, body, replyTo?.id ?? null, closing, null, mentions);
         if (!res.ok) {
           toast.error(res.error);
           return;
@@ -141,6 +181,7 @@ export function Composer({
         if (closing) toast.success('Conversa encerrada', { description: 'A próxima mensagem do cliente inicia uma nova conversa.' });
         setClosing(false);
         setText('');
+        setPicked([]);
         onClearReply();
         router.refresh();
         ref.current?.focus();
@@ -164,13 +205,14 @@ export function Composer({
         }
         const type = mime.startsWith('image/') && !mime.includes('svg') ? 'image' : mime.startsWith('video/') ? 'video' : mime.startsWith('audio/') ? 'audio' : 'document';
         const media: GroupFile = { path: prep.data.path, type, mime, name: sending.name, size: sending.size };
-        const res = await sendGroupMessage(groupId, first ? body : '', first ? (replyTo?.id ?? null) : null, closing && i === queue.length - 1, media);
+        const res = await sendGroupMessage(groupId, first ? body : '', first ? (replyTo?.id ?? null) : null, closing && i === queue.length - 1, media, first ? mentions : []);
         if (!res.ok) {
           toast.error(res.error);
           break;
         }
         if (first) {
           setText('');
+          setPicked([]);
           onClearReply();
         }
         // o que já foi enviado sai da lista: se algo falhar, o resto continua para tentar de novo
@@ -278,6 +320,40 @@ export function Composer({
             e.target.value = '';
           }}
         />
+        {mentionOpen && mentionOptions.length > 0 && (
+          <div
+            className="absolute bottom-full left-0 right-14 z-20 mb-2 overflow-hidden rounded-xl border border-line bg-surface shadow-lg"
+            role="listbox"
+            aria-label="Marcar alguém do grupo"
+          >
+            <p className="flex items-center gap-1.5 border-b border-line px-3 py-1.5 text-[11px] font-medium text-muted">
+              @ Marcar alguém do grupo · ↑↓ escolhe · Enter insere · Esc fecha
+            </p>
+            <ul className="max-h-64 overflow-y-auto py-1">
+              {mentionOptions.map((m, i) => (
+                <li key={m.jid} role="option" aria-selected={i === mentionActive}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      insertMention(m);
+                    }}
+                    onMouseEnter={() => setMentionActive(i)}
+                    className={cn('flex w-full items-center gap-2 px-3 py-2 text-left', i === mentionActive && 'bg-brand-soft')}
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold text-ink-2" aria-hidden>
+                      {mentionLabel(m).replace(/\D/g, '').length > 6 ? '@' : mentionLabel(m).charAt(0).toUpperCase()}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-ink">{mentionLabel(m)}</span>
+                      {m.phone && m.name && <span className="block truncate text-xs text-ink-2">{formatPhone(m.phone)}</span>}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {open && (
           <div
             className="absolute bottom-full left-0 right-14 z-20 mb-2 overflow-hidden rounded-xl border border-line bg-surface shadow-lg"
@@ -334,7 +410,10 @@ export function Composer({
               onChange={(e) => {
                 const value = e.target.value.slice(0, MAX);
                 setText(value);
-                if (!value.trim()) setClosing(false);
+                if (!value.trim()) {
+                  setClosing(false);
+                  setPicked([]);
+                }
                 detect(value, e.target.selectionStart ?? value.length);
               }}
               onSelect={(e) => detect(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
@@ -346,8 +425,29 @@ export function Composer({
                   addFiles(pasted);
                 }
               }}
-              onBlur={() => setTrigger(null)}
+              onBlur={() => {
+                setTrigger(null);
+                setMentionTrigger(null);
+              }}
               onKeyDown={(e) => {
+                // lista de menções (@): setas escolhem, Enter ou Tab inserem, Esc fecha
+                if (mentionOpen) {
+                  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && mentionOptions.length) {
+                    e.preventDefault();
+                    setMentionActive((a) => (a + (e.key === 'ArrowDown' ? 1 : mentionOptions.length - 1)) % mentionOptions.length);
+                    return;
+                  }
+                  if ((e.key === 'Enter' || e.key === 'Tab') && mentionOptions.length && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    insertMention(mentionOptions[Math.min(mentionActive, mentionOptions.length - 1)]);
+                    return;
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setMentionTrigger(null);
+                    return;
+                  }
+                }
                 if (open) {
                   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                     e.preventDefault();
@@ -410,6 +510,7 @@ export function Composer({
         Sai pelo número conectado e aparece também no celular
         {config.signName ? ` · assinada como *${config.userName}:*` : ''} · Enter envia, Shift+Enter quebra a linha · 📎 anexa um arquivo · 🎤 grava um áudio
         {quick.length > 0 ? ' · \\ + atalho insere uma mensagem rápida' : ''}
+        {members.length > 0 ? ' · @ marca alguém do grupo' : ''}
       </p>
     </div>
   );
@@ -425,7 +526,7 @@ const STATUS = {
 const FILE_LABEL: Record<string, string> = { image: 'Imagem', video: 'Vídeo', document: 'Documento' };
 
 /** Resposta do painel que ainda não voltou pelo WhatsApp (na fila, enviando ou com falha). */
-export function OutgoingBubble({ item, quoted }: { item: OutgoingMessage; quoted?: Message }) {
+export function OutgoingBubble({ item, quoted, renderText }: { item: OutgoingMessage; quoted?: Message; renderText?: (text: string) => ReactNode }) {
   const [pending, start] = useTransition();
   const router = useRouter();
   const s = STATUS[item.status];
@@ -461,7 +562,7 @@ export function OutgoingBubble({ item, quoted }: { item: OutgoingMessage; quoted
                 <Paperclip className="h-4 w-4 shrink-0" /> <span className="truncate">{item.media_name || FILE_LABEL[item.message_type] || 'Arquivo'}</span>
               </p>
             )}
-            {item.body && <p className="whitespace-pre-wrap break-words text-ink">{item.body}</p>}
+            {item.body && <p className="whitespace-pre-wrap break-words text-ink">{renderText ? renderText(item.body) : item.body}</p>}
           </>
         )}
         <div className={cn('mt-1 flex items-center justify-end gap-1 text-[11px]', s.cls)}>

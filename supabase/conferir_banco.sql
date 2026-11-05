@@ -181,6 +181,8 @@ from (values
   (136, 'Chave geral da automação de atendimento (0145)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'automation_enabled')),
   (137, 'Excluir regra encerra a demanda aberta (0146)', to_regprocedure('public.automation_rule_deleted()') is not null),
-  (138, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (138, 'Mencionar pessoas nas respostas do grupo (0147)', exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'outgoing_messages' and column_name = 'mentions')),
+  (139, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
