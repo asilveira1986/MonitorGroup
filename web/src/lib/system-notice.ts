@@ -105,3 +105,77 @@ export async function showSystemNotice(
     return { ok: false, reason: `O navegador recusou a notificação (${swError || detail}).` };
   }
 }
+
+export type NoticeEnvironment = {
+  os: 'windows' | 'mac' | 'linux' | 'android' | 'ios' | 'outro';
+  browser: 'chrome' | 'edge' | 'firefox' | 'safari' | 'opera' | 'brave' | 'outro';
+};
+
+/** Navegador e sistema operacional, para orientar onde liberar as notificações. */
+export function detectEnvironment(
+  ua: string = typeof navigator === 'undefined' ? '' : navigator.userAgent,
+  opts: { brave?: boolean; touchPoints?: number } = {
+    brave: typeof navigator !== 'undefined' && Boolean((navigator as { brave?: unknown }).brave),
+    touchPoints: typeof navigator === 'undefined' ? 0 : navigator.maxTouchPoints,
+  },
+): NoticeEnvironment {
+  const os: NoticeEnvironment['os'] = /Android/i.test(ua)
+    ? 'android'
+    : /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && (opts.touchPoints ?? 0) > 1)
+      ? 'ios'
+      : /Windows/i.test(ua)
+        ? 'windows'
+        : /Macintosh|Mac OS X/i.test(ua)
+          ? 'mac'
+          : /Linux|X11|CrOS/i.test(ua)
+            ? 'linux'
+            : 'outro';
+  const browser: NoticeEnvironment['browser'] = opts.brave
+    ? 'brave'
+    : /Edg(e|A|iOS)?\//i.test(ua)
+      ? 'edge'
+      : /OPR\/|Opera/i.test(ua)
+        ? 'opera'
+        : /Firefox|FxiOS/i.test(ua)
+          ? 'firefox'
+          : /Chrome|CriOS|Chromium/i.test(ua)
+            ? 'chrome'
+            : /Safari/i.test(ua)
+              ? 'safari'
+              : 'outro';
+  return { os, browser };
+}
+
+/**
+ * Endereço das configurações de notificações do navegador (o navegador não deixa uma página abrir esse
+ * endereço: a pessoa cola na barra de endereço). null: sem endereço próprio (Safari, outros).
+ */
+export function browserSettingsUrl(browser: NoticeEnvironment['browser'], origin: string): string | null {
+  const site = encodeURIComponent(origin);
+  switch (browser) {
+    case 'chrome':
+      return `chrome://settings/content/siteDetails?site=${site}`;
+    case 'edge':
+      return `edge://settings/content/siteDetails?site=${site}`;
+    case 'brave':
+      return `brave://settings/content/siteDetails?site=${site}`;
+    case 'opera':
+      return 'opera://settings/content/notifications';
+    case 'firefox':
+      return 'about:preferences#privacy';
+    default:
+      return null;
+  }
+}
+
+/** Link que abre as configurações de notificações do sistema (o navegador pede confirmação). null: sem link. */
+export function osSettingsLink(os: NoticeEnvironment['os']): string | null {
+  switch (os) {
+    case 'windows':
+      return 'ms-settings:notifications';
+    case 'mac':
+      return 'x-apple.systempreferences:com.apple.Notifications-Settings.extension';
+    default:
+      return null;
+  }
+}
