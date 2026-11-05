@@ -1,15 +1,17 @@
 'use client';
 
-import { BellRing, Copy, ExternalLink, MonitorUp, Send } from 'lucide-react';
+import { Copy, ExternalLink, MonitorUp, Send } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Button, Card, CardHeader } from '@/components/ui';
+import { Button, Card, CardHeader, Toggle } from '@/components/ui';
 import {
   browserSettingsUrl,
   detectEnvironment,
   enableSystemNotices,
   osSettingsLink,
+  setSystemNoticePref,
   showSystemNotice,
+  systemNoticePref,
   systemNoticeState,
   type NoticeEnvironment,
   type SystemNoticeState,
@@ -130,10 +132,13 @@ export function DesktopNoticeSettings() {
   const [env, setEnv] = useState<NoticeEnvironment | null>(null);
   // orientações para liberar no navegador e no sistema: abrem sozinhas ao ativar (ou quando está bloqueado)
   const [guide, setGuide] = useState(false);
+  // preferência deste navegador: ligado/desligado (a permissão do navegador fica como está)
+  const [wanted, setWanted] = useState(true);
 
   useEffect(() => {
     const read = () => {
       setState(systemNoticeState());
+      setWanted(systemNoticePref());
       setEnv(detectEnvironment());
     };
     read();
@@ -154,6 +159,18 @@ export function DesktopNoticeSettings() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const toggle = async (next: boolean) => {
+    setSystemNoticePref(next);
+    setWanted(next);
+    if (!next) {
+      toast.success('Avisos fora da tela desativados neste navegador', { description: 'Os avisos continuam aparecendo dentro da tela do sistema. É só ativar de novo quando quiser.' });
+      return;
+    }
+    // ativar sem a permissão do navegador: pede agora (e abre as orientações se ele bloquear)
+    if (state !== 'granted') await enable();
+    else toast.success('Avisos fora da tela ativados neste navegador');
   };
 
   // dá tempo de trocar de aba ou minimizar para ver o aviso aparecer fora da página
@@ -183,10 +200,13 @@ export function DesktopNoticeSettings() {
       : state === 'unsupported'
         ? 'Este navegador não mostra notificações do computador.'
         : state === 'granted'
-          ? 'Ativado neste navegador.'
+          ? wanted
+            ? 'Ativado neste navegador.'
+            : 'Desativado neste navegador.'
           : state === 'denied'
-            ? 'Bloqueado neste navegador.'
+            ? 'Bloqueado pelo navegador: libere nas orientações abaixo e ative.'
             : 'Ainda não ativado neste navegador.';
+  const on = state === 'granted' && wanted;
 
   return (
     <Card>
@@ -199,14 +219,17 @@ export function DesktopNoticeSettings() {
         description="Quando o sistema está em segundo plano (outra aba, janela minimizada ou outro programa na frente), o aviso aparece também como notificação do computador. Clicar nela traz o sistema para a frente e abre a tela do aviso."
       />
       <div className="space-y-3 px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
-        {status && <p className="text-sm font-medium text-ink">{status}</p>}
+        {state !== null && (
+          <Toggle
+            checked={on}
+            onChange={(next) => void toggle(next)}
+            disabled={state === 'unsupported' || busy}
+            label={<span className="text-sm font-medium">{on ? 'Avisos fora da tela ativados' : 'Avisos fora da tela desativados'}</span>}
+          />
+        )}
+        {status && <p className="text-xs text-ink-2">{status}</p>}
         <div className="flex flex-wrap gap-2">
-          {(state === 'default' || state === 'denied') && (
-            <Button onClick={() => void enable()} disabled={busy}>
-              <BellRing className="h-4 w-4" /> Ativar avisos fora da tela
-            </Button>
-          )}
-          {state === 'granted' && (
+          {on && (
             <Button variant="secondary" onClick={test}>
               <Send className="h-4 w-4" /> Testar (em 5 segundos)
             </Button>

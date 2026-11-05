@@ -22,6 +22,27 @@ export function systemNoticeState(): SystemNoticeState {
   return Notification.permission;
 }
 
+const PREF_KEY = 'screen-notice-off';
+
+/** A pessoa quer os avisos fora da tela neste navegador? (padrão: sim; vale só com a permissão do navegador) */
+export function systemNoticePref(): boolean {
+  try {
+    return localStorage.getItem(PREF_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+/** Liga ou desliga os avisos fora da tela neste navegador (a permissão do navegador não muda). */
+export function setSystemNoticePref(on: boolean) {
+  try {
+    if (on) localStorage.removeItem(PREF_KEY);
+    else localStorage.setItem(PREF_KEY, 'off');
+  } catch {
+    /* sem armazenamento local */
+  }
+}
+
 /** A página do sistema está fora da vista de quem usa? (outra aba, minimizada ou outro programa na frente) */
 export function pageOutOfSight(): boolean {
   return document.visibilityState !== 'visible' || !document.hasFocus();
