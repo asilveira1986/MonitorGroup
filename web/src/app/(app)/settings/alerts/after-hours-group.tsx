@@ -3,7 +3,7 @@
 import { Moon, Save, Send } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Button, Card, CardHeader, Field, Input, Select } from '@/components/ui';
+import { Button, Card, CardHeader, Field, Input, Select, Toggle } from '@/components/ui';
 import { saveAfterHoursAlertGroup, testAfterHoursAlertGroup, testAfterHoursAlertGroupStatus } from '../actions';
 
 /**
@@ -14,13 +14,16 @@ export function AfterHoursGroup({
   groups,
   current,
   currentMinutes,
+  currentEnabled,
   isAdmin,
 }: {
   groups: { id: string; name: string }[];
   current: string | null;
   currentMinutes: number | null;
+  currentEnabled: boolean;
   isAdmin: boolean;
 }) {
+  const [enabled, setEnabled] = useState(currentEnabled);
   const [value, setValue] = useState(current ?? '');
   const [minutes, setMinutes] = useState(currentMinutes ? String(currentMinutes) : '');
   const [pending, start] = useTransition();
@@ -48,9 +51,9 @@ export function AfterHoursGroup({
   };
   const save = () =>
     start(async () => {
-      const res = await saveAfterHoursAlertGroup(value || null, minutes.trim() ? Number(minutes) : null);
+      const res = await saveAfterHoursAlertGroup(value || null, minutes.trim() ? Number(minutes) : null, enabled);
       if (!res.ok) toast.error(res.error);
-      else toast.success(value ? 'Grupo de alertas salvo' : 'Aviso fora do expediente desligado');
+      else toast.success(enabled ? 'Aviso fora do expediente ativado' : 'Aviso fora do expediente desativado');
     });
   return (
     <Card>
@@ -63,12 +66,20 @@ export function AfterHoursGroup({
         description="Fora do horário de trabalho, o sistema avisa neste grupo do WhatsApp todo grupo cujo cliente já está sem resposta além do tempo definido, uma vez por mensagem sem resposta. Vale também para o que ficou sem resposta durante o dia e passou do horário."
       />
       <div className="space-y-3 px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
+        <Toggle
+          checked={enabled}
+          onChange={setEnabled}
+          disabled={!isAdmin || pending}
+          label={<span className="text-sm font-medium">{enabled ? 'Aviso ativado' : 'Aviso desativado'}</span>}
+        />
         <Field
           label="Grupo que recebe o aviso"
           hint="Crie um grupo no WhatsApp com a equipe de plantão e coloque o número conectado nele. O aviso vale nos horários fora do expediente (noites, fins de semana e feriados), contando o tempo corrido desde a mensagem do cliente, e só para pendências dos últimos 2 dias. Sugestão: deixe esse grupo sem monitoramento."
         >
-          <Select value={value} onChange={(e) => setValue(e.target.value)} disabled={!isAdmin || pending} aria-label="Grupo de alertas">
-            <option value="">Desligado</option>
+          <Select value={value} onChange={(e) => setValue(e.target.value)} disabled={!isAdmin || pending || !enabled} aria-label="Grupo de alertas">
+            <option value="">{enabled ? 'Selecione um grupo' : 'Ative o aviso para escolher o grupo'}</option>
+            {/* o grupo salvo pode não estar na lista (o número saiu dele): mantém a escolha visível */}
+            {value && !groups.some((g) => g.id === value) && <option value={value}>Grupo salvo (não aparece na lista)</option>}
             {groups.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name}
@@ -85,16 +96,19 @@ export function AfterHoursGroup({
             value={minutes}
             onChange={(e) => setMinutes(e.target.value)}
             placeholder="SLA do grupo"
-            disabled={!isAdmin || pending}
+            disabled={!isAdmin || pending || !enabled}
             aria-label="Minutos sem resposta para avisar"
           />
         </Field>
         {isAdmin && (
           <div className="flex flex-wrap gap-2">
-          <Button onClick={save} disabled={pending || (value === (current ?? '') && minutes.trim() === (currentMinutes ? String(currentMinutes) : ''))}>
+          <Button
+            onClick={save}
+            disabled={pending || (enabled === currentEnabled && value === (current ?? '') && minutes.trim() === (currentMinutes ? String(currentMinutes) : ''))}
+          >
             <Save className="h-4 w-4" /> Salvar
           </Button>
-          {current && (
+          {currentEnabled && current && (
             <Button variant="secondary" onClick={() => void test()} disabled={testing || pending} title="Envia uma mensagem de teste no grupo salvo, pelo número conectado">
               <Send className="h-4 w-4" /> {testing ? 'Enviando…' : 'Enviar mensagem de teste'}
             </Button>
