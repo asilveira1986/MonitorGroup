@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { requireAdmin, requireProfile } from '@/lib/auth';
-import { validateRuleInput, type RuleInput, type RuleValues } from '@/lib/automation-rules';
+import { validateGroupIds, validateRuleInput, type RuleInput, type RuleValues } from '@/lib/automation-rules';
 import { friendlyDbError } from '@/lib/db-errors';
 import { createClient } from '@/lib/supabase/server';
 
@@ -51,6 +51,65 @@ export async function saveAutomationRule(groupId: string, input: RuleInput): Pro
   const { error } = existing
     ? await supabase.from('automation_rules').update({ ...row, updated_at: new Date().toISOString() }).eq('group_id', groupId)
     : await supabase.from('automation_rules').insert({ ...row, group_id: groupId, company_id: profile.company_id });
+  revalidatePath('/settings/automation');
+  return error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };
+}
+
+/**
+ * Cria ou atualiza a MESMA regra para vários grupos de uma vez (só administradores), por exemplo todos os grupos de
+ * um setor com o grupo interno desse setor. O grupo interno é obrigatório; grupos que já são o grupo interno de
+ * alguma regra, ou o próprio grupo interno escolhido, ficam de fora (contados em `skipped`).
+ */
+export async function saveAutomationRules(groupIds: string[], input: RuleInput): Promise<Result & { saved?: number; skipped?: number }> {
+  const profile = await requireAdmin();
+  const ids = validateGroupIds(groupIds);
+  if (!ids.ok) return ids;
+  const checked = validateRuleInput(input, { creating: true });
+  if (!checked.ok) return checked;
+  const notifyJid = checked.value.notifyGroupJid!;
+
+  const supabase = await createClient();
+  const [{ data: groups, error: groupsError }, { data: used }] = await Promise.all([
+    supabase.from('groups').select('id, jid').in('id', ids.value),
+    supabase.from('automation_rules').select('notify_group_jid'),
+  ]);
+  if (groupsError) return { ok: false, error: friendlyDbError(groupsError.message) };
+  const found = groups ?? [];
+  if (found.length !== ids.value.length) return { ok: false, error: 'Algum grupo não foi encontrado.' };
+  const internal = new Set([notifyJid, ...((used ?? []) as { notify_group_jid: string }[]).map((r) => r.notify_group_jid)]);
+  const targets = found.filter((g) => !internal.has(g.jid));
+  if (!targets.length) return { ok: false, error: 'Os grupos escolhidos já são grupos internos. Escolha grupos de clientes.' };
+
+  const row = Object.fromEntries(Object.entries(checked.value).map(([key, value]) => [COLUMNS[key as keyof RuleValues], value]));
+  const at = new Date().toISOString();
+  const { error } = await supabase
+    .from('automation_rules')
+    .upsert(targets.map((g) => ({ ...row, group_id: g.id, company_id: profile.company_id, updated_at: at })), { onConflict: 'group_id' });
+  revalidatePath('/settings/automation');
+  return error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true, saved: targets.length, skipped: found.length - targets.length };
+}
+
+/** Liga ou desliga a automação de vários grupos de uma vez (só administradores). */
+export async function setAutomationRulesEnabled(groupIds: string[], enabled: boolean): Promise<Result> {
+  await requireAdmin();
+  const ids = validateGroupIds(groupIds);
+  if (!ids.ok) return ids;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('automation_rules')
+    .update({ enabled, updated_at: new Date().toISOString() })
+    .in('group_id', ids.value);
+  revalidatePath('/settings/automation');
+  return error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };
+}
+
+/** Remove as regras de vários grupos de uma vez (só administradores). */
+export async function deleteAutomationRules(groupIds: string[]): Promise<Result> {
+  await requireAdmin();
+  const ids = validateGroupIds(groupIds);
+  if (!ids.ok) return ids;
+  const supabase = await createClient();
+  const { error } = await supabase.from('automation_rules').delete().in('group_id', ids.value);
   revalidatePath('/settings/automation');
   return error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };
 }

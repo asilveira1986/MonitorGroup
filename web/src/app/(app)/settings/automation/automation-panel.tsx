@@ -1,11 +1,18 @@
 'use client';
 
-import { BellRing, CheckCheck, Clock, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { BellRing, CheckCheck, Clock, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select, Textarea, Toggle } from '@/components/ui';
 import { formatDuration, timeAgo } from '@/lib/format';
-import { deleteAutomationRule, resolveAutomationPending, saveAutomationRule, setAutomationEnabled } from './actions';
+import {
+  deleteAutomationRules,
+  resolveAutomationPending,
+  saveAutomationRule,
+  saveAutomationRules,
+  setAutomationEnabled,
+  setAutomationRulesEnabled,
+} from './actions';
 
 export type RuleItem = {
   id: string;
@@ -25,7 +32,7 @@ export type RuleItem = {
   business_days: number[];
   business_start: string;
   business_end: string;
-  groups: { name: string } | null;
+  groups: { name: string; sector_id: string | null } | null;
 };
 
 export type PendingItem = {
@@ -49,7 +56,8 @@ export type AutomationMetrics = {
 };
 
 export type MemberOption = { id: string; name: string; jid: string };
-type GroupOption = { id: string; name: string; jid: string };
+type GroupOption = { id: string; name: string; jid: string; sector_id: string | null };
+export type SectorOption = { id: string; name: string };
 
 const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const DEFAULT_ACK = '✅ Recebemos sua mensagem! Nossa equipe já foi avisada e retorna em breve.';
@@ -66,21 +74,132 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
   );
 }
 
-/** Formulário de uma regra: criação (escolhe o grupo do cliente) ou edição. */
+/** Nome do setor de um grupo (ou "Sem setor"). */
+const sectorLabel = (sectors: SectorOption[], sectorId: string | null) => (sectorId ? (sectors.find((x) => x.id === sectorId)?.name ?? 'Setor') : 'Sem setor');
+
+/**
+ * Escolha dos grupos do cliente que recebem a regra: busca, atalhos por setor ("selecionar todos do setor") e
+ * marcação grupo a grupo. Grupos internos (que recebem avisos) não entram na lista.
+ */
+function GroupPicker({
+  groups,
+  sectors,
+  selected,
+  onChange,
+  takenGroupIds,
+  excludeJids,
+  disabled,
+}: {
+  groups: GroupOption[];
+  sectors: SectorOption[];
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+  takenGroupIds: Set<string>;
+  excludeJids: Set<string>;
+  disabled: boolean;
+}) {
+  const [query, setQuery] = useState('');
+  const candidates = groups.filter((g) => !excludeJids.has(g.jid));
+  const visible = candidates.filter((g) => g.name.toLowerCase().includes(query.trim().toLowerCase()));
+  // atalhos por setor (só os que têm grupos), com "Sem setor" por último
+  const bySector = new Map<string | null, GroupOption[]>();
+  for (const g of candidates) bySector.set(g.sector_id, [...(bySector.get(g.sector_id) ?? []), g]);
+  const shortcuts = [...sectors.map((x) => x.id), null].filter((id) => bySector.has(id));
+
+  const toggleMany = (items: GroupOption[]) => {
+    const next = new Set(selected);
+    const allIn = items.every((g) => next.has(g.id));
+    for (const g of items) {
+      if (allIn) next.delete(g.id);
+      else next.add(g.id);
+    }
+    onChange(next);
+  };
+  const toggleOne = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-ink-2">Selecionar todos:</span>
+        {shortcuts.map((id) => {
+          const items = bySector.get(id) ?? [];
+          const all = items.length > 0 && items.every((g) => selected.has(g.id));
+          return (
+            <button
+              key={id ?? 'none'}
+              type="button"
+              disabled={disabled}
+              onClick={() => toggleMany(items)}
+              aria-pressed={all}
+              className={`rounded-full border px-2.5 py-1 text-xs transition ${all ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2 hover:border-ink-2'}`}
+            >
+              {sectorLabel(sectors, id)} ({items.length})
+            </button>
+          );
+        })}
+        <button type="button" disabled={disabled} onClick={() => toggleMany(candidates)} className="rounded-full border border-line px-2.5 py-1 text-xs text-ink-2 hover:border-ink-2">
+          Todos ({candidates.length})
+        </button>
+        <button type="button" disabled={disabled || selected.size === 0} onClick={() => onChange(new Set())} className="px-1 text-xs text-muted underline-offset-2 hover:text-ink hover:underline">
+          Limpar
+        </button>
+      </div>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
+        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar grupo" className="pl-9" aria-label="Buscar grupo do cliente" disabled={disabled} />
+      </div>
+      <ul className="max-h-60 divide-y divide-line overflow-y-auto rounded-xl border border-line">
+        {visible.length === 0 && <li className="px-3 py-3 text-xs text-muted">Nenhum grupo encontrado.</li>}
+        {visible.map((g) => (
+          <li key={g.id}>
+            <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm hover:bg-surface-2">
+              <input type="checkbox" checked={selected.has(g.id)} onChange={() => toggleOne(g.id)} disabled={disabled} className="h-4 w-4 accent-[var(--brand)]" />
+              <span className="min-w-0 flex-1 truncate text-ink">{g.name}</span>
+              <span className="shrink-0 text-[11px] text-muted">{sectorLabel(sectors, g.sector_id)}</span>
+              {takenGroupIds.has(g.id) && <Badge className="py-0 text-[10px]">já tem regra</Badge>}
+            </label>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-ink-2">
+        <strong>{selected.size}</strong> grupo(s) escolhido(s). Os que já têm regra serão atualizados com estes ajustes.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Formulário da regra. Criação: escolhe um ou vários grupos do cliente (por exemplo, todos os de um setor) e o
+ * grupo interno que recebe os avisos deles. Edição: ajusta a regra de um ou de vários grupos de uma vez.
+ */
 function RuleForm({
   rule,
+  editIds,
   groups,
+  sectors,
   members,
   takenGroupIds,
+  internalJids,
   onClose,
 }: {
+  /** regra usada como modelo dos campos (edição) */
   rule: RuleItem | null;
+  /** grupos que a edição altera; null na criação */
+  editIds: string[] | null;
   groups: GroupOption[];
+  sectors: SectorOption[];
   members: MemberOption[];
   takenGroupIds: Set<string>;
+  /** grupos que já são o grupo interno de alguma regra */
+  internalJids: Set<string>;
   onClose: () => void;
 }) {
-  const [groupId, setGroupId] = useState(rule?.group_id ?? '');
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const [enabled, setEnabled] = useState(rule?.enabled ?? true);
   const [ackEnabled, setAckEnabled] = useState(rule?.ack_enabled ?? true);
   const [ackMessage, setAckMessage] = useState(rule?.ack_message ?? DEFAULT_ACK);
@@ -97,8 +216,11 @@ function RuleForm({
   const [end, setEnd] = useState(rule?.business_end ?? '18:00');
   const [pending, startTransition] = useTransition();
 
-  const available = groups.filter((g) => !takenGroupIds.has(g.id) || g.id === rule?.group_id);
-  const notifyOptions = groups.filter((g) => g.id !== groupId);
+  const creating = editIds === null;
+  const targetIds = creating ? [...picked] : editIds;
+  const targetSet = new Set(targetIds);
+  // o grupo interno não pode ser um dos grupos que recebem a regra
+  const notifyOptions = groups.filter((g) => !targetSet.has(g.id));
   const toggleIn = <T,>(set: Set<T>, value: T, setter: (s: Set<T>) => void) => {
     const next = new Set(set);
     if (next.has(value)) next.delete(value);
@@ -108,9 +230,10 @@ function RuleForm({
 
   const save = () =>
     startTransition(async () => {
-      if (!groupId) return void toast.error('Escolha o grupo do cliente.');
+      if (!targetIds.length) return void toast.error('Escolha ao menos um grupo do cliente.');
+      if (!notifyJid) return void toast.error('Escolha o grupo interno que recebe os avisos.');
       const notify = groups.find((g) => g.jid === notifyJid);
-      const res = await saveAutomationRule(groupId, {
+      const res = await saveAutomationRules(targetIds, {
         enabled,
         ackEnabled,
         ackMessage,
@@ -128,15 +251,24 @@ function RuleForm({
         businessEnd: end,
       });
       if (!res.ok) return void toast.error(res.error);
-      toast.success(rule ? 'Regra salva' : 'Regra criada');
+      const n = res.saved ?? targetIds.length;
+      toast.success(creating ? `Regra aplicada a ${n} grupo(s)` : `Regra salva em ${n} grupo(s)`, {
+        description: res.skipped ? `${res.skipped} grupo(s) ficaram de fora por já serem grupos internos.` : undefined,
+      });
       onClose();
     });
+
+  const title = creating
+    ? 'Nova regra de automação'
+    : targetIds.length === 1
+      ? `Regra: ${rule?.groups?.name ?? 'grupo'}`
+      : `Editar ${targetIds.length} regras de uma vez`;
 
   return (
     <Card>
       <CardHeader
-        title={rule ? `Regra: ${rule.groups?.name ?? 'grupo'}` : 'Nova regra de automação'}
-        description="A automação age nas mensagens novas dos clientes neste grupo. Quem responde no grupo (equipe ou o número conectado) encerra a demanda."
+        title={title}
+        description="Escolha os grupos do cliente e o grupo interno que recebe o aviso e a cobrança deles. Crie quantas regras quiser: por exemplo, um setor para cada grupo interno."
         action={
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="Fechar o formulário">
             <X className="h-4 w-4" />
@@ -144,28 +276,36 @@ function RuleForm({
         }
       />
       <div className="space-y-5 px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Grupo do cliente">
-            <Select value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={Boolean(rule) || pending}>
-              <option value="">Escolha o grupo</option>
-              {available.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Grupo interno (recebe o aviso e a cobrança)" hint="O número conectado precisa participar dele. Sugestão: deixe esse grupo sem monitoramento.">
-            <Select value={notifyJid} onChange={(e) => setNotifyJid(e.target.value)} disabled={pending}>
-              <option value="">Escolha o grupo interno</option>
-              {notifyOptions.map((g) => (
-                <option key={g.id} value={g.jid}>
-                  {g.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
+        {creating ? (
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-ink-2">Grupos do cliente</p>
+            <GroupPicker
+              groups={groups}
+              sectors={sectors}
+              selected={picked}
+              onChange={setPicked}
+              takenGroupIds={takenGroupIds}
+              excludeJids={new Set([...internalJids, ...(notifyJid ? [notifyJid] : [])])}
+              disabled={pending}
+            />
+          </div>
+        ) : (
+          <p className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-ink-2">
+            {targetIds.length === 1
+              ? 'Os ajustes valem para este grupo.'
+              : `Os ajustes abaixo valem para os ${targetIds.length} grupos escolhidos e substituem os ajustes atuais deles.`}
+          </p>
+        )}
+        <Field label="Grupo interno (recebe o aviso e a cobrança)" hint="O número conectado precisa participar dele. Sugestão: deixe esse grupo sem monitoramento.">
+          <Select value={notifyJid} onChange={(e) => setNotifyJid(e.target.value)} disabled={pending}>
+            <option value="">Escolha o grupo interno</option>
+            {notifyOptions.map((g) => (
+              <option key={g.id} value={g.jid}>
+                {g.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
 
         <div className="flex flex-wrap gap-x-6 gap-y-2">
           <Toggle checked={enabled} onChange={setEnabled} disabled={pending} label={<span className="text-sm">Automação ligada neste grupo</span>} />
@@ -248,6 +388,7 @@ export function AutomationPanel({
   pending,
   metrics,
   groups,
+  sectors,
   members,
 }: {
   isAdmin: boolean;
@@ -257,12 +398,33 @@ export function AutomationPanel({
   pending: PendingItem[];
   metrics: AutomationMetrics | null;
   groups: GroupOption[];
+  sectors: SectorOption[];
   members: MemberOption[];
 }) {
   const [on, setOn] = useState(enabled);
-  const [editing, setEditing] = useState<RuleItem | 'new' | null>(null);
+  // 'new' = criar; lista de regras = editar uma ou várias de uma vez
+  const [editing, setEditing] = useState<'new' | RuleItem[] | null>(null);
+  // regras marcadas na lista (por grupo), para agir em lote
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, startTransition] = useTransition();
   const takenGroupIds = new Set(rules.map((r) => r.group_id));
+  const internalJids = new Set(rules.map((r) => r.notify_group_jid));
+
+  // regras agrupadas pelo setor do grupo do cliente
+  const sections = [...sectors.map((x) => x.id), null]
+    .map((id) => ({ id, label: sectorLabel(sectors, id), items: rules.filter((r) => (r.groups?.sector_id ?? null) === id) }))
+    .filter((sec) => sec.items.length > 0);
+  const selectedRules = rules.filter((r) => selected.has(r.group_id));
+  const toggleSelect = (ids: string[]) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const all = ids.every((id) => next.has(id));
+      for (const id of ids) {
+        if (all) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
 
   const toggleAll = (next: boolean) =>
     startTransition(async () => {
@@ -272,11 +434,14 @@ export function AutomationPanel({
       toast.success(next ? 'Automação de atendimento ligada' : 'Automação de atendimento desligada');
     });
 
-  const run = (fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) =>
+  const run = (fn: () => Promise<{ ok: boolean; error?: string }>, ok: string, clearSelection = false) =>
     startTransition(async () => {
       const res = await fn();
       if (!res.ok) toast.error(res.error);
-      else toast.success(ok);
+      else {
+        toast.success(ok);
+        if (clearSelection) setSelected(new Set());
+      }
     });
 
   return (
@@ -354,19 +519,25 @@ export function AutomationPanel({
 
       {editing && (
         <RuleForm
-          key={editing === 'new' ? 'new' : editing.id}
-          rule={editing === 'new' ? null : editing}
+          key={editing === 'new' ? 'new' : editing.map((r) => r.group_id).join(',')}
+          rule={editing === 'new' ? null : editing[0]}
+          editIds={editing === 'new' ? null : editing.map((r) => r.group_id)}
           groups={groups}
+          sectors={sectors}
           members={members}
           takenGroupIds={takenGroupIds}
-          onClose={() => setEditing(null)}
+          internalJids={internalJids}
+          onClose={() => {
+            setEditing(null);
+            setSelected(new Set());
+          }}
         />
       )}
 
       <Card>
         <CardHeader
           title="Regras por grupo"
-          description="A automação só age nos grupos que têm regra. O horário de atendimento, o acuse e os tempos de cobrança são de cada grupo."
+          description="A automação só age nos grupos que têm regra. Crie quantas regras quiser: cada uma pode valer para vários grupos (por exemplo, todos de um setor) e mandar os avisos para um grupo interno diferente. Marque grupos na lista para ligar, desligar, editar ou remover de uma vez."
           action={
             isAdmin && !editing ? (
               <Button size="sm" onClick={() => setEditing('new')}>
@@ -376,46 +547,107 @@ export function AutomationPanel({
           }
         />
         <div className="px-4 pb-4 pt-2 sm:px-5 sm:pb-5">
+          {isAdmin && selected.size > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-brand-line bg-brand-soft/50 px-3 py-2 text-sm">
+              <strong>{selected.size}</strong> grupo(s) marcado(s):
+              <Button size="sm" variant="secondary" disabled={busy || Boolean(editing)} onClick={() => setEditing(selectedRules)}>
+                <Pencil className="h-3.5 w-3.5" /> Editar
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => run(() => setAutomationRulesEnabled([...selected], true), 'Automação ligada nos grupos marcados', true)}
+              >
+                Ligar
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => run(() => setAutomationRulesEnabled([...selected], false), 'Automação desligada nos grupos marcados', true)}
+              >
+                Desligar
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  if (confirm(`Remover a regra de ${selected.size} grupo(s)? A automação deixa de agir neles.`)) {
+                    run(() => deleteAutomationRules([...selected]), 'Regras removidas', true);
+                  }
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Remover
+              </Button>
+              <button type="button" onClick={() => setSelected(new Set())} className="ml-auto text-xs text-muted underline-offset-2 hover:text-ink hover:underline">
+                Limpar seleção
+              </button>
+            </div>
+          )}
           {rules.length === 0 ? (
-            <EmptyState icon={<BellRing />} title="Nenhuma regra ainda" description="Crie uma regra para o primeiro grupo e escolha o grupo interno que recebe os avisos." />
+            <EmptyState icon={<BellRing />} title="Nenhuma regra ainda" description="Crie uma regra, escolha os grupos (ou todos de um setor) e o grupo interno que recebe os avisos." />
           ) : (
-            <ul className="divide-y divide-line">
-              {rules.map((r) => (
-                <li key={r.id} className="flex flex-wrap items-center gap-3 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink">{r.groups?.name ?? 'Grupo'}</p>
-                    <p className="truncate text-xs text-ink-2">
-                      Avisa em {r.notify_group_name} · cobra depois de {r.escalate_after_min} min, a cada {r.repeat_every_min} min, até {r.max_escalations}x ·{' '}
-                      atendimento {r.business_start}–{r.business_end}
-                    </p>
-                  </div>
-                  <Toggle
-                    checked={r.enabled}
-                    disabled={!isAdmin || busy}
-                    onChange={(on) => run(() => saveAutomationRule(r.group_id, { enabled: on }), on ? 'Automação ligada' : 'Automação desligada')}
-                    label={<span className="text-xs">{r.enabled ? 'Ligada' : 'Desligada'}</span>}
-                  />
-                  {isAdmin && (
-                    <>
-                      <Button variant="secondary" size="sm" onClick={() => setEditing(r)}>
-                        <Pencil className="h-3.5 w-3.5" /> Editar
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => {
-                          if (confirm('Remover a regra deste grupo? A automação deixa de agir nele.')) run(() => deleteAutomationRule(r.group_id), 'Regra removida');
-                        }}
-                        aria-label="Remover a regra"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <div className="space-y-4">
+              {sections.map((sec) => {
+                const ids = sec.items.map((r) => r.group_id);
+                const allSelected = ids.every((id) => selected.has(id));
+                const targets = [...new Set(sec.items.map((r) => r.notify_group_name))];
+                return (
+                  <section key={sec.id ?? 'none'}>
+                    <div className="flex flex-wrap items-center gap-2 border-b border-line pb-1.5">
+                      {isAdmin && (
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          onChange={() => toggleSelect(ids)}
+                          className="h-4 w-4 accent-[var(--brand)]"
+                          aria-label={`Marcar todos os grupos de ${sec.label}`}
+                        />
+                      )}
+                      <h4 className="text-sm font-semibold text-ink">{sec.label}</h4>
+                      <span className="text-xs text-muted">
+                        {sec.items.length} grupo(s) · avisa em {targets.join(', ')}
+                      </span>
+                    </div>
+                    <ul className="divide-y divide-line">
+                      {sec.items.map((r) => (
+                        <li key={r.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                          {isAdmin && (
+                            <input
+                              type="checkbox"
+                              checked={selected.has(r.group_id)}
+                              onChange={() => toggleSelect([r.group_id])}
+                              className="h-4 w-4 accent-[var(--brand)]"
+                              aria-label={`Marcar ${r.groups?.name ?? 'grupo'}`}
+                            />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-ink">{r.groups?.name ?? 'Grupo'}</p>
+                            <p className="truncate text-xs text-ink-2">
+                              Avisa em {r.notify_group_name} · cobra depois de {r.escalate_after_min} min, a cada {r.repeat_every_min} min, até {r.max_escalations}x ·{' '}
+                              atendimento {r.business_start}–{r.business_end}
+                            </p>
+                          </div>
+                          <Toggle
+                            checked={r.enabled}
+                            disabled={!isAdmin || busy}
+                            onChange={(next) => run(() => saveAutomationRule(r.group_id, { enabled: next }), next ? 'Automação ligada' : 'Automação desligada')}
+                            label={<span className="text-xs">{r.enabled ? 'Ligada' : 'Desligada'}</span>}
+                          />
+                          {isAdmin && (
+                            <Button variant="secondary" size="sm" disabled={Boolean(editing)} onClick={() => setEditing([r])}>
+                              <Pencil className="h-3.5 w-3.5" /> Editar
+                            </Button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                );
+              })}
+            </div>
           )}
         </div>
       </Card>

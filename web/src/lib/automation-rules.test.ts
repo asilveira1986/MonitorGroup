@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { HHMM, normalizePhone, phoneToJid, validateRuleInput, validateTeamMember } from './automation-rules.ts';
+import { HHMM, normalizePhone, phoneToJid, validateGroupIds, validateRuleInput, validateTeamMember } from './automation-rules.ts';
 
 const valid = { notifyGroupJid: '120363000000000001@g.us', notifyGroupName: 'Trabalhista' };
 
@@ -78,4 +78,14 @@ test('telefone da equipe: com DDI e pelo menos 12 dígitos', () => {
   assert.equal(semFone.ok, false);
   assert.match(semFone.ok ? '' : semFone.error, /Telefone inválido/);
   assert.equal(validateTeamMember({ name: '', phone: '5551999998888' }).ok, false);
+});
+
+test('grupos escolhidos: de 1 a 500, sem repetir e com identificadores válidos', () => {
+  const a = '3f8a1c2e-1111-4222-8333-444455556666';
+  const b = '3f8a1c2e-1111-4222-8333-444455556667';
+  assert.deepEqual(validateGroupIds([a, b, a]), { ok: true, value: [a, b] });
+  assert.equal(validateGroupIds([]).ok, false);
+  assert.equal(validateGroupIds('x').ok, false);
+  assert.equal(validateGroupIds(['não é id']).ok, false);
+  assert.equal(validateGroupIds(Array.from({ length: 501 }, (_, i) => `3f8a1c2e-1111-4222-8333-${String(i).padStart(12, '0')}`)).ok, false);
 });
