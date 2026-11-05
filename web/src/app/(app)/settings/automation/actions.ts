@@ -55,6 +55,21 @@ export async function saveAutomationRule(groupId: string, input: RuleInput): Pro
   return error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };
 }
 
+/**
+ * Chave geral da automação de atendimento (só administradores): desligada, o worker não responde, não avisa nem
+ * cobra. As regras e as demandas abertas ficam guardadas. Começa desligada.
+ */
+export async function setAutomationEnabled(enabled: boolean): Promise<Result> {
+  const profile = await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('app_settings')
+    .update({ automation_enabled: enabled, updated_at: new Date().toISOString() })
+    .eq('company_id', profile.company_id);
+  revalidatePath('/settings/automation');
+  return error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };
+}
+
 /** Remove a regra do grupo: a automação deixa de agir nele (as demandas já encerradas continuam no histórico). */
 export async function deleteAutomationRule(groupId: string): Promise<Result> {
   await requireAdmin();

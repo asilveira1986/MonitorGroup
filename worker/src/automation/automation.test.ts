@@ -52,10 +52,14 @@ function setup(ruleOverrides: Partial<AutomationRule> = {}, start: Date = INSIDE
   const sent: Sent[] = [];
   const logsOut: { level: string; msg?: string }[] = [];
   let groupStillPending = true;
+  let enabled = true;
   let failSend: ((req: Sent) => boolean) | null = null;
   let ids = 0;
 
   const store: AutomationStore = {
+    async isEnabled() {
+      return enabled;
+    },
     async getRule(groupId) {
       return groupId === rule.groupId ? { ...rule } : null;
     },
@@ -165,6 +169,7 @@ function setup(ruleOverrides: Partial<AutomationRule> = {}, start: Date = INSIDE
     setNow: (d: Date) => (current = d),
     advance: (ms: number) => (current = new Date(current.getTime() + ms)),
     setGroupStillPending: (v: boolean) => (groupStillPending = v),
+    setEnabled: (v: boolean) => (enabled = v),
     failSends: (fn: ((req: Sent) => boolean) | null) => (failSend = fn),
   };
 }
@@ -441,6 +446,37 @@ test('sem o script do banco (0144): avisa uma vez no log e não lança nem erra 
   assert.equal(avisos.length, 1); // uma vez só
   assert.equal(t.logsOut.filter((l) => l.level === 'error').length, 0);
   assert.equal(t.sent.length, 0);
+});
+
+test('chave geral desligada: não responde, não avisa nem cobra; a resposta da equipe ainda encerra', async () => {
+  const t = setup();
+  t.setEnabled(false);
+  await t.automation.handleMessage(t.client());
+  assert.equal(t.sent.length, 0);
+  assert.equal(t.pendings.length, 0);
+  assert.equal(t.alerts.length, 0);
+
+  // com demanda aberta (aberta antes de desligar), a cobrança fica parada e a resposta da equipe ainda encerra
+  t.setEnabled(true);
+  await t.automation.handleMessage(t.client());
+  assert.equal(t.pendings.length, 1);
+  t.setEnabled(false);
+  t.advance(min(30));
+  assert.equal(await t.automation.checkEscalations(), 0);
+  assert.equal(t.sent.filter((s) => s.text.startsWith('⏰🚨')).length, 0);
+  await t.automation.handleMessage(t.team());
+  assert.ok(t.pendings[0].resolvedAt);
+});
+
+test('religar a chave geral volta a agir (depois que o cache de leitura vence)', async () => {
+  const t = setup();
+  t.setEnabled(false);
+  await t.automation.handleMessage(t.client());
+  assert.equal(t.pendings.length, 0);
+  t.setEnabled(true);
+  await t.automation.handleMessage(t.client({ text: 'agora sim' }));
+  assert.equal(t.pendings.length, 1);
+  assert.equal(t.sent.length, 2); // acuse + aviso
 });
 
 test('start() registra o verificador e stop() não deixa timers segurando o processo', () => {

@@ -16,7 +16,9 @@ export default async function AutomationPage() {
   const profile = await requireProfile();
   const isAdmin = profile.role === 'admin' || profile.platform_admin;
   const supabase = await createClient();
-  const [rules, pending, metrics, groups, team] = await Promise.all([
+  const [settings, rules, pending, metrics, groups, team] = await Promise.all([
+    // sem o script do banco (0145) a coluna não existe: a chave geral aparece desligada
+    supabase.from('app_settings').select('*').maybeSingle(),
     supabase.from('automation_rules').select('*, groups(name)').order('created_at'),
     supabase.from('automation_pending').select('*, groups(name)').is('resolved_at', null).order('received_at'),
     supabase.rpc('automation_metrics', { p_days: 30 }),
@@ -46,6 +48,7 @@ export default async function AutomationPage() {
       {!isAdmin && <AdminNotice />}
       <AutomationPanel
         isAdmin={isAdmin}
+        enabled={Boolean((settings.data as { automation_enabled?: boolean } | null)?.automation_enabled)}
         rules={(rules.data ?? []) as unknown as RuleItem[]}
         pending={(pending.data ?? []) as unknown as PendingItem[]}
         metrics={(metrics.data ?? null) as AutomationMetrics | null}

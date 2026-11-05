@@ -82,6 +82,14 @@ const ALERT_TYPES = ['new_message', 'no_reply'];
 /** Automação sobre o Supabase (chave de serviço do worker). */
 export function createSupabaseStore(): AutomationStore {
   return {
+    async isEnabled(companyId) {
+      const row = check(
+        await db.from('app_settings').select('automation_enabled').eq('company_id', companyId).maybeSingle(),
+        'automation enabled',
+      ) as { automation_enabled: boolean | null } | null;
+      return Boolean(row?.automation_enabled);
+    },
+
     async getRule(groupId) {
       const row = check(await db.from('automation_rules').select('*').eq('group_id', groupId).maybeSingle(), 'automation rule') as RuleRow | null;
       return row ? toRule(row) : null;
