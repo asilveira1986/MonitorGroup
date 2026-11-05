@@ -9,7 +9,7 @@ import { ALERT_TYPE_LABEL, cn, formatDuration, formatPhone } from '@/lib/format'
 import { createClient } from '@/lib/supabase/client';
 import type { Alert, Message } from '@/lib/types';
 import { playAlertSound, type AlertSound } from '@/lib/sounds';
-import { pageOutOfSight, showSystemNotice } from '@/lib/system-notice';
+import { pageOutOfSight, showSystemNotice, systemNoticePref } from '@/lib/system-notice';
 import { useRealtime } from '@/lib/use-realtime';
 import { renderTemplate, sampleValues, speak, spokenDuration, templateFor, type VoiceOptions } from '@/lib/voice';
 
@@ -157,7 +157,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
     if (item.sound ?? configRef.current.sound) playAlertSound(speaking ? 'voice' : TONE_SOUND[item.tone]);
     if (speaking) speak(item.speech!, configRef.current.voiceOptions, configRef.current.sound ? 450 : 0);
     // página fora da vista (outra aba, minimizada, outro programa): também como notificação do computador
-    if (!force && pageOutOfSight()) {
+    if (!force && pageOutOfSight() && systemNoticePref()) {
       void showSystemNotice(
         {
           title: `${item.heading} · ${item.group}`,
