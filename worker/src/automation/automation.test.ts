@@ -118,8 +118,8 @@ function setup(ruleOverrides: Partial<AutomationRule> = {}, start: Date = INSIDE
   };
   const logger = {
     info: (_o: object | string, msg?: string) => void logsOut.push({ level: 'info', msg: typeof _o === 'string' ? _o : msg }),
-    warn: (_o: object | string, msg?: string) => void logsOut.push({ level: 'warn', msg }),
-    error: (_o: object | string, msg?: string) => void logsOut.push({ level: 'error', msg }),
+    warn: (_o: object | string, msg?: string) => void logsOut.push({ level: 'warn', msg: typeof _o === 'string' ? _o : msg }),
+    error: (_o: object | string, msg?: string) => void logsOut.push({ level: 'error', msg: typeof _o === 'string' ? _o : msg }),
   };
   const automation = createAutomation({
     store,
@@ -423,6 +423,24 @@ test('um reinício não perde cobranças: o estado está no banco', async () => 
     ruleCacheMs: 0,
   });
   assert.equal(await reiniciado.checkEscalations(), 1);
+});
+
+test('sem o script do banco (0144): avisa uma vez no log e não lança nem erra a cada mensagem', async () => {
+  const t = setup();
+  const quebrado = new Error('Could not find the table \'public.automation_rules\' in the schema cache');
+  t.store.getRule = async () => {
+    throw quebrado;
+  };
+  t.store.listOpenPending = async () => {
+    throw quebrado;
+  };
+  await t.automation.handleMessage(t.client());
+  await t.automation.handleMessage(t.client());
+  assert.equal(await t.automation.checkEscalations(), 0);
+  const avisos = t.logsOut.filter((l) => l.msg?.includes('falta rodar o script do banco'));
+  assert.equal(avisos.length, 1); // uma vez só
+  assert.equal(t.logsOut.filter((l) => l.level === 'error').length, 0);
+  assert.equal(t.sent.length, 0);
 });
 
 test('start() registra o verificador e stop() não deixa timers segurando o processo', () => {

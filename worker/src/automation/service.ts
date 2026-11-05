@@ -144,6 +144,10 @@ export type AutomationDeps = {
   ruleCacheMs?: number;
 };
 
+/** O banco ainda não tem as tabelas da automação (script 0144 não rodado)? */
+const isMissingSchema = (err: unknown) =>
+  /automation_(rules|pending|log)|schema cache|does not exist|relation .* does not exist/i.test(err instanceof Error ? err.message : String(err));
+
 /** Demanda recém-aberta sem pendência no sistema: dá tempo da gravação da mensagem terminar antes de concluir "respondido". */
 const GRACE_MS = 2 * 60_000;
 
@@ -160,6 +164,19 @@ export function createAutomation(deps: AutomationDeps) {
   let timer: ReturnType<typeof setInterval> | null = null;
   let firstCheck: ReturnType<typeof setTimeout> | null = null;
   let checking = false;
+  let missingSchemaWarned = false;
+
+  /** Sem o script do banco (0144): avisa uma vez no log e segue sem agir, em vez de errar a cada mensagem. */
+  const failed = (err: unknown, context: string, extra: object = {}) => {
+    if (isMissingSchema(err)) {
+      if (!missingSchemaWarned) {
+        missingSchemaWarned = true;
+        logger.warn('[automation] falta rodar o script do banco (supabase/atualizar_banco_parte2.sql, item 0144): a automação de atendimento está parada');
+      }
+      return;
+    }
+    logger.error({ err, ...extra }, context);
+  };
 
   const link = (groupId: string) => (panelUrl ? `${panelUrl}/groups/${groupId}` : '');
 
@@ -291,7 +308,7 @@ export function createAutomation(deps: AutomationDeps) {
       if (open) return void (await bump(open, m));
       await openDemand(m, rule);
     } catch (err) {
-      logger.error({ err, group: m.group.jid }, '[automation] falha ao processar a mensagem');
+      failed(err, '[automation] falha ao processar a mensagem', { group: m.group.jid });
     }
   };
 
@@ -348,7 +365,7 @@ export function createAutomation(deps: AutomationDeps) {
     let sent = 0;
     try {
       const at = now();
-      for (const { pending, rule, groupStillPending } of await store.listOpenPending()) {
+      for (const { pending, rule, groupStillPending } of await store.listOpenPending().catch((err) => (failed(err, '[automation] falha ao listar as demandas abertas'), []))) {
         try {
           if (!rule || !rule.enabled) continue;
           const age = at.getTime() - pending.receivedAt.getTime();
