@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { AlertRule, AppSettings } from '@/lib/types';
 import type { VoiceEvent } from '@/lib/voice';
 import { VoiceSettings } from '../alerts/voice-settings';
+import { DesktopNoticeSettings } from '../desktop-notice-settings';
 import { MessageAlertSettings } from '../message-alert-settings';
 import { PrivateAlertSettings } from '../private-alert-settings';
 
@@ -24,6 +25,7 @@ export default async function NoticeSettingsPage() {
     <div className="space-y-4">
       {!isAdmin && <AdminNotice />}
       {s && <MessageAlertSettings settings={s} disabled={!isAdmin} />}
+      <DesktopNoticeSettings />
       {s && privateOk && s.private_alert_mine !== undefined && <PrivateAlertSettings settings={s} disabled={!isAdmin} />}
       <VoiceSettings
         initial={{
