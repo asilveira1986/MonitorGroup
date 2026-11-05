@@ -178,6 +178,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    138. `supabase/migrations/0138_deleted_messages_scrub.sql`
    139. `supabase/migrations/0139_after_hours_alert_group.sql`
    140. `supabase/migrations/0140_after_hours_alert_minutes.sql`
+   141. `supabase/migrations/0141_after_hours_overdue_now.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

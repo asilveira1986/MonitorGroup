@@ -228,7 +228,8 @@ begin
   (130, 'Grupo de alertas fora do expediente (0139)', to_regprocedure('public.after_hours_sla_candidates(uuid)') is not null),
   (131, 'Minutos para avisar fora do expediente (0140)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'after_hours_alert_minutes')),
-  (132, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (132, 'Aviso fora do expediente também das pendências da noite (0141)', coalesce(pg_get_functiondef('public.after_hours_sla_candidates(uuid)'::regprocedure) like '%2 days%', false)),
+  (133, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -237,7 +238,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -20667,6 +20668,68 @@ notify pgrst, 'reload schema';
 $mig0140$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0141_after_hours_overdue_now.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0141', $mig0141$
+-- =====================================================================
+-- Grupo de alertas fora do expediente: avisa também as pendências que viraram a noite.
+--
+--  * Antes (0139/0140) o aviso só saía quando o prazo vencia fora do expediente. Uma mensagem que
+--    venceu às 16h e continuou sem resposta depois das 18h nunca era avisada.
+--  * Agora o aviso sai quando o grupo está com o prazo vencido (os minutos configurados ou o SLA do
+--    grupo) E o horário de agora é fora do expediente (dias úteis, horário e feriados), uma vez por
+--    pendência. Quem vence já fora do expediente continua sendo avisado na hora.
+--  * Só entram pendências dos últimos 2 dias (evita avisar pendências muito antigas).
+-- =====================================================================
+
+create or replace function public.after_hours_sla_candidates(p_company_id uuid)
+returns table (
+  alert_group_id uuid, group_id uuid, group_name text, pending_since timestamptz, pending_count int,
+  sla_seconds int, waiting_seconds int, who text, body text, message_type text
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_f     jsonb;
+  v_alert uuid;
+begin
+  perform set_config('app.company_id', p_company_id::text, true);
+  select s.after_hours_alert_group_id into v_alert from public.app_settings s where s.company_id = p_company_id;
+  if v_alert is null then
+    return;
+  end if;
+  v_f := public.indicator_filters(now(), now(), null, null);
+  if v_f is null then
+    return;
+  end if;
+  -- dentro do expediente quem cuida dos avisos são os alertas normais
+  if public.is_business_time(now(), v_f) then
+    return;
+  end if;
+  return query
+  select v_alert, g.id, g.name, g.pending_since, g.pending_count,
+         (coalesce(s.after_hours_alert_minutes, g.sla_minutes, s.default_sla_minutes) * 60)::int,
+         extract(epoch from now() - g.pending_since)::int,
+         coalesce(pm.sender_name, pm.sender_phone, 'Cliente'), left(pm.body, 200), pm.message_type
+    from public.groups g
+    join public.app_settings s on s.company_id = g.company_id
+    left join public.messages pm on pm.id = g.pending_message_id
+   where g.company_id = p_company_id and g.monitored and g.removed_at is null
+     and g.id <> v_alert
+     and g.pending_since is not null
+     -- o prazo já venceu...
+     and g.pending_since + make_interval(mins => coalesce(s.after_hours_alert_minutes, g.sla_minutes, s.default_sla_minutes)) <= now()
+     -- ...e a pendência não é antiga demais
+     and g.pending_since >= now() - interval '2 days'
+     and not exists (select 1 from public.after_hours_sla_notices n where n.group_id = g.id and n.pending_since = g.pending_since)
+   order by g.pending_since;
+end;
+$$;
+revoke all on function public.after_hours_sla_candidates(uuid) from public, anon, authenticated;
+grant execute on function public.after_hours_sla_candidates(uuid) to service_role;
+
+notify pgrst, 'reload schema';
+$mig0141$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -20847,6 +20910,7 @@ from (values
   (130, 'Grupo de alertas fora do expediente (0139)', to_regprocedure('public.after_hours_sla_candidates(uuid)') is not null),
   (131, 'Minutos para avisar fora do expediente (0140)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'after_hours_alert_minutes')),
-  (132, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (132, 'Aviso fora do expediente também das pendências da noite (0141)', coalesce(pg_get_functiondef('public.after_hours_sla_candidates(uuid)'::regprocedure) like '%2 days%', false)),
+  (133, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

@@ -173,7 +173,8 @@ CHECKS=$(cat <<'SQL'
   (130, 'Grupo de alertas fora do expediente (0139)', to_regprocedure('public.after_hours_sla_candidates(uuid)') is not null),
   (131, 'Minutos para avisar fora do expediente (0140)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'after_hours_alert_minutes')),
-  (132, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (132, 'Aviso fora do expediente também das pendências da noite (0141)', coalesce(pg_get_functiondef('public.after_hours_sla_candidates(uuid)'::regprocedure) like '%2 days%', false)),
+  (133, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

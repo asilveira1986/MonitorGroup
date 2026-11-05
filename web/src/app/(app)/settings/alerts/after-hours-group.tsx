@@ -60,12 +60,12 @@ export function AfterHoursGroup({
             <Moon className="h-4 w-4" aria-hidden /> Grupo de alertas fora do expediente
           </>
         }
-        description="Quando um cliente fica sem resposta pelo tempo definido e esse prazo vence fora do horário de trabalho, o sistema avisa neste grupo do WhatsApp, uma vez por mensagem sem resposta."
+        description="Fora do horário de trabalho, o sistema avisa neste grupo do WhatsApp todo grupo cujo cliente já está sem resposta além do tempo definido, uma vez por mensagem sem resposta. Vale também para o que ficou sem resposta durante o dia e passou do horário."
       />
       <div className="space-y-3 px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
         <Field
           label="Grupo que recebe o aviso"
-          hint="Crie um grupo no WhatsApp com a equipe de plantão e coloque o número conectado nele. O aviso vale quando o prazo vence fora dos dias e horários do expediente (ou em feriados), contando o tempo corrido desde a mensagem do cliente. Sugestão: deixe esse grupo sem monitoramento."
+          hint="Crie um grupo no WhatsApp com a equipe de plantão e coloque o número conectado nele. O aviso vale nos horários fora do expediente (noites, fins de semana e feriados), contando o tempo corrido desde a mensagem do cliente, e só para pendências dos últimos 2 dias. Sugestão: deixe esse grupo sem monitoramento."
         >
           <Select value={value} onChange={(e) => setValue(e.target.value)} disabled={!isAdmin || pending} aria-label="Grupo de alertas">
             <option value="">Desligado</option>
