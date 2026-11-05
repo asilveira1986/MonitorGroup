@@ -216,7 +216,7 @@ export function DesktopNoticeSettings() {
             <MonitorUp className="h-4 w-4" aria-hidden /> Avisos fora da tela do sistema
           </>
         }
-        description="Quando o sistema está em segundo plano (outra aba, janela minimizada ou outro programa na frente), o aviso aparece também como notificação do computador. Clicar nela traz o sistema para a frente e abre a tela do aviso."
+        description="Quando o sistema está em segundo plano (outra aba, janela minimizada ou outro programa na frente), o aviso aparece também como notificação do computador. Clicar nela traz o sistema para a frente e abre a tela do aviso. Fica ligado por padrão: o navegador pede a permissão no primeiro clique depois de entrar no sistema."
       />
       <div className="space-y-3 px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
         {state !== null && (
