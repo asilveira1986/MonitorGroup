@@ -709,11 +709,12 @@ export async function savePrivateAlertSettings(values: { mine: boolean; queue: b
 
 /**
  * Grupo de alertas fora do expediente (0139): o worker avisa nele quando o SLA de um grupo estoura
- * fora do horário de trabalho. null desliga. `minutes`: minutos sem resposta para avisar (null: o SLA do grupo).
+ * fora do horário de trabalho. `enabled` liga/desliga sem perder o grupo escolhido. `minutes`: minutos sem resposta para avisar (null: o SLA do grupo).
  */
-export async function saveAfterHoursAlertGroup(groupId: string | null, minutes: number | null = null): Promise<Result> {
+export async function saveAfterHoursAlertGroup(groupId: string | null, minutes: number | null = null, enabled = true): Promise<Result> {
   const profile = await requireAdmin();
   const supabase = await createClient();
+  if (enabled && !groupId) return { ok: false, error: 'Escolha o grupo que recebe o aviso.' };
   if (groupId) {
     const { data: group } = await supabase.from('groups').select('id, removed_at').eq('id', groupId).maybeSingle();
     if (!group || group.removed_at) return { ok: false, error: 'Escolha um grupo em que o número conectado ainda participa.' };
@@ -723,7 +724,12 @@ export async function saveAfterHoursAlertGroup(groupId: string | null, minutes: 
   }
   const { error } = await supabase
     .from('app_settings')
-    .update({ after_hours_alert_group_id: groupId, after_hours_alert_minutes: minutes, updated_at: new Date().toISOString() })
+    .update({
+      after_hours_alert_group_id: groupId,
+      after_hours_alert_minutes: minutes,
+      after_hours_alert_enabled: enabled,
+      updated_at: new Date().toISOString(),
+    })
     .eq('company_id', profile.company_id);
   revalidatePath('/settings/alerts');
   return result(error);
