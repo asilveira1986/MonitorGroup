@@ -184,6 +184,8 @@ export async function sendGroupMessage(
   quotedMessageId: string | null,
   closes = false,
   media: GroupAudio | GroupFile | null = null,
+  /** pessoas marcadas com @ (identificadores do WhatsApp), 0147 */
+  mentions: string[] = [],
 ): Promise<Result> {
   await requireProfile();
   const supabase = await createClient();
@@ -195,6 +197,8 @@ export async function sendGroupMessage(
     p_closes: closes,
     // áudio gravado no painel (0074); sem ele, o banco antigo segue aceitando o texto
     ...(media ? { p_media: media } : {}),
+    // pessoas marcadas (0147); sem ninguém marcado, o banco antigo segue aceitando o envio
+    ...(mentions.length ? { p_mentions: mentions } : {}),
   });
   return fail(error);
 }

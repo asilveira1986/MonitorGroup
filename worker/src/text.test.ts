@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isWithinBusinessHours } from './business-hours.js';
-import { contactCardsOf, extractContent, findKeyword, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, reactionOf, samePhone } from './text.js';
+import { contactCardsOf, extractContent, withMentions, findKeyword, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, reactionOf, samePhone } from './text.js';
 
 test('findKeyword ignora acentos e maiúsculas e respeita palavra inteira', () => {
   assert.equal(findKeyword('Isso é URGENTE!!', ['urgente']), 'urgente');
@@ -131,4 +131,24 @@ test('contactCardsOf lê o telefone do cartão de contato (waid ou TEL)', () => 
     [{ name: 'A', phone: '5551999998888' }],
   );
   assert.deepEqual(contactCardsOf({ conversation: 'oi' }), []);
+});
+
+test('withMentions leva as pessoas marcadas no envio e ignora o que não é identificador', () => {
+  assert.deepEqual(withMentions({ text: 'oi @5551999990001' }, ['5551999990001@s.whatsapp.net']), {
+    text: 'oi @5551999990001',
+    mentions: ['5551999990001@s.whatsapp.net'],
+  });
+  // LID, repetidos e inválidos
+  assert.deepEqual(withMentions({ text: 'x' }, ['121839833624806@lid', '121839833624806@lid', 'joao@gmail.com', '']).mentions, ['121839833624806@lid']);
+  // sem ninguém marcado o conteúdo não muda
+  const content = { text: 'sem marcar' };
+  assert.equal(withMentions(content, []), content);
+  assert.equal(withMentions(content, null), content);
+  assert.equal(withMentions(content, undefined), content);
+  // legenda de arquivo com menção mantém o resto do conteúdo
+  assert.deepEqual(withMentions({ image: 'buf', caption: 'veja @5551999990001' }, ['5551999990001@s.whatsapp.net']), {
+    image: 'buf',
+    caption: 'veja @5551999990001',
+    mentions: ['5551999990001@s.whatsapp.net'],
+  });
 });
