@@ -11,7 +11,9 @@
 --  * app_settings.broadcast_*: ritmo de envio da empresa.
 --  * broadcast_audience / broadcast_create / broadcast_set_status / broadcast_counts: funções do painel.
 --
--- Só administradores da empresa criam e acompanham. O envio é do worker (service_role).
+-- Por enquanto só quem administra a plataforma (administrador geral) usa os disparos: can_use_broadcasts().
+-- Para liberar aos administradores de cada empresa, troque is_platform_admin() por is_admin() nessa função
+-- (e o requirePlatformAdmin das telas por requireAdmin). O envio é do worker (service_role).
 -- =====================================================================
 
 alter table public.app_settings add column if not exists broadcast_min_delay_s int not null default 8;
@@ -19,6 +21,14 @@ alter table public.app_settings add column if not exists broadcast_max_delay_s i
 alter table public.app_settings add column if not exists broadcast_batch_size int not null default 40;
 alter table public.app_settings add column if not exists broadcast_batch_pause_min int not null default 5;
 alter table public.app_settings add column if not exists broadcast_daily_limit int not null default 200;
+
+-- quem pode usar os disparos (hoje: administrador geral da plataforma)
+create or replace function public.can_use_broadcasts()
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.is_active_user() and public.is_platform_admin()
+$$;
+revoke all on function public.can_use_broadcasts() from public, anon;
+grant execute on function public.can_use_broadcasts() to authenticated;
 
 create table if not exists public.broadcast_campaigns (
   id           uuid primary key default gen_random_uuid(),
@@ -66,10 +76,10 @@ alter table public.broadcast_campaigns  enable row level security;
 alter table public.broadcast_recipients enable row level security;
 drop policy if exists broadcast_campaigns_read on public.broadcast_campaigns;
 create policy broadcast_campaigns_read on public.broadcast_campaigns for select
-  using ((select public.is_admin()) and company_id = (select public.current_company_id()));
+  using ((select public.can_use_broadcasts()) and company_id = (select public.current_company_id()));
 drop policy if exists broadcast_recipients_read on public.broadcast_recipients;
 create policy broadcast_recipients_read on public.broadcast_recipients for select
-  using ((select public.is_admin()) and company_id = (select public.current_company_id()));
+  using ((select public.can_use_broadcasts()) and company_id = (select public.current_company_id()));
 revoke all on public.broadcast_campaigns, public.broadcast_recipients from anon;
 grant select on public.broadcast_campaigns, public.broadcast_recipients to authenticated;
 grant select, insert, update, delete on public.broadcast_campaigns, public.broadcast_recipients to service_role;
@@ -104,8 +114,8 @@ declare
   v_groups uuid[] := coalesce(array(select jsonb_array_elements_text(p_filter->'group_ids')::uuid), '{}');
   v_phones text[] := coalesce(array(select public.br_phone(x) from jsonb_array_elements_text(p_filter->'phones') x), '{}');
 begin
-  if not public.is_admin() then
-    raise exception 'Só administradores usam os disparos.' using errcode = '42501';
+  if not public.can_use_broadcasts() then
+    raise exception 'Os disparos estão liberados só para quem administra a plataforma.' using errcode = '42501';
   end if;
 
   if v_target = 'groups' then
@@ -196,8 +206,8 @@ declare
   v_id uuid;
   v_n int;
 begin
-  if not public.is_admin() then
-    raise exception 'Só administradores usam os disparos.' using errcode = '42501';
+  if not public.can_use_broadcasts() then
+    raise exception 'Os disparos estão liberados só para quem administra a plataforma.' using errcode = '42501';
   end if;
   if v_target not in ('groups', 'people') then
     raise exception 'Escolha para quem enviar: grupos ou pessoas.';
@@ -253,8 +263,8 @@ declare
   v_c public.broadcast_campaigns;
   v_summary text;
 begin
-  if not public.is_admin() then
-    raise exception 'Só administradores usam os disparos.' using errcode = '42501';
+  if not public.can_use_broadcasts() then
+    raise exception 'Os disparos estão liberados só para quem administra a plataforma.' using errcode = '42501';
   end if;
   select * into v_c from public.broadcast_campaigns where id = p_id and company_id = public.current_company_id() for update;
   if not found then
@@ -299,7 +309,7 @@ returns table (campaign_id uuid, status text, n bigint)
 language sql stable set search_path = public as $$
   select r.campaign_id, r.status, count(*)
     from public.broadcast_recipients r
-   where r.company_id = public.current_company_id() and public.is_admin()
+   where r.company_id = public.current_company_id() and public.can_use_broadcasts()
    group by r.campaign_id, r.status
 $$;
 revoke all on function public.broadcast_counts() from public, anon;

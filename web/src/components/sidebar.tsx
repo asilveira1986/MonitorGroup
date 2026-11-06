@@ -23,7 +23,7 @@ const NAV = [
   { href: '/private', label: 'Conversas privadas', icon: MessageCircle, badgeKey: 'private' as const },
   // contatos (0112): agenda do WhatsApp + cadastros do sistema; mesmo acesso das conversas privadas
   { href: '/contacts', label: 'Contatos', icon: BookUser },
-  // disparos em massa (0150): só administradores (o layout esconde para os demais)
+  // disparos em massa (0150): só o administrador geral da plataforma (o layout esconde para os demais)
   { href: '/broadcasts', label: 'Disparos', icon: Megaphone },
   { href: '/alerts', label: 'Alertas', icon: Bell, badgeKey: 'alerts' as const },
   { href: '/reports', label: 'Relatórios', icon: FileBarChart },

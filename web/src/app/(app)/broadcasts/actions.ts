@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { dbResult, type ActionResult } from '@/lib/action-result';
-import { requireAdmin } from '@/lib/auth';
+import { requirePlatformAdmin } from '@/lib/auth';
 import { validateBroadcastSettings, type BroadcastFilter, type BroadcastRecipient, type BroadcastSettingsValues } from '@/lib/broadcast';
 import { friendlyDbError } from '@/lib/db-errors';
 import { createClient } from '@/lib/supabase/server';
@@ -12,7 +12,7 @@ export async function previewAudience(
   filter: BroadcastFilter,
   opts: { limit?: number; search?: string } = {},
 ): Promise<{ ok: true; total: number; rows: BroadcastRecipient[] } | { ok: false; error: string }> {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('broadcast_preview', {
     p_filter: filter,
@@ -37,7 +37,7 @@ export type NewBroadcast = {
 
 /** Cria o disparo (envia agora ou agenda) com o público do filtro, menos os desmarcados. */
 export async function createBroadcast(input: NewBroadcast): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const when = input.scheduledAt ? new Date(input.scheduledAt) : null;
   if (when && Number.isNaN(when.getTime())) return { ok: false, error: 'Data de envio inválida.' };
   if (when && when.getTime() < Date.now() - 60_000) return { ok: false, error: 'A data de envio já passou.' };
@@ -57,7 +57,7 @@ export async function createBroadcast(input: NewBroadcast): Promise<{ ok: true; 
 
 /** Pausa, retoma ou cancela um disparo. */
 export async function setBroadcastStatus(id: string, action: 'pause' | 'resume' | 'cancel'): Promise<ActionResult> {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const supabase = await createClient();
   const { error } = await supabase.rpc('broadcast_set_status', { p_id: id, p_action: action });
   if (error) return { ok: false, error: friendlyDbError(error.message) };
@@ -68,7 +68,7 @@ export async function setBroadcastStatus(id: string, action: 'pause' | 'resume' 
 
 /** Ritmo de envio da empresa (intervalos, lotes e limite de 24 horas). */
 export async function saveBroadcastSettings(values: BroadcastSettingsValues): Promise<ActionResult> {
-  const profile = await requireAdmin();
+  const profile = await requirePlatformAdmin();
   const checked = validateBroadcastSettings(values);
   if (!checked.ok) return checked;
   const supabase = await createClient();

@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import type { CustomerTag } from '@/components/customer-tags';
 import { appSettings } from '@/lib/app-settings';
-import { requireAdmin } from '@/lib/auth';
+import { requirePlatformAdmin } from '@/lib/auth';
 import { settingsFromRow } from '@/lib/broadcast';
 import { createClient } from '@/lib/supabase/server';
 import { NewBroadcast, type GroupOption, type InstanceOption } from './new-broadcast';
@@ -11,7 +11,7 @@ import { NewBroadcast, type GroupOption, type InstanceOption } from './new-broad
 export const metadata: Metadata = { title: 'Monitor Group · Novo disparo' };
 
 export default async function NewBroadcastPage() {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const supabase = await createClient();
   const [tags, sectors, groups, instances, settings, probe] = await Promise.all([
     supabase.from('customer_tags').select('id, name, color').order('name'),

@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Badge, Card, CardHeader, PageHeader } from '@/components/ui';
-import { requireAdmin } from '@/lib/auth';
+import { requirePlatformAdmin } from '@/lib/auth';
 import { CAMPAIGN_STATUS_LABEL, groupCounts, emptyCounts, RECIPIENT_STATUS_LABEL } from '@/lib/broadcast';
 import { formatDateTime, formatPhone } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
@@ -25,7 +25,7 @@ const RECIPIENT_TONE: Record<string, 'neutral' | 'good' | 'warning' | 'critical'
 const SHOWN = 1000;
 
 export default async function BroadcastDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ status?: string }> }) {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const { id } = await params;
   const { status } = await searchParams;
   const supabase = await createClient();

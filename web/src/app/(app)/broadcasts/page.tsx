@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
 import { appSettings } from '@/lib/app-settings';
-import { requireAdmin } from '@/lib/auth';
+import { requirePlatformAdmin } from '@/lib/auth';
 import { CAMPAIGN_STATUS_LABEL, emptyCounts, groupCounts, settingsFromRow, totalOf } from '@/lib/broadcast';
 import { formatDateTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
@@ -27,7 +27,7 @@ const TONE: Record<string, 'neutral' | 'good' | 'warning' | 'critical' | 'brand'
  * enviadas agora ou agendadas, em ritmo controlado para proteger o número.
  */
 export default async function BroadcastsPage() {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const supabase = await createClient();
   const [campaigns, counts, settings] = await Promise.all([
     supabase.from('broadcast_campaigns').select('id, name, target, status, scheduled_at, created_at').order('created_at', { ascending: false }).limit(100),
