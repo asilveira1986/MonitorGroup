@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
 import { appSettings } from '@/lib/app-settings';
 import { requirePlatformAdmin } from '@/lib/auth';
-import { CAMPAIGN_STATUS_LABEL, emptyCounts, groupCounts, settingsFromRow, totalOf } from '@/lib/broadcast';
+import { CAMPAIGN_STATUS_LABEL, emptyCounts, groupCounts, settingsFromRow, totalOf, type OptOut } from '@/lib/broadcast';
 import { formatDateTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
+import { Optouts } from './optouts';
 import { Progress } from './progress';
 import { RateSettings } from './rate-settings';
 
@@ -29,10 +30,12 @@ const TONE: Record<string, 'neutral' | 'good' | 'warning' | 'critical' | 'brand'
 export default async function BroadcastsPage() {
   await requirePlatformAdmin();
   const supabase = await createClient();
-  const [campaigns, counts, settings] = await Promise.all([
+  const [campaigns, counts, settings, optouts] = await Promise.all([
     supabase.from('broadcast_campaigns').select('id, name, target, status, scheduled_at, created_at').order('created_at', { ascending: false }).limit(100),
     supabase.rpc('broadcast_counts'),
     appSettings(),
+    // sem o script 0151 a tabela não existe: lista vazia
+    supabase.from('broadcast_optouts').select('id, phone, name, source, created_at').order('created_at', { ascending: false }).limit(500),
   ]);
 
   // sem o script do banco (0150) as tabelas não existem
@@ -107,6 +110,8 @@ export default async function BroadcastsPage() {
           </div>
         )}
       </Card>
+
+      <Optouts items={(optouts.data ?? []) as OptOut[]} />
 
       <RateSettings initial={settingsFromRow(settings.data as Record<string, unknown> | null)} />
     </div>

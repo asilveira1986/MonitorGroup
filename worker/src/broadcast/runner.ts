@@ -1,4 +1,4 @@
-import { batchPauseMs, pickDelayMs, RecipientError, renderMessage, typingMs } from './service.js';
+import { batchPauseMs, inSendWindow, pickDelayMs, pickVariant, RecipientError, renderMessage, typingMs, withOptOutFooter } from './service.js';
 import type { BroadcastSettings, BroadcastSock, BroadcastStore, Campaign, Recipient } from './types.js';
 
 type Logger = { info(o: object, m?: string): void; warn(o: object, m?: string): void };
@@ -11,6 +11,10 @@ export type BroadcastDeps = {
   onSending: (id: string) => void;
   /** depois de enviar a uma pessoa (ex.: gravar na conversa privada) */
   afterPersonSent?: (info: { instanceId: string; companyId: string; jid: string; phone: string; waId: string; text: string; campaign: string }) => Promise<void>;
+  /** conteúdo de arquivo (imagem, vídeo, documento, áudio) pronto para o WhatsApp */
+  buildMedia?: (media: { type: string; mime: string; name: string | null }, buffer: Buffer, caption: string) => Promise<Record<string, unknown>>;
+  /** fuso da empresa (janela de horário) */
+  getTimezone?: (companyId: string) => Promise<string>;
   logger: Logger;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
@@ -42,9 +46,15 @@ export function createBroadcast(deps: BroadcastDeps) {
   let timer: ReturnType<typeof setInterval> | null = null;
   let busy = false;
 
+  /** arquivo de cada campanha em memória (baixa do Storage uma vez só) */
+  const mediaCache = new Map<string, Buffer>();
+
   async function sendOne(c: Campaign, r: Recipient, sock: BroadcastSock, s: BroadcastSettings): Promise<void> {
-    const text = renderMessage(c.message, { name: r.name });
-    if (!text) throw new RecipientError('A mensagem ficou vazia depois de aplicar as variáveis.');
+    // texto deste destinatário: o principal ou uma variação (sorteio estável pelo id dele)
+    const base = renderMessage(pickVariant([c.message, ...c.variants], r.id), { name: r.name });
+    const audio = c.media?.type === 'audio'; // áudio não leva texto
+    const text = c.target === 'people' && c.optoutFooter && !audio ? withOptOutFooter(base) : base;
+    if (!text && !c.media) throw new RecipientError('A mensagem ficou vazia depois de aplicar as variáveis.');
     let jid = r.jid;
     if (r.kind === 'person') {
       if (!r.phone) throw new RecipientError('Contato sem telefone.');
@@ -61,7 +71,17 @@ export function createBroadcast(deps: BroadcastDeps) {
     const id = deps.generateId(sock);
     deps.onSending(id);
     try {
-      await sock.sendMessage(jid, { text }, { messageId: id });
+      let content: Record<string, unknown> = { text };
+      if (c.media) {
+        if (!deps.buildMedia) throw new Error('Envio de arquivos indisponível.');
+        let buffer = mediaCache.get(c.id);
+        if (!buffer) {
+          buffer = await store.loadMedia(c.media.path);
+          mediaCache.set(c.id, buffer);
+        }
+        content = await deps.buildMedia(c.media, buffer, audio ? '' : text);
+      }
+      await sock.sendMessage(jid, content, { messageId: id });
     } finally {
       if (sock.sendPresenceUpdate) await sock.sendPresenceUpdate('paused', jid).catch(() => undefined);
     }
@@ -84,6 +104,11 @@ export function createBroadcast(deps: BroadcastDeps) {
   }
 
   async function processCampaign(c: Campaign, sentToday: Map<string, number>): Promise<void> {
+    // fora dos dias e horas do disparo: espera (nada é perdido, segue quando a janela abrir)
+    if (c.window) {
+      const tz = deps.getTimezone ? await deps.getTimezone(c.companyId).catch(() => 'America/Sao_Paulo') : 'America/Sao_Paulo';
+      if (!inSendWindow(c.window, new Date(now()), tz)) return;
+    }
     const s = await store.getSettings(c.companyId);
     const pending = await store.listPending(c.id, 25);
     for (const r of pending) {
@@ -103,6 +128,11 @@ export function createBroadcast(deps: BroadcastDeps) {
       }
       if (used >= s.dailyLimit) continue; // limite de 24 h: segue quando a janela abrir
       if (!(await store.claim(r.id))) continue;
+      // quem pediu para sair depois de o disparo ser criado não recebe
+      if (r.kind === 'person' && r.phone && (await store.isOptedOut(c.companyId, r.phone))) {
+        await store.markSkipped(r.id, 'Pediu para não receber mensagens.');
+        continue;
+      }
       try {
         await sendOne(c, r, sock, s);
         sentToday.set(inst, used + 1);
@@ -126,6 +156,7 @@ export function createBroadcast(deps: BroadcastDeps) {
     }
     if ((await store.openCount(c.id)) === 0) {
       await store.finish(c.id);
+      mediaCache.delete(c.id);
       logger.info({ campaign: c.id, name: c.name }, 'disparo concluído');
     }
   }

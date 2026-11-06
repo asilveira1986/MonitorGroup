@@ -123,7 +123,7 @@ type OutgoingRow = {
 const FORWARDED = { isForwarded: true, forwardingScore: 1 };
 
 /** Conteúdo de um arquivo guardado no Storage, pronto para o WhatsApp (imagem, vídeo, áudio, documento). */
-async function mediaContent(type: string, buffer: Buffer, mimetype: string, opts: { caption?: string; fileName?: string | null; voice?: boolean }) {
+export async function mediaContent(type: string, buffer: Buffer, mimetype: string, opts: { caption?: string; fileName?: string | null; voice?: boolean }) {
   if (type === 'image') return { image: buffer, caption: opts.caption, mimetype };
   if (type === 'video') return { video: buffer, caption: opts.caption, mimetype };
   if (type === 'audio') return audioContent(buffer, mimetype, Boolean(opts.voice));
@@ -256,9 +256,12 @@ export class WhatsAppManager {
   }
 
   /** Disparos em massa (0150): o eco das mensagens enviadas por eles não conta como resposta da equipe. */
-  private broadcast: { isBotMessage(id: string | null | undefined): boolean } | null = null;
+  private broadcast: {
+    isBotMessage(id: string | null | undefined): boolean;
+    handleIncoming(info: { instanceId: string; jid: string; alt: string | null; name: string | null; text: string | null }): Promise<void>;
+  } | null = null;
 
-  setBroadcast(broadcast: { isBotMessage(id: string | null | undefined): boolean }) {
+  setBroadcast(broadcast: NonNullable<WhatsAppManager['broadcast']>) {
     this.broadcast = broadcast;
   }
 
@@ -1042,7 +1045,24 @@ export class WhatsAppManager {
       return;
     }
     if (!isJidGroup(jid)) {
-      if (isPrivateJid(jid)) await this.handlePrivateMessage(session, msg, false);
+      if (isPrivateJid(jid)) {
+        // "SAIR" em resposta a um disparo: a pessoa entra na lista de quem não recebe (0151)
+        if (this.broadcast && !msg.key.fromMe) {
+          const content = extractContent(msg.message);
+          if (content?.type === 'text') {
+            void this.broadcast
+              .handleIncoming({
+                instanceId: session.instanceId,
+                jid,
+                alt: (msg.key as { remoteJidAlt?: string }).remoteJidAlt ?? null,
+                name: msg.pushName ?? null,
+                text: content.body,
+              })
+              .catch((err) => logger.warn({ err }, 'falha ao conferir pedido de saída dos disparos'));
+          }
+        }
+        await this.handlePrivateMessage(session, msg, false);
+      }
       return;
     }
     const reaction = reactionOf(msg.message);

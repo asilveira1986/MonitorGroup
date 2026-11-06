@@ -185,7 +185,9 @@ from (values
       where table_schema = 'public' and table_name = 'outgoing_messages' and column_name = 'mentions')),
   (139, 'Índice dos alertas em aberto por grupo (0148)', exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'alerts_group_open_idx')),
   (140, 'Mensagem de encerramento: regras e respostas (0149)', to_regclass('public.closing_flows') is not null and to_regclass('public.closing_surveys') is not null),
-  (141, 'Disparos em massa (0150)', to_regclass('public.broadcast_campaigns') is not null and to_regprocedure('public.broadcast_create(text,jsonb,text,uuid,timestamptz,text[])') is not null),
-  (142, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (141, 'Disparos em massa (0150)', to_regclass('public.broadcast_campaigns') is not null and to_regprocedure('public.can_use_broadcasts()') is not null),
+  (142, 'Disparos: mídia, variações, públicos salvos, janela, reenvio e opt-out (0151)', to_regclass('public.broadcast_optouts') is not null and to_regclass('public.broadcast_audiences') is not null
+      and to_regprocedure('public.broadcast_retry_failed(uuid)') is not null),
+  (143, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

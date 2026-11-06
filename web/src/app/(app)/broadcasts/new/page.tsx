@@ -4,7 +4,7 @@ import { Card, EmptyState, PageHeader } from '@/components/ui';
 import type { CustomerTag } from '@/components/customer-tags';
 import { appSettings } from '@/lib/app-settings';
 import { requirePlatformAdmin } from '@/lib/auth';
-import { settingsFromRow } from '@/lib/broadcast';
+import { settingsFromRow, type SavedAudience } from '@/lib/broadcast';
 import { createClient } from '@/lib/supabase/server';
 import { NewBroadcast, type GroupOption, type InstanceOption } from './new-broadcast';
 
@@ -13,13 +13,15 @@ export const metadata: Metadata = { title: 'Monitor Group · Novo disparo' };
 export default async function NewBroadcastPage() {
   await requirePlatformAdmin();
   const supabase = await createClient();
-  const [tags, sectors, groups, instances, settings, probe] = await Promise.all([
+  const [tags, sectors, groups, instances, settings, probe, savedAudiences] = await Promise.all([
     supabase.from('customer_tags').select('id, name, color').order('name'),
     supabase.from('sectors').select('id, name').order('name'),
     supabase.from('groups').select('id, name').is('removed_at', null).order('name'),
     supabase.from('whatsapp_instances').select('id, name, phone, status').order('name'),
     appSettings(),
     supabase.from('broadcast_campaigns').select('id', { head: true, count: 'exact' }),
+    // sem o script 0151 a tabela não existe: sem públicos salvos
+    supabase.from('broadcast_audiences').select('id, name, target, filter').order('name'),
   ]);
   if (probe.error) {
     return (
@@ -41,6 +43,8 @@ export default async function NewBroadcastPage() {
         groups={(groups.data ?? []) as GroupOption[]}
         instances={(instances.data ?? []) as InstanceOption[]}
         rate={settingsFromRow(settings.data as Record<string, unknown> | null)}
+        saved={(savedAudiences.data ?? []) as SavedAudience[]}
+        timezone={(settings.data as { timezone?: string } | null)?.timezone || 'America/Sao_Paulo'}
       />
     </div>
   );

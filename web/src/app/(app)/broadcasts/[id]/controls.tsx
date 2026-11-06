@@ -1,12 +1,12 @@
 'use client';
 
-import { Pause, Play, XCircle } from 'lucide-react';
+import { Pause, Play, RotateCcw, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui';
 import { useRealtime } from '@/lib/use-realtime';
-import { setBroadcastStatus } from '../actions';
+import { retryBroadcastFailures, setBroadcastStatus } from '../actions';
 
 /** Pausar, retomar e cancelar o disparo. */
 export function Controls({ id, status }: { id: string; status: string }) {
@@ -58,4 +58,27 @@ export function LiveRefresh() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'broadcast_campaigns' }, refresh),
   );
   return null;
+}
+
+/** Devolve as falhas para a fila: o envio recomeça por elas, no mesmo ritmo. */
+export function RetryFailures({ id, failed }: { id: string; failed: number }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  return (
+    <Button
+      variant="secondary"
+      disabled={pending}
+      onClick={() =>
+        start(async () => {
+          const r = await retryBroadcastFailures(id);
+          if (r.ok) {
+            toast.success(`${r.count} destinatário(s) voltaram para a fila.`);
+            router.refresh();
+          } else toast.error(r.error);
+        })
+      }
+    >
+      <RotateCcw className="h-4 w-4" /> Reenviar {failed} falha{failed > 1 ? 's' : ''}
+    </Button>
+  );
 }

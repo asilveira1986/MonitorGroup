@@ -1,13 +1,20 @@
 import { generateMessageIDV2 } from 'baileys';
 import { createBotRegistry } from '../automation/service.js';
 import { db } from '../db.js';
+import { getSettings } from '../cache.js';
+import { env } from '../env.js';
 import { logger } from '../logger.js';
 import { privateEnabled } from '../private.js';
+import { mediaContent } from '../whatsapp.js';
 import { createBroadcast, type BroadcastService } from './runner.js';
+import { isOptOutText } from './service.js';
 import { createSupabaseBroadcastStore } from './store.js';
 import type { BroadcastSock } from './types.js';
 
-export type WorkerBroadcast = BroadcastService & { isBotMessage(id: string | null | undefined): boolean };
+export type WorkerBroadcast = BroadcastService & {
+  isBotMessage(id: string | null | undefined): boolean;
+  handleIncoming(info: { instanceId: string; jid: string; alt: string | null; name: string | null; text: string | null }): Promise<void>;
+};
 
 /** Monta os disparos em massa (0150) sobre as conexões do worker e o Supabase. */
 export function createWorkerBroadcast(connections: { getSock(instanceId: string): unknown }): WorkerBroadcast {
@@ -34,7 +41,26 @@ export function createWorkerBroadcast(connections: { getSock(instanceId: string)
         p_count_unread: false,
       });
     },
+    buildMedia: (media, buffer, caption) => mediaContent(media.type, buffer, media.mime, { caption: caption || undefined, fileName: media.name }),
+    getTimezone: async (companyId) => {
+      try {
+        return (await getSettings(companyId)).timezone || env.tzAtendimento;
+      } catch {
+        return env.tzAtendimento;
+      }
+    },
     logger,
   });
-  return { ...service, isBotMessage: (id) => bots.has(id) };
+  return {
+    ...service,
+    isBotMessage: (id) => bots.has(id),
+    // pedido de saída: só vale para quem recebeu um disparo recente (a função do banco confere)
+    async handleIncoming({ instanceId, jid, alt, name, text }) {
+      if (!isOptOutText(text)) return;
+      const { data, error } = await db.rpc('broadcast_register_optout', { p_instance_id: instanceId, p_jid: jid, p_alt: alt, p_name: name });
+      // sem o script 0151 a função não existe
+      if (error) return;
+      if (data === true) logger.info({ jid }, 'pessoa pediu para não receber disparos');
+    },
+  };
 }

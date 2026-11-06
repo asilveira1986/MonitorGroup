@@ -1,4 +1,5 @@
-import type { BroadcastSettings } from './types.js';
+import { isWithinBusinessHours } from '../business-hours.js';
+import type { BroadcastSettings, SendWindow } from './types.js';
 
 /** Regras puras dos disparos (sem banco nem WhatsApp). */
 
@@ -52,3 +53,36 @@ export function typingMs(text: string): number {
 
 /** Erros de dado do destinatário (não contam como problema do número). */
 export class RecipientError extends Error {}
+
+/** Rodapé das mensagens a pessoas: o jeito de pedir para sair da lista. */
+export const OPTOUT_FOOTER = 'Para não receber mais mensagens, responda SAIR.';
+
+export function withOptOutFooter(text: string): string {
+  return text ? `${text}\n\n${OPTOUT_FOOTER}` : OPTOUT_FOOTER;
+}
+
+/** A resposta é um pedido para sair da lista? Só a palavra sozinha (sem "não quero sair do plano..."). */
+export function isOptOutText(text: string | null | undefined): boolean {
+  const t = (text ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return ['sair', 'parar', 'pare', 'stop', 'descadastrar', 'remover', 'nao quero receber'].includes(t);
+}
+
+/** Texto deste destinatário: o principal ou uma das variações, sorteado de forma estável pelo id dele. */
+export function pickVariant(texts: string[], seed: string): string {
+  if (texts.length <= 1) return texts[0] ?? '';
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return texts[h % texts.length]!;
+}
+
+/** Está dentro dos dias e horas permitidos do disparo? (sem janela: sempre) */
+export function inSendWindow(window: SendWindow | null, at: Date, timezone: string): boolean {
+  if (!window) return true;
+  return isWithinBusinessHours(at, { timezone, businessDays: window.days, start: window.start, end: window.end });
+}

@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Badge, Card, CardHeader, PageHeader } from '@/components/ui';
 import { requirePlatformAdmin } from '@/lib/auth';
-import { CAMPAIGN_STATUS_LABEL, groupCounts, emptyCounts, RECIPIENT_STATUS_LABEL } from '@/lib/broadcast';
+import { CAMPAIGN_STATUS_LABEL, emptyCounts, groupCounts, MEDIA_TYPE_LABEL, RECIPIENT_STATUS_LABEL, WEEKDAY_LABEL, type MediaType } from '@/lib/broadcast';
 import { formatDateTime, formatPhone } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import { Progress } from '../progress';
-import { Controls, LiveRefresh } from './controls';
+import { Controls, LiveRefresh, RetryFailures } from './controls';
 
 export const metadata: Metadata = { title: 'Monitor Group · Disparo' };
 
@@ -65,6 +65,7 @@ export default async function BroadcastDetailPage({ params, searchParams }: { pa
             <Link href="/broadcasts" className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-medium text-ink hover:bg-surface-2">
               <ArrowLeft className="h-4 w-4" /> Disparos
             </Link>
+            {campaign.status !== 'cancelled' && counts.failed > 0 && <RetryFailures id={id} failed={counts.failed} />}
             {active && <Controls id={id} status={campaign.status} />}
           </>
         }
@@ -140,7 +141,27 @@ export default async function BroadcastDetailPage({ params, searchParams }: { pa
           </Card>
           <Card>
             <CardHeader title="Mensagem" />
-            <p className="whitespace-pre-wrap p-4 text-sm text-ink sm:p-5">{campaign.message}</p>
+            <div className="space-y-3 p-4 text-sm text-ink sm:p-5">
+              {campaign.media_path && (
+                <p className="text-xs text-ink-2">
+                  Arquivo: {MEDIA_TYPE_LABEL[campaign.media_type as MediaType] ?? 'Arquivo'}
+                  {campaign.media_name ? ` · ${campaign.media_name}` : ''}
+                </p>
+              )}
+              {campaign.message && <p className="whitespace-pre-wrap">{campaign.message}</p>}
+              {((campaign.variants ?? []) as string[]).map((v, i) => (
+                <div key={i} className="rounded-xl bg-surface-2 p-3">
+                  <p className="mb-1 text-xs font-medium text-muted">Variação {i + 1}</p>
+                  <p className="whitespace-pre-wrap">{v}</p>
+                </div>
+              ))}
+              {campaign.window_enabled && (
+                <p className="text-xs text-ink-2">
+                  Só envia {((campaign.window_days ?? []) as number[]).map((x) => WEEKDAY_LABEL[x]).join(', ')}, das {campaign.window_start} às {campaign.window_end}.
+                </p>
+              )}
+              {campaign.optout_footer && <p className="text-xs text-ink-2">Com o aviso “responda SAIR” no fim.</p>}
+            </div>
           </Card>
         </div>
       </div>

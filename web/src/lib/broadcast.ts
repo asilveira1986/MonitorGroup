@@ -15,11 +15,13 @@ export type BroadcastFilter = {
   sector_id?: string | null;
   group_ids?: string[];
   phones?: string[];
+  /** números importados (CSV ou digitados): entram sempre, mesmo fora do cadastro do sistema */
+  extra?: { phone: string; name?: string | null }[];
 };
 
 /** O filtro tem algum critério? (sem critério o público fica vazio, nunca "todos" por engano) */
 export function hasCriteria(f: BroadcastFilter): boolean {
-  return Boolean(f.all || f.tag_ids?.length || f.sector_id || f.group_ids?.length || f.phones?.length);
+  return Boolean(f.all || f.tag_ids?.length || f.sector_id || f.group_ids?.length || f.phones?.length || f.extra?.length);
 }
 
 export type BroadcastRecipient = { key: string; name: string | null; sub: string | null };
@@ -126,3 +128,101 @@ export function groupCounts(rows: { campaign_id: string; status: string; n: numb
 }
 
 export const totalOf = (c: StatusCounts) => c.pending + c.sending + c.sent + c.failed + c.skipped;
+
+// ------------------------------------------------------------------ fase 2
+
+export const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
+export const MAX_VARIANTS = 4;
+
+export type MediaType = 'image' | 'video' | 'audio' | 'document';
+
+export const MEDIA_TYPE_LABEL: Record<MediaType, string> = { image: 'Imagem', video: 'Vídeo', audio: 'Áudio', document: 'Documento' };
+
+/** Tipo do arquivo no WhatsApp a partir do tipo MIME (o que não é imagem, vídeo ou áudio vai como documento). */
+export function mediaTypeFromMime(mime: string): MediaType {
+  const m = (mime || '').toLowerCase();
+  if (m.startsWith('image/') && m !== 'image/svg+xml') return 'image';
+  if (m.startsWith('video/')) return 'video';
+  if (m.startsWith('audio/')) return 'audio';
+  return 'document';
+}
+
+export type BroadcastMedia = { path: string; mime: string; name: string; type: MediaType };
+
+/** Dias e horas em que o disparo pode sair (0 = domingo ... 6 = sábado). */
+export type BroadcastWindow = { days: number[]; start: string; end: string };
+
+export const WEEKDAY_LABEL = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+export const DEFAULT_WINDOW: BroadcastWindow = { days: [1, 2, 3, 4, 5], start: '08:00', end: '18:00' };
+
+const HHMM = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+
+export function validateWindow(w: BroadcastWindow): { ok: true } | { ok: false; error: string } {
+  if (w.days.length === 0) return { ok: false, error: 'Escolha pelo menos um dia da semana.' };
+  if (!HHMM.test(w.start) || !HHMM.test(w.end)) return { ok: false, error: 'Informe o horário no formato 08:00.' };
+  if (w.start === w.end) return { ok: false, error: 'O horário de início e o de fim não podem ser iguais.' };
+  return { ok: true };
+}
+
+/** Telefone brasileiro só com dígitos e o 55 (DDD + número); null se não parece um telefone. */
+export function normalizeBrPhone(raw: string): string | null {
+  const d = raw.replace(/\D/g, '');
+  if (d.length === 10 || d.length === 11) return `55${d}`;
+  if ((d.length === 12 || d.length === 13) && d.startsWith('55')) return d;
+  return null;
+}
+
+export type ParsedContacts = { rows: { phone: string; name: string | null }[]; invalid: number; duplicates: number };
+
+const NAME_HEADERS = ['nome', 'name', 'cliente', 'contato'];
+const PHONE_HEADERS = ['telefone', 'celular', 'phone', 'whatsapp', 'fone', 'numero', 'número', 'tel'];
+
+/**
+ * Lê um CSV de contatos (separador vírgula, ponto e vírgula ou tab). Com cabeçalho (nome, telefone...) usa as
+ * colunas; sem cabeçalho, acha o telefone na linha e usa o outro campo como nome. Números repetidos contam
+ * uma vez; linhas sem telefone válido ficam de fora (e são contadas em invalid).
+ */
+export function parseContactsCsv(text: string): ParsedContacts {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const out: ParsedContacts = { rows: [], invalid: 0, duplicates: 0 };
+  if (lines.length === 0) return out;
+  const first = lines[0]!;
+  const delimiter = [';', '\t', ','].map((d) => [d, first.split(d).length] as const).sort((a, b) => b[1] - a[1])[0]![0];
+  const split = (line: string) => line.split(delimiter).map((c) => c.trim().replace(/^"(.*)"$/, '$1').trim());
+
+  let nameCol = -1;
+  let phoneCol = -1;
+  let start = 0;
+  const head = split(first).map((c) => c.toLowerCase());
+  const looksLikeHeader = !head.some((c) => c.replace(/\D/g, '').length >= 8) && head.some((c) => c !== '');
+  if (looksLikeHeader) {
+    start = 1;
+    nameCol = head.findIndex((c) => NAME_HEADERS.includes(c));
+    phoneCol = head.findIndex((c) => PHONE_HEADERS.includes(c));
+  }
+
+  const seen = new Set<string>();
+  for (const line of lines.slice(start)) {
+    const cells = split(line);
+    let rawPhone: string | undefined = phoneCol >= 0 ? cells[phoneCol] : cells.find((c) => c.replace(/\D/g, '').length >= 8);
+    let name: string | null | undefined = nameCol >= 0 ? cells[nameCol] : cells.find((c) => c && c !== rawPhone && c.replace(/\D/g, '').length < 8);
+    if (looksLikeHeader && phoneCol < 0) rawPhone = cells.find((c) => c.replace(/\D/g, '').length >= 8);
+    if (looksLikeHeader && nameCol < 0) name = cells.find((c) => c && c !== rawPhone && c.replace(/\D/g, '').length < 8);
+    const phone = rawPhone ? normalizeBrPhone(rawPhone) : null;
+    if (!phone) {
+      out.invalid++;
+      continue;
+    }
+    if (seen.has(phone)) {
+      out.duplicates++;
+      continue;
+    }
+    seen.add(phone);
+    out.rows.push({ phone, name: name?.trim() ? name.trim().slice(0, 120) : null });
+  }
+  return out;
+}
+
+export type SavedAudience = { id: string; name: string; target: BroadcastTarget; filter: BroadcastFilter };
+
+export type OptOut = { id: string; phone: string; name: string | null; source: 'reply' | 'manual'; created_at: string };

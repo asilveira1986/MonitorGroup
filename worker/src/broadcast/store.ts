@@ -2,7 +2,24 @@ import { db } from '../db.js';
 import { DEFAULT_SETTINGS, normalizeSettings } from './service.js';
 import type { BroadcastStore, Campaign, Recipient } from './types.js';
 
-type CampaignRow = { id: string; company_id: string; name: string; target: 'groups' | 'people'; message: string };
+type CampaignRow = {
+  id: string;
+  company_id: string;
+  name: string;
+  target: 'groups' | 'people';
+  message: string;
+  // colunas da 0151 (ausentes se o script ainda não foi rodado)
+  variants?: string[] | null;
+  media_path?: string | null;
+  media_mime?: string | null;
+  media_name?: string | null;
+  media_type?: 'image' | 'video' | 'document' | 'audio' | null;
+  window_enabled?: boolean | null;
+  window_days?: number[] | null;
+  window_start?: string | null;
+  window_end?: string | null;
+  optout_footer?: boolean | null;
+};
 type RecipientRow = {
   id: string;
   campaign_id: string;
@@ -12,6 +29,12 @@ type RecipientRow = {
   jid: string | null;
   instance_id: string | null;
 };
+
+/** Telefone comparável: DDD + 8 últimos dígitos (tolera o 55 e o 9º dígito), como phone_key do banco. */
+export function phoneKey(phone: string): string {
+  const d = phone.replace(/\D/g, '');
+  return d.replace(/^(?:55)?(\d{2})9?(\d{8})$/, '$1$2');
+}
 
 const must = (error: { message: string } | null, context: string) => {
   if (error) throw new Error(`broadcast ${context}: ${error.message}`);
@@ -32,12 +55,23 @@ export function createSupabaseBroadcastStore(): BroadcastStore {
     async listRunning() {
       const { data, error } = await db
         .from('broadcast_campaigns')
-        .select('id, company_id, name, target, message')
+        // "*": sem o script 0151 as colunas novas não existem e os disparos simples seguem funcionando
+        .select('*')
         .eq('status', 'running')
         .order('scheduled_at');
       must(error, 'list running');
       return ((data ?? []) as CampaignRow[]).map(
-        (c): Campaign => ({ id: c.id, companyId: c.company_id, name: c.name, target: c.target, message: c.message }),
+        (c): Campaign => ({
+          id: c.id,
+          companyId: c.company_id,
+          name: c.name,
+          target: c.target,
+          message: c.message,
+          variants: c.variants ?? [],
+          media: c.media_path && c.media_type ? { path: c.media_path, type: c.media_type, mime: c.media_mime ?? 'application/octet-stream', name: c.media_name ?? null } : null,
+          window: c.window_enabled ? { days: c.window_days ?? [1, 2, 3, 4, 5], start: c.window_start ?? '08:00', end: c.window_end ?? '18:00' } : null,
+          optoutFooter: c.optout_footer ?? false,
+        }),
       );
     },
 
@@ -94,6 +128,25 @@ export function createSupabaseBroadcastStore(): BroadcastStore {
     async markFailed(recipientId, message) {
       const { error } = await db.from('broadcast_recipients').update({ status: 'failed', error: message.slice(0, 300) }).eq('id', recipientId);
       must(error, 'mark failed');
+    },
+
+    async isOptedOut(companyId, phone) {
+      const { data, error } = await db.from('broadcast_optouts').select('phone').eq('company_id', companyId);
+      // sem o script 0151 não há lista de opt-out
+      if (error) return false;
+      const key = phoneKey(phone);
+      return ((data ?? []) as { phone: string }[]).some((o) => phoneKey(o.phone) === key);
+    },
+
+    async markSkipped(recipientId, reason) {
+      const { error } = await db.from('broadcast_recipients').update({ status: 'skipped', error: reason.slice(0, 300) }).eq('id', recipientId);
+      must(error, 'mark skipped');
+    },
+
+    async loadMedia(path) {
+      const file = await db.storage.from('media').download(path);
+      if (file.error || !file.data) throw new Error('Arquivo do disparo não encontrado no Storage.');
+      return Buffer.from(await file.data.arrayBuffer());
     },
 
     async countSent(instanceId, since) {
