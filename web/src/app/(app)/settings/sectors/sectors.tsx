@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Badge, Button, Card, Input, Select } from '@/components/ui';
 import { cn } from '@/lib/format';
-import { createSector, deleteSector, saveSector, setDefaultSector, type SectorInput } from '../actions';
+import { createSector, deleteSector, saveSector, setDefaultSector, type SectorInput } from '@/app/(app)/settings/actions/sectors';
 import { Row } from '../demand-settings';
 
 export type SectorRow = SectorInput & { id: string };

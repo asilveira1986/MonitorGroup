@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import type { Role } from '@/lib/types';
 import { ROLE_LABEL } from '@/lib/roles';
-import { updateUser } from '../actions';
+import { updateUser } from '@/app/(app)/settings/actions/users';
 
 /** Perfil do usuário: administrador, atendente ou somente ver painéis. */
 export function RoleSelect({ userId, role }: { userId: string; role: Role }) {

@@ -7,7 +7,7 @@ import { ActionForm } from '@/components/form-action';
 import { Badge, Button, Card, EmptyState, Field, Input, Select, SeverityBadge, Textarea, Toggle } from '@/components/ui';
 import { ALERT_TYPE_LABEL } from '@/lib/format';
 import type { AlertRule, AlertType } from '@/lib/types';
-import { deleteAlertRule, saveAlertRule, toggleAlertRule } from '../actions';
+import { deleteAlertRule, saveAlertRule, toggleAlertRule } from '@/app/(app)/settings/actions/alerts';
 
 const TYPE_INFO: Record<AlertType, { icon: typeof Clock; help: string }> = {
   no_response: { icon: Clock, help: 'Dispara quando um cliente fica sem resposta por mais tempo que o limite.' },

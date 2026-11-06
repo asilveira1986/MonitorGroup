@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Card, CardHeader, Select } from '@/components/ui';
 import type { AppSettings } from '@/lib/types';
-import { saveReplySettings } from './actions';
+import { saveReplySettings } from '@/app/(app)/settings/actions/replies';
 import { Row } from './demand-settings';
 
 export function ReplySettings({ settings, disabled }: { settings: AppSettings; disabled: boolean }) {

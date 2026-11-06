@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ActionForm } from '@/components/form-action';
 import { Button, Field, Input, Select, Toggle } from '@/components/ui';
 import type { AppSettings } from '@/lib/types';
-import { saveGeneralSettings } from './actions';
+import { saveGeneralSettings } from '@/app/(app)/settings/actions/company';
 
 const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const TIMEZONES = [

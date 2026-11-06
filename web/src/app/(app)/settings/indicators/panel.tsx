@@ -6,7 +6,8 @@ import { toast } from 'sonner';
 import { Badge, Button, Card, Input, Textarea, Toggle } from '@/components/ui';
 import { cn, timeAgo } from '@/lib/format';
 import type { BlockConfig, IndicatorConfig, ParamField } from '@/lib/indicators';
-import { resetIndicators, saveBusinessHours, setIndicatorBlockEnabled, updateIndicator } from '../actions';
+import { saveBusinessHours } from '@/app/(app)/settings/actions/company';
+import { resetIndicators, setIndicatorBlockEnabled, updateIndicator } from '@/app/(app)/settings/actions/indicators';
 
 export type BusinessHours = { days: number[]; start: string; end: string; holidays: number };
 

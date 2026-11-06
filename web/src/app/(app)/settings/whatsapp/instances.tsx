@@ -9,7 +9,7 @@ import { formatNumber, formatPhone, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import type { Instance } from '@/lib/types';
 import { useRealtime } from '@/lib/use-realtime';
-import { createInstance, deleteInstance, requestInstanceAction, setInstanceSector } from '../actions';
+import { createInstance, deleteInstance, requestInstanceAction, setInstanceSector } from '@/app/(app)/settings/actions/whatsapp';
 import { WorkerStatus } from './worker-status';
 
 const STATUS = {

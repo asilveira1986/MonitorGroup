@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Field, Input, Select } from '@/components/ui';
 import { randomPassword } from '@/lib/random-password';
-import { grantTeamMemberAccess } from '../actions';
+import { grantTeamMemberAccess } from '@/app/(app)/settings/actions/people';
 
 /**
  * Administrador: transforma a pessoa da equipe em usuário do sistema (e-mail + senha inicial),

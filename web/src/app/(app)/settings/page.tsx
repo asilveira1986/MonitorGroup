@@ -6,7 +6,7 @@ import { appSettings } from '@/lib/app-settings';
 import { currentCompany, requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { AppSettings } from '@/lib/types';
-import { prepareImageUpload, saveCompanyLogo } from './actions';
+import { prepareImageUpload, saveCompanyLogo } from '@/app/(app)/settings/actions/images';
 import { GeneralForm } from './general-form';
 import { Holidays } from './holidays';
 

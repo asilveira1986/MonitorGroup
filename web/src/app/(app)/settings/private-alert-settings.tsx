@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Card, CardHeader } from '@/components/ui';
 import type { AppSettings } from '@/lib/types';
-import { savePrivateAlertSettings } from './actions';
+import { savePrivateAlertSettings } from '@/app/(app)/settings/actions/alerts';
 import { Row } from './demand-settings';
 
 /** Avisos em tela das conversas privadas (0120): das minhas, das que aguardam, som e voz. */

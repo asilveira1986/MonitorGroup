@@ -4,7 +4,7 @@ import { CalendarOff } from 'lucide-react';
 import { ActionButton } from '@/components/action-button';
 import { ActionForm } from '@/components/form-action';
 import { Button, Card, CardHeader, Field, Input } from '@/components/ui';
-import { addHoliday, removeHoliday } from './actions';
+import { addHoliday, removeHoliday } from '@/app/(app)/settings/actions/company';
 
 const fmt = (day: string) =>
   new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(

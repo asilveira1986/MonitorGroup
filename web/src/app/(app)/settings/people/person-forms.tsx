@@ -8,7 +8,8 @@ import { FormDialog } from '@/components/disclosure';
 import { ActionForm } from '@/components/form-action';
 import { Button, Field, Input, Select, Toggle } from '@/components/ui';
 import { randomPassword } from '@/lib/random-password';
-import { addPerson, generateUserPassword, makeAttendant, updatePerson } from '../actions';
+import { addPerson, makeAttendant, updatePerson } from '@/app/(app)/settings/actions/people';
+import { generateUserPassword } from '@/app/(app)/settings/actions/users';
 
 export type SectorOption = { id: string; name: string };
 
