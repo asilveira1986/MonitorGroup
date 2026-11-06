@@ -90,8 +90,6 @@ export const SEVERITY_LABEL: Record<string, string> = {
   critical: 'Crítico',
 };
 
-export const secondsSince = (date: string) => (Date.now() - new Date(date).getTime()) / 1000;
-
 export const REMOVED_REASON_LABEL: Record<string, string> = {
   left: 'O número conectado saiu do grupo',
   removed: 'O número conectado foi removido do grupo',
