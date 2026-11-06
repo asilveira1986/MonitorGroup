@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Card, Field, Input, Textarea } from '@/components/ui';
-import { cn, formatPhone, formatTime, timeAgo } from '@/lib/format';
+import { CONTACT_INITIALS, cn, formatPhone, formatTime, initials, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import { useRealtime } from '@/lib/use-realtime';
 import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
@@ -66,14 +66,6 @@ const TYPE_LABEL: Record<string, string> = {
 
 const chatTitle = (c: Pick<PrivateChat, 'name' | 'phone' | 'jid'>) =>
   c.name || formatPhone(c.phone) || (c.jid.endsWith('@lid') ? 'Contato (sem número)' : c.jid.split('@')[0]);
-const initials = (s: string) =>
-  s
-    .split(/\s+/)
-    .filter((w) => /\p{L}/u.test(w[0] ?? ''))
-    .slice(0, 2)
-    .map((w) => w[0]!.toUpperCase())
-    .join('') || '#';
-
 /** Nova conversa: um contato do WhatsApp (busca) ou um número digitado. */
 function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string) => void }) {
   const [q, setQ] = useState('');
@@ -173,7 +165,7 @@ function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: 
                   onClick={() => open({ jid: c.jid, name: c.name ?? c.notify ?? undefined })}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-surface-2 disabled:opacity-60"
                 >
-                  <Avatar jid={c.photo} hasPhoto={Boolean(c.photo)} name={title} fallback={initials(title)} className="h-9 w-9 rounded-full bg-brand-soft text-xs text-brand-text" />
+                  <Avatar jid={c.photo} hasPhoto={Boolean(c.photo)} name={title} fallback={initials(title, CONTACT_INITIALS)} className="h-9 w-9 rounded-full bg-brand-soft text-xs text-brand-text" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{title}</span>
                     <span className="block truncate text-xs text-muted">
@@ -448,7 +440,7 @@ function ChatView({
         <button type="button" onClick={onBack} className="rounded-lg p-1 text-ink-2 hover:bg-surface-2 md:hidden" aria-label="Voltar para a lista">
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <Avatar jid={photo} hasPhoto={Boolean(photo)} name={title} fallback={initials(title)} className="h-10 w-10 rounded-full bg-brand-soft text-sm text-brand-text" />
+        <Avatar jid={photo} hasPhoto={Boolean(photo)} name={title} fallback={initials(title, CONTACT_INITIALS)} className="h-10 w-10 rounded-full bg-brand-soft text-sm text-brand-text" />
         <div className="min-w-0">
           <p className="truncate font-semibold">{title}</p>
           <p className="truncate text-xs text-muted">{chat.phone ? formatPhone(chat.phone) : 'número não informado pelo WhatsApp'}</p>
@@ -936,7 +928,7 @@ export function PrivateInbox({
                     jid={photos[c.id]}
                     hasPhoto={Boolean(photos[c.id])}
                     name={title}
-                    fallback={initials(title)}
+                    fallback={initials(title, CONTACT_INITIALS)}
                     className="h-10 w-10 rounded-full bg-brand-soft text-xs text-brand-text"
                   />
                   <span className="min-w-0 flex-1">

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Button, Card, CardHeader, Input } from '@/components/ui';
 import { DEFAULT_ACK_EXAMPLES, isAcknowledgement, isStickerOrEmoji, matchIgnorePhrase } from '@/lib/acknowledgement';
 import type { AppSettings } from '@/lib/types';
-import { saveIgnoreSettings } from './actions';
+import { saveIgnoreSettings } from '@/app/(app)/settings/actions/replies';
 import { Row } from './demand-settings';
 
 const SUGGESTIONS = ['obrigado pelo retorno', 'fico no aguardo', 'agradeço a atenção', 'bom dia', 'boa tarde', 'até mais'];

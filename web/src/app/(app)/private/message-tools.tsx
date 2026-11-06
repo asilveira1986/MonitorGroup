@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Lightbox } from '../groups/[id]/message-media';
 import { AudioPlayer } from '@/components/audio-player';
 import { Button, Textarea } from '@/components/ui';
-import { cn } from '@/lib/format';
+import { cn, formatSize } from '@/lib/format';
 import { requestPrivateAction } from './actions';
 
 export type PrivateMessageRow = {
@@ -41,9 +41,6 @@ export type PrivateReaction = { id: string; message_id: string; reactor_jid: str
 const QUICK = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 const EDIT_MS = 15 * 60_000;
 const DELETE_MS = 2 * 86_400_000;
-
-const formatSize = (bytes: number | null | undefined) =>
-  bytes == null ? '' : bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 /** Imagem, figurinha, áudio, vídeo ou documento guardado da mensagem privada. */
 export function PrivateMedia({ message: m }: { message: PrivateMessageRow }) {

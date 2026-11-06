@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui';
 import type { RecalcSummary } from '@/lib/recalc-groups';
-import { recalcGroups, recalcGroupsBatch, recalcGroupsFinish, recalcGroupsStart } from '../actions';
+import { recalcGroups, recalcGroupsBatch, recalcGroupsFinish, recalcGroupsStart } from '@/app/(app)/settings/actions/people';
 
 const BATCH = 20;
 

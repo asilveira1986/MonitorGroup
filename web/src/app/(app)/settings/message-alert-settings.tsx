@@ -7,7 +7,7 @@ import { TEST_EVENT } from '@/components/message-notifier';
 import { Button, Card, CardHeader, Select } from '@/components/ui';
 import { playAlertSound, SOUND_LABEL } from '@/lib/sounds';
 import type { AppSettings } from '@/lib/types';
-import { saveMessageAlertSettings } from './actions';
+import { saveMessageAlertSettings } from '@/app/(app)/settings/actions/alerts';
 import { Row } from './demand-settings';
 
 const AUTO_CLOSE_OPTIONS = [5, 10, 15, 30, 60, 120, 300];

@@ -4,7 +4,7 @@ import { BellRing } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/format';
-import { setMemberAlertsOwnGroups } from '../actions';
+import { setMemberAlertsOwnGroups } from '@/app/(app)/settings/actions/people';
 
 /**
  * Administrador: a pessoa recebe os avisos (tela, voz, WhatsApp e e-mail) só dos grupos em que é

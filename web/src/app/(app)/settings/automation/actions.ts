@@ -1,12 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import type { ActionResult as Result } from '@/lib/action-result';
 import { requireAdmin, requireProfile } from '@/lib/auth';
 import { validateGroupIds, validateRuleInput, type RuleInput, type RuleValues } from '@/lib/automation-rules';
 import { friendlyDbError } from '@/lib/db-errors';
 import { createClient } from '@/lib/supabase/server';
-
-type Result = { ok: true } | { ok: false; error: string };
 
 /** Campo do formulário -> coluna de automation_rules (0144). */
 const COLUMNS: Record<keyof RuleValues, string> = {

@@ -90,22 +90,6 @@ export const SEVERITY_LABEL: Record<string, string> = {
   critical: 'Crítico',
 };
 
-/** Meia-noite (no fuso informado) de `daysBack` dias atrás, como Date em UTC. */
-export function startOfDayInTz(timeZone: string, daysBack = 0): Date {
-  const now = new Date();
-  const ymd = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-  const offset =
-    new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })
-      .formatToParts(now)
-      .find((p) => p.type === 'timeZoneName')
-      ?.value.replace('GMT', '') || '+00:00';
-  const midnight = new Date(`${ymd}T00:00:00${offset === '' ? '+00:00' : offset}`);
-  midnight.setUTCDate(midnight.getUTCDate() - daysBack);
-  return midnight;
-}
-
-export const secondsSince = (date: string) => (Date.now() - new Date(date).getTime()) / 1000;
-
 export const REMOVED_REASON_LABEL: Record<string, string> = {
   left: 'O número conectado saiu do grupo',
   removed: 'O número conectado foi removido do grupo',
@@ -130,3 +114,25 @@ export function demandsEnabled(
   return Boolean(s.demand_manual_enabled || s.demand_command_enabled || s.demand_keyword_enabled || s.demand_ai_enabled || s.demand_commitment_enabled,
   );
 }
+
+/** Tamanho de arquivo para a tela: "320 KB" ou "4.2 MB". Vazio quando não se sabe. */
+export const formatSize = (bytes: number | null | undefined) =>
+  bytes == null ? '' : bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+/**
+ * Iniciais (até 2) de um nome, para o avatar sem foto. `lettersOnly` ignora palavras que não começam com letra
+ * (ex.: "+55", "(11)"); `fallback` é o que mostrar quando não sobra nenhuma letra.
+ */
+export function initials(name: string, opts: { lettersOnly?: boolean; fallback?: string } = {}): string {
+  const { lettersOnly = false, fallback = '?' } = opts;
+  const words = name.split(/\s+/).filter((w) => (lettersOnly ? /\p{L}/u.test(w[0] ?? '') : Boolean(w)));
+  return (
+    words
+      .slice(0, 2)
+      .map((w) => w[0]!.toUpperCase())
+      .join('') || fallback
+  );
+}
+
+/** Iniciais de contatos e conversas: só letras, "#" quando o nome é só um número. */
+export const CONTACT_INITIALS = { lettersOnly: true, fallback: '#' } as const;

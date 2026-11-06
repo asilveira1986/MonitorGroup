@@ -1,5 +1,6 @@
 import { History } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui';
+import { appSettings } from '@/lib/app-settings';
 import { requireAdmin } from '@/lib/auth';
 import { formatDateTime } from '@/lib/format';
 import type { BlockConfig, IndicatorConfig } from '@/lib/indicators';
@@ -61,7 +62,7 @@ export default async function IndicatorsSettingsPage() {
       .in('table_name', ['indicators', 'indicator_blocks', 'company_indicators', 'company_indicator_blocks', 'app_settings', 'holidays'])
       .order('changed_at', { ascending: false })
       .limit(30),
-    supabase.from('app_settings').select('business_days, business_start, business_end').single(),
+    appSettings(),
     supabase.from('holidays').select('day', { count: 'exact', head: true }),
   ]);
 

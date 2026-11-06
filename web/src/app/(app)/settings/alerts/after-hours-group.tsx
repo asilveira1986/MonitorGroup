@@ -4,7 +4,7 @@ import { Moon, Save, Send } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Card, CardHeader, Field, Input, Select, Toggle } from '@/components/ui';
-import { saveAfterHoursAlertGroup, testAfterHoursAlertGroup, testAfterHoursAlertGroupStatus } from '../actions';
+import { saveAfterHoursAlertGroup, testAfterHoursAlertGroup, testAfterHoursAlertGroupStatus } from '@/app/(app)/settings/actions/alerts';
 
 /**
  * Grupo de alertas fora do expediente (0139): quando o tempo de resposta (SLA) de um grupo estoura fora

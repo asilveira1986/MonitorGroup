@@ -4,15 +4,8 @@ import { KeyRound, Wand2, X } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Field, Input, Select } from '@/components/ui';
-import { grantTeamMemberAccess } from '../actions';
-
-/** Senha inicial aleatória, fácil de ditar (sem caracteres parecidos). */
-function randomPassword() {
-  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  const buf = new Uint32Array(10);
-  crypto.getRandomValues(buf);
-  return Array.from(buf, (n) => chars[n % chars.length]).join('');
-}
+import { randomPassword } from '@/lib/random-password';
+import { grantTeamMemberAccess } from '@/app/(app)/settings/actions/people';
 
 /**
  * Administrador: transforma a pessoa da equipe em usuário do sistema (e-mail + senha inicial),

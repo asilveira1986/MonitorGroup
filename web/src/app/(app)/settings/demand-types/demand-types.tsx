@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Card, CardHeader, Input } from '@/components/ui';
-import { saveDemandTypes } from '../actions';
+import { saveDemandTypes } from '@/app/(app)/settings/actions/demand-types';
 
 export type DemandType = { name: string; keywords: string[] };
 type Row = DemandType & { key: number; orig: string | null; draft: string };

@@ -1,4 +1,5 @@
 import { AdminNotice } from '@/components/admin-notice';
+import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { AppSettings, Instance } from '@/lib/types';
@@ -10,7 +11,7 @@ export default async function WhatsAppSettingsPage() {
   const supabase = await createClient();
   const [{ data }, { data: settings }, { data: usage }, { data: sectors }] = await Promise.all([
     supabase.from('whatsapp_instances').select('*').order('created_at'),
-    supabase.from('app_settings').select('*').single(),
+    appSettings(),
     supabase.rpc('media_usage'),
     supabase.from('sectors').select('id, name').order('name'),
   ]);

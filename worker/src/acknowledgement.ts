@@ -1,3 +1,5 @@
+// CÓPIA IDÊNTICA: este arquivo existe também em worker/src/acknowledgement.ts e web/src/lib/acknowledgement.ts (o painel e o worker são
+// implantados separadamente). Altere nos dois lugares: o teste worker/src/acknowledgement.test.ts falha se divergirem.
 /**
  * Mensagens a ignorar: agradecimentos e confirmações do cliente ("ok", "obrigado", 👍) que não
  * pedem resposta. Além da lista padrão, cada empresa cadastra as próprias frases

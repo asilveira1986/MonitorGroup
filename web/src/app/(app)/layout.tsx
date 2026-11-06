@@ -3,6 +3,7 @@ import { MessageNotifier } from '@/components/message-notifier';
 import { PresenceProvider } from '@/components/presence';
 import { RealtimeListener } from '@/components/realtime-listener';
 import { Sidebar } from '@/components/sidebar';
+import { appSettings } from '@/lib/app-settings';
 import { currentCompany, requireProfile } from '@/lib/auth';
 import { demandsEnabled } from '@/lib/format';
 import { canSeeMenu, MENU_ITEMS } from '@/lib/menu';
@@ -16,11 +17,8 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     supabase.from('pending_queue').select('id', { count: 'exact', head: true }),
     supabase.from('alerts').select('id', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', ['aberta', 'em_andamento']),
-    supabase
-      .from('app_settings')
-      // tudo da linha: coluna nova que ainda não existe no banco não derruba a consulta
-      .select('*')
-      .maybeSingle(),
+    // a mesma leitura serve aos menus e à página (uma por requisição); lê a linha inteira
+    appSettings(),
     currentCompany(),
     // quem administra a plataforma troca de empresa pelo topo
     profile.platform_admin

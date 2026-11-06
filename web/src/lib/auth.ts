@@ -1,3 +1,4 @@
+import { appSettings } from '@/lib/app-settings';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
@@ -60,8 +61,7 @@ export async function requireAdmin(): Promise<Profile> {
 
 /** Configuração dos menus da empresa (Configurações › Menus). */
 export const menuConfig = cache(async (): Promise<Record<string, unknown>> => {
-  const supabase = await createClient();
-  const { data } = await supabase.from('app_settings').select('menu_access').maybeSingle();
+  const { data } = await appSettings();
   return (data?.menu_access as Record<string, unknown> | null) ?? {};
 });
 

@@ -2,6 +2,7 @@ import { AlertTriangle } from 'lucide-react';
 import type { Metadata } from 'next';
 import { AdminNotice } from '@/components/admin-notice';
 import { Card, EmptyState } from '@/components/ui';
+import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { AutomationPanel, type AutomationMetrics, type MemberOption, type PendingItem, type RuleItem } from './automation-panel';
@@ -18,7 +19,7 @@ export default async function AutomationPage() {
   const supabase = await createClient();
   const [settings, rules, pending, metrics, groups, sectors, team] = await Promise.all([
     // sem o script do banco (0145) a coluna não existe: a chave geral aparece desligada
-    supabase.from('app_settings').select('*').maybeSingle(),
+    appSettings(),
     supabase.from('automation_rules').select('*, groups(name, sector_id)').order('created_at'),
     supabase.from('automation_pending').select('*, groups(name)').is('resolved_at', null).order('received_at'),
     supabase.rpc('automation_metrics', { p_days: 30 }),

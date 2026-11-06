@@ -1,3 +1,4 @@
+import { appSettings } from '@/lib/app-settings';
 import { requireMenu } from '@/lib/auth';
 import { AlertOctagon, CheckCheck, Hourglass, PartyPopper, UserCheck } from 'lucide-react';
 import Link from 'next/link';
@@ -14,7 +15,7 @@ export default async function PendingPage() {
   const supabase = await createClient();
   const [{ data }, { data: settings }] = await Promise.all([
     supabase.from('pending_queue').select('*'),
-    supabase.from('app_settings').select('timezone').single(),
+    appSettings(),
   ]);
   const items = (data ?? []) as PendingItem[];
   // responsáveis da equipe por grupo (0056)

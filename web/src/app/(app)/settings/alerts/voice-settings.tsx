@@ -15,7 +15,7 @@ import {
   type VoiceEvent,
   type VoiceOptions,
 } from '@/lib/voice';
-import { saveVoiceSettings } from '../actions';
+import { saveVoiceSettings } from '@/app/(app)/settings/actions/alerts';
 
 export type VoiceSettingsValue = {
   voice: boolean;

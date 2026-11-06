@@ -1,3 +1,4 @@
+import { appSettings } from '@/lib/app-settings';
 import { createClient } from '@/lib/supabase/server';
 
 /** Períodos de vários dias (dias para trás a partir de hoje). */
@@ -54,7 +55,7 @@ export type Comparison = { from: string; to: string; label: string };
 export async function loadIndicatorFilters(sp: Record<string, unknown>, opts: { defaultPeriod?: string } = {}) {
   const supabase = await createClient();
   const [{ data: settings }, { data: groups }, { data: members }] = await Promise.all([
-    supabase.from('app_settings').select('timezone').single(),
+    appSettings(),
     supabase.from('groups').select('id, name').eq('monitored', true).is('removed_at', null).order('name'),
     supabase.from('team_members').select('id, name').eq('active', true).order('name'),
   ]);

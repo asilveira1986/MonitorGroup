@@ -5,7 +5,7 @@ import { CallPrivateButton } from '../../private/call-private';
 import { useState } from 'react';
 import { Card, CardHeader } from '@/components/ui';
 import { Avatar } from '@/components/avatar';
-import { cn, formatPhone, timeAgo } from '@/lib/format';
+import { cn, formatPhone, initials, timeAgo } from '@/lib/format';
 
 export type GroupMember = {
   jid: string;
@@ -22,14 +22,6 @@ export type GroupMember = {
   /** o worker guardou a foto de perfil */
   has_avatar?: boolean;
 };
-
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]!.toUpperCase())
-    .join('');
 
 /**
  * Membros do grupo (lista do próprio WhatsApp, atualizada pelo worker quando alguém entra ou sai):
@@ -98,7 +90,7 @@ export function GroupMembers({
                       m.team || m.is_me ? 'bg-deep text-on-deep' : 'bg-brand-soft text-brand-text',
                     )}
                     fallback={
-                      m.is_me ? <Smartphone className="h-3.5 w-3.5" /> : initials(m.name || label) || <Users className="h-3.5 w-3.5" />
+                      m.is_me ? <Smartphone className="h-3.5 w-3.5" /> : initials(m.name || label, { fallback: '' }) || <Users className="h-3.5 w-3.5" />
                     }
                   />
                   <div className="min-w-0 flex-1">

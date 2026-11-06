@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/format';
 import type { MenuAccess } from '@/lib/menu';
-import { saveMenuAccess } from '../actions';
+import { saveMenuAccess } from '@/app/(app)/settings/actions/menus';
 
 const ICONS: Record<string, LucideIcon> = {
   '/dashboard': LayoutDashboard,

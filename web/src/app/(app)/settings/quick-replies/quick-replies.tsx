@@ -5,7 +5,7 @@ import { useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Card, CardHeader, EmptyState, Input, Select, Textarea } from '@/components/ui';
 import { greeting, normalizeShortcut, QUICK_REPLY_VARIABLES, renderQuickReply, type QuickReply } from '@/lib/quick-replies';
-import { deleteQuickReply, saveClosingShortcut, saveQuickReply } from '../actions';
+import { deleteQuickReply, saveClosingShortcut, saveQuickReply } from '@/app/(app)/settings/actions/replies';
 
 const EMPTY = { id: null as string | null, shortcut: '', title: '', body: '' };
 const SAMPLE = { cliente: 'Carla', grupo: 'Vendas SP', atendente: 'Ana Souza' };

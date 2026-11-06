@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DemandStatusBadge } from '@/components/demands/status';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
+import { appSettings } from '@/lib/app-settings';
 import { requireMenu } from '@/lib/auth';
 import { agendaColor, type AgendaType } from '@/lib/agenda-colors';
 import { cn, formatTime } from '@/lib/format';
@@ -62,7 +63,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const [{ data: myIdsRaw }, { data: team }, { data: settings }, { data: peopleRaw }, { data: teamsRaw }, { data: typesRaw }] = await Promise.all([
     supabase.rpc('my_team_member_ids'),
     supabase.from('team_members').select('id, name, active').order('name'),
-    supabase.from('app_settings').select('timezone').maybeSingle(),
+    appSettings(),
     // usuários da empresa (agenda por usuário, 0097) e os setores
     supabase.rpc('agenda_people'),
     // setores (0107: os mesmos Setores dos grupos), com as pessoas de cada um

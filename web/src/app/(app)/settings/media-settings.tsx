@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Button, Card, CardHeader, Select } from '@/components/ui';
 import { cn } from '@/lib/format';
 import type { AppSettings } from '@/lib/types';
-import { saveMediaSettings } from './actions';
+import { saveMediaSettings } from '@/app/(app)/settings/actions/whatsapp';
 import { Row } from './demand-settings';
 
 const TYPES = [

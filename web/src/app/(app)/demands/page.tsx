@@ -1,6 +1,7 @@
 import { ClipboardList } from 'lucide-react';
 import Link from 'next/link';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
+import { appSettings } from '@/lib/app-settings';
 import { requireMenu } from '@/lib/auth';
 import { DEFAULT_DEMAND_TYPES, demandsEnabled } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
@@ -39,12 +40,7 @@ export default async function DemandsPage({ searchParams }: PageProps<'/demands'
       query,
       supabase.from('groups').select('id, name').eq('monitored', true).is('removed_at', null).order('name'),
       supabase.from('team_members').select('id, name').eq('active', true).order('name'),
-      supabase
-        .from('app_settings')
-        .select(
-          'timezone, demand_manual_enabled, demand_command_enabled, demand_keyword_enabled, demand_ai_enabled, demand_commitment_enabled',
-        )
-        .single(),
+      appSettings(),
       supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
       supabase.from('demands').select('id', { count: 'exact', head: true }).in('status', STATUS_FILTER.open),
       supabase.rpc('my_permissions'),

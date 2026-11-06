@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { AdminNotice } from '@/components/admin-notice';
+import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { AlertRule } from '@/lib/types';
@@ -20,7 +21,7 @@ export default async function AlertRulesPage({ searchParams }: PageProps<'/setti
     // o grupo de alertas fora do expediente pode ser um grupo sem monitoramento (0139)
     supabase.from('groups').select('id, name').is('removed_at', null).order('name'),
     // sem o script do banco (0139) a coluna não existe: segue sem o grupo escolhido
-    supabase.from('app_settings').select('*').maybeSingle(),
+    appSettings(),
   ]);
   const afterHoursSettings = (settings ?? {}) as { after_hours_alert_group_id?: string | null; after_hours_alert_minutes?: number | null; after_hours_alert_enabled?: boolean | null };
   const afterHours = afterHoursSettings.after_hours_alert_group_id ?? null;

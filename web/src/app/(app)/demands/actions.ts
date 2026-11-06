@@ -1,11 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import type { ActionResult as Result } from '@/lib/action-result';
 import { requireAdmin, requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { DemandStatus } from '@/lib/types';
 
-type Result = { ok: true } | { ok: false; error: string };
 const result = (error: { message: string } | null | undefined): Result =>
   error ? { ok: false, error: error.message } : { ok: true };
 

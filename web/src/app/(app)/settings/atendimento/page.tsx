@@ -1,6 +1,6 @@
 import { AdminNotice } from '@/components/admin-notice';
+import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
-import { createClient } from '@/lib/supabase/server';
 import type { AppSettings } from '@/lib/types';
 import { IgnoreSettings } from '../ignore-settings';
 import { ReplySettings } from '../reply-settings';
@@ -11,8 +11,7 @@ export const maxDuration = 60;
 /** Atendimento › Respostas e mensagens: responder pelo sistema e as mensagens a ignorar. */
 export default async function ServiceSettingsPage() {
   const profile = await requireProfile();
-  const supabase = await createClient();
-  const { data } = await supabase.from('app_settings').select('*').single();
+  const { data } = await appSettings();
   const disabled = profile.role !== 'admin';
   return (
     <div className="space-y-4">

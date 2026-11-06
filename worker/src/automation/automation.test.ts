@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { formatWait } from '../duration.js';
 import { isBusinessHours } from './hours.js';
 import { createSender } from './sender.js';
 import {
   createAutomation,
   createBotRegistry,
   escalationText,
-  formatWait,
   messagePreview,
   type AutomationMessage,
 } from './service.js';

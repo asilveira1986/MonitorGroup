@@ -3,13 +3,11 @@
 import { createECDH } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
+import { dbResult as result, type ActionResult as Result } from '@/lib/action-result';
 import { requireProfile } from '@/lib/auth';
 import { friendlyDbError } from '@/lib/db-errors';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 
-type Result = { ok: true } | { ok: false; error: string };
-const result = (error: { message: string } | null | undefined): Result =>
-  error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };
 
 const IMAGE_TYPES: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
 
