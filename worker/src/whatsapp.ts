@@ -123,7 +123,7 @@ type OutgoingRow = {
 const FORWARDED = { isForwarded: true, forwardingScore: 1 };
 
 /** Conteúdo de um arquivo guardado no Storage, pronto para o WhatsApp (imagem, vídeo, áudio, documento). */
-async function mediaContent(type: string, buffer: Buffer, mimetype: string, opts: { caption?: string; fileName?: string | null; voice?: boolean }) {
+export async function mediaContent(type: string, buffer: Buffer, mimetype: string, opts: { caption?: string; fileName?: string | null; voice?: boolean }) {
   if (type === 'image') return { image: buffer, caption: opts.caption, mimetype };
   if (type === 'video') return { video: buffer, caption: opts.caption, mimetype };
   if (type === 'audio') return audioContent(buffer, mimetype, Boolean(opts.voice));
@@ -253,6 +253,17 @@ export class WhatsAppManager {
 
   setAutomation(automation: AutomationService) {
     this.automation = automation;
+  }
+
+  /** Disparos em massa (0150): o eco das mensagens enviadas por eles não conta como resposta da equipe. */
+  private broadcast: {
+    isBotMessage(id: string | null | undefined): boolean;
+    handleIncoming(info: { instanceId: string; jid: string; alt: string | null; name: string | null; text: string | null }): Promise<void>;
+    handleStatus(waMessageId: string, status: number): Promise<void>;
+  } | null = null;
+
+  setBroadcast(broadcast: NonNullable<WhatsAppManager['broadcast']>) {
+    this.broadcast = broadcast;
   }
 
   /** Pesquisa de encerramento (0149): enquete ao cliente depois do fechamento e ações conforme a resposta. */
@@ -798,6 +809,8 @@ export class WhatsAppManager {
     sock.ev.on('messages.update', (updates) => {
       for (const { key, update } of updates) {
         if (!key.fromMe || !key.id || !key.remoteJid || typeof update.status !== 'number') continue;
+        // entregue / lida: o relatório dos disparos (só mexe em mensagens que um disparo enviou)
+        if (this.broadcast && update.status >= 3) void this.broadcast.handleStatus(key.id, update.status);
         if (isPrivateJid(key.remoteJid)) {
           void db
             .from('private_messages')
@@ -1029,13 +1042,31 @@ export class WhatsAppManager {
     const jid = msg.key.remoteJid;
     if (!jid || !msg.message) return;
     // mensagem enviada pela própria automação (acuse, aviso, cobrança): não entra como resposta da equipe
-    if (this.automation?.isBotMessage(msg.key.id) || this.closing?.isBotMessage(msg.key.id)) return;
+    if (this.automation?.isBotMessage(msg.key.id) || this.closing?.isBotMessage(msg.key.id) || this.broadcast?.isBotMessage(msg.key.id)) return;
     if (msg.message.pollUpdateMessage) {
       if (isJidGroup(jid)) await this.handlePollVote(session, msg);
       return;
     }
     if (!isJidGroup(jid)) {
-      if (isPrivateJid(jid)) await this.handlePrivateMessage(session, msg, false);
+      if (isPrivateJid(jid)) {
+        // "SAIR" em resposta a um disparo: a pessoa entra na lista de quem não recebe (0151)
+        // e qualquer resposta a um disparo recente entra no relatório
+        if (this.broadcast && !msg.key.fromMe) {
+          const content = extractContent(msg.message);
+          if (content) {
+            void this.broadcast
+              .handleIncoming({
+                instanceId: session.instanceId,
+                jid,
+                alt: (msg.key as { remoteJidAlt?: string }).remoteJidAlt ?? null,
+                name: msg.pushName ?? null,
+                text: content.type === 'text' ? content.body : null,
+              })
+              .catch((err) => logger.warn({ err }, 'falha ao conferir resposta ou pedido de saída dos disparos'));
+          }
+        }
+        await this.handlePrivateMessage(session, msg, false);
+      }
       return;
     }
     const reaction = reactionOf(msg.message);

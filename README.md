@@ -9,6 +9,7 @@ Sistema web que acompanha as mensagens recebidas e enviadas nos grupos de WhatsA
 - **Indicadores configuráveis**: o dashboard é montado a partir de um catálogo de indicadores agrupados em blocos. Em **Configurações › Indicadores** (só administradores) é possível ligar/desligar cada indicador ou bloco, ligar/desligar o alerta, editar os parâmetros e restaurar o padrão. As mudanças valem na hora para todos e ficam registradas (quem e quando). Desligar não apaga dados.
 - **Importação do histórico**: ao ler o QR code, as mensagens anteriores dos grupos monitorados (padrão: últimos 30 dias, só texto) são importadas em segundo plano e as métricas do período já aparecem no dashboard. Para um número já conectado, use **Configurações › WhatsApp › Conexão e arquivos › Importar histórico** (gera um novo QR code, pois o WhatsApp só envia o histórico na conexão). A conversa de cada grupo carrega 50 mensagens por vez ao rolar.
 - **Grupos excluídos**: quando o número conectado sai ou é removido de um grupo, ou o grupo é apagado no celular, ele vai para a aba **Grupos › Excluídos**, sai da fila e dos alertas, mas o histórico continua disponível. O administrador pode excluí-lo definitivamente de lá. Se o número voltar ao grupo, ele é reativado sozinho.
+- **Disparos** (menu **Disparos**, por enquanto visível só para o administrador geral da plataforma): envia uma mensagem para vários grupos ou pessoas de uma vez, por **etiqueta** (qualquer uma ou todas, excluindo outras), **setor**, **escolha manual** ou todos. Em grupos vai a mensagem do grupo; em pessoas, uma mensagem individual a cada contato (com `{primeiro_nome}`, `{nome}`, `{grupo}`). Você confere e desmarca a lista antes, envia agora ou agenda, e acompanha o andamento, as falhas e pode pausar, retomar ou cancelar. Também aceita **imagem, vídeo, documento ou áudio**, **variações do texto** (cada pessoa recebe uma sorteada), **números importados por CSV**, **públicos salvos** e **janela de dias e horários** de envio; as falhas podem ser **reenviadas** e quem responde **SAIR** (ou é cadastrado à mão) fica fora de todos os públicos. Dá para **repetir** o disparo (todo dia, toda semana ou todo mês, com o público refeito a cada envio), filtrar quem está **sem conversa há X dias** (aviso automático para grupos parados, por exemplo) e acompanhar um **relatório** de enviados, entregues, lidos e respostas. O envio segue um **ritmo configurável** (intervalo aleatório entre mensagens, pausa a cada lote e limite em 24 h por número) para proteger o número do bloqueio.
 - **Login** com e-mail e senha cadastrados por um administrador. Só entra quem foi autorizado.
 - Tudo roda na nuvem: o navegador é o único programa necessário.
 
@@ -189,6 +190,9 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    147. `supabase/migrations/0147_group_mentions.sql`
    148. `supabase/migrations/0148_alerts_open_index.sql`
    149. `supabase/migrations/0149_closing_flows.sql`
+   150. `supabase/migrations/0150_broadcasts.sql`
+   151. `supabase/migrations/0151_broadcasts_phase2.sql`
+   152. `supabase/migrations/0152_broadcasts_phase3.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key
