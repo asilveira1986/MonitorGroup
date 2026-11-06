@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Bell, BookUser, Building2, CalendarDays, ChevronDown, MessageCircle, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
+import { Activity, Bell, BookUser, Building2, CalendarDays, MessageCircle, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';

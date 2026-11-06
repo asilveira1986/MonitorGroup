@@ -44,12 +44,6 @@ export const DEFAULT_TEMPLATES: Record<VoiceEvent, string> = {
   alert: 'Alerta: {tipo}, no grupo {grupo}.',
 };
 
-export const VOICE_EVENT_LABEL: Record<VoiceEvent, string> = {
-  message: 'Mensagem nova',
-  sla: 'SLA excedido',
-  alert: 'Alertas das regras',
-};
-
 /** Frase configurada (ou a padrão) do aviso. */
 export const templateFor = (options: VoiceOptions | null | undefined, event: VoiceEvent) =>
   options?.templates?.[event]?.trim() || DEFAULT_TEMPLATES[event];

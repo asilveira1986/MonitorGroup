@@ -90,20 +90,6 @@ export const SEVERITY_LABEL: Record<string, string> = {
   critical: 'Crítico',
 };
 
-/** Meia-noite (no fuso informado) de `daysBack` dias atrás, como Date em UTC. */
-export function startOfDayInTz(timeZone: string, daysBack = 0): Date {
-  const now = new Date();
-  const ymd = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-  const offset =
-    new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })
-      .formatToParts(now)
-      .find((p) => p.type === 'timeZoneName')
-      ?.value.replace('GMT', '') || '+00:00';
-  const midnight = new Date(`${ymd}T00:00:00${offset === '' ? '+00:00' : offset}`);
-  midnight.setUTCDate(midnight.getUTCDate() - daysBack);
-  return midnight;
-}
-
 export const secondsSince = (date: string) => (Date.now() - new Date(date).getTime()) / 1000;
 
 export const REMOVED_REASON_LABEL: Record<string, string> = {

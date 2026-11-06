@@ -163,19 +163,6 @@ export async function deleteAlertRule(id: string): Promise<Result> {
   return result(error);
 }
 
-// --------------------------------------------------------------- Equipe
-export async function addTeamMember(form: FormData): Promise<Result> {
-  const profile = await requireProfile();
-  const supabase = await createClient();
-  const phone = String(form.get('phone') ?? '').replace(/\D/g, '');
-  if (!phone) return { ok: false, error: 'Informe o telefone com DDI e DDD (ex.: 5511999998888).' };
-  const { error } = await supabase.from('team_members').insert({ name: String(form.get('name') || phone), phone });
-  // mensagens antigas da pessoa passam a contar como da equipe
-  if (!error) await recalcCompanyGroups(profile.company_id);
-  revalidatePath('/', 'layout');
-  return result(error);
-}
-
 /** Mensagens a ignorar: agradecimentos, figurinha/emoji e frases da empresa. */
 export async function saveIgnoreSettings(values: {
   acknowledgements: boolean;
@@ -377,28 +364,6 @@ export async function setMemberAlertsOwnGroups(id: string, only: boolean): Promi
 }
 
 // --------------------------------------------------------------- Usuários
-export async function addAllowedEmail(form: FormData): Promise<Result> {
-  const admin = await requireAdmin();
-  const supabase = await createClient();
-  const email = String(form.get('email') ?? '').trim().toLowerCase();
-  const raw = form.get('role');
-  const role = raw === 'admin' || raw === 'viewer' || raw === 'agenda' ? raw : 'agent';
-  const password = String(form.get('password') ?? '');
-  const name = String(form.get('full_name') ?? '').trim();
-  // o acesso é só por e-mail e senha: a senha inicial é obrigatória; o usuário fica na empresa de quem cadastra
-  const res = await createCompanyUser({
-    companyId: admin.company_id!,
-    email,
-    password,
-    role,
-    name,
-    createdBy: admin.id,
-  });
-  if (!res.ok) return { ok: false, error: friendlyDbError(res.error) };
-  revalidatePath('/settings/people');
-  return { ok: true };
-}
-
 export async function removeAllowedEmail(email: string): Promise<Result> {
   const admin = await requireAdmin();
   if (email === admin.email) return { ok: false, error: 'Você não pode remover o seu próprio acesso.' };

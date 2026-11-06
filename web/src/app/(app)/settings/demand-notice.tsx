@@ -51,8 +51,6 @@ const KINDS = {
 } as const;
 export type NoticeKind = keyof typeof KINDS;
 
-export const DEFAULT_DEMAND_NOTICE = KINDS.created.template;
-
 const SAMPLE: Record<string, string> = {
   numero: '128',
   demanda: 'Enviar a segunda via do boleto de outubro',

@@ -4,7 +4,7 @@ import { Bell, CalendarClock, Check, Clock, Pencil, Plus, Repeat, RotateCcw, Sti
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Button, Field, Input, Select, Textarea, Toggle } from '@/components/ui';
+import { Button, Field, Input, Select, Textarea } from '@/components/ui';
 import { AGENDA_COLORS, agendaColor, type AgendaType } from '@/lib/agenda-colors';
 import { createAgendaEvent, deleteAgendaEvent, setAgendaEventDone, updateAgendaEvent, type RepeatRule } from './actions';
 
