@@ -178,6 +178,17 @@ export function createSupabaseBroadcastStore(): BroadcastStore {
       must(error, 'pause');
     },
 
+    async spawnDue() {
+      const { data, error } = await db.rpc('broadcast_spawn_due');
+      must(error, 'spawn due');
+      return Number(data ?? 0);
+    },
+
+    async track(waMessageId, status) {
+      const { error } = await db.rpc('broadcast_track', { p_wa_message_id: waMessageId, p_status: status });
+      must(error, 'track');
+    },
+
     async failStuck() {
       const { data, error } = await db
         .from('broadcast_recipients')

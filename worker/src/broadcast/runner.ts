@@ -45,6 +45,10 @@ export function createBroadcast(deps: BroadcastDeps) {
   const fails = new Map<string, number>();
   let timer: ReturnType<typeof setInterval> | null = null;
   let busy = false;
+  /** disparos recorrentes: confere a cada 30 s (o banco só cria o que chegou na hora) */
+  const SPAWN_EVERY_MS = 30_000;
+  let lastSpawnCheck = 0;
+  let spawnWarned = false;
 
   /** arquivo de cada campanha em memória (baixa do Storage uma vez só) */
   const mediaCache = new Map<string, Buffer>();
@@ -166,6 +170,19 @@ export function createBroadcast(deps: BroadcastDeps) {
     if (busy) return;
     busy = true;
     try {
+      if (now() - lastSpawnCheck >= SPAWN_EVERY_MS) {
+        lastSpawnCheck = now();
+        // sem o script 0152 a função não existe: os disparos comuns seguem funcionando
+        await store.spawnDue().then(
+          (n) => n > 0 && logger.info({ n }, 'disparos recorrentes criados'),
+          (err) => {
+            if (!spawnWarned) {
+              spawnWarned = true;
+              logger.warn({ err }, 'não foi possível criar os disparos recorrentes (script 0152 rodado?)');
+            }
+          },
+        );
+      }
       await store.startDue(new Date(now()));
       const sentToday = new Map<string, number>();
       for (const c of await store.listRunning()) {

@@ -259,6 +259,7 @@ export class WhatsAppManager {
   private broadcast: {
     isBotMessage(id: string | null | undefined): boolean;
     handleIncoming(info: { instanceId: string; jid: string; alt: string | null; name: string | null; text: string | null }): Promise<void>;
+    handleStatus(waMessageId: string, status: number): Promise<void>;
   } | null = null;
 
   setBroadcast(broadcast: NonNullable<WhatsAppManager['broadcast']>) {
@@ -808,6 +809,8 @@ export class WhatsAppManager {
     sock.ev.on('messages.update', (updates) => {
       for (const { key, update } of updates) {
         if (!key.fromMe || !key.id || !key.remoteJid || typeof update.status !== 'number') continue;
+        // entregue / lida: o relatório dos disparos (só mexe em mensagens que um disparo enviou)
+        if (this.broadcast && update.status >= 3) void this.broadcast.handleStatus(key.id, update.status);
         if (isPrivateJid(key.remoteJid)) {
           void db
             .from('private_messages')
@@ -1047,18 +1050,19 @@ export class WhatsAppManager {
     if (!isJidGroup(jid)) {
       if (isPrivateJid(jid)) {
         // "SAIR" em resposta a um disparo: a pessoa entra na lista de quem não recebe (0151)
+        // e qualquer resposta a um disparo recente entra no relatório
         if (this.broadcast && !msg.key.fromMe) {
           const content = extractContent(msg.message);
-          if (content?.type === 'text') {
+          if (content) {
             void this.broadcast
               .handleIncoming({
                 instanceId: session.instanceId,
                 jid,
                 alt: (msg.key as { remoteJidAlt?: string }).remoteJidAlt ?? null,
                 name: msg.pushName ?? null,
-                text: content.body,
+                text: content.type === 'text' ? content.body : null,
               })
-              .catch((err) => logger.warn({ err }, 'falha ao conferir pedido de saída dos disparos'));
+              .catch((err) => logger.warn({ err }, 'falha ao conferir resposta ou pedido de saída dos disparos'));
           }
         }
         await this.handlePrivateMessage(session, msg, false);

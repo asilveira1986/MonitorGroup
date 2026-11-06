@@ -14,13 +14,16 @@ import type { BroadcastSock } from './types.js';
 export type WorkerBroadcast = BroadcastService & {
   isBotMessage(id: string | null | undefined): boolean;
   handleIncoming(info: { instanceId: string; jid: string; alt: string | null; name: string | null; text: string | null }): Promise<void>;
+  /** recibo do WhatsApp de uma mensagem do número conectado (3 entregue, 4 lida) */
+  handleStatus(waMessageId: string, status: number): Promise<void>;
 };
+const store = createSupabaseBroadcastStore();
 
 /** Monta os disparos em massa (0150) sobre as conexões do worker e o Supabase. */
 export function createWorkerBroadcast(connections: { getSock(instanceId: string): unknown }): WorkerBroadcast {
   const bots = createBotRegistry();
   const service = createBroadcast({
-    store: createSupabaseBroadcastStore(),
+    store,
     getSock: (instanceId) => connections.getSock(instanceId) as BroadcastSock | undefined,
     generateId: (sock) => generateMessageIDV2(sock.user?.id),
     onSending: (id) => bots.mark(id),
@@ -54,13 +57,23 @@ export function createWorkerBroadcast(connections: { getSock(instanceId: string)
   return {
     ...service,
     isBotMessage: (id) => bots.has(id),
-    // pedido de saída: só vale para quem recebeu um disparo recente (a função do banco confere)
+    // pedido de saída ("SAIR") ou resposta a um disparo recente: o banco só marca quem recebeu um disparo
     async handleIncoming({ instanceId, jid, alt, name, text }) {
-      if (!isOptOutText(text)) return;
-      const { data, error } = await db.rpc('broadcast_register_optout', { p_instance_id: instanceId, p_jid: jid, p_alt: alt, p_name: name });
-      // sem o script 0151 a função não existe
-      if (error) return;
-      if (data === true) logger.info({ jid }, 'pessoa pediu para não receber disparos');
+      if (isOptOutText(text)) {
+        const { data, error } = await db.rpc('broadcast_register_optout', { p_instance_id: instanceId, p_jid: jid, p_alt: alt, p_name: name });
+        // sem o script 0151 a função não existe
+        if (error) return;
+        if (data === true) {
+          logger.info({ jid }, 'pessoa pediu para não receber disparos');
+          return; // pedir para sair não conta como resposta ao disparo
+        }
+      }
+      // sem o script 0152 a função não existe
+      await db.rpc('broadcast_register_reply', { p_instance_id: instanceId, p_jid: jid, p_alt: alt });
+    },
+    async handleStatus(waMessageId, status) {
+      if (status < 3) return;
+      await store.track(waMessageId, status).catch(() => undefined);
     },
   };
 }

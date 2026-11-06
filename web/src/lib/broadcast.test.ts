@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   DEFAULT_BROADCAST_SETTINGS,
+  describeRecurrence,
   estimateSeconds,
   formatEstimate,
   groupCounts,
@@ -11,7 +12,9 @@ import {
   mediaTypeFromMime,
   normalizeBrPhone,
   parseContactsCsv,
+  percentOf,
   totalOf,
+  validateRecurrence,
   validateBroadcastSettings,
   validateWindow,
 } from './broadcast.ts';
@@ -110,4 +113,33 @@ test('CSV com colunas fora de ordem, BOM e tab', () => {
   const r = parseContactsCsv('\uFEFFtelefone\tnome\tempresa\n11999990001\tAna\tX\n');
   assert.deepEqual(r.rows, [{ phone: '5511999990001', name: 'Ana' }]);
   assert.deepEqual(parseContactsCsv('').rows, []);
+});
+
+test('inatividade conta como critério do filtro', () => {
+  assert.equal(hasCriteria({ target: 'groups', inactive_days: 30 }), true);
+  assert.equal(hasCriteria({ target: 'groups', inactive_days: 0 }), false);
+});
+
+test('recorrência: validação', () => {
+  assert.deepEqual(validateRecurrence({ freq: 'daily', time: '09:00' }), { ok: true });
+  assert.deepEqual(validateRecurrence({ freq: 'weekly', time: '09:00', days: [1, 3] }), { ok: true });
+  assert.equal(validateRecurrence({ freq: 'weekly', time: '09:00', days: [] }).ok, false);
+  assert.equal(validateRecurrence({ freq: 'monthly', time: '09:00', day_of_month: 32 }).ok, false);
+  assert.deepEqual(validateRecurrence({ freq: 'monthly', time: '18:30', day_of_month: 31, until: '2026-12-31' }), { ok: true });
+  assert.equal(validateRecurrence({ freq: 'daily', time: '9h' }).ok, false);
+  assert.equal(validateRecurrence({ freq: 'daily', time: '09:00', until: '31/12/2026' }).ok, false);
+});
+
+test('recorrência: descrição em português', () => {
+  assert.equal(describeRecurrence({ freq: 'daily', time: '09:00' }), 'Todo dia às 09:00');
+  assert.equal(describeRecurrence({ freq: 'weekly', time: '09:00', days: [3, 1] }), 'Toda segunda e quarta às 09:00');
+  assert.equal(describeRecurrence({ freq: 'weekly', time: '08:30', days: [1, 3, 5] }), 'Toda segunda, quarta e sexta às 08:30');
+  assert.equal(describeRecurrence({ freq: 'monthly', time: '10:00', day_of_month: 5, until: '2026-12-31' }), 'Todo dia 5 do mês às 10:00 (até 31/12/2026)');
+  assert.equal(describeRecurrence(null), '');
+});
+
+test('percentual do relatório', () => {
+  assert.equal(percentOf(1, 4), '25%');
+  assert.equal(percentOf(2, 3), '67%');
+  assert.equal(percentOf(0, 0), '—');
 });

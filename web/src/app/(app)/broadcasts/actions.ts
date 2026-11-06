@@ -7,12 +7,14 @@ import {
   MAX_MEDIA_BYTES,
   mediaTypeFromMime,
   validateBroadcastSettings,
+  validateRecurrence,
   validateWindow,
   type BroadcastFilter,
   type BroadcastMedia,
   type BroadcastRecipient,
   type BroadcastSettingsValues,
   type BroadcastWindow,
+  type Recurrence,
 } from '@/lib/broadcast';
 import { friendlyDbError } from '@/lib/db-errors';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -51,6 +53,8 @@ export type NewBroadcast = {
   window?: BroadcastWindow | null;
   /** rodapé "responda SAIR" nas mensagens a pessoas */
   optoutFooter?: boolean;
+  /** repete o disparo (o público é recalculado a cada envio); scheduledAt vira "a partir de" */
+  recurrence?: Recurrence | null;
 };
 
 /** Cria o disparo (envia agora ou agenda) com o público do filtro, menos os desmarcados. */
@@ -63,6 +67,10 @@ export async function createBroadcast(input: NewBroadcast): Promise<{ ok: true; 
     const w = validateWindow(input.window);
     if (!w.ok) return w;
   }
+  if (input.recurrence) {
+    const r = validateRecurrence(input.recurrence);
+    if (!r.ok) return r;
+  }
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('broadcast_create', {
     p_name: input.name,
@@ -70,11 +78,13 @@ export async function createBroadcast(input: NewBroadcast): Promise<{ ok: true; 
     p_message: input.message,
     p_instance_id: input.filter.target === 'people' ? input.instanceId : null,
     p_scheduled_at: when ? when.toISOString() : null,
-    p_skip: input.skip,
+    // numa série o público é recalculado a cada envio: as marcações da revisão não valem
+    p_skip: input.recurrence ? [] : input.skip,
     p_variants: input.variants ?? [],
     p_media: input.media ?? null,
     p_window: input.window ?? null,
     p_optout_footer: input.optoutFooter ?? true,
+    p_recurrence: input.recurrence ?? null,
   });
   if (error) return { ok: false, error: friendlyDbError(error.message) };
   revalidatePath('/broadcasts');

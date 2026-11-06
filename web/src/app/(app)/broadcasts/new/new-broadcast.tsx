@@ -1,6 +1,6 @@
 'use client';
 
-import { Bookmark, CalendarClock, FileUp, Loader2, Paperclip, Plus, Send, Trash2, Users, X } from 'lucide-react';
+import { Bookmark, CalendarClock, FileUp, Repeat, Loader2, Paperclip, Plus, Send, Trash2, Users, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -8,7 +8,9 @@ import type { CustomerTag } from '@/components/customer-tags';
 import { Badge, Button, Card, CardHeader, Field, Input, Select, Textarea, Toggle } from '@/components/ui';
 import { AGENDA_COLORS, type AgendaColor } from '@/lib/agenda-colors';
 import {
+  DEFAULT_RECURRENCE,
   DEFAULT_WINDOW,
+  describeRecurrence,
   estimateSeconds,
   formatEstimate,
   hasCriteria,
@@ -24,6 +26,7 @@ import {
   type BroadcastSettingsValues,
   type BroadcastTarget,
   type BroadcastWindow,
+  type Recurrence,
   type SavedAudience,
 } from '@/lib/broadcast';
 import { cn } from '@/lib/format';
@@ -168,9 +171,12 @@ export function NewBroadcast({
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [instanceId, setInstanceId] = useState(instances.find((i) => i.status === 'connected')?.id ?? instances[0]?.id ?? '');
   const [message, setMessage] = useState('');
-  const [when, setWhen] = useState<'now' | 'later'>('now');
+  const [when, setWhen] = useState<'now' | 'later' | 'repeat'>('now');
   const [at, setAt] = useState('');
   // fase 2
+  const [inactiveDays, setInactiveDays] = useState('');
+  const [rec, setRec] = useState<Recurrence>(DEFAULT_RECURRENCE);
+  const [startDate, setStartDate] = useState('');
   const [extra, setExtra] = useState<{ phone: string; name: string | null }[]>([]);
   const [csvInfo, setCsvInfo] = useState<string | null>(null);
   const [variants, setVariants] = useState<string[]>([]);
@@ -201,8 +207,9 @@ export function NewBroadcast({
       group_ids: target === 'groups' ? groupIds : [],
       phones: target === 'people' ? phones : [],
       extra: target === 'people' ? extra : [],
+      inactive_days: Number(inactiveDays) > 0 ? Math.floor(Number(inactiveDays)) : undefined,
     }),
-    [target, all, tagIds, tagMode, excludeIds, sectorId, groupIds, phones, extra],
+    [target, all, tagIds, tagMode, excludeIds, sectorId, groupIds, phones, extra, inactiveDays],
   );
   const filterKey = JSON.stringify(filter);
 
@@ -231,7 +238,7 @@ export function NewBroadcast({
   const rows = hasFilter ? foundRows : [];
   const total = hasFilter ? foundTotal : 0;
   const skipSet = new Set(skip);
-  const skippedHere = rows.filter((r) => skipSet.has(r.key)).length;
+  const skippedHere = when === 'repeat' ? 0 : rows.filter((r) => skipSet.has(r.key)).length;
   const count = Math.max(0, total - skippedHere);
   const sample = rows.find((r) => !skipSet.has(r.key));
 
@@ -265,7 +272,8 @@ export function NewBroadcast({
 
   const instanceOk = target === 'groups' || Boolean(instanceId);
   const hasContent = Boolean(message.trim() || media);
-  const canSend = name.trim() && hasContent && count > 0 && instanceOk && (when === 'now' || at) && (!windowOn || win.days.length > 0) && !loading && !pending && !uploading;
+  const recOk = (rec.freq !== 'weekly' || (rec.days?.length ?? 0) > 0) && /^\d{2}:\d{2}$/.test(rec.time) && (rec.freq !== 'monthly' || Number(rec.day_of_month) >= 1);
+  const canSend = name.trim() && hasContent && count > 0 && instanceOk && (when !== 'later' || at) && (when !== 'repeat' || recOk) && (!windowOn || win.days.length > 0) && !loading && !pending && !uploading;
 
   const names: Record<string, string> = { ...Object.fromEntries(groups.map((g) => [g.id, g.name])), ...picked };
 
@@ -311,6 +319,7 @@ export function NewBroadcast({
     setSectorId(f.sector_id ?? '');
     setGroupIds(f.group_ids ?? []);
     setPhones(f.phones ?? []);
+    setInactiveDays(f.inactive_days ? String(f.inactive_days) : '');
     setExtra((f.extra ?? []).map((e) => ({ phone: e.phone, name: e.name ?? null })));
     setCsvInfo(f.extra?.length ? `${f.extra.length} número(s) importado(s).` : null);
     setSkip([]);
@@ -343,18 +352,19 @@ export function NewBroadcast({
         filter,
         message,
         instanceId: target === 'people' ? instanceId : null,
-        scheduledAt: when === 'later' && at ? new Date(at).toISOString() : null,
+        scheduledAt: when === 'later' && at ? new Date(at).toISOString() : when === 'repeat' && startDate ? new Date(`${startDate}T00:00`).toISOString() : null,
         skip,
         variants: variants.map((v) => v.trim()).filter(Boolean),
         media,
         window: windowOn ? win : null,
         optoutFooter: footer,
+        recurrence: when === 'repeat' ? { ...rec, until: rec.until || null } : null,
       });
       if (!r.ok) {
         toast.error(r.error);
         return;
       }
-      toast.success(when === 'later' ? 'Disparo agendado.' : 'Disparo iniciado.');
+      toast.success(when === 'repeat' ? 'Disparo recorrente criado.' : when === 'later' ? 'Disparo agendado.' : 'Disparo iniciado.');
       router.push(`/broadcasts/${r.id}`);
     });
 
@@ -441,6 +451,13 @@ export function NewBroadcast({
                 </Select>
               </Field>
             )}
+
+            <Field
+              label={target === 'groups' ? 'Grupos sem mensagem há pelo menos (dias)' : 'Pessoas sem conversa privada há pelo menos (dias)'}
+              hint="Deixe vazio para não filtrar. Junto com etiquetas ou setor, precisa cumprir os dois. Combine com “Repetir” para um aviso automático."
+            >
+              <Input type="number" min={1} value={inactiveDays} onChange={(e) => setInactiveDays(e.target.value)} placeholder="Ex.: 30" className="max-w-40" />
+            </Field>
 
             {target === 'groups' ? (
               <ManualPicker
@@ -578,7 +595,60 @@ export function NewBroadcast({
               <button type="button" onClick={() => setWhen('later')} className={cn('inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition', when === 'later' ? 'btn-signal text-brand-ink' : 'bg-surface-2 text-ink-2 hover:text-ink')}>
                 <CalendarClock className="h-4 w-4" /> Agendar
               </button>
+              <button type="button" onClick={() => setWhen('repeat')} className={cn('inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition', when === 'repeat' ? 'btn-signal text-brand-ink' : 'bg-surface-2 text-ink-2 hover:text-ink')}>
+                <Repeat className="h-4 w-4" /> Repetir
+              </button>
             </div>
+            {when === 'repeat' && (
+              <div className="space-y-3 rounded-xl bg-surface-2 p-3">
+                <div className="flex flex-wrap items-end gap-3">
+                  <Field label="Repetir">
+                    <Select value={rec.freq} onChange={(e) => setRec({ ...rec, freq: e.target.value as Recurrence['freq'] })} className="w-44">
+                      <option value="daily">Todo dia</option>
+                      <option value="weekly">Toda semana</option>
+                      <option value="monthly">Todo mês</option>
+                    </Select>
+                  </Field>
+                  {rec.freq === 'monthly' && (
+                    <Field label="No dia" hint="Dia 31 em mês curto vale o último dia.">
+                      <Input type="number" min={1} max={31} value={rec.day_of_month ?? 1} onChange={(e) => setRec({ ...rec, day_of_month: Number(e.target.value) })} className="w-24" />
+                    </Field>
+                  )}
+                  <Field label="Às">
+                    <Input type="time" value={rec.time} onChange={(e) => setRec({ ...rec, time: e.target.value })} className="w-32" />
+                  </Field>
+                </div>
+                {rec.freq === 'weekly' && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {WEEKDAY_LABEL.map((d, i) => {
+                      const on = rec.days?.includes(i);
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => setRec({ ...rec, days: on ? (rec.days ?? []).filter((x) => x !== i) : [...(rec.days ?? []), i].sort() })}
+                          className={cn('rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset transition', on ? 'bg-brand-soft text-ink ring-brand-line' : 'bg-surface text-ink-2 ring-line hover:bg-surface-2')}
+                        >
+                          {d}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="flex flex-wrap items-end gap-3">
+                  <Field label="Começar em (opcional)">
+                    <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-44" />
+                  </Field>
+                  <Field label="Parar depois de (opcional)">
+                    <Input type="date" value={rec.until ?? ''} onChange={(e) => setRec({ ...rec, until: e.target.value || null })} className="w-44" />
+                  </Field>
+                </div>
+                <p className="text-xs text-ink-2">
+                  {recOk ? describeRecurrence(rec) : 'Complete a repetição.'}. O público é recalculado a cada envio (quem entrou no filtro depois também recebe; quem pediu SAIR não). Se o envio anterior ainda não terminou ou ninguém bate com o filtro, aquele horário é pulado. Fuso da empresa: {timezone}.
+                </p>
+              </div>
+            )}
             {when === 'later' && (
               <Field label="Data e hora" hint="No horário do seu navegador. O envio começa nessa hora, no ritmo configurado.">
                 <Input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} className="max-w-xs" />
@@ -638,6 +708,7 @@ export function NewBroadcast({
                   <strong>{count}</strong> {target === 'groups' ? 'grupo(s)' : 'pessoa(s)'} vão receber
                   {skip.length > 0 && <span className="text-muted">({skip.length} tirado(s))</span>}
                 </p>
+                {when === 'repeat' && <p className="text-xs text-muted">Lista de hoje, só como referência: numa recorrência o público é refeito a cada envio.</p>}
                 {count > 0 && <p className="text-xs text-muted">Tempo estimado no ritmo atual: {formatEstimate(estimateSeconds(count, rate))}.</p>}
                 {count > rate.dailyLimit && (
                   <p className="rounded-lg bg-warning/15 px-3 py-2 text-xs text-warning-ink">
@@ -653,6 +724,7 @@ export function NewBroadcast({
                           <label className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-surface-2">
                             <input
                               type="checkbox"
+                              disabled={when === 'repeat'}
                               checked={!off}
                               onChange={() => setSkip(off ? skip.filter((k) => k !== r.key) : [...skip, r.key])}
                               className="h-4 w-4 accent-brand"
@@ -673,7 +745,7 @@ export function NewBroadcast({
               </>
             )}
             <Button onClick={submit} disabled={!canSend} className="w-full">
-              <Send className="h-4 w-4" /> {pending ? 'Criando…' : when === 'later' ? 'Agendar disparo' : 'Enviar agora'}
+              <Send className="h-4 w-4" /> {pending ? 'Criando…' : when === 'repeat' ? 'Criar disparo recorrente' : when === 'later' ? 'Agendar disparo' : 'Enviar agora'}
             </Button>
             <p className="text-xs text-muted">Envie só para quem aceitou receber mensagens da sua empresa (LGPD). Mensagens em massa para quem não conhece o número podem levar ao bloqueio.</p>
           </div>

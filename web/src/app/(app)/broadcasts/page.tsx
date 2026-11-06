@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
 import { appSettings } from '@/lib/app-settings';
 import { requirePlatformAdmin } from '@/lib/auth';
-import { CAMPAIGN_STATUS_LABEL, emptyCounts, groupCounts, settingsFromRow, totalOf, type OptOut } from '@/lib/broadcast';
+import { CAMPAIGN_STATUS_LABEL, describeRecurrence, emptyCounts, groupCounts, settingsFromRow, totalOf, type OptOut, type Recurrence } from '@/lib/broadcast';
 import { formatDateTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import { Optouts } from './optouts';
@@ -13,7 +13,19 @@ import { RateSettings } from './rate-settings';
 
 export const metadata: Metadata = { title: 'Monitor Group · Disparos' };
 
-type CampaignRow = { id: string; name: string; target: 'groups' | 'people'; status: string; scheduled_at: string; created_at: string };
+type CampaignRow = {
+  id: string;
+  name: string;
+  target: 'groups' | 'people';
+  status: string;
+  scheduled_at: string;
+  created_at: string;
+  // 0152 (ausentes se o script ainda não foi rodado)
+  recurrence?: Recurrence | null;
+  next_run_at?: string | null;
+  series_id?: string | null;
+  last_run_note?: string | null;
+};
 
 const TONE: Record<string, 'neutral' | 'good' | 'warning' | 'critical' | 'brand' | 'info'> = {
   scheduled: 'info',
@@ -21,6 +33,7 @@ const TONE: Record<string, 'neutral' | 'good' | 'warning' | 'critical' | 'brand'
   paused: 'warning',
   done: 'good',
   cancelled: 'neutral',
+  series: 'info',
 };
 
 /**
@@ -31,7 +44,8 @@ export default async function BroadcastsPage() {
   await requirePlatformAdmin();
   const supabase = await createClient();
   const [campaigns, counts, settings, optouts] = await Promise.all([
-    supabase.from('broadcast_campaigns').select('id, name, target, status, scheduled_at, created_at').order('created_at', { ascending: false }).limit(100),
+    // "*": sem o script 0152 as colunas da recorrência não existem
+    supabase.from('broadcast_campaigns').select('*').order('created_at', { ascending: false }).limit(100),
     supabase.rpc('broadcast_counts'),
     appSettings(),
     // sem o script 0151 a tabela não existe: lista vazia
@@ -53,6 +67,7 @@ export default async function BroadcastsPage() {
 
   const byCampaign = groupCounts((counts.data ?? []) as { campaign_id: string; status: string; n: number }[]);
   const rows = (campaigns.data ?? []) as CampaignRow[];
+  const seriesName = new Map(rows.filter((r) => r.recurrence).map((r) => [r.id, r.name]));
 
   return (
     <div data-wide className="space-y-6">
@@ -90,17 +105,19 @@ export default async function BroadcastsPage() {
                         <Link href={`/broadcasts/${c.id}`} className="font-medium text-ink hover:underline">
                           {c.name}
                         </Link>
+                        {c.recurrence && <p className="mt-0.5 text-xs text-muted">{describeRecurrence(c.recurrence)}</p>}
+                        {c.series_id && seriesName.get(c.series_id) && <p className="mt-0.5 text-xs text-muted">Da série “{seriesName.get(c.series_id)}”</p>}
                       </td>
                       <td className="px-4 py-3 text-ink-2">{c.target === 'groups' ? 'Grupos' : 'Pessoas'}</td>
                       <td className="px-4 py-3">
                         <Badge tone={TONE[c.status] ?? 'neutral'}>{CAMPAIGN_STATUS_LABEL[c.status] ?? c.status}</Badge>
                       </td>
                       <td className="min-w-48 px-4 py-3">
-                        <Progress counts={n} compact />
+                        {c.recurrence ? <span className="text-xs text-muted">{c.last_run_note ?? 'Ainda não enviou.'}</span> : <Progress counts={n} compact />}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-ink-2">
-                        {formatDateTime(c.scheduled_at)}
-                        {totalOf(n) === 0 && <span className="ml-1 text-xs text-muted">(sem destinatários)</span>}
+                        {c.recurrence ? (c.status === 'series' ? `Próximo: ${formatDateTime(c.next_run_at)}` : '—') : formatDateTime(c.scheduled_at)}
+                        {!c.recurrence && totalOf(n) === 0 && <span className="ml-1 text-xs text-muted">(sem destinatários)</span>}
                       </td>
                     </tr>
                   );

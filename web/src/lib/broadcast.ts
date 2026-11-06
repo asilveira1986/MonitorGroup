@@ -17,11 +17,13 @@ export type BroadcastFilter = {
   phones?: string[];
   /** números importados (CSV ou digitados): entram sempre, mesmo fora do cadastro do sistema */
   extra?: { phone: string; name?: string | null }[];
+  /** só quem está sem conversa há pelo menos N dias (grupos: sem mensagem; pessoas: sem conversa privada) */
+  inactive_days?: number;
 };
 
 /** O filtro tem algum critério? (sem critério o público fica vazio, nunca "todos" por engano) */
 export function hasCriteria(f: BroadcastFilter): boolean {
-  return Boolean(f.all || f.tag_ids?.length || f.sector_id || f.group_ids?.length || f.phones?.length || f.extra?.length);
+  return Boolean(f.all || f.tag_ids?.length || f.sector_id || f.group_ids?.length || f.phones?.length || f.extra?.length || f.inactive_days);
 }
 
 export type BroadcastRecipient = { key: string; name: string | null; sub: string | null };
@@ -102,6 +104,7 @@ export const CAMPAIGN_STATUS_LABEL: Record<string, string> = {
   paused: 'Pausado',
   done: 'Concluído',
   cancelled: 'Cancelado',
+  series: 'Recorrente',
 };
 
 export const RECIPIENT_STATUS_LABEL: Record<string, string> = {
@@ -226,3 +229,63 @@ export function parseContactsCsv(text: string): ParsedContacts {
 export type SavedAudience = { id: string; name: string; target: BroadcastTarget; filter: BroadcastFilter };
 
 export type OptOut = { id: string; phone: string; name: string | null; source: 'reply' | 'manual'; created_at: string };
+
+// ------------------------------------------------------------------ fase 3
+
+export type RecurrenceFreq = 'daily' | 'weekly' | 'monthly';
+
+/** Como o disparo se repete (no fuso da empresa). days: 0 = domingo ... 6 = sábado. */
+export type Recurrence = {
+  freq: RecurrenceFreq;
+  time: string;
+  days?: number[];
+  day_of_month?: number;
+  /** AAAA-MM-DD: último dia em que ainda envia */
+  until?: string | null;
+};
+
+export const DEFAULT_RECURRENCE: Recurrence = { freq: 'weekly', time: '09:00', days: [1], day_of_month: 1, until: null };
+
+export function validateRecurrence(r: Recurrence): { ok: true } | { ok: false; error: string } {
+  if (!['daily', 'weekly', 'monthly'].includes(r.freq)) return { ok: false, error: 'Escolha como o disparo se repete.' };
+  if (!HHMM.test(r.time)) return { ok: false, error: 'Informe o horário no formato 09:00.' };
+  if (r.freq === 'weekly' && !(r.days?.length)) return { ok: false, error: 'Escolha pelo menos um dia da semana.' };
+  if (r.freq === 'monthly' && !(Number.isInteger(r.day_of_month) && r.day_of_month! >= 1 && r.day_of_month! <= 31)) {
+    return { ok: false, error: 'Escolha o dia do mês (1 a 31).' };
+  }
+  if (r.until && !/^\d{4}-\d{2}-\d{2}$/.test(r.until)) return { ok: false, error: 'Data final inválida.' };
+  return { ok: true };
+}
+
+/** Texto da repetição: "Toda segunda e quarta às 09:00". */
+export function describeRecurrence(r: Recurrence | null | undefined): string {
+  if (!r) return '';
+  const full = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  let when: string;
+  if (r.freq === 'daily') when = 'Todo dia';
+  else if (r.freq === 'weekly') {
+    const names = [...(r.days ?? [])].sort().map((d) => full[d]).filter(Boolean);
+    const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}` : (names[0] ?? '');
+    when = `Toda ${list}`;
+  } else when = `Todo dia ${r.day_of_month} do mês`;
+  const until = r.until ? ` (até ${r.until.split('-').reverse().join('/')})` : '';
+  return `${when} às ${r.time}${until}`;
+}
+
+export type BroadcastReport = {
+  total: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  pending: number;
+  delivered: number;
+  read: number;
+  replied: number;
+  /** enviados a pessoas (só elas têm recibo por pessoa) */
+  people: number;
+};
+
+/** Percentual inteiro de a sobre b ("—" quando não há base). */
+export function percentOf(a: number, b: number): string {
+  return b > 0 ? `${Math.round((a / b) * 100)}%` : '—';
+}

@@ -188,6 +188,7 @@ from (values
   (141, 'Disparos em massa (0150)', to_regclass('public.broadcast_campaigns') is not null and to_regprocedure('public.can_use_broadcasts()') is not null),
   (142, 'Disparos: mídia, variações, públicos salvos, janela, reenvio e opt-out (0151)', to_regclass('public.broadcast_optouts') is not null and to_regclass('public.broadcast_audiences') is not null
       and to_regprocedure('public.broadcast_retry_failed(uuid)') is not null),
-  (143, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (143, 'Disparos: recorrência, relatório e inatividade (0152)', to_regprocedure('public.broadcast_spawn_due()') is not null and to_regprocedure('public.broadcast_report(uuid)') is not null),
+  (144, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
