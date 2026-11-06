@@ -27,6 +27,9 @@ import { AvatarQueue } from './avatars.js';
 import { storeMessageMedia, storePrivateMedia } from './media.js';
 import { messagePreview, type AutomationService } from './automation/service.js';
 import type { SockLike } from './automation/types.js';
+import { decodeVote, parsePollMessage } from './closing-flow/poll.js';
+import type { ClosingService } from './closing-flow/service.js';
+import { loadPollMessage } from './closing-flow/store.js';
 import { contactCardsOf, extractContent, withMentions as withMentionList, isAcknowledgement, isForwarded, isStickerOrEmoji, isThanksAfterTeam, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
@@ -250,6 +253,33 @@ export class WhatsAppManager {
 
   setAutomation(automation: AutomationService) {
     this.automation = automation;
+  }
+
+  /** Pesquisa de encerramento (0149): enquete ao cliente depois do fechamento e ações conforme a resposta. */
+  private closing: ClosingService | null = null;
+
+  setClosing(closing: ClosingService) {
+    this.closing = closing;
+  }
+
+  /** Voto numa enquete da pesquisa de encerramento: decifra e entrega ao serviço. */
+  private async handlePollVote(session: Session, msg: WAMessage) {
+    const update = msg.message?.pollUpdateMessage;
+    const pollId = update?.pollCreationMessageKey?.id;
+    if (!this.closing || !update?.vote || !pollId || msg.key.fromMe) return;
+    const raw = await loadPollMessage(pollId);
+    if (!raw) return;
+    const user = session.sock.user as { id?: string; lid?: string } | undefined;
+    const key = msg.key as typeof msg.key & { participantAlt?: string };
+    const index = decodeVote({
+      pollMessage: parsePollMessage(raw),
+      pollWaId: pollId,
+      vote: update.vote,
+      creatorJids: [user?.id, user?.lid],
+      voterJids: [msg.key.participant, key.participantAlt, msg.key.remoteJid],
+    });
+    if (index === null) return;
+    await this.closing.handleVote({ pollWaId: pollId, optionIndex: index, voterName: msg.pushName ?? null });
   }
 
   /** Conexão ativa de uma instância (a automação não guarda o socket: ele muda a cada reconexão). */
@@ -554,6 +584,12 @@ export class WhatsAppManager {
       // com a importação ligada, aceita também o lote "FULL" (o padrão da biblioteca o ignora)
       ...(importHistory ? { shouldSyncHistoryMessage: () => true } : {}),
       generateHighQualityLinkPreview: false,
+      // abrir os votos das enquetes da pesquisa de encerramento (0149) exige a mensagem original
+      getMessage: async (key) => {
+        if (!key.id) return undefined;
+        const raw = await loadPollMessage(key.id).catch(() => null);
+        return raw ? ((parsePollMessage(raw) as WAMessage['message']) ?? undefined) : undefined;
+      },
     });
 
     const session: Session = {
@@ -993,7 +1029,11 @@ export class WhatsAppManager {
     const jid = msg.key.remoteJid;
     if (!jid || !msg.message) return;
     // mensagem enviada pela própria automação (acuse, aviso, cobrança): não entra como resposta da equipe
-    if (this.automation?.isBotMessage(msg.key.id)) return;
+    if (this.automation?.isBotMessage(msg.key.id) || this.closing?.isBotMessage(msg.key.id)) return;
+    if (msg.message.pollUpdateMessage) {
+      if (isJidGroup(jid)) await this.handlePollVote(session, msg);
+      return;
+    }
     if (!isJidGroup(jid)) {
       if (isPrivateJid(jid)) await this.handlePrivateMessage(session, msg, false);
       return;
@@ -1104,6 +1144,26 @@ export class WhatsAppManager {
           }),
         )
         .catch((err) => logger.error({ err, id: messageId }, 'falha na automação de atendimento'));
+    }
+
+    // pesquisa de encerramento (0149): agenda após o fechamento, cancela se o cliente voltar e lê a resposta digitada
+    if (this.closing && result.inserted && !result.stale && (fromTeam || !result.ignored)) {
+      const closing = this.closing;
+      session.sideQueue = (session.sideQueue ?? Promise.resolve())
+        .then(() =>
+          closing.handleMessage({
+            companyId: session.companyId,
+            instanceId: session.instanceId,
+            group: { id: group.id, jid: group.jid, name: group.name },
+            fromTeam,
+            closes: Boolean(closes),
+            senderName,
+            text: content.body ?? '',
+            sentAt: new Date(ts * 1000),
+            isNotify: upsertType === 'notify',
+          }),
+        )
+        .catch((err) => logger.error({ err, id: msg.key.id }, 'falha na pesquisa de encerramento'));
     }
 
     // resposta citando uma mensagem gravada sem remetente: a citação diz quem a escreveu (0080)

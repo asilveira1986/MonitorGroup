@@ -241,7 +241,8 @@ begin
   (138, 'Mencionar pessoas nas respostas do grupo (0147)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'outgoing_messages' and column_name = 'mentions')),
   (139, 'Índice dos alertas em aberto por grupo (0148)', exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'alerts_group_open_idx')),
-  (140, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (140, 'Mensagem de encerramento: regras e respostas (0149)', to_regclass('public.closing_flows') is not null and to_regclass('public.closing_surveys') is not null),
+  (141, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -250,7 +251,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -4794,6 +4795,108 @@ create index if not exists alerts_group_open_idx on public.alerts (group_id, typ
 $mig0148$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0149_closing_flows.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0149', $mig0149$
+-- =====================================================================
+-- Regra de mensagem de encerramento: pergunta ao cliente (enquete) e age conforme a resposta.
+--
+-- Quando a equipe encerra o atendimento num grupo com a regra ligada, o worker espera alguns minutos e envia
+-- uma enquete ("Seu atendimento foi resolvido?" com as opções configuradas). O WhatsApp não entrega botões
+-- de verdade para números comuns em grupos; a enquete é o "botão" (o cliente também pode digitar 1, 2 ou o
+-- texto da opção). Cada opção define o que fazer: responder no grupo, avisar o grupo interno e/ou reabrir.
+--
+--  * closing_flows:   regras (pergunta, opções, grupos, tempos, grupo interno).
+--  * closing_surveys: uma pergunta enviada (ou agendada) a um grupo e a resposta recebida.
+-- =====================================================================
+
+create table if not exists public.closing_flows (
+  id                uuid primary key default gen_random_uuid(),
+  company_id        uuid not null default public.default_company_id() references public.companies(id) on delete cascade,
+  name              text not null default 'Pesquisa de encerramento',
+  enabled           boolean not null default true,
+  question          text not null default 'Seu atendimento foi resolvido?',
+  -- [{ "label": "Sim, resolvido", "reply": "texto enviado ao grupo", "reopen": false, "notify": false }]
+  options           jsonb not null default '[]'::jsonb,
+  group_ids         uuid[] not null default '{}',
+  delay_min         int  not null default 5   check (delay_min >= 0),
+  expire_hours      int  not null default 24  check (expire_hours >= 1),
+  notify_group_jid  text,
+  notify_group_name text,
+  mention_jids      text[] not null default '{}',
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+create index if not exists closing_flows_company_idx on public.closing_flows (company_id);
+
+create table if not exists public.closing_surveys (
+  id            uuid primary key default gen_random_uuid(),
+  company_id    uuid not null references public.companies(id) on delete cascade,
+  flow_id       uuid references public.closing_flows(id) on delete set null,
+  group_id      uuid not null references public.groups(id) on delete cascade,
+  instance_id   uuid references public.whatsapp_instances(id) on delete set null,
+  group_jid     text not null,
+  status        text not null default 'scheduled' check (status in ('scheduled', 'sent', 'answered', 'expired', 'cancelled')),
+  send_at       timestamptz not null,
+  sent_at       timestamptz,
+  expires_at    timestamptz,
+  poll_wa_id    text,
+  poll_message  text,          -- mensagem da enquete (BufferJSON): a chave para abrir os votos
+  question      text not null default '',
+  options       jsonb not null default '[]'::jsonb,
+  answer_label  text,
+  answer_index  int,
+  answered_by   text,
+  answered_at   timestamptz,
+  created_at    timestamptz not null default now()
+);
+-- uma só pergunta em andamento por grupo
+create unique index if not exists closing_surveys_open_idx on public.closing_surveys (group_id) where status in ('scheduled', 'sent');
+create index if not exists closing_surveys_poll_idx on public.closing_surveys (poll_wa_id) where poll_wa_id is not null;
+create index if not exists closing_surveys_company_idx on public.closing_surveys (company_id, created_at desc);
+
+alter table public.closing_flows   enable row level security;
+alter table public.closing_surveys enable row level security;
+
+drop policy if exists closing_flows_read on public.closing_flows;
+create policy closing_flows_read on public.closing_flows for select
+  using ((select public.is_active_user()) and company_id = (select public.current_company_id()));
+drop policy if exists closing_flows_admin on public.closing_flows;
+create policy closing_flows_admin on public.closing_flows for all
+  using ((select public.is_admin()) and company_id = (select public.current_company_id()))
+  with check ((select public.is_admin()) and company_id = (select public.current_company_id()));
+
+-- respostas: leitura dos grupos que a pessoa vê (a escrita é do worker)
+drop policy if exists closing_surveys_read on public.closing_surveys;
+create policy closing_surveys_read on public.closing_surveys for select
+  using ((select public.is_active_user()) and company_id = (select public.current_company_id()) and public.can_view_group(group_id));
+
+-- ------------------------------------------------ métricas
+create or replace function public.closing_metrics(p_days int default 30)
+returns jsonb language sql stable set search_path = public as $$
+  select jsonb_build_object(
+    'days', p_days,
+    'sent', count(*) filter (where status in ('sent', 'answered', 'expired')),
+    'answered', count(*) filter (where status = 'answered'),
+    'waiting', count(*) filter (where status in ('scheduled', 'sent')),
+    'expired', count(*) filter (where status = 'expired'),
+    'by_answer', coalesce((
+      select jsonb_object_agg(a.answer_label, a.n) from (
+        select answer_label, count(*) n from public.closing_surveys
+         where company_id = public.current_company_id() and status = 'answered'
+           and created_at >= now() - make_interval(days => p_days)
+         group by answer_label) a), '{}'::jsonb)
+  )
+  from public.closing_surveys
+  where company_id = public.current_company_id()
+    and created_at >= now() - make_interval(days => p_days)
+$$;
+revoke all on function public.closing_metrics(int) from public, anon;
+grant execute on function public.closing_metrics(int) to authenticated;
+
+notify pgrst, 'reload schema';
+$mig0149$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -4986,6 +5089,7 @@ from (values
   (138, 'Mencionar pessoas nas respostas do grupo (0147)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'outgoing_messages' and column_name = 'mentions')),
   (139, 'Índice dos alertas em aberto por grupo (0148)', exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'alerts_group_open_idx')),
-  (140, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (140, 'Mensagem de encerramento: regras e respostas (0149)', to_regclass('public.closing_flows') is not null and to_regclass('public.closing_surveys') is not null),
+  (141, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

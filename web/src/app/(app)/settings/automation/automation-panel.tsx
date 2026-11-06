@@ -57,7 +57,7 @@ export type AutomationMetrics = {
 };
 
 export type MemberOption = { id: string; name: string; jid: string };
-type GroupOption = { id: string; name: string; jid: string; sector_id: string | null };
+export type GroupOption = { id: string; name: string; jid: string; sector_id: string | null };
 export type SectorOption = { id: string; name: string };
 
 const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -82,7 +82,7 @@ const sectorLabel = (sectors: SectorOption[], sectorId: string | null) => (secto
  * Escolha dos grupos do cliente que recebem a regra: busca, atalhos por setor ("selecionar todos do setor") e
  * marcação grupo a grupo. Grupos internos (que recebem avisos) não entram na lista.
  */
-function GroupPicker({
+export function GroupPicker({
   groups,
   sectors,
   selected,

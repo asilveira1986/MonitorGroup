@@ -36,6 +36,7 @@ Uma pasta com um arquivo por assunto. O ponto de entrada é `index.ts`; quase tu
 | **Regras de negócio** | `acknowledgement.ts` (o que ignorar: "ok", "obrigado"), `commitment.ts` (equipe assumiu uma tarefa), `closing.ts`, `dates.ts` (prazos em português), `demands.ts` + `ai.ts` (demandas e IA), `business-hours.ts`, `duration.ts` |
 | **Alertas e avisos** | `alerts.ts` (regras de alerta, a cada minuto e a cada mensagem), `recipients.ts` (quem recebe), `notify.ts` (WhatsApp, e-mail, webhook), `push.ts` (push), `team-whatsapp.ts` (avisos à equipe), `after-hours.ts` (grupo de alertas fora do expediente) |
 | **Automação de atendimento** | `automation/` — `service.ts` (regras de negócio), `store.ts` (Supabase), `sender.ts` (fila de envio), `hours.ts`, `setup.ts`, `types.ts` |
+| **Mensagem de encerramento** | `closing-flow/` — `service.ts` (agenda após o fechamento, lê voto/resposta digitada, ações), `poll.ts` (decifra o voto da enquete), `store.ts`, `setup.ts`, `types.ts`. O “botão” é uma **enquete**: o WhatsApp não entrega botões a números comuns em grupos |
 | **Limpeza** | `cleanup.ts` |
 
 Cada arquivo de regra tem um teste ao lado (`*.test.ts`). A automação é testada com banco, envio e relógio simulados

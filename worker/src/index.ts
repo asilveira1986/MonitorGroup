@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { hostname } from 'node:os';
 import { runPeriodicChecks } from './alerts.js';
 import { createWorkerAutomation } from './automation/setup.js';
+import { createWorkerClosing } from './closing-flow/setup.js';
 import { refreshCache } from './cache.js';
 import { db } from './db.js';
 import { env } from './env.js';
@@ -66,6 +67,8 @@ async function main() {
   // automação de atendimento (0144): acuse, alerta, aviso e cobrança; o estado fica no banco
   const automation = createWorkerAutomation(manager);
   manager.setAutomation(automation);
+  const closingFlow = createWorkerClosing(manager);
+  manager.setClosing(closingFlow);
 
   // Healthcheck para a plataforma de hospedagem (sobe primeiro)
   createServer((req, res) => {
@@ -129,6 +132,7 @@ async function main() {
     closing = true;
     logger.info({ signal }, 'encerrando o worker');
     automation.stop();
+    closingFlow.stop();
     await manager.shutdown().catch(() => {});
     await db.rpc('release_worker_lock', { p_holder: workerId }).then(() => undefined, () => undefined);
     process.exit(0);
@@ -145,6 +149,7 @@ async function main() {
   void startPush();
   await manager.init();
   automation.start();
+  closingFlow.start();
   // avisos no WhatsApp da equipe: compromissos e demandas (0106)
   startTeamWhatsApp();
 
