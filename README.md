@@ -12,6 +12,8 @@ Sistema web que acompanha as mensagens recebidas e enviadas nos grupos de WhatsA
 - **Login** com e-mail e senha cadastrados por um administrador. Só entra quem foi autorizado.
 - Tudo roda na nuvem: o navegador é o único programa necessário.
 
+> **Para quem mantém o código:** veja o [guia de manutenção](docs/ARQUITETURA.md) (onde fica cada coisa, receitas para as mudanças mais comuns e armadilhas) e rode `sh scripts/check.sh` antes de publicar.
+
 ## Arquitetura
 
 ```
@@ -676,4 +678,7 @@ npm test
 # painel
 cd web && cp .env.example .env.local
 npm install && npm run dev    # http://localhost:3000
+
+# tudo o que o CI roda (tipos, testes, lint e build dos dois)
+sh scripts/check.sh
 ```
