@@ -3,6 +3,7 @@ import { check, db, type AlertRule, type GroupRow } from './db.js';
 import { isWithinBusinessHours } from './business-hours.js';
 import { logger } from './logger.js';
 import { notifyAfterHours, type AfterHoursRow } from './after-hours.js';
+import { formatWaitSeconds } from './duration.js';
 import { env } from './env.js';
 import { sendNotifications, sendWhatsAppToGroup } from './notify.js';
 import { alertRecipients, type RecipientMember } from './recipients.js';
@@ -53,13 +54,6 @@ async function inBusinessHours(companyId: string) {
     start: s.business_start,
     end: s.business_end,
   });
-}
-
-function formatDuration(seconds: number) {
-  const m = Math.floor(seconds / 60);
-  if (m < 60) return `${m} min`;
-  const h = Math.floor(m / 60);
-  return `${h}h${String(m % 60).padStart(2, '0')}`;
 }
 
 /** Já existe alerta desta regra para o alvo desde `since`? */
@@ -173,7 +167,7 @@ async function checkNoResponse(companyId: string, rules: AlertRule[], businessHo
       }
       const waited = (Date.now() - new Date(group.pending_since!).getTime()) / 1000;
       await createAlert(rule, {
-        title: `Sem resposta há ${formatDuration(waited)} - ${group.name}`,
+        title: `Sem resposta há ${formatWaitSeconds(waited)} - ${group.name}`,
         description: `${group.pending_count} mensagem(ns) de cliente aguardando resposta no grupo "${group.name}".${preview}`,
         groupId: group.id,
         groupName: group.name,
@@ -206,7 +200,7 @@ async function checkInactivity(companyId: string, rules: AlertRule[], businessHo
       if (await hasRecentAlert(rule.id, { groupId: group.id }, since)) continue;
       await createAlert(rule, {
         title: `Grupo sem movimentação - ${group.name}`,
-        description: `Nenhuma mensagem no grupo "${group.name}" há mais de ${formatDuration(rule.threshold_minutes * 60)}.`,
+        description: `Nenhuma mensagem no grupo "${group.name}" há mais de ${formatWaitSeconds(rule.threshold_minutes * 60)}.`,
         groupId: group.id,
         groupName: group.name,
       });
@@ -292,7 +286,7 @@ async function checkRecurrence(companyId: string, rules: AlertRule[], businessHo
         description:
           `O grupo "${g.group_name}" teve ${g.failures} falhas de resposta (fora do SLA ou ainda sem resposta) ` +
           `nos últimos ${days} dia(s).` +
-          (g.worst_seconds ? ` Maior atraso: ${formatDuration(g.worst_seconds)}.` : ''),
+          (g.worst_seconds ? ` Maior atraso: ${formatWaitSeconds(g.worst_seconds)}.` : ''),
         groupId: g.group_id,
         groupName: g.group_name,
       });
@@ -463,7 +457,7 @@ async function checkDeadlines(companyId: string, rules: AlertRule[]) {
       if (await demandAlerted(rule.id, d.id)) continue;
       const late = (Date.now() - new Date(d.promised_at).getTime()) / 1000;
       await createAlert(rule, {
-        title: `Prazo vencido há ${formatDuration(late)} - demanda #${d.number}`,
+        title: `Prazo vencido há ${formatWaitSeconds(late)} - demanda #${d.number}`,
         description: `"${d.description.slice(0, 200)}" no grupo "${d.groups.name}" não foi entregue no prazo prometido.`,
         groupId: d.group_id,
         groupName: d.groups.name,

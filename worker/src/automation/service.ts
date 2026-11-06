@@ -1,3 +1,4 @@
+import { formatWait } from '../duration.js';
 import { DEFAULT_TIMEZONE, isBusinessHours } from './hours.js';
 import type { Sender } from './sender.js';
 import type { AutomationRule, AutomationStore, PendingReply } from './types.js';
@@ -84,13 +85,6 @@ export function messagePreview(type: string, body: string | null | undefined, ma
   const text = (body ?? '').replace(/\s+/g, ' ').trim();
   const out = type === 'text' || !type ? text : `[${TYPE_LABEL[type] ?? type}]${text ? ` ${text}` : ''}`;
   return out.length > max ? `${out.slice(0, max - 1).trimEnd()}…` : out;
-}
-
-/** "14 min", "1h05". */
-export function formatWait(minutes: number): string {
-  const m = Math.max(0, Math.floor(minutes));
-  if (m < 60) return `${m} min`;
-  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
 }
 
 const mentionToken = (jid: string) => `@${jid.split('@')[0].split(':')[0]}`;

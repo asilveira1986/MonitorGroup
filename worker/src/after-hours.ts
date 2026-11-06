@@ -1,5 +1,7 @@
 /** Aviso do grupo de alertas fora do expediente (0139/0140): texto e envio, sem depender do banco. */
 
+import { formatWaitSeconds } from './duration.js';
+
 export type AfterHoursRow = {
   alert_group_id: string;
   group_id: string;
@@ -18,13 +20,6 @@ export type AfterHoursRow = {
   last_client_at: string | null;
 };
 
-function duration(seconds: number) {
-  const m = Math.floor(seconds / 60);
-  if (m < 60) return `${m} min`;
-  const h = Math.floor(m / 60);
-  return `${h}h${String(m % 60).padStart(2, '0')}`;
-}
-
 /** Mensagem enviada no grupo de alertas. */
 export function afterHoursNotice(r: AfterHoursRow, appUrl: string): string {
   const who = r.who ?? 'Cliente';
@@ -32,7 +27,7 @@ export function afterHoursNotice(r: AfterHoursRow, appUrl: string): string {
   return [
     '🚨 GRUPO SEM RESPOSTA',
     `Grupo: ${r.group_name}`,
-    `Sem resposta há ${duration(r.waiting_seconds)} (limite de ${duration(r.sla_seconds)}) · ${r.pending_count} mensagem(ns)${preview}`,
+    `Sem resposta há ${formatWaitSeconds(r.waiting_seconds)} (limite de ${formatWaitSeconds(r.sla_seconds)}) · ${r.pending_count} mensagem(ns)${preview}`,
     appUrl ? `${appUrl}/groups/${r.group_id}` : '',
   ]
     .filter(Boolean)
