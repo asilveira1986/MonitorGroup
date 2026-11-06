@@ -3,6 +3,7 @@
 import { randomInt } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { requireAdmin, requireProfile } from '@/lib/auth';
+import { dbResult as result, type ActionResult as Result } from '@/lib/action-result';
 import { createCompanyUser } from '@/lib/company-users';
 import { friendlyDbError } from '@/lib/db-errors';
 import { MENU_ITEMS } from '@/lib/menu';
@@ -11,9 +12,6 @@ import { recalcCompanyGroups, type RecalcSummary } from '@/lib/recalc-groups';
 import { reapplyIgnoreRules, type ReapplySummary } from '@/lib/reapply-ignore';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 
-type Result = { ok: true } | { ok: false; error: string };
-const result = (error: { message: string } | null | undefined): Result =>
-  error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };
 
 const list = (value: FormDataEntryValue | null) =>
   String(value ?? '')

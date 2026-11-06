@@ -9,7 +9,7 @@ import { Avatar } from '@/components/avatar';
 import { TagChips, type CustomerTag } from '@/components/customer-tags';
 import { createCustomerTag } from '@/app/(app)/tag-actions';
 import { AGENDA_COLORS, type AgendaColor } from '@/lib/agenda-colors';
-import { cn, formatPhone } from '@/lib/format';
+import { CONTACT_INITIALS, cn, formatPhone, initials } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import { startPrivateChat } from '../private/actions';
 import { deleteContact, saveContact, type ContactInput } from './actions';
@@ -45,14 +45,6 @@ const SHOW_STEP = 100;
 const COLORS = Object.keys(AGENDA_COLORS) as AgendaColor[];
 
 const titleOf = (c: Contact) => c.name || c.notify || formatPhone(c.phone) || c.email || 'Contato';
-const initials = (s: string) =>
-  s
-    .split(/\s+/)
-    .filter((w) => /\p{L}/u.test(w[0] ?? ''))
-    .slice(0, 2)
-    .map((w) => w[0]!.toUpperCase())
-    .join('') || '#';
-
 /** Novo contato ou edição: nome, telefone, e-mail, empresa, observações e etiquetas. */
 export function ContactDialog({
   contact,
@@ -335,7 +327,7 @@ export function ContactsBook({ tags }: { tags: CustomerTag[] }) {
             .join(' · ');
           return (
             <li key={c.jid} className="flex flex-wrap items-center gap-3 px-4 py-2.5 sm:flex-nowrap">
-              <Avatar jid={c.photo} hasPhoto={Boolean(c.photo)} name={title} fallback={initials(title)} className="h-10 w-10 rounded-full bg-brand-soft text-xs text-brand-text" />
+              <Avatar jid={c.photo} hasPhoto={Boolean(c.photo)} name={title} fallback={initials(title, CONTACT_INITIALS)} className="h-10 w-10 rounded-full bg-brand-soft text-xs text-brand-text" />
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-1.5">
                   <span className="truncate text-sm font-medium">{title}</span>

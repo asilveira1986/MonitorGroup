@@ -114,3 +114,25 @@ export function demandsEnabled(
   return Boolean(s.demand_manual_enabled || s.demand_command_enabled || s.demand_keyword_enabled || s.demand_ai_enabled || s.demand_commitment_enabled,
   );
 }
+
+/** Tamanho de arquivo para a tela: "320 KB" ou "4.2 MB". Vazio quando não se sabe. */
+export const formatSize = (bytes: number | null | undefined) =>
+  bytes == null ? '' : bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+/**
+ * Iniciais (até 2) de um nome, para o avatar sem foto. `lettersOnly` ignora palavras que não começam com letra
+ * (ex.: "+55", "(11)"); `fallback` é o que mostrar quando não sobra nenhuma letra.
+ */
+export function initials(name: string, opts: { lettersOnly?: boolean; fallback?: string } = {}): string {
+  const { lettersOnly = false, fallback = '?' } = opts;
+  const words = name.split(/\s+/).filter((w) => (lettersOnly ? /\p{L}/u.test(w[0] ?? '') : Boolean(w)));
+  return (
+    words
+      .slice(0, 2)
+      .map((w) => w[0]!.toUpperCase())
+      .join('') || fallback
+  );
+}
+
+/** Iniciais de contatos e conversas: só letras, "#" quando o nome é só um número. */
+export const CONTACT_INITIALS = { lettersOnly: true, fallback: '#' } as const;

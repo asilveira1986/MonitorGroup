@@ -3,10 +3,8 @@
 import { Download, ExternalLink, FileText, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AudioPlayer } from '@/components/audio-player';
+import { formatSize } from '@/lib/format';
 import type { Message } from '@/lib/types';
-
-const formatSize = (bytes: number | null | undefined) =>
-  bytes == null ? '' : bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 const UNAVAILABLE: Record<string, (m: Message) => string> = {
   too_large: (m) => `Arquivo grande demais para guardar${m.media_size ? ` (${formatSize(m.media_size)})` : ''}. Veja no celular.`,

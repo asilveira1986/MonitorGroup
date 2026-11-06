@@ -1,15 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { cn } from '@/lib/format';
-
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]!.toUpperCase())
-    .join('') || '?';
+import { cn, initials } from '@/lib/format';
 
 /**
  * Foto de perfil do WhatsApp (contato ou grupo), guardada pelo worker. Sem foto, ou se a foto não

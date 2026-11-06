@@ -1,13 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { dbResult as result, type ActionResult as Result } from '@/lib/action-result';
 import { requireProfile } from '@/lib/auth';
-import { friendlyDbError } from '@/lib/db-errors';
 import { createClient } from '@/lib/supabase/server';
 
-type Result = { ok: true } | { ok: false; error: string };
-const result = (error: { message: string } | null | undefined): Result =>
-  error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };
 
 export type AgendaEventInput = {
   /** participantes (usuários); vazio = só quem criou */
