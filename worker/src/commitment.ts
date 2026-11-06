@@ -1,3 +1,5 @@
+// CÓPIA IDÊNTICA: este arquivo existe também em worker/src/commitment.ts e web/src/lib/commitment.ts (o painel e o worker são
+// implantados separadamente). Altere nos dois lugares: o teste worker/src/commitment.test.ts falha se divergirem.
 /**
  * Gatilhos de compromisso da equipe: reconhece na resposta do atendente que ele assumiu uma tarefa
  * ("irei verificar e te retorno", "vou corrigir", "já estou ajustando", "verificarei", "fico de enviar").
