@@ -44,6 +44,7 @@ export const SETTINGS_NAV: { group: string; items: SettingsItem[] }[] = [
     group: 'Atendimento',
     items: [
       { href: '/settings/automation', label: 'Automação de atendimento', description: 'Acuse ao cliente, aviso e cobrança da equipe quando uma mensagem fica sem resposta', adminOnly: true },
+      { href: '/settings/closing', label: 'Mensagem de encerramento', description: 'Pergunta ao cliente depois do encerramento (enquete) e age conforme a resposta', adminOnly: true },
       { href: '/settings/demand-types', label: 'Demandas', description: 'Tipos e como as demandas são criadas' },
       { href: '/settings/agenda-types', label: 'Agenda', description: 'Tipos de compromisso e a cor de cada um', adminOnly: true },
       { href: '/settings/tags', label: 'Etiquetas', description: 'Etiquetas para marcar os clientes nos grupos e no privado', adminOnly: true },

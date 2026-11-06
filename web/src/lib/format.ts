@@ -65,6 +65,8 @@ export const ALERT_TYPE_LABEL: Record<string, string> = {
   // automação de atendimento (0144)
   new_message: 'Nova mensagem',
   no_reply: 'Sem resposta',
+  // mensagem de encerramento (0149)
+  closing_reopen: 'Cliente pediu para reabrir',
 };
 
 export const DEMAND_STATUS_LABEL: Record<string, string> = {

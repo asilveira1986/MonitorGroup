@@ -188,6 +188,7 @@ Todos os passos são feitos pelo navegador. Você vai precisar de contas gratuit
    146. `supabase/migrations/0146_automation_rule_delete.sql`
    147. `supabase/migrations/0147_group_mentions.sql`
    148. `supabase/migrations/0148_alerts_open_index.sql`
+   149. `supabase/migrations/0149_closing_flows.sql`
 3. Em **Project Settings › API**, anote:
    - `Project URL`
    - `anon public` key

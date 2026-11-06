@@ -185,7 +185,8 @@ CHECKS=$(cat <<'SQL'
   (138, 'Mencionar pessoas nas respostas do grupo (0147)', exists (select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'outgoing_messages' and column_name = 'mentions')),
   (139, 'Índice dos alertas em aberto por grupo (0148)', exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'alerts_group_open_idx')),
-  (140, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (140, 'Mensagem de encerramento: regras e respostas (0149)', to_regclass('public.closing_flows') is not null and to_regclass('public.closing_surveys') is not null),
+  (141, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

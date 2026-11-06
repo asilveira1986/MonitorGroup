@@ -10,7 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/*.test.ts src/automation/*.test.ts"
+    "test": "tsx --test src/*.test.ts src/automation/*.test.ts src/closing-flow/*.test.ts"
   },
   "engines": {
     "node": ">=20"
