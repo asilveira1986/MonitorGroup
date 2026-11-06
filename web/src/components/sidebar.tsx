@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Bell, BookUser, Building2, CalendarDays, MessageCircle, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
+import { Activity, Bell, BookUser, Building2, CalendarDays, MessageCircle, Megaphone, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -23,6 +23,8 @@ const NAV = [
   { href: '/private', label: 'Conversas privadas', icon: MessageCircle, badgeKey: 'private' as const },
   // contatos (0112): agenda do WhatsApp + cadastros do sistema; mesmo acesso das conversas privadas
   { href: '/contacts', label: 'Contatos', icon: BookUser },
+  // disparos em massa (0150): só administradores (o layout esconde para os demais)
+  { href: '/broadcasts', label: 'Disparos', icon: Megaphone },
   { href: '/alerts', label: 'Alertas', icon: Bell, badgeKey: 'alerts' as const },
   { href: '/reports', label: 'Relatórios', icon: FileBarChart },
   { href: '/settings', label: 'Configurações', icon: Settings },

@@ -255,6 +255,13 @@ export class WhatsAppManager {
     this.automation = automation;
   }
 
+  /** Disparos em massa (0150): o eco das mensagens enviadas por eles não conta como resposta da equipe. */
+  private broadcast: { isBotMessage(id: string | null | undefined): boolean } | null = null;
+
+  setBroadcast(broadcast: { isBotMessage(id: string | null | undefined): boolean }) {
+    this.broadcast = broadcast;
+  }
+
   /** Pesquisa de encerramento (0149): enquete ao cliente depois do fechamento e ações conforme a resposta. */
   private closing: ClosingService | null = null;
 
@@ -1029,7 +1036,7 @@ export class WhatsAppManager {
     const jid = msg.key.remoteJid;
     if (!jid || !msg.message) return;
     // mensagem enviada pela própria automação (acuse, aviso, cobrança): não entra como resposta da equipe
-    if (this.automation?.isBotMessage(msg.key.id) || this.closing?.isBotMessage(msg.key.id)) return;
+    if (this.automation?.isBotMessage(msg.key.id) || this.closing?.isBotMessage(msg.key.id) || this.broadcast?.isBotMessage(msg.key.id)) return;
     if (msg.message.pollUpdateMessage) {
       if (isJidGroup(jid)) await this.handlePollVote(session, msg);
       return;

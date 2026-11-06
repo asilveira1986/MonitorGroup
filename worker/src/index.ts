@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { hostname } from 'node:os';
 import { runPeriodicChecks } from './alerts.js';
 import { createWorkerAutomation } from './automation/setup.js';
+import { createWorkerBroadcast } from './broadcast/setup.js';
 import { createWorkerClosing } from './closing-flow/setup.js';
 import { refreshCache } from './cache.js';
 import { db } from './db.js';
@@ -69,6 +70,9 @@ async function main() {
   manager.setAutomation(automation);
   const closingFlow = createWorkerClosing(manager);
   manager.setClosing(closingFlow);
+  // disparos em massa (0150): agendados e enviados no painel, enviados aqui com ritmo controlado
+  const broadcast = createWorkerBroadcast(manager);
+  manager.setBroadcast(broadcast);
 
   // Healthcheck para a plataforma de hospedagem (sobe primeiro)
   createServer((req, res) => {
@@ -133,6 +137,7 @@ async function main() {
     logger.info({ signal }, 'encerrando o worker');
     automation.stop();
     closingFlow.stop();
+    broadcast.stop();
     await manager.shutdown().catch(() => {});
     await db.rpc('release_worker_lock', { p_holder: workerId }).then(() => undefined, () => undefined);
     process.exit(0);
@@ -150,6 +155,7 @@ async function main() {
   await manager.init();
   automation.start();
   closingFlow.start();
+  void broadcast.start();
   // avisos no WhatsApp da equipe: compromissos e demandas (0106)
   startTeamWhatsApp();
 

@@ -58,6 +58,8 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
           // a Agenda funciona sem as demandas (compromissos); só as Demandas somem
           ...(demandsEnabled(settings) ? [] : ['/demands']),
           ...(privateOk ? [] : ['/private', '/contacts']),
+          // disparos em massa (0150): só administradores
+          ...(profile.role === 'admin' || profile.platform_admin ? [] : ['/broadcasts']),
           ...MENU_ITEMS.filter(
             (i) =>
               !canSeeMenu(
