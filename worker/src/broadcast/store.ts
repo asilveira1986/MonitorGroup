@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { DEFAULT_SETTINGS, normalizeSettings } from './service.js';
+import { DEFAULT_SETTINGS, normalizeSettings, phoneKey } from './service.js';
 import type { BroadcastStore, Campaign, Recipient } from './types.js';
 
 type CampaignRow = {
@@ -29,12 +29,6 @@ type RecipientRow = {
   jid: string | null;
   instance_id: string | null;
 };
-
-/** Telefone comparável: DDD + 8 últimos dígitos (tolera o 55 e o 9º dígito), como phone_key do banco. */
-export function phoneKey(phone: string): string {
-  const d = phone.replace(/\D/g, '');
-  return d.replace(/^(?:55)?(\d{2})9?(\d{8})$/, '$1$2');
-}
 
 const must = (error: { message: string } | null, context: string) => {
   if (error) throw new Error(`broadcast ${context}: ${error.message}`);

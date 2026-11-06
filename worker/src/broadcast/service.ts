@@ -86,3 +86,9 @@ export function inSendWindow(window: SendWindow | null, at: Date, timezone: stri
   if (!window) return true;
   return isWithinBusinessHours(at, { timezone, businessDays: window.days, start: window.start, end: window.end });
 }
+
+/** Telefone comparável: DDD + 8 últimos dígitos (tolera o 55 e o 9º dígito), como phone_key do banco. */
+export function phoneKey(phone: string): string {
+  const d = phone.replace(/\D/g, '');
+  return d.replace(/^(?:55)?(\d{2})9?(\d{8})$/, '$1$2');
+}

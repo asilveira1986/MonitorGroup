@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createBroadcast } from './runner.js';
-import { batchPauseMs, inSendWindow, isOptOutText, normalizeSettings, OPTOUT_FOOTER, pickDelayMs, pickVariant, renderMessage, typingMs, withOptOutFooter } from './service.js';
-import { phoneKey } from './store.js';
+import { batchPauseMs, inSendWindow, isOptOutText, normalizeSettings, OPTOUT_FOOTER, pickDelayMs, pickVariant, phoneKey, renderMessage, typingMs, withOptOutFooter } from './service.js';
 import type { BroadcastSettings, BroadcastSock, BroadcastStore, Campaign, Recipient } from './types.js';
 
 // ------------------------------------------------------------------ regras puras
