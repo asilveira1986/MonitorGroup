@@ -1,6 +1,6 @@
 import { AdminNotice } from '@/components/admin-notice';
+import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
-import { createClient } from '@/lib/supabase/server';
 import { DemandNotice } from '../demand-notice';
 
 type Row = Record<string, boolean | string | null>;
@@ -13,7 +13,7 @@ type Row = Record<string, boolean | string | null>;
 export default async function NoticesPage() {
   const profile = await requireProfile();
   const isAdmin = profile.role === 'admin' || profile.platform_admin;
-  const { data } = await (await createClient()).from('app_settings').select('*').maybeSingle();
+  const { data } = await appSettings();
   const s = (data ?? {}) as Row;
   const heading = 'px-1 pt-2 text-sm font-semibold text-ink';
   return (

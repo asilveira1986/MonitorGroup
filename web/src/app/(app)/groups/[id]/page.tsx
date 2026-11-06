@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ActionButton } from '@/components/action-button';
 import { Card, CardHeader } from '@/components/ui';
+import { appSettings } from '@/lib/app-settings';
 import { DEFAULT_DEMAND_TYPES, formatDateTime, formatDuration, formatNumber, REMOVED_REASON_LABEL, timeAgo } from '@/lib/format';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -37,10 +38,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
       .order('sent_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(PAGE_SIZE),
-    supabase
-      .from('app_settings')
-      .select('timezone, default_sla_minutes, demand_manual_enabled, reply_enabled, reply_sign_name, reply_allowed')
-      .single(),
+    appSettings(),
     // indicadores calculados no banco
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
@@ -65,7 +63,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     supabase.rpc('group_members', { p_group_id: id }),
     supabase.from('quick_replies').select('id, shortcut, title, body').order('shortcut'),
     // à parte: sem o script 0043 a coluna não existe e o resto da tela segue normal
-    supabase.from('app_settings').select('closing_shortcut').maybeSingle(),
+    appSettings(),
     // imagem do grupo (guardada pelo worker)
     supabase.from('contact_avatars').select('path').eq('jid', group?.jid ?? '').maybeSingle(),
     // "Chamar no privado" (0069): administradores e atendentes, com o módulo ligado (0114)

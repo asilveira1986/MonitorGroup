@@ -1,4 +1,5 @@
 import { AdminNotice } from '@/components/admin-notice';
+import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { AlertRule, AppSettings } from '@/lib/types';
@@ -14,7 +15,7 @@ export default async function NoticeSettingsPage() {
   const isAdmin = profile.role === 'admin' || profile.platform_admin;
   const supabase = await createClient();
   const [{ data: settings }, { data: rules }, { data: privateOk }] = await Promise.all([
-    supabase.from('app_settings').select('*').maybeSingle(),
+    appSettings(),
     supabase.from('alert_rules').select('voice'),
     // conversas privadas ligadas na empresa (e o banco com o script 0120): a seção própria
     supabase.rpc('can_use_private_chats'),

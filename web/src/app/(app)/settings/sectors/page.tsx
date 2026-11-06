@@ -1,4 +1,5 @@
 import { AdminNotice } from '@/components/admin-notice';
+import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { DefaultSector, SectorsList, type SectorRow } from './sectors';
@@ -17,7 +18,7 @@ export default async function SectorsPage() {
     supabase.from('sector_members').select('sector_id, user_id'),
     supabase.from('profiles').select('id, full_name, email, role, active, platform_admin').order('full_name'),
     supabase.from('groups').select('id, name, sector_id, monitored').is('removed_at', null).order('name'),
-    supabase.from('app_settings').select('default_sector_id').single(),
+    appSettings(),
   ]);
   const list = (sectors ?? []) as SectorRow[];
   const allGroups = groups ?? [];

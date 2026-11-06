@@ -1,4 +1,5 @@
 import { AdminNotice } from '@/components/admin-notice';
+import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
 import type { QuickReply } from '@/lib/quick-replies';
 import { createClient } from '@/lib/supabase/server';
@@ -9,7 +10,7 @@ export default async function QuickRepliesPage() {
   const supabase = await createClient();
   const [{ data, error }, { data: cfg }] = await Promise.all([
     supabase.from('quick_replies').select('id, shortcut, title, body').order('shortcut'),
-    supabase.from('app_settings').select('closing_shortcut').maybeSingle(),
+    appSettings(),
   ]);
   return (
     <div className="space-y-4">

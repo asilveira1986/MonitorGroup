@@ -1,3 +1,4 @@
+import { appSettings } from '@/lib/app-settings';
 import { requireMenu } from '@/lib/auth';
 import { BellOff, Check, CheckCheck, Eye, Mail, MessageCircle, Webhook } from 'lucide-react';
 import Link from 'next/link';
@@ -34,7 +35,7 @@ export default async function AlertsPage({ searchParams }: PageProps<'/alerts'>)
     await Promise.all([
     base().neq('status', 'resolved').limit(200),
     base().eq('status', 'resolved').limit(100),
-    supabase.from('app_settings').select('timezone').single(),
+    appSettings(),
     supabase.from('alert_rules').select('type, indicator_key').eq('active', true),
     supabase.from('my_indicators').select('key, block_key, enabled, alert_enabled'),
     supabase.from('my_indicator_blocks').select('key, enabled'),

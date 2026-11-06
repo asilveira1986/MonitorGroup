@@ -1,6 +1,7 @@
 import { Lock, MessageCircle } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
+import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { ContactsSync } from './contacts-sync';
@@ -21,7 +22,7 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
   const [{ data: allowed }, { data: chats }, { data: settings }, { data: instance }, { data: tagRows }] = await Promise.all([
     supabase.rpc('can_use_private_chats'),
     supabase.from('private_chats').select('*').order('last_message_at', { ascending: false, nullsFirst: false }).limit(300),
-    supabase.from('app_settings').select('timezone').maybeSingle(),
+    appSettings(),
     supabase.from('whatsapp_instances').select('status').eq('status', 'connected').limit(1).maybeSingle(),
     // etiquetas de clientes (0103)
     supabase.from('customer_tags').select('id, name, color').order('name'),

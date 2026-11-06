@@ -1,4 +1,5 @@
 import { AdminNotice } from '@/components/admin-notice';
+import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
 import { DEFAULT_DEMAND_TYPES } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
@@ -15,7 +16,7 @@ export default async function DemandTypesPage() {
   const [{ data: ind }, { data: used }, { data: settings }] = await Promise.all([
     supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
     supabase.from('demands').select('type').not('type', 'is', null).limit(20000),
-    supabase.from('app_settings').select('*').single(),
+    appSettings(),
   ]);
   const categories = (ind?.params as { categories?: DemandType[] } | undefined)?.categories;
   const types: DemandType[] = categories?.length

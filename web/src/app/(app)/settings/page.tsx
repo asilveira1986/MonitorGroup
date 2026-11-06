@@ -2,6 +2,7 @@ import { Building2 } from 'lucide-react';
 import { AdminNotice } from '@/components/admin-notice';
 import { ImageUpload } from '@/components/image-upload';
 import { Card, CardHeader } from '@/components/ui';
+import { appSettings } from '@/lib/app-settings';
 import { currentCompany, requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { AppSettings } from '@/lib/types';
@@ -15,7 +16,7 @@ export default async function CompanySettingsPage() {
   const supabase = await createClient();
   const company = await currentCompany();
   const [{ data }, { data: holidays }, { data: logo }] = await Promise.all([
-    supabase.from('app_settings').select('*').single(),
+    appSettings(),
     supabase.from('holidays').select('day, name').order('day'),
     // à parte: sem o script 0083 a coluna não existe e o resto da tela segue normal
     supabase.from('companies').select('logo_path').eq('id', company?.id ?? '').maybeSingle(),
