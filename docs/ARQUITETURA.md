@@ -67,6 +67,9 @@ Módulos de `lib/` que mais se usa:
 ## 4. Banco (`supabase/migrations`)
 
 - Um arquivo por mudança, numerado e **só para a frente**: `0149_nome.sql`. Nunca edite uma migração antiga.
+- **Mudou a assinatura de uma função?** (ex.: ganhou um parâmetro, como `send_group_message` na 0147) procure o nome em
+  `supabase/build-updates.sh` e ajuste as conferências antigas que citam a assinatura anterior. Senão `conferir_banco.sql`
+  acusa "FALTANDO" para um recurso que existe (aconteceu com 0043 e 0074).
 - Escreva para poder rodar de novo (`if not exists`, `create or replace`, `drop ... if exists`). Quem atualiza o banco
   roda o script completo outra vez.
 - Em geral, funções do painel usam `security invoker` (respeitam o RLS) e funções só do worker, `security definer` com
