@@ -72,6 +72,8 @@ export type BroadcastStore = {
   pause(campaignId: string): Promise<void>;
   /** cria o envio de cada disparo recorrente que chegou na hora; devolve quantos criou */
   spawnDue(): Promise<number>;
+  /** cria o envio dos gatilhos (etiqueta aplicada, aniversário) para quem entrou na regra; devolve quantos criou */
+  runTriggers(): Promise<number>;
   /** recibo do WhatsApp de uma mensagem enviada (3 entregue, 4 lida) */
   track(waMessageId: string, status: number): Promise<void>;
   /** destinatários que ficaram "enviando" por uma queda do worker: não reenviar (evita duplicar) */

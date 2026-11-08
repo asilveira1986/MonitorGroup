@@ -71,6 +71,7 @@ function setup(opts: {
   let campaignStatus = 'running';
   let sent = opts.sentBefore ?? 0;
   let spawnCalls = 0;
+  let triggerCalls = 0;
 
   const store: BroadcastStore = {
     async startDue() {},
@@ -124,6 +125,11 @@ function setup(opts: {
       if (opts.spawnFails) throw new Error('function broadcast_spawn_due() does not exist');
       return opts.spawnResult ?? 0;
     },
+    async runTriggers() {
+      triggerCalls++;
+      if (opts.spawnFails) throw new Error('function broadcast_triggers_run() does not exist');
+      return 0;
+    },
     async track() {},
     async failStuck() {
       return 0;
@@ -152,7 +158,7 @@ function setup(opts: {
     rand: () => 0,
     maxConsecutiveFailures: opts.maxFails,
   });
-  return { svc, status, errors, calls, events, mediaLoads, spawnCalls: () => spawnCalls, advance: (ms: number) => (clock += ms), campaignStatus: () => campaignStatus };
+  return { svc, status, errors, calls, events, mediaLoads, spawnCalls: () => spawnCalls, triggerCalls: () => triggerCalls, advance: (ms: number) => (clock += ms), campaignStatus: () => campaignStatus };
 }
 
 const group = (n: number): Recipient => ({ id: `r${n}`, campaignId: 'c1', kind: 'group', name: `Grupo ${n}`, phone: null, jid: `${n}@g.us`, instanceId: 'i1' });
@@ -375,4 +381,17 @@ test('sem o script 0152 (spawnDue falha) os disparos comuns seguem enviando', as
   await t.svc.tick();
   assert.equal(t.calls.length, 1);
   assert.equal(t.status.get('r1'), 'sent');
+});
+
+test('gatilhos: confere a cada minuto, sem atrapalhar o envio', async () => {
+  const t = setup({ recipients: [group(1), group(2)] });
+  await t.svc.tick();
+  assert.equal(t.triggerCalls(), 1);
+  t.advance(30_000);
+  await t.svc.tick();
+  assert.equal(t.triggerCalls(), 1); // ainda dentro de 1 minuto
+  t.advance(30_000);
+  await t.svc.tick();
+  assert.equal(t.triggerCalls(), 2);
+  assert.equal(t.calls.length, 2); // o envio comum seguiu
 });

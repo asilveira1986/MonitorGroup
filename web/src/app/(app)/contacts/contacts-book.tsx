@@ -12,7 +12,7 @@ import { AGENDA_COLORS, type AgendaColor } from '@/lib/agenda-colors';
 import { CONTACT_INITIALS, cn, formatPhone, initials } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
 import { startPrivateChat } from '../private/actions';
-import { deleteContact, saveContact, type ContactInput } from './actions';
+import { deleteContact, saveContact, setContactBirthday, type ContactInput } from './actions';
 
 /** linha da lista (contact_directory, 0112): uma por pessoa */
 export type Contact = {
@@ -70,11 +70,33 @@ export function ContactDialog({
   });
   const [list, setList] = useState(allTags);
   const [newTag, setNewTag] = useState('');
+  // aniversário (0153): lido à parte, para não depender da lista de contatos; sem o script, o campo fica vazio
+  const [birthday, setBirthday] = useState('');
+  const [initialBirthday, setInitialBirthday] = useState('');
   const [pending, start] = useTransition();
   const set = (k: keyof ContactInput) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
   // contato só da agenda do WhatsApp (ou de uma conversa): salvar cria o cadastro no sistema
   const fromWhatsApp = Boolean(contact && !contact.id);
   const title = heading ?? (contact ? 'Editar contato' : 'Novo contato');
+
+  useEffect(() => {
+    if (!contact?.id) return;
+    let cancelled = false;
+    void createClient()
+      .from('contacts')
+      .select('birthday')
+      .eq('id', contact.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const value = ((data as { birthday?: string | null } | null)?.birthday as string | null) ?? '';
+        setBirthday(value);
+        setInitialBirthday(value);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [contact?.id]);
 
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -103,6 +125,11 @@ export function ContactDialog({
           start(async () => {
             const res = await saveContact(contact?.id ?? null, form);
             if (!res.ok) return void toast.error(res.error);
+            // aniversário à parte: o contato já está salvo; só grava se o campo mudou (sem o script 0153, sem aviso)
+            if (res.data?.id && birthday !== initialBirthday) {
+              const b = await setContactBirthday(res.data.id, birthday || null);
+              if (!b.ok) toast.error(`Contato salvo, mas o aniversário não: ${b.error}`);
+            }
             toast.success(contact?.id ? 'Contato salvo' : 'Contato cadastrado');
             onSaved();
             onClose();
@@ -132,6 +159,9 @@ export function ContactDialog({
           </Field>
           <Field label="Empresa">
             <Input value={form.organization} onChange={set('organization')} maxLength={120} />
+          </Field>
+          <Field label="Aniversário" hint="Usado pelo gatilho de aniversário dos Disparos.">
+            <Input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} max={new Date().toISOString().slice(0, 10)} />
           </Field>
           <div className="sm:col-span-2">
             <Field label="Observações">

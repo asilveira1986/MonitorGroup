@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   DEFAULT_BROADCAST_SETTINGS,
   describeRecurrence,
+  describeTrigger,
   estimateSeconds,
   formatEstimate,
   groupCounts,
@@ -15,6 +16,7 @@ import {
   percentOf,
   totalOf,
   validateRecurrence,
+  validateTrigger,
   validateBroadcastSettings,
   validateWindow,
 } from './broadcast.ts';
@@ -142,4 +144,24 @@ test('percentual do relatório', () => {
   assert.equal(percentOf(1, 4), '25%');
   assert.equal(percentOf(2, 3), '67%');
   assert.equal(percentOf(0, 0), '—');
+});
+
+const trig = { name: 'Boas-vindas', kind: 'tag_applied' as const, tagId: 't1', sendTime: '09:00', target: 'people' as const, instanceId: 'i1', message: 'Olá {primeiro_nome}!', optoutFooter: true, includeExisting: false };
+
+test('gatilho: validação', () => {
+  assert.deepEqual(validateTrigger(trig), { ok: true });
+  assert.equal(validateTrigger({ ...trig, name: ' ' }).ok, false);
+  assert.equal(validateTrigger({ ...trig, message: '' }).ok, false);
+  assert.equal(validateTrigger({ ...trig, tagId: null }).ok, false);
+  assert.equal(validateTrigger({ ...trig, instanceId: null }).ok, false);
+  assert.deepEqual(validateTrigger({ ...trig, target: 'groups', instanceId: null }), { ok: true });
+  assert.deepEqual(validateTrigger({ ...trig, kind: 'birthday', tagId: null }), { ok: true });
+  assert.equal(validateTrigger({ ...trig, kind: 'birthday', tagId: null, sendTime: '9h' }).ok, false);
+  assert.equal(validateTrigger({ ...trig, kind: 'birthday', tagId: null, target: 'groups', instanceId: null }).ok, false);
+});
+
+test('gatilho: descrição', () => {
+  assert.equal(describeTrigger({ kind: 'birthday', target: 'people', send_time: '09:00' }), 'No aniversário do contato, às 09:00');
+  assert.equal(describeTrigger({ kind: 'tag_applied', target: 'people', send_time: '09:00' }, 'Novo cliente'), 'Quando alguém receber a etiqueta Novo cliente');
+  assert.equal(describeTrigger({ kind: 'tag_applied', target: 'groups', send_time: '09:00' }, 'VIP'), 'Quando um grupo receber a etiqueta VIP');
 });
