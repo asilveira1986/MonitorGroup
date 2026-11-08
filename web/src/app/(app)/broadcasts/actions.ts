@@ -208,6 +208,9 @@ export async function saveBroadcastTrigger(input: TriggerInput): Promise<ActionR
     p_message: input.message,
     p_optout_footer: input.optoutFooter,
     p_include_existing: input.includeExisting,
+    p_variants: input.variants ?? [],
+    p_media: input.media ?? null,
+    p_window: input.window ?? null,
   });
   if (error) return { ok: false, error: friendlyDbError(error.message) };
   revalidatePath('/broadcasts/triggers');

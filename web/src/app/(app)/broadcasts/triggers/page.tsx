@@ -5,6 +5,7 @@ import type { CustomerTag } from '@/components/customer-tags';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { requirePlatformAdmin } from '@/lib/auth';
 import type { BroadcastTrigger } from '@/lib/broadcast';
+import { appSettings } from '@/lib/app-settings';
 import { createClient } from '@/lib/supabase/server';
 import type { InstanceOption } from '../new/new-broadcast';
 import { Triggers } from './triggers';
@@ -18,12 +19,13 @@ export const metadata: Metadata = { title: 'Monitor Group · Gatilhos de disparo
 export default async function TriggersPage() {
   await requirePlatformAdmin();
   const supabase = await createClient();
-  const [triggers, tags, instances, birthdays] = await Promise.all([
+  const [triggers, tags, instances, birthdays, settings] = await Promise.all([
     supabase.from('broadcast_triggers').select('*').order('created_at', { ascending: false }),
     supabase.from('customer_tags').select('id, name, color').order('name'),
     supabase.from('whatsapp_instances').select('id, name, phone, status').order('name'),
     // sem o script 0153 a coluna não existe: contagem indisponível
     supabase.from('contacts').select('id', { count: 'exact', head: true }).not('birthday', 'is', null),
+    appSettings(),
   ]);
 
   if (triggers.error) {
@@ -54,6 +56,7 @@ export default async function TriggersPage() {
         tags={(tags.data ?? []) as CustomerTag[]}
         instances={(instances.data ?? []) as InstanceOption[]}
         birthdays={birthdays.error ? null : (birthdays.count ?? 0)}
+        timezone={(settings.data as { timezone?: string } | null)?.timezone || 'America/Sao_Paulo'}
       />
     </div>
   );

@@ -5,9 +5,10 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import type { CustomerTag } from '@/components/customer-tags';
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select, Textarea, Toggle } from '@/components/ui';
-import { describeTrigger, TRIGGER_KIND_LABEL, validateTrigger, type BroadcastTarget, type BroadcastTrigger, type TriggerKind } from '@/lib/broadcast';
+import { DEFAULT_WINDOW, describeTrigger, MEDIA_TYPE_LABEL, TRIGGER_KIND_LABEL, validateTrigger, WEEKDAY_LABEL, type BroadcastMedia, type BroadcastTarget, type BroadcastTrigger, type BroadcastWindow, type TriggerKind } from '@/lib/broadcast';
 import { formatDateTime } from '@/lib/format';
 import { deleteBroadcastTrigger, saveBroadcastTrigger, setBroadcastTriggerEnabled } from '../actions';
+import { MediaField, VariantsField, WindowField } from '../fields';
 import type { InstanceOption } from '../new/new-broadcast';
 
 /** Lista dos gatilhos e o formulário de novo gatilho. */
@@ -16,12 +17,14 @@ export function Triggers({
   tags,
   instances,
   birthdays,
+  timezone,
 }: {
   items: BroadcastTrigger[];
   tags: CustomerTag[];
   instances: InstanceOption[];
   /** contatos com aniversário cadastrado (null = banco sem o script) */
   birthdays: number | null;
+  timezone: string;
 }) {
   const [pending, start] = useTransition();
   const [open, setOpen] = useState(items.length === 0);
@@ -34,13 +37,18 @@ export function Triggers({
   const [message, setMessage] = useState('');
   const [footer, setFooter] = useState(true);
   const [includeExisting, setIncludeExisting] = useState(false);
+  const [variants, setVariants] = useState<string[]>([]);
+  const [media, setMedia] = useState<BroadcastMedia | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [windowOn, setWindowOn] = useState(false);
+  const [win, setWin] = useState<BroadcastWindow>(DEFAULT_WINDOW);
 
   const tagName = (id: string | null) => tags.find((t) => t.id === id)?.name ?? null;
   const people = kind === 'birthday' || target === 'people';
 
   const save = () =>
     start(async () => {
-      const input = { name, kind, tagId: kind === 'tag_applied' ? tagId : null, sendTime, target: kind === 'birthday' ? 'people' : target, instanceId: people ? instanceId : null, message, optoutFooter: footer && people, includeExisting };
+      const input = { name, kind, tagId: kind === 'tag_applied' ? tagId : null, sendTime, target: kind === 'birthday' ? 'people' : target, instanceId: people ? instanceId : null, message, optoutFooter: footer && people, includeExisting, variants: variants.map((v) => v.trim()).filter(Boolean), media, window: windowOn ? win : null };
       const checked = validateTrigger(input);
       if (!checked.ok) {
         toast.error(checked.error);
@@ -54,6 +62,9 @@ export function Triggers({
       toast.success('Gatilho criado.');
       setName('');
       setMessage('');
+      setVariants([]);
+      setMedia(null);
+      setWindowOn(false);
       setOpen(false);
     });
 
@@ -98,7 +109,12 @@ export function Triggers({
                     {!t.enabled && <Badge tone="warning">Desligado</Badge>}
                   </p>
                   <p className="mt-0.5 text-xs text-ink-2">{describeTrigger(t, tagName(t.tag_id))}</p>
-                  <p className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-xs text-muted">{t.message}</p>
+                  {t.message && <p className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-xs text-muted">{t.message}</p>}
+                  <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted">
+                    {t.media_path && <span>Arquivo: {MEDIA_TYPE_LABEL[t.media_type as keyof typeof MEDIA_TYPE_LABEL] ?? 'Arquivo'}{t.media_name ? ` · ${t.media_name}` : ''}</span>}
+                    {(t.variants?.length ?? 0) > 0 && <span>{t.variants!.length} variação(ões)</span>}
+                    {t.window_enabled && <span>Só {(t.window_days ?? []).map((d) => WEEKDAY_LABEL[d]).join(', ')}, das {t.window_start} às {t.window_end}</span>}
+                  </p>
                   {t.last_run_at && (
                     <p className="mt-0.5 text-xs text-muted">
                       Último envio: {formatDateTime(t.last_run_at)}
@@ -188,14 +204,20 @@ export function Triggers({
               </Field>
             )}
 
-            <Field label="Mensagem" hint={kind === 'tag_applied' && target === 'groups' ? 'Use {grupo} para o nome do grupo.' : 'Use {primeiro_nome} ou {nome}.'}>
+            <Field label="Mensagem (legenda, se houver arquivo)" hint={kind === 'tag_applied' && target === 'groups' ? 'Use {grupo} para o nome do grupo.' : 'Use {primeiro_nome} ou {nome}.'}>
               <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={5} maxLength={4000} placeholder={kind === 'birthday' ? 'Parabéns, {primeiro_nome}! 🎉 …' : 'Olá, {primeiro_nome}! Bem-vindo(a) …'} />
             </Field>
+
+            <VariantsField value={variants} onChange={setVariants} />
+            <MediaField value={media} onChange={setMedia} onBusyChange={setUploading} />
+            <div className="border-t border-line/60 pt-3">
+              <WindowField enabled={windowOn} onEnabledChange={setWindowOn} value={win} onChange={setWin} timezone={timezone} />
+            </div>
 
             {people && <Toggle checked={footer} onChange={setFooter} label="Incluir “Para não receber mais mensagens, responda SAIR.” no fim" />}
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={save} disabled={pending || !name.trim() || !message.trim()}>
+              <Button onClick={save} disabled={pending || uploading || !name.trim() || (!message.trim() && !media)}>
                 <Zap className="h-4 w-4" /> {pending ? 'Criando…' : 'Criar gatilho'}
               </Button>
               {items.length > 0 && (

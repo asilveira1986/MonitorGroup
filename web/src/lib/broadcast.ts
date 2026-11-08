@@ -310,6 +310,15 @@ export type BroadcastTrigger = {
   message: string;
   optout_footer: boolean;
   enabled: boolean;
+  // 0154 (ausentes se o script ainda não foi rodado)
+  variants?: string[] | null;
+  media_path?: string | null;
+  media_name?: string | null;
+  media_type?: MediaType | null;
+  window_enabled?: boolean | null;
+  window_days?: number[] | null;
+  window_start?: string | null;
+  window_end?: string | null;
   last_run_at: string | null;
   last_run_note: string | null;
   created_at: string;
@@ -326,12 +335,23 @@ export type TriggerInput = {
   optoutFooter: boolean;
   /** etiqueta aplicada: também envia a quem já tem a etiqueta agora */
   includeExisting: boolean;
+  variants?: string[];
+  media?: BroadcastMedia | null;
+  window?: BroadcastWindow | null;
 };
 
 export function validateTrigger(t: TriggerInput): { ok: true } | { ok: false; error: string } {
   if (!t.name.trim()) return { ok: false, error: 'Dê um nome ao gatilho.' };
-  if (!t.message.trim()) return { ok: false, error: 'Escreva a mensagem.' };
+  if (!t.message.trim() && !t.media) return { ok: false, error: 'Escreva a mensagem ou anexe um arquivo.' };
   if (t.message.length > 4000) return { ok: false, error: 'A mensagem passa de 4000 caracteres.' };
+  const variants = (t.variants ?? []).filter((v) => v.trim());
+  if (variants.length > MAX_VARIANTS) return { ok: false, error: `No máximo ${MAX_VARIANTS} variações além do texto principal.` };
+  if (variants.length > 0 && !t.message.trim()) return { ok: false, error: 'Escreva o texto principal para usar variações.' };
+  if (variants.some((v) => v.length > 4000)) return { ok: false, error: 'Uma variação passa de 4000 caracteres.' };
+  if (t.window) {
+    const w = validateWindow(t.window);
+    if (!w.ok) return w;
+  }
   if (t.kind === 'tag_applied' && !t.tagId) return { ok: false, error: 'Escolha a etiqueta que dispara a mensagem.' };
   if (t.kind === 'birthday' && !HHMM.test(t.sendTime)) return { ok: false, error: 'Informe o horário no formato 09:00.' };
   if ((t.kind === 'birthday' || t.target === 'people') && !t.instanceId) return { ok: false, error: 'Escolha o número do WhatsApp que envia.' };
