@@ -1,34 +1,16 @@
 'use client';
 
-import { Activity, Bell, BookUser, Building2, CalendarDays, MessageCircle, Megaphone, ChevronsLeft, ChevronsRight, ClipboardList, Clock, FileBarChart, LayoutDashboard, LayoutGrid, LogOut, Menu, MessagesSquare, ScrollText, Settings, X } from 'lucide-react';
-import Link from 'next/link';
+import { Building2, ChevronsLeft, ChevronsRight, LogOut, Menu, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { CompanyMenu } from '@/components/company-menu';
 import { ProfileDialog, type MyProfile } from '@/components/profile-dialog';
 import { Logo } from '@/components/logo';
+import { SidebarNav } from '@/components/sidebar-nav';
 import { MyAlertsToggle, NotifyToggle } from '@/components/message-notifier';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { cn } from '@/lib/format';
 import { ROLE_LABEL } from '@/lib/roles';
-
-const NAV = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/panel', label: 'Painel de grupos', icon: LayoutGrid },
-  { href: '/pending', label: 'Aguardando resposta', icon: Clock, badgeKey: 'pending' as const },
-  { href: '/demands', label: 'Demandas', icon: ClipboardList, badgeKey: 'demands' as const },
-  { href: '/agenda', label: 'Agenda', icon: CalendarDays, badgeKey: 'agenda' as const },
-  { href: '/groups', label: 'Grupos', icon: MessagesSquare },
-  // conversas privadas (0069): administradores e atendentes, na empresa com o módulo ligado (0114)
-  { href: '/private', label: 'Conversas privadas', icon: MessageCircle, badgeKey: 'private' as const },
-  // contatos (0112): agenda do WhatsApp + cadastros do sistema; mesmo acesso das conversas privadas
-  { href: '/contacts', label: 'Contatos', icon: BookUser },
-  // disparos em massa (0150): só o administrador geral da plataforma (o layout esconde para os demais)
-  { href: '/broadcasts', label: 'Disparos', icon: Megaphone },
-  { href: '/alerts', label: 'Alertas', icon: Bell, badgeKey: 'alerts' as const },
-  { href: '/reports', label: 'Relatórios', icon: FileBarChart },
-  { href: '/settings', label: 'Configurações', icon: Settings },
-];
 
 // variantes válidas só no menu fixo da tela grande quando ele está recolhido
 // (o menu do celular usa a mesma lista e não muda)
@@ -150,75 +132,11 @@ export function Sidebar({
     </div>
   );
 
-  const nav = (
-    <nav className="space-y-0.5">
-      {[
-        ...NAV,
-        ...(platformAdmin
-          ? [
-              { href: '/platform', label: 'Empresas', icon: Building2, badgeKey: undefined },
-              // uso da plataforma por empresa (0135)
-              { href: '/acompanhamento', label: 'Acompanhamento', icon: Activity, badgeKey: undefined },
-              // log de atividades dos usuários: só quem administra a plataforma
-              { href: '/logs', label: 'Log', icon: ScrollText, badgeKey: undefined },
-            ]
-          : []),
-      ]
-        .filter((item) => !hidden.includes(item.href))
-        .map(({ href, label, icon: Icon, badgeKey }) => {
-        const active = pathname === href || pathname.startsWith(`${href}/`);
-        const count = badgeKey ? (counts[badgeKey] ?? 0) : 0;
-        return (
-          <Link
-            key={href}
-            href={href}
-            onClick={() => setOpen(false)}
-            title={label}
-            className={cn(
-              'relative flex items-center gap-2.5 rounded-xl px-2.5 py-3 text-sm font-medium transition lg:py-1.5',
-              '[[data-sidebar=collapsed]_aside_&]:justify-center [[data-sidebar=collapsed]_aside_&]:px-0',
-              // ativo: placa azul-escura da marca, texto claro e ícone em verde-limão
-              active ? 'nav-active font-semibold' : 'text-ink-2 hover:bg-white/[0.06] hover:text-ink',
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0 [[data-sidebar=collapsed]_aside_&]:h-5 [[data-sidebar=collapsed]_aside_&]:w-5" />
-            <span className={cn('flex-1 whitespace-nowrap', COLLAPSED_HIDE)}>{label}</span>
-            {/* recolhido: só um ponto sobre o ícone indicando que há itens */}
-            {count > 0 && (
-              <span
-                className={cn(
-                  'absolute right-2.5 top-1.5 hidden h-2 w-2 rounded-full ring-2 ring-surface [[data-sidebar=collapsed]_aside_&]:block',
-                  badgeKey === 'alerts' || badgeKey === 'agenda' ? 'bg-critical' : badgeKey === 'private' ? 'bg-good' : badgeKey === 'demands' ? 'bg-ink-2' : 'bg-warning',
-                )}
-                aria-hidden
-              />
-            )}
-            {count > 0 && (
-              <span
-                className={cn(
-                  COLLAPSED_HIDE,
-                  'tabular shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none',
-                  badgeKey === 'alerts' || badgeKey === 'agenda'
-                    ? 'bg-critical text-white'
-                    : badgeKey === 'private'
-                      ? 'bg-good text-white'
-                    : badgeKey === 'demands'
-                      ? 'bg-surface-2 text-ink-2 ring-1 ring-line'
-                      : 'bg-warning text-black',
-                )}
-              >
-                {count > 99 ? '99+' : count}
-              </span>
-            )}
-          </Link>
-        );
-      })}
-    </nav>
-  );
+  const nav = <SidebarNav pathname={pathname} counts={counts} hidden={hidden} platformAdmin={platformAdmin} onNavigate={() => setOpen(false)} />;
 
   return (
     <>
-      <aside className="theme-deep sidebar-glow fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-surface px-3 py-4 transition-[width] duration-200 lg:flex [[data-sidebar=collapsed]_&]:w-[4.5rem] [[data-sidebar=collapsed]_&]:px-3">
+      <aside className="theme-deep sidebar-glow fixed inset-y-0 left-0 z-30 hidden w-[17rem] flex-col border-r border-line bg-surface px-3 py-4 transition-[width] duration-200 lg:flex [[data-sidebar=collapsed]_&]:w-[4.5rem] [[data-sidebar=collapsed]_&]:px-3">
         {/* recolher/expandir: discreto, no canto superior direito (vira uma aba na borda quando recolhido) */}
         <button
           type="button"
