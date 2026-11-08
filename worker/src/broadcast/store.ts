@@ -76,15 +76,15 @@ export function createSupabaseBroadcastStore(): BroadcastStore {
       return normalizeSettings(data as Record<string, unknown>);
     },
 
-    async listPending(campaignId, limit) {
-      const { data, error } = await db
+    async listPending(campaignId, limit, excludeInstances = []) {
+      let query = db
         .from('broadcast_recipients')
         .select('id, campaign_id, kind, name, phone, jid, instance_id')
         .eq('campaign_id', campaignId)
-        .eq('status', 'pending')
-        .order('created_at')
-        .order('id')
-        .limit(limit);
+        .eq('status', 'pending');
+      // quem é de um número que não pode enviar agora não fecha a fila dos outros (destino sem número entra: falha na hora)
+      if (excludeInstances.length > 0) query = query.or(`instance_id.is.null,instance_id.not.in.(${excludeInstances.join(',')})`);
+      const { data, error } = await query.order('created_at').order('id').limit(limit);
       must(error, 'list pending');
       return ((data ?? []) as RecipientRow[]).map(
         (r): Recipient => ({
@@ -125,7 +125,10 @@ export function createSupabaseBroadcastStore(): BroadcastStore {
     },
 
     async isOptedOut(companyId, phone) {
-      const { data, error } = await db.from('broadcast_optouts').select('phone').eq('company_id', companyId);
+      // só os pedidos que terminam com os mesmos 8 dígitos (o resto da lista não importa; a API limita as respostas)
+      const tail = phone.replace(/\D/g, '').slice(-8);
+      if (tail.length < 8) return false;
+      const { data, error } = await db.from('broadcast_optouts').select('phone').eq('company_id', companyId).like('phone', `%${tail}`);
       // sem o script 0151 não há lista de opt-out
       if (error) return false;
       const key = phoneKey(phone);
