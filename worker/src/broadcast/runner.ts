@@ -118,47 +118,68 @@ export function createBroadcast(deps: BroadcastDeps) {
       if (!inSendWindow(c.window, new Date(now()), tz)) return;
     }
     const s = await store.getSettings(c.companyId);
-    const pending = await store.listPending(c.id, 25);
-    for (const r of pending) {
-      // parou no meio (pausa ou cancelamento) não é visto aqui: a pausa vale no próximo ciclo
-      const inst = r.instanceId;
-      if (!inst) {
-        if (await store.claim(r.id)) await store.markFailed(r.id, 'O número do WhatsApp deste destino não existe mais.');
-        continue;
-      }
-      if ((nextAt.get(inst) ?? 0) > now()) continue;
-      const sock = deps.getSock(inst);
-      if (!sock || !sock.user) continue; // desconectado: espera voltar
-      let used = sentToday.get(inst);
-      if (used === undefined) {
-        used = await store.countSent(inst, new Date(now() - DAY_MS));
-        sentToday.set(inst, used);
-      }
-      if (used >= s.dailyLimit) continue; // limite de 24 h: segue quando a janela abrir
-      if (!(await store.claim(r.id))) continue;
-      // quem pediu para sair depois de o disparo ser criado não recebe
-      if (r.kind === 'person' && r.phone && (await store.isOptedOut(c.companyId, r.phone))) {
-        await store.markSkipped(r.id, 'Pediu para não receber mensagens.');
-        continue;
-      }
-      try {
-        await sendOne(c, r, sock, s);
-        sentToday.set(inst, used + 1);
-        fails.set(c.id, 0);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await store.markFailed(r.id, message);
-        // espera mesmo na falha, para não martelar o número
-        nextAt.set(inst, now() + pickDelayMs(s, rand));
-        if (err instanceof RecipientError) continue;
-        logger.warn({ err, campaign: c.id }, 'falha ao enviar disparo');
-        const n = (fails.get(c.id) ?? 0) + 1;
-        fails.set(c.id, n);
-        if (n >= maxFails) {
-          await store.pause(c.id);
-          fails.delete(c.id);
-          logger.warn({ campaign: c.id, name: c.name }, 'disparo pausado: falhas seguidas no envio');
-          return;
+    // Cada número envia no máximo uma mensagem por ciclo. Quem não pode enviar agora (ainda no intervalo,
+    // desconectado ou no limite de 24 h) sai da busca, para os destinatários dos outros números não ficarem
+    // presos atrás dele na fila.
+    const blocked = new Set<string>();
+    for (let round = 0; round < 20; round++) {
+      const pending = await store.listPending(c.id, 25, [...blocked]);
+      if (pending.length === 0) break;
+      for (const r of pending) {
+        // parou no meio (pausa ou cancelamento) não é visto aqui: a pausa vale no próximo ciclo
+        const inst = r.instanceId;
+        if (!inst) {
+          if (await store.claim(r.id)) await store.markFailed(r.id, 'O número do WhatsApp deste destino não existe mais.');
+          continue;
+        }
+        if (blocked.has(inst)) continue;
+        if ((nextAt.get(inst) ?? 0) > now()) {
+          blocked.add(inst);
+          continue;
+        }
+        const sock = deps.getSock(inst);
+        if (!sock || !sock.user) {
+          blocked.add(inst); // desconectado: espera voltar
+          continue;
+        }
+        let used = sentToday.get(inst);
+        if (used === undefined) {
+          used = await store.countSent(inst, new Date(now() - DAY_MS));
+          sentToday.set(inst, used);
+        }
+        if (used >= s.dailyLimit) {
+          blocked.add(inst); // limite de 24 h: segue quando a janela abrir
+          continue;
+        }
+        if (!(await store.claim(r.id))) {
+          blocked.add(inst);
+          continue;
+        }
+        // quem pediu para sair depois de o disparo ser criado não recebe (e não gasta o intervalo do número)
+        if (r.kind === 'person' && r.phone && (await store.isOptedOut(c.companyId, r.phone))) {
+          await store.markSkipped(r.id, 'Pediu para não receber mensagens.');
+          continue;
+        }
+        blocked.add(inst); // uma por número a cada ciclo
+        try {
+          await sendOne(c, r, sock, s);
+          sentToday.set(inst, used + 1);
+          fails.set(c.id, 0);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          await store.markFailed(r.id, message);
+          // espera mesmo na falha, para não martelar o número
+          nextAt.set(inst, now() + pickDelayMs(s, rand));
+          if (err instanceof RecipientError) continue;
+          logger.warn({ err, campaign: c.id }, 'falha ao enviar disparo');
+          const n = (fails.get(c.id) ?? 0) + 1;
+          fails.set(c.id, n);
+          if (n >= maxFails) {
+            await store.pause(c.id);
+            fails.delete(c.id);
+            logger.warn({ campaign: c.id, name: c.name }, 'disparo pausado: falhas seguidas no envio');
+            return;
+          }
         }
       }
     }

@@ -51,8 +51,8 @@ export type BroadcastStore = {
   startDue(now: Date): Promise<void>;
   listRunning(): Promise<Campaign[]>;
   getSettings(companyId: string): Promise<BroadcastSettings>;
-  /** próximos destinatários pendentes (em ordem) */
-  listPending(campaignId: string, limit: number): Promise<Recipient[]>;
+  /** próximos destinatários pendentes (em ordem), sem os dos números em excludeInstances */
+  listPending(campaignId: string, limit: number, excludeInstances?: string[]): Promise<Recipient[]>;
   /** reserva o destinatário; false se outro processo já pegou */
   claim(recipientId: string): Promise<boolean>;
   markSent(recipientId: string, waMessageId: string, sentAt: Date): Promise<void>;

@@ -49,6 +49,8 @@ function setup(opts: {
   timezone?: string;
   spawnResult?: number;
   spawnFails?: boolean;
+  /** números sem conexão */
+  disconnectedInstances?: string[];
 }) {
   let clock = opts.start ?? 1_000_000;
   const mediaLoads: string[] = [];
@@ -81,8 +83,8 @@ function setup(opts: {
     async getSettings() {
       return settings;
     },
-    async listPending(_c, limit) {
-      return opts.recipients.filter((r) => status.get(r.id) === 'pending').slice(0, limit);
+    async listPending(_c, limit, exclude = []) {
+      return opts.recipients.filter((r) => status.get(r.id) === 'pending' && (!r.instanceId || !exclude.includes(r.instanceId))).slice(0, limit);
     },
     async claim(id) {
       if (status.get(id) !== 'pending') return false;
@@ -145,7 +147,7 @@ function setup(opts: {
   };
   const svc = createBroadcast({
     store,
-    getSock: () => (opts.connected === false ? undefined : sock),
+    getSock: (instanceId) => (opts.connected === false || opts.disconnectedInstances?.includes(instanceId) ? undefined : sock),
     generateId: () => `id${calls.length + 1}`,
     onSending: (id) => events.push(`bot:${id}`),
     buildMedia: async (media, buffer, caption) => ({ [media.type]: buffer, caption, mimetype: media.mime }),
@@ -394,4 +396,36 @@ test('gatilhos: confere a cada minuto, sem atrapalhar o envio', async () => {
   await t.svc.tick();
   assert.equal(t.triggerCalls(), 2);
   assert.equal(t.calls.length, 2); // o envio comum seguiu
+});
+
+// ------------------------------------------------------------------ vários números
+
+const groupOn = (n: number, instanceId: string): Recipient => ({ id: `r${n}`, campaignId: 'c1', kind: 'group', name: `Grupo ${n}`, phone: null, jid: `${n}@g.us`, instanceId });
+
+test('número desconectado com muitos destinatários não prende os dos outros números', async () => {
+  // 30 grupos do número i1 (desconectado) na frente e 2 do número i2
+  const recipients = [...Array.from({ length: 30 }, (_, i) => groupOn(i + 1, 'i1')), groupOn(31, 'i2'), groupOn(32, 'i2')];
+  const t = setup({ recipients, disconnectedInstances: ['i1'] });
+  await t.svc.tick();
+  assert.equal(t.status.get('r31'), 'sent');
+  assert.equal(t.status.get('r32'), 'pending'); // um por número a cada ciclo
+  assert.equal(t.status.get('r1'), 'pending'); // o do número desconectado espera voltar
+  assert.equal(t.campaignStatus(), 'running');
+});
+
+test('cada número envia no seu ritmo, no mesmo ciclo', async () => {
+  const t = setup({ recipients: [groupOn(1, 'i1'), groupOn(2, 'i1'), groupOn(3, 'i2'), groupOn(4, 'i2')] });
+  await t.svc.tick();
+  assert.deepEqual([t.status.get('r1'), t.status.get('r2'), t.status.get('r3'), t.status.get('r4')], ['sent', 'pending', 'sent', 'pending']);
+  t.advance(10_000);
+  await t.svc.tick();
+  assert.deepEqual([t.status.get('r2'), t.status.get('r4')], ['sent', 'sent']);
+});
+
+test('destino sem número falha na hora mesmo com outros números bloqueados', async () => {
+  const orphan: Recipient = { id: 'orphan', campaignId: 'c1', kind: 'group', name: 'Órfão', phone: null, jid: '9@g.us', instanceId: null };
+  const t = setup({ recipients: [groupOn(1, 'i1'), orphan], disconnectedInstances: ['i1'] });
+  await t.svc.tick();
+  assert.equal(t.status.get('orphan'), 'failed');
+  assert.equal(t.errors.get('orphan'), 'O número do WhatsApp deste destino não existe mais.');
 });
