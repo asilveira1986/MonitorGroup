@@ -44,3 +44,13 @@ export async function deleteContact(id: string): Promise<Result> {
   revalidatePath('/contacts');
   return { ok: true };
 }
+
+/** Aniversário do contato (0153): usado pelo gatilho de aniversário dos disparos. Vazio apaga. */
+export async function setContactBirthday(id: string, birthday: string | null): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('set_contact_birthday', { p_id: id, p_birthday: birthday || null });
+  if (error) return { ok: false, error: friendlyDbError(error.message) };
+  revalidatePath('/contacts');
+  return { ok: true };
+}

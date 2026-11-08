@@ -289,3 +289,57 @@ export type BroadcastReport = {
 export function percentOf(a: number, b: number): string {
   return b > 0 ? `${Math.round((a / b) * 100)}%` : '—';
 }
+
+// ------------------------------------------------------------------ fase 4: gatilhos
+
+export type TriggerKind = 'tag_applied' | 'birthday';
+
+export const TRIGGER_KIND_LABEL: Record<TriggerKind, string> = {
+  tag_applied: 'Etiqueta aplicada',
+  birthday: 'Aniversário',
+};
+
+export type BroadcastTrigger = {
+  id: string;
+  name: string;
+  kind: TriggerKind;
+  target: BroadcastTarget;
+  tag_id: string | null;
+  send_time: string;
+  instance_id: string | null;
+  message: string;
+  optout_footer: boolean;
+  enabled: boolean;
+  last_run_at: string | null;
+  last_run_note: string | null;
+  created_at: string;
+};
+
+export type TriggerInput = {
+  name: string;
+  kind: TriggerKind;
+  tagId: string | null;
+  sendTime: string;
+  target: BroadcastTarget;
+  instanceId: string | null;
+  message: string;
+  optoutFooter: boolean;
+  /** etiqueta aplicada: também envia a quem já tem a etiqueta agora */
+  includeExisting: boolean;
+};
+
+export function validateTrigger(t: TriggerInput): { ok: true } | { ok: false; error: string } {
+  if (!t.name.trim()) return { ok: false, error: 'Dê um nome ao gatilho.' };
+  if (!t.message.trim()) return { ok: false, error: 'Escreva a mensagem.' };
+  if (t.message.length > 4000) return { ok: false, error: 'A mensagem passa de 4000 caracteres.' };
+  if (t.kind === 'tag_applied' && !t.tagId) return { ok: false, error: 'Escolha a etiqueta que dispara a mensagem.' };
+  if (t.kind === 'birthday' && !HHMM.test(t.sendTime)) return { ok: false, error: 'Informe o horário no formato 09:00.' };
+  if ((t.kind === 'birthday' || t.target === 'people') && !t.instanceId) return { ok: false, error: 'Escolha o número do WhatsApp que envia.' };
+  return { ok: true };
+}
+
+/** Resumo da regra: "Quando alguém receber a etiqueta Novo cliente" / "No aniversário, às 09:00". */
+export function describeTrigger(t: Pick<BroadcastTrigger, 'kind' | 'target' | 'send_time'>, tagName?: string | null): string {
+  if (t.kind === 'birthday') return `No aniversário do contato, às ${t.send_time}`;
+  return `Quando ${t.target === 'groups' ? 'um grupo' : 'alguém'} receber a etiqueta ${tagName ?? '(removida)'}`;
+}

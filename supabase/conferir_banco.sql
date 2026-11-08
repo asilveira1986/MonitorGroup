@@ -189,6 +189,8 @@ from (values
   (142, 'Disparos: mídia, variações, públicos salvos, janela, reenvio e opt-out (0151)', to_regclass('public.broadcast_optouts') is not null and to_regclass('public.broadcast_audiences') is not null
       and to_regprocedure('public.broadcast_retry_failed(uuid)') is not null),
   (143, 'Disparos: recorrência, relatório e inatividade (0152)', to_regprocedure('public.broadcast_spawn_due()') is not null and to_regprocedure('public.broadcast_report(uuid)') is not null),
-  (144, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (144, 'Disparos: gatilhos de etiqueta e aniversário (0153)', to_regclass('public.broadcast_triggers') is not null and to_regprocedure('public.broadcast_triggers_run()') is not null
+      and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'contacts' and column_name = 'birthday')),
+  (145, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

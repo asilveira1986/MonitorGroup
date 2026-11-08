@@ -8,6 +8,7 @@ import {
   mediaTypeFromMime,
   validateBroadcastSettings,
   validateRecurrence,
+  validateTrigger,
   validateWindow,
   type BroadcastFilter,
   type BroadcastMedia,
@@ -15,6 +16,7 @@ import {
   type BroadcastSettingsValues,
   type BroadcastWindow,
   type Recurrence,
+  type TriggerInput,
 } from '@/lib/broadcast';
 import { friendlyDbError } from '@/lib/db-errors';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -187,5 +189,45 @@ export async function removeBroadcastOptout(id: string): Promise<ActionResult> {
   const { error } = await supabase.rpc('broadcast_optout_remove', { p_id: id });
   if (error) return { ok: false, error: friendlyDbError(error.message) };
   revalidatePath('/broadcasts');
+  return { ok: true };
+}
+
+/** Cria um gatilho: etiqueta aplicada (envia uma vez a quem recebe a etiqueta) ou aniversário (no dia, no horário). */
+export async function saveBroadcastTrigger(input: TriggerInput): Promise<ActionResult> {
+  await requirePlatformAdmin();
+  const checked = validateTrigger(input);
+  if (!checked.ok) return checked;
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('broadcast_trigger_save', {
+    p_name: input.name,
+    p_kind: input.kind,
+    p_tag_id: input.kind === 'tag_applied' ? input.tagId : null,
+    p_send_time: input.sendTime,
+    p_target: input.target,
+    p_instance_id: input.target === 'people' || input.kind === 'birthday' ? input.instanceId : null,
+    p_message: input.message,
+    p_optout_footer: input.optoutFooter,
+    p_include_existing: input.includeExisting,
+  });
+  if (error) return { ok: false, error: friendlyDbError(error.message) };
+  revalidatePath('/broadcasts/triggers');
+  return { ok: true };
+}
+
+export async function setBroadcastTriggerEnabled(id: string, enabled: boolean): Promise<ActionResult> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('broadcast_trigger_set_enabled', { p_id: id, p_enabled: enabled });
+  if (error) return { ok: false, error: friendlyDbError(error.message) };
+  revalidatePath('/broadcasts/triggers');
+  return { ok: true };
+}
+
+export async function deleteBroadcastTrigger(id: string): Promise<ActionResult> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('broadcast_trigger_delete', { p_id: id });
+  if (error) return { ok: false, error: friendlyDbError(error.message) };
+  revalidatePath('/broadcasts/triggers');
   return { ok: true };
 }

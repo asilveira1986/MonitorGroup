@@ -49,6 +49,10 @@ export function createBroadcast(deps: BroadcastDeps) {
   const SPAWN_EVERY_MS = 30_000;
   let lastSpawnCheck = 0;
   let spawnWarned = false;
+  /** gatilhos (etiqueta aplicada, aniversário): de minuto em minuto */
+  const TRIGGERS_EVERY_MS = 60_000;
+  let lastTriggersCheck = 0;
+  let triggersWarned = false;
 
   /** arquivo de cada campanha em memória (baixa do Storage uma vez só) */
   const mediaCache = new Map<string, Buffer>();
@@ -179,6 +183,19 @@ export function createBroadcast(deps: BroadcastDeps) {
             if (!spawnWarned) {
               spawnWarned = true;
               logger.warn({ err }, 'não foi possível criar os disparos recorrentes (script 0152 rodado?)');
+            }
+          },
+        );
+      }
+      if (now() - lastTriggersCheck >= TRIGGERS_EVERY_MS) {
+        lastTriggersCheck = now();
+        // sem o script 0153 a função não existe: o resto segue funcionando
+        await store.runTriggers().then(
+          (n) => n > 0 && logger.info({ n }, 'disparos de gatilhos criados'),
+          (err) => {
+            if (!triggersWarned) {
+              triggersWarned = true;
+              logger.warn({ err }, 'não foi possível rodar os gatilhos de disparo (script 0153 rodado?)');
             }
           },
         );

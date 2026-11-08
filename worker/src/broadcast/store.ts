@@ -184,6 +184,12 @@ export function createSupabaseBroadcastStore(): BroadcastStore {
       return Number(data ?? 0);
     },
 
+    async runTriggers() {
+      const { data, error } = await db.rpc('broadcast_triggers_run');
+      must(error, 'run triggers');
+      return Number(data ?? 0);
+    },
+
     async track(waMessageId, status) {
       const { error } = await db.rpc('broadcast_track', { p_wa_message_id: waMessageId, p_status: status });
       must(error, 'track');

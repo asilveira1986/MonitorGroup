@@ -1,4 +1,4 @@
-import { AlertTriangle, Megaphone, Plus } from 'lucide-react';
+import { AlertTriangle, Megaphone, Plus, Zap } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
@@ -24,6 +24,7 @@ type CampaignRow = {
   recurrence?: Recurrence | null;
   next_run_at?: string | null;
   series_id?: string | null;
+  trigger_id?: string | null;
   last_run_note?: string | null;
 };
 
@@ -43,13 +44,15 @@ const TONE: Record<string, 'neutral' | 'good' | 'warning' | 'critical' | 'brand'
 export default async function BroadcastsPage() {
   await requirePlatformAdmin();
   const supabase = await createClient();
-  const [campaigns, counts, settings, optouts] = await Promise.all([
+  const [campaigns, counts, settings, optouts, triggerRows] = await Promise.all([
     // "*": sem o script 0152 as colunas da recorrência não existem
     supabase.from('broadcast_campaigns').select('*').order('created_at', { ascending: false }).limit(100),
     supabase.rpc('broadcast_counts'),
     appSettings(),
     // sem o script 0151 a tabela não existe: lista vazia
     supabase.from('broadcast_optouts').select('id, phone, name, source, created_at').order('created_at', { ascending: false }).limit(500),
+    // sem o script 0153 a tabela não existe: sem o rótulo "Gatilho"
+    supabase.from('broadcast_triggers').select('id, name'),
   ]);
 
   // sem o script do banco (0150) as tabelas não existem
@@ -67,6 +70,7 @@ export default async function BroadcastsPage() {
 
   const byCampaign = groupCounts((counts.data ?? []) as { campaign_id: string; status: string; n: number }[]);
   const rows = (campaigns.data ?? []) as CampaignRow[];
+  const triggerName = new Map(((triggerRows.data ?? []) as { id: string; name: string }[]).map((t) => [t.id, t.name]));
   const seriesName = new Map(rows.filter((r) => r.recurrence).map((r) => [r.id, r.name]));
 
   return (
@@ -75,9 +79,14 @@ export default async function BroadcastsPage() {
         title="Disparos"
         description="Envie uma mensagem para vários grupos ou pessoas de uma vez, por etiqueta, setor ou escolha manual, agora ou agendada."
         action={
+          <>
+          <Link href="/broadcasts/triggers" className="inline-flex h-11 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-medium text-ink hover:bg-surface-2 sm:h-10">
+            <Zap className="h-4 w-4" /> Gatilhos
+          </Link>
           <Link href="/broadcasts/new" className="btn-signal inline-flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-medium text-brand-ink sm:h-10">
             <Plus className="h-4 w-4" /> Novo disparo
           </Link>
+          </>
         }
       />
 
@@ -106,6 +115,7 @@ export default async function BroadcastsPage() {
                           {c.name}
                         </Link>
                         {c.recurrence && <p className="mt-0.5 text-xs text-muted">{describeRecurrence(c.recurrence)}</p>}
+                        {c.trigger_id && triggerName.get(c.trigger_id) && <p className="mt-0.5 text-xs text-muted">Do gatilho “{triggerName.get(c.trigger_id)}”</p>}
                         {c.series_id && seriesName.get(c.series_id) && <p className="mt-0.5 text-xs text-muted">Da série “{seriesName.get(c.series_id)}”</p>}
                       </td>
                       <td className="px-4 py-3 text-ink-2">{c.target === 'groups' ? 'Grupos' : 'Pessoas'}</td>
