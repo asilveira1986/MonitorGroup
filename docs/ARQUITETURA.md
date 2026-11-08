@@ -37,6 +37,7 @@ Uma pasta com um arquivo por assunto. O ponto de entrada é `index.ts`; quase tu
 | **Alertas e avisos** | `alerts.ts` (regras de alerta, a cada minuto e a cada mensagem), `recipients.ts` (quem recebe), `notify.ts` (WhatsApp, e-mail, webhook), `push.ts` (push), `team-whatsapp.ts` (avisos à equipe), `after-hours.ts` (grupo de alertas fora do expediente) |
 | **Automação de atendimento** | `automation/` — `service.ts` (regras de negócio), `store.ts` (Supabase), `sender.ts` (fila de envio), `hours.ts`, `setup.ts`, `types.ts` |
 | **Mensagem de encerramento** | `closing-flow/` — `service.ts` (agenda após o fechamento, lê voto/resposta digitada, ações), `poll.ts` (decifra o voto da enquete), `store.ts`, `setup.ts`, `types.ts`. O “botão” é uma **enquete**: o WhatsApp não entrega botões a números comuns em grupos |
+| **Disparos em massa** | `broadcast/` — `service.ts` (variáveis do texto, intervalos, limites; puro), `runner.ts` (ciclo de envio, com arquivo, variações, janela de horário e opt-out: um por número com intervalo aleatório, pausa por lote, limite de 24 h, pausa automática após falhas seguidas), `store.ts` (Supabase), `setup.ts` (também lê "SAIR" nas respostas privadas e cadastra o opt-out, grava respostas e recibos de entrega/leitura para o relatório). Disparo recorrente = campanha "série" (`status = 'series'`): a cada 30 s o ciclo chama `broadcast_spawn_due()`, que cria a campanha filha com o público do momento (`broadcast_audience_for`). O eco da mensagem enviada é ignorado em `whatsapp.ts` (`setBroadcast`), como na automação |
 | **Limpeza** | `cleanup.ts` |
 
 Cada arquivo de regra tem um teste ao lado (`*.test.ts`). A automação é testada com banco, envio e relógio simulados
@@ -46,7 +47,7 @@ Cada arquivo de regra tem um teste ao lado (`*.test.ts`). A automação é testa
 
 | Onde | O que tem |
 |---|---|
-| `app/(app)/<tela>/page.tsx` | Uma pasta por tela: `dashboard`, `panel`, `groups`, `pending`, `alerts`, `demands`, `agenda`, `private`, `contacts`, `reports`, `acompanhamento`, `logs`, `platform`, `profile` e `settings` |
+| `app/(app)/<tela>/page.tsx` | Uma pasta por tela: `dashboard`, `broadcasts` (disparos: lista, `new/`, `[id]/`), `panel`, `groups`, `pending`, `alerts`, `demands`, `agenda`, `private`, `contacts`, `reports`, `acompanhamento`, `logs`, `platform`, `profile` e `settings` |
 | `app/(app)/settings/*` | Uma pasta por página de configuração; `automation/` é a automação de atendimento |
 | `app/(app)/settings/actions/*.ts` | **Ações do servidor das configurações, uma por assunto**: `company`, `images`, `whatsapp`, `alerts`, `replies`, `users`, `people`, `demand-types`, `indicators`, `sectors`, `menus` |
 | `app/(app)/*/actions.ts` | Ações das outras telas (grupos, agenda, demandas, privado, perfil) |
@@ -61,7 +62,7 @@ Módulos de `lib/` que mais se usa:
 - `action-result.ts`: tipo e auxiliar de resposta das ações (`dbResult`), com a mensagem "rode o script SQL".
 - `format.ts`: formatação de datas, tempos, telefones, tamanhos e iniciais. Antes de criar um formatador, procure aqui.
 - `settings-nav.ts`: menu das Configurações. `types.ts`: tipos das linhas do banco.
-- `mentions.ts`, `quick-replies.ts`, `automation-rules.ts`: lógica sem tela, com testes (`*.test.ts`).
+- `mentions.ts`, `quick-replies.ts`, `automation-rules.ts`, `broadcast.ts`: lógica sem tela, com testes (`*.test.ts`).
 
 ## 4. Banco (`supabase/migrations`)
 
