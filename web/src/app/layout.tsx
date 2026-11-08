@@ -1,12 +1,12 @@
 import type { Metadata, Viewport } from 'next';
-import { DM_Sans, JetBrains_Mono, Sora } from 'next/font/google';
+import localFont from 'next/font/local';
 import { Toaster } from 'sonner';
 import './globals.css';
 
-// tipografia da identidade visual Monitor Group
-const dmSans = DM_Sans({ variable: '--font-dm-sans', subsets: ['latin'] });
-const sora = Sora({ variable: '--font-sora', subsets: ['latin'], weight: ['400', '600', '700'] });
-const jetbrains = JetBrains_Mono({ variable: '--font-jetbrains', subsets: ['latin'], weight: ['500'] });
+// tipografia da identidade visual Monitor Group. Os arquivos ficam em ./fonts (o build não baixa nada do Google)
+const dmSans = localFont({ src: './fonts/dm-sans-latin-wght-normal.woff2', variable: '--font-dm-sans', weight: '100 1000', display: 'swap' });
+const sora = localFont({ src: './fonts/sora-latin-wght-normal.woff2', variable: '--font-sora', weight: '100 800', display: 'swap' });
+const jetbrains = localFont({ src: './fonts/jetbrains-mono-latin-500-normal.woff2', variable: '--font-jetbrains', weight: '500', display: 'swap' });
 
 export const metadata: Metadata = {
   title: 'Monitor Group',
