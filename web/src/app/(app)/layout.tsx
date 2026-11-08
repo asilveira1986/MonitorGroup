@@ -122,7 +122,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         }}
       />
       <DesktopNoticePrompt />
-      <div className="transition-[padding] duration-200 lg:pl-60 lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
+      <div className="transition-[padding] duration-200 lg:pl-[17rem] lg:[[data-sidebar=collapsed]_&]:pl-[4.5rem]">
 
         <main className="mx-auto max-w-7xl px-4 pb-10 pt-5 sm:px-8 sm:py-8 has-[[data-wide]]:max-w-none">
           {/* quem está online agora (bolinha verde na foto dos usuários) */}

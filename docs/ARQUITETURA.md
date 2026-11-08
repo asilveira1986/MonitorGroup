@@ -62,7 +62,7 @@ Módulos de `lib/` que mais se usa:
 - `action-result.ts`: tipo e auxiliar de resposta das ações (`dbResult`), com a mensagem "rode o script SQL".
 - `format.ts`: formatação de datas, tempos, telefones, tamanhos e iniciais. Antes de criar um formatador, procure aqui.
 - `settings-nav.ts`: menu das Configurações. `types.ts`: tipos das linhas do banco.
-- `mentions.ts`, `quick-replies.ts`, `automation-rules.ts`, `broadcast.ts`: lógica sem tela, com testes (`*.test.ts`).
+- `mentions.ts`, `quick-replies.ts`, `automation-rules.ts`, `broadcast.ts`, `nav.ts`: lógica sem tela, com testes (`*.test.ts`).
 
 ## 4. Banco (`supabase/migrations`)
 
@@ -99,6 +99,12 @@ começa com `'use server'` e **só pode exportar funções `async` e tipos**; au
 
 **Algo novo no worker:** crie o arquivo ao lado do assunto, com o teste ao lado, e ligue em `whatsapp.ts` ou `index.ts`.
 Prefira funções puras (sem banco) para a regra e uma camada fina para o banco, como em `automation/`.
+
+**Novo item no menu lateral:** adicione em `NAV_TREE` (`web/src/lib/nav.ts`), solto ou dentro de um grupo (Grupos, Conversas,
+Automações, Gestão), com o ícone em `components/sidebar-nav.tsx` (`ICONS`). Item de uso só da plataforma leva
+`platformOnly: true`; grupo sem nenhum item visível some sozinho. O menu fixo e o do celular usam o mesmo componente
+(`SidebarNav`). A largura do menu é `w-[17rem]` em `sidebar.tsx` e `lg:pl-[17rem]` em `(app)/layout.tsx`: mude os dois
+juntos (cabe o nome mais comprido com contador de dois dígitos, "Aguardando resposta 99+").
 
 ## 6. Verificar antes de publicar
 
