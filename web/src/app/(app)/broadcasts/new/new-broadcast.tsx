@@ -1,6 +1,6 @@
 'use client';
 
-import { Bookmark, CalendarClock, FileUp, Repeat, Loader2, Paperclip, Plus, Send, Trash2, Users, X } from 'lucide-react';
+import { Bookmark, CalendarClock, FileUp, Repeat, Loader2, Paperclip, Send, Trash2, Users, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -14,8 +14,6 @@ import {
   estimateSeconds,
   formatEstimate,
   hasCriteria,
-  MAX_MEDIA_BYTES,
-  MAX_VARIANTS,
   MEDIA_TYPE_LABEL,
   parseContactsCsv,
   renderBroadcast,
@@ -30,8 +28,8 @@ import {
   type SavedAudience,
 } from '@/lib/broadcast';
 import { cn } from '@/lib/format';
-import { createClient } from '@/lib/supabase/client';
-import { createBroadcast, deleteBroadcastAudience, prepareBroadcastUpload, previewAudience, saveBroadcastAudience } from '../actions';
+import { createBroadcast, deleteBroadcastAudience, previewAudience, saveBroadcastAudience } from '../actions';
+import { MediaField, VariantsField, WindowField } from '../fields';
 
 export type GroupOption = { id: string; name: string };
 export type InstanceOption = { id: string; name: string; phone: string | null; status: string };
@@ -187,7 +185,6 @@ export function NewBroadcast({
   const [footer, setFooter] = useState(true);
   const [savedList, setSavedList] = useState(saved);
   const [saveName, setSaveName] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
   const csvRef = useRef<HTMLInputElement>(null);
 
   const [foundTotal, setTotal] = useState(0);
@@ -287,26 +284,6 @@ export function NewBroadcast({
         '.',
     );
     if (csvRef.current) csvRef.current.value = '';
-  };
-
-  const upload = async (file: File) => {
-    setUploading(true);
-    try {
-      const prep = await prepareBroadcastUpload({ name: file.name, mime: file.type, size: file.size });
-      if (!prep.ok) {
-        toast.error(prep.error);
-        return;
-      }
-      const up = await createClient().storage.from('media').uploadToSignedUrl(prep.media.path, prep.token, file, { contentType: prep.media.mime });
-      if (up.error) {
-        toast.error('Não foi possível enviar o arquivo. Tente de novo.');
-        return;
-      }
-      setMedia(prep.media);
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
   };
 
   const applySaved = (a: SavedAudience) => {
@@ -528,45 +505,9 @@ export function NewBroadcast({
               ))}
               <span className="ml-auto text-xs text-muted">{message.length}/4000</span>
             </div>
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-ink-2">Variações do texto (opcional)</p>
-              <p className="text-xs text-muted">Cada destinatário recebe uma delas (ou o texto principal) sorteada. Mensagens diferentes reduzem o risco de bloqueio.</p>
-              {variants.map((v, i) => (
-                <div key={i} className="flex gap-2">
-                  <Textarea value={v} onChange={(e) => setVariants(variants.map((x, j) => (j === i ? e.target.value : x)))} rows={3} maxLength={4000} placeholder={`Variação ${i + 1}`} />
-                  <button type="button" onClick={() => setVariants(variants.filter((_, j) => j !== i))} className="h-9 shrink-0 rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-critical-ink" aria-label={`Remover a variação ${i + 1}`}>
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-              {variants.length < MAX_VARIANTS && (
-                <Button type="button" variant="secondary" size="sm" onClick={() => setVariants([...variants, ''])}>
-                  <Plus className="h-4 w-4" /> Adicionar variação
-                </Button>
-              )}
-            </div>
+            <VariantsField value={variants} onChange={setVariants} />
 
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-ink-2">Arquivo (opcional)</p>
-              <input ref={fileRef} type="file" className="sr-only" onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
-              {media ? (
-                <div className="flex items-center justify-between gap-2 rounded-xl border border-line/80 px-3 py-2 text-sm">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <Paperclip className="h-4 w-4 shrink-0 text-muted" />
-                    <span className="truncate">{media.name}</span>
-                    <Badge tone="brand">{MEDIA_TYPE_LABEL[media.type]}</Badge>
-                  </span>
-                  <button type="button" onClick={() => setMedia(null)} className="rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-critical-ink" aria-label="Tirar o arquivo">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <Button type="button" variant="secondary" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
-                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />} {uploading ? 'Enviando…' : 'Anexar imagem, vídeo, documento ou áudio'}
-                </Button>
-              )}
-              <p className="text-xs text-muted">Até {MAX_MEDIA_BYTES / 1024 / 1024} MB. Áudio vai sem texto.</p>
-            </div>
+            <MediaField value={media} onChange={setMedia} onBusyChange={setUploading} />
 
             {target === 'people' && (
               <Toggle checked={footer} onChange={setFooter} label="Incluir “Para não receber mais mensagens, responda SAIR.” no fim" />
@@ -654,37 +595,8 @@ export function NewBroadcast({
                 <Input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} className="max-w-xs" />
               </Field>
             )}
-            <div className="space-y-3 border-t border-line/60 pt-3">
-              <Toggle checked={windowOn} onChange={setWindowOn} label="Só enviar em certos dias e horários" />
-              {windowOn && (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap gap-1.5">
-                    {WEEKDAY_LABEL.map((d, i) => {
-                      const on = win.days.includes(i);
-                      return (
-                        <button
-                          key={d}
-                          type="button"
-                          aria-pressed={on}
-                          onClick={() => setWin({ ...win, days: on ? win.days.filter((x) => x !== i) : [...win.days, i].sort() })}
-                          className={cn('rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset transition', on ? 'bg-brand-soft text-ink ring-brand-line' : 'bg-surface text-ink-2 ring-line hover:bg-surface-2')}
-                        >
-                          {d}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="flex flex-wrap items-end gap-3">
-                    <Field label="Das">
-                      <Input type="time" value={win.start} onChange={(e) => setWin({ ...win, start: e.target.value })} className="w-32" />
-                    </Field>
-                    <Field label="Até">
-                      <Input type="time" value={win.end} onChange={(e) => setWin({ ...win, end: e.target.value })} className="w-32" />
-                    </Field>
-                  </div>
-                  <p className="text-xs text-muted">Fuso da empresa: {timezone}. Fora desse horário o envio espera e continua sozinho quando a janela abrir.</p>
-                </div>
-              )}
+            <div className="border-t border-line/60 pt-3">
+              <WindowField enabled={windowOn} onEnabledChange={setWindowOn} value={win} onChange={setWin} timezone={timezone} />
             </div>
           </div>
         </Card>

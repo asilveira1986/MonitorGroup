@@ -47,7 +47,7 @@ Cada arquivo de regra tem um teste ao lado (`*.test.ts`). A automação é testa
 
 | Onde | O que tem |
 |---|---|
-| `app/(app)/<tela>/page.tsx` | Uma pasta por tela: `dashboard`, `broadcasts` (disparos: lista, `new/`, `[id]/`), `panel`, `groups`, `pending`, `alerts`, `demands`, `agenda`, `private`, `contacts`, `reports`, `acompanhamento`, `logs`, `platform`, `profile` e `settings` |
+| `app/(app)/<tela>/page.tsx` | Uma pasta por tela: `dashboard`, `broadcasts` (disparos: lista, `new/`, `[id]/`, `triggers/`; `fields.tsx` tem o arquivo, as variações e a janela, usados no assistente e nos gatilhos), `panel`, `groups`, `pending`, `alerts`, `demands`, `agenda`, `private`, `contacts`, `reports`, `acompanhamento`, `logs`, `platform`, `profile` e `settings` |
 | `app/(app)/settings/*` | Uma pasta por página de configuração; `automation/` é a automação de atendimento |
 | `app/(app)/settings/actions/*.ts` | **Ações do servidor das configurações, uma por assunto**: `company`, `images`, `whatsapp`, `alerts`, `replies`, `users`, `people`, `demand-types`, `indicators`, `sectors`, `menus` |
 | `app/(app)/*/actions.ts` | Ações das outras telas (grupos, agenda, demandas, privado, perfil) |

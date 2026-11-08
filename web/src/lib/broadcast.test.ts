@@ -165,3 +165,14 @@ test('gatilho: descrição', () => {
   assert.equal(describeTrigger({ kind: 'tag_applied', target: 'people', send_time: '09:00' }, 'Novo cliente'), 'Quando alguém receber a etiqueta Novo cliente');
   assert.equal(describeTrigger({ kind: 'tag_applied', target: 'groups', send_time: '09:00' }, 'VIP'), 'Quando um grupo receber a etiqueta VIP');
 });
+
+test('gatilho: arquivo, variações e janela', () => {
+  const media = { path: 'c/broadcast/a.pdf', mime: 'application/pdf', name: 'a.pdf', type: 'document' as const };
+  assert.deepEqual(validateTrigger({ ...trig, message: '', media }), { ok: true }); // só arquivo
+  assert.equal(validateTrigger({ ...trig, message: '  ', media: null }).ok, false);
+  assert.deepEqual(validateTrigger({ ...trig, variants: ['B', ' ', 'C'] }), { ok: true });
+  assert.equal(validateTrigger({ ...trig, variants: ['1', '2', '3', '4', '5'] }).ok, false);
+  assert.equal(validateTrigger({ ...trig, message: '', media, variants: ['a'] }).ok, false);
+  assert.deepEqual(validateTrigger({ ...trig, window: { days: [1, 2], start: '08:00', end: '18:00' } }), { ok: true });
+  assert.equal(validateTrigger({ ...trig, window: { days: [], start: '08:00', end: '18:00' } }).ok, false);
+});
