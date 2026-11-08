@@ -7,6 +7,7 @@ import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { requireMenu } from '@/lib/auth';
 import { loadIndicatorFilters } from '@/lib/indicator-filters';
 import type { IndicatorValue, KpiData } from '@/lib/indicators';
+import { ScheduledRefresh } from '@/lib/use-scheduled-refresh';
 import { DashboardFilters } from './filters';
 import { PrivateDashboard } from './private-dashboard';
 
@@ -23,6 +24,8 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
   if (privateAllowed && sp.origem === 'privado') {
     const user = typeof sp.user === 'string' && /^[0-9a-f-]{36}$/i.test(sp.user) ? sp.user : null;
     return (
+      <>
+      <ScheduledRefresh />
       <PrivateDashboard
         filters={filters}
         comparison={comparison}
@@ -32,6 +35,7 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
           <DashboardFilters groups={groups} members={members} today={today} defaultPeriod="today" origin="privado" privateAgents={privateAgents} />
         }
       />
+      </>
     );
   }
 
@@ -70,6 +74,7 @@ export default async function DashboardPage({ searchParams }: PageProps<'/dashbo
   return (
     // data-wide: o dashboard usa a largura toda da tela
     <div data-wide>
+      <ScheduledRefresh />
       <PageHeader
         title="Dashboard"
         stackAction

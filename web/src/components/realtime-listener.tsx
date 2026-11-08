@@ -32,6 +32,8 @@ export function RealtimeListener() {
     }
     if (timer.current) return;
     const path = window.location.pathname;
+    // Dashboard: atualiza só nos horários programados (ScheduledRefresh), não a cada mudança
+    if (path.startsWith('/dashboard')) return;
     // a conversa de um grupo (/groups/[id]) já se atualiza sozinha pelo tempo real
     const slow = HEAVY_PAGES.some((p) => path.startsWith(p)) || !GROUP_PAGES.some((p) => path === p || (p !== '/groups' && path.startsWith(p)));
     const wait = Math.max(1500, (slow ? HEAVY_INTERVAL_MS : MIN_INTERVAL_MS) - (Date.now() - last.current));
