@@ -113,7 +113,8 @@ begin
       where table_schema = 'public' and table_name = 'app_settings' and column_name = 'ignore_phrases')),
   (35, 'Mensagens rápidas (0042)', to_regclass('public.quick_replies') is not null),
   (36, 'Fechamento da conversa (0043)', (to_regprocedure('public.send_group_message(uuid,text,uuid,boolean)') is not null
-       or to_regprocedure('public.send_group_message(uuid,text,uuid,boolean,jsonb)') is not null)
+       or to_regprocedure('public.send_group_message(uuid,text,uuid,boolean,jsonb)') is not null
+       or to_regprocedure('public.send_group_message(uuid,text,uuid,boolean,jsonb,text[])') is not null)
       and exists (select 1 from information_schema.columns
                   where table_schema = 'public' and table_name = 'groups' and column_name = 'closed_at')),
   (37, 'Fotos de perfil (0044)', to_regclass('public.contact_avatars') is not null),
@@ -159,7 +160,8 @@ begin
   (62, 'Conversas privadas: enviar arquivos e citar (0071)', to_regprocedure('public.send_private_message(uuid,text,uuid,jsonb)') is not null),
   (63, 'Sincronizar contatos (0072)', to_regprocedure('public.request_contacts_sync()') is not null),
   (64, 'Contatos com o nome salvo (0073)', to_regprocedure('public.save_wa_contacts(uuid,jsonb)') is not null),
-  (65, 'Enviar áudio (0074)', to_regprocedure('public.send_group_message(uuid,text,uuid,boolean,jsonb)') is not null),
+  (65, 'Enviar áudio (0074)', to_regprocedure('public.send_group_message(uuid,text,uuid,boolean,jsonb)') is not null
+       or to_regprocedure('public.send_group_message(uuid,text,uuid,boolean,jsonb,text[])') is not null),
   (66, 'Nome salvo pelo número (0075)', to_regprocedure('public.phone_key(text)') is not null),
   (67, 'Verificação completa cliente × equipe (0076)', to_regclass('public.group_participants_lid_idx') is not null),
   (68, 'Número do LID pela sessão (0077)', to_regprocedure('public.lid_phone(uuid,text)') is not null),
