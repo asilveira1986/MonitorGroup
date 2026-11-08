@@ -122,6 +122,10 @@ para mudar dependências).
 - **Vercel x Railway:** o painel não pode enviar WhatsApp nem rodar tarefas contínuas; tudo que precisa do número
   conectado fica no worker.
 
+- **Fontes do painel ficam no repositório** (`web/src/app/fonts`, carregadas por `next/font/local`). Não volte para
+  `next/font/google`: o build passa a baixar a fonte do Google a cada execução, e esse download falhava de vez em quando
+  no CI ("next/font/google queries have exactly one entry"), derrubando o check `web` sem ter relação com o código.
+
 ## 8. Próximos passos sugeridos (não feitos de propósito)
 
 São mudanças maiores, que valem fazer com o sistema rodando para conferir o comportamento:
