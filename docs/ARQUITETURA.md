@@ -127,6 +127,11 @@ para mudar dependências).
   de recarga sem necessidade.
 - **Cache do worker:** configurações, equipe e empresas ficam em memória e renovam sozinhas (cerca de 1 minuto).
   Uma mudança no painel pode levar esse tempo para valer no worker; a automação lê a chave geral a cada 30 s.
+- **Grupo com o monitoramento desligado guarda as mensagens, mas não aciona nada (0157).** `ingest_message` grava a
+  mensagem (histórico) e só atualiza a última atividade; não abre pendência, não calcula tempo de resposta nem resolve
+  alertas. O worker (`whatsapp.ts`, variável `tracked`) também não guarda arquivos nem aciona avisos, demandas, automação
+  de atendimento ou pesquisa de encerramento. Se criar outro efeito colateral por mensagem, coloque-o atrás de `tracked`,
+  senão ele passa a valer em grupos desligados (resposta automática a cliente, por exemplo).
 - **Mensagens e textos da tela em português.** Erros devolvidos pelas ações são mostrados ao usuário como estão.
 - **Vercel x Railway:** o painel não pode enviar WhatsApp nem rodar tarefas contínuas; tudo que precisa do número
   conectado fica no worker.
