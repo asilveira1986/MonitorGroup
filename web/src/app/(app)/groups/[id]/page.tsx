@@ -276,8 +276,14 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
       {/* coluna da esquerda com largura fixa: os nomes e números dos membros cabem inteiros. A partir do lg as duas
           janelas têm a mesma altura (o que sobra da tela) e rolam por dentro. */}
       <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
-        <div id="membros" className="scroll-mt-20 lg:h-full lg:min-h-0">
-          <GroupMembers members={(groupMembers ?? []) as GroupMember[]} total={g.participants_count} canPrivate={Boolean(canPrivate)} responsibleIds={responsibleIds} />
+        <div className="flex flex-col gap-4 lg:h-full lg:min-h-0">
+          <div id="membros" className="scroll-mt-20 lg:min-h-0 lg:flex-1">
+            <GroupMembers members={(groupMembers ?? []) as GroupMember[]} total={g.participants_count} canPrivate={Boolean(canPrivate)} responsibleIds={responsibleIds} />
+          </div>
+          {/* arquivos do grupo: fechado é só uma linha embaixo dos membros; aberto, ocupa até metade da coluna e rola */}
+          <div className="lg:flex lg:max-h-[55%] lg:min-h-0 lg:shrink-0 lg:flex-col">
+            <GroupFiles groupId={g.id} timeZone={tz} />
+          </div>
         </div>
 
         <Card className="min-w-0 lg:flex lg:h-full lg:min-h-0 lg:flex-col">
@@ -313,8 +319,6 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
           />
         </Card>
       </div>
-
-      <GroupFiles groupId={g.id} timeZone={tz} />
     </div>
   );
 }
