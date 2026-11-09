@@ -317,6 +317,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
               quickReplies: (quickReplies ?? []) as QuickReply[],
               groupName: g.name,
               closingShortcut: (closingCfg as { closing_shortcut?: string } | null)?.closing_shortcut ?? 'fechamento',
+              canDeleteStickers: isAdminUser,
             }}
             demands={{
               manualEnabled: !viewer && (settings?.demand_manual_enabled ?? true) && canDemandsHere !== false,

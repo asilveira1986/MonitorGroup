@@ -127,6 +127,8 @@ export async function mediaContent(type: string, buffer: Buffer, mimetype: strin
   if (type === 'image') return { image: buffer, caption: opts.caption, mimetype };
   if (type === 'video') return { video: buffer, caption: opts.caption, mimetype };
   if (type === 'audio') return audioContent(buffer, mimetype, Boolean(opts.voice));
+  // figurinha (0160): arquivo .webp enviado como figurinha, sem legenda
+  if (type === 'sticker') return { sticker: buffer, mimetype: 'image/webp' };
   return { document: buffer, mimetype, fileName: opts.fileName ?? 'arquivo', caption: opts.caption };
 }
 

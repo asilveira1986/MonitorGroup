@@ -17,6 +17,7 @@ import {
 } from '@/lib/mentions';
 import { findShortcutTrigger, greeting, matchQuickReplies, renderQuickReply, type QuickReply } from '@/lib/quick-replies';
 import type { Message, OutgoingMessage } from '@/lib/types';
+import { StickerButton } from './sticker-picker';
 import { discardGroupMessage, prepareGroupAudioUpload, prepareGroupUpload, retryGroupMessage, sendGroupMessage, type GroupFile } from '../../actions';
 
 export type ReplyConfig = {
@@ -30,6 +31,8 @@ export type ReplyConfig = {
   groupName?: string;
   /** atalho da mensagem rápida que encerra a conversa */
   closingShortcut?: string;
+  /** administradores excluem figurinhas da biblioteca (0160) */
+  canDeleteStickers?: boolean;
 };
 
 const MAX = 4000;
@@ -404,6 +407,16 @@ export function Composer({
             >
               <Paperclip className="h-5 w-5" />
             </button>
+            <StickerButton
+              groupId={groupId}
+              quotedId={replyTo?.id ?? null}
+              disabled={pending}
+              canDelete={Boolean(config.canDeleteStickers)}
+              onSent={() => {
+                onClearReply();
+                router.refresh();
+              }}
+            />
             <textarea
               ref={ref}
               value={text}
@@ -523,7 +536,7 @@ const STATUS = {
   failed: { icon: AlertCircle, label: 'Não enviada', cls: 'text-critical-ink' },
 } as const;
 
-const FILE_LABEL: Record<string, string> = { image: 'Imagem', video: 'Vídeo', document: 'Documento' };
+const FILE_LABEL: Record<string, string> = { image: 'Imagem', video: 'Vídeo', document: 'Documento', sticker: 'Figurinha' };
 
 /** Resposta do painel que ainda não voltou pelo WhatsApp (na fila, enviando ou com falha). */
 export function OutgoingBubble({ item, quoted, renderText }: { item: OutgoingMessage; quoted?: Message; renderText?: (text: string) => ReactNode }) {
