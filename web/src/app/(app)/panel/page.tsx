@@ -15,11 +15,13 @@ export const metadata: Metadata = { title: 'Monitor Group · Painel de grupos' }
 export default async function PanelPage() {
   await requireMenu('/panel');
   const supabase = await createClient();
-  const [{ data, error }, { data: groupSectors }, { data: sectors }, { data: team }] = await Promise.all([
+  const [{ data, error }, { data: groupSectors }, { data: sectors }, { data: team }, { data: myIds }] = await Promise.all([
     supabase.rpc('groups_panel'),
     supabase.from('groups').select('*'),
     supabase.from('sectors').select('id, name').order('name'),
     supabase.from('team_members').select('id, name, active').order('name'),
+    // pessoas da equipe ligadas ao e-mail de acesso deste usuário (0059)
+    supabase.rpc('my_team_member_ids'),
   ]);
   type GroupInfo = {
     id: string;
@@ -64,6 +66,8 @@ export default async function PanelPage() {
   const used = new Set(groups.map((g) => g.sector_id));
   const sectorOptions = (sectors ?? []).filter((s) => used.has(s.id));
   const geral = sectorOptions.find((s) => s.name.trim().toLowerCase() === 'geral');
+  // o painel abre já nos grupos do próprio usuário (os que ele é responsável); sem grupos, abre como antes
+  const mine = ((myIds ?? []) as string[]).find((id) => responsibles.some((r) => r.id === id && r.groups > 0)) ?? null;
 
   return (
     <div data-wide>
@@ -80,7 +84,9 @@ export default async function PanelPage() {
           groups={groups}
           sectors={sectorOptions}
           hasNoSector={used.has(null)}
-          defaultSector={geral?.id ?? 'all'}
+          // com os grupos dele filtrados, o setor fica em Todos para não esconder grupo de outro setor
+          defaultSector={mine ? 'all' : (geral?.id ?? 'all')}
+          myMemberId={mine}
           responsibles={responsibles}
           hasNoResponsible={groups.some((g) => !g.responsible_ids.length)}
         />

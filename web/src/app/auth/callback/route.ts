@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next');
-  const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
+  const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/panel';
 
   // O Supabase devolve o motivo quando o link é recusado
   let reason = searchParams.get('error_description') ?? searchParams.get('error');
