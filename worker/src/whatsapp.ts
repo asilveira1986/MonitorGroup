@@ -1085,11 +1085,15 @@ export class WhatsAppManager {
       ) as GroupRow;
       session.groupCache.set(jid, group);
     }
+    // grupo sem monitoramento: a mensagem é guardada (histórico, para não perder o que chegou enquanto estava
+    // desligado), mas nada é acionado: sem pendência, alerta, demanda, resposta automática nem pesquisa (0157)
+    let tracked = true;
     if (!group.monitored) {
-      // o painel pode ter mudado a configuração; confere no banco antes de ignorar
+      // o painel pode ter mudado a configuração; confere no banco antes de tratar como desligado
       session.groupCache.delete(jid);
       const fresh = await this.getGroup(session, jid);
-      if (!fresh.monitored) return;
+      group = fresh;
+      tracked = fresh.monitored;
     }
 
     const d = await this.describeMessage(session, msg, content);
@@ -1114,10 +1118,13 @@ export class WhatsAppManager {
         p_closes: closes,
       }),
       'ingest_message',
-    ) as { inserted: boolean; message_id?: string; stale?: boolean; ignored?: boolean };
+    ) as { inserted: boolean; message_id?: string; stale?: boolean; ignored?: boolean; untracked?: boolean };
+    // o banco também diz se o grupo estava desligado (fonte final: a linha travada no momento da gravação)
+    tracked = tracked && !result.untracked;
 
-    // imagem/áudio: guarda o arquivo para abrir no painel (em segundo plano, não atrasa a mensagem)
-    if (result.inserted && result.message_id) {
+    // imagem/áudio: guarda o arquivo para abrir no painel (em segundo plano, não atrasa a mensagem);
+    // grupo desligado guarda só o texto, sem ocupar o armazenamento com arquivos
+    if (result.inserted && result.message_id && tracked) {
       void storeMessageMedia({
         sock: session.sock,
         msg,
@@ -1131,7 +1138,7 @@ export class WhatsAppManager {
     // avisos (regras de alerta) e demandas (comandos, prazos, classificação por IA) podem demorar
     // (WhatsApp, e-mail, IA): vão para a fila própria da conexão, sem atrasar a próxima mensagem
     const messageId = result.message_id;
-    if (result.inserted && !result.stale && messageId) {
+    if (tracked && result.inserted && !result.stale && messageId) {
       session.sideQueue = (session.sideQueue ?? Promise.resolve())
         .then(async () => {
           if (!fromTeam && !result.ignored) {
@@ -1155,7 +1162,7 @@ export class WhatsAppManager {
     }
 
     // automação de atendimento (0144): na fila da conexão, na ordem das mensagens e sem atrasar a próxima
-    if (this.automation && result.inserted && !result.stale && messageId && (fromTeam || !result.ignored)) {
+    if (tracked && this.automation && result.inserted && !result.stale && messageId && (fromTeam || !result.ignored)) {
       const automation = this.automation;
       session.sideQueue = (session.sideQueue ?? Promise.resolve())
         .then(() =>
@@ -1178,7 +1185,7 @@ export class WhatsAppManager {
     }
 
     // pesquisa de encerramento (0149): agenda após o fechamento, cancela se o cliente voltar e lê a resposta digitada
-    if (this.closing && result.inserted && !result.stale && (fromTeam || !result.ignored)) {
+    if (tracked && this.closing && result.inserted && !result.stale && (fromTeam || !result.ignored)) {
       const closing = this.closing;
       session.sideQueue = (session.sideQueue ?? Promise.resolve())
         .then(() =>
