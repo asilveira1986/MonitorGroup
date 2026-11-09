@@ -52,7 +52,7 @@ export function GroupMembers({
   const silent = members.filter((m) => !m.messages_30d && !m.is_me).length;
 
   return (
-    <Card>
+    <Card className="lg:flex lg:h-full lg:flex-col">
       <CardHeader
         title={`Membros (${members.length || total})`}
         description={
@@ -62,9 +62,9 @@ export function GroupMembers({
         }
       />
       {members.length > 0 && (
-        <div className="px-3 pb-3">
+        <div className="px-3 pb-3 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
           {members.length > 6 && (
-            <label className="relative mb-2 block">
+            <label className="relative mb-2 block lg:shrink-0">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" aria-hidden />
               <input
                 type="search"
@@ -76,7 +76,7 @@ export function GroupMembers({
               />
             </label>
           )}
-          <ul className="max-h-[26rem] space-y-0.5 overflow-y-auto">
+          <ul className="max-h-[26rem] space-y-0.5 overflow-y-auto lg:min-h-0 lg:max-h-none lg:flex-1">
             {shown.map((m) => {
               const label = m.is_me ? 'Número conectado' : m.name || formatPhone(m.phone) || 'Sem nome';
               return (
