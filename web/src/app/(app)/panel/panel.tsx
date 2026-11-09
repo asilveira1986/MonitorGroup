@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from '@/components/avatar';
 import { EmptyState } from '@/components/ui';
 import { cn, formatDuration, formatNumber } from '@/lib/format';
+import { matchesResponsible } from '@/lib/responsibles';
 
 export type PanelStatus = 'late' | 'waiting' | 'answered' | 'neutral';
 
@@ -239,6 +240,7 @@ export function GroupsPanel({
   responsibles,
   hasNoResponsible,
   myMemberId = null,
+  adminResponsibleIds = [],
 }: {
   /** pessoas da equipe e quantos grupos (no painel) cada uma é responsável */
   /** hidden: grupos da pessoa fora do painel (não monitorados ou de que o número saiu) */
@@ -251,6 +253,8 @@ export function GroupsPanel({
   defaultSector: string;
   /** pessoa da equipe ligada ao usuário que abriu o painel (com grupos): o painel abre filtrado nela */
   myMemberId?: string | null;
+  /** administradores (pessoas da equipe) que respondem por todos os grupos (0162): filtrar por eles mostra tudo */
+  adminResponsibleIds?: string[];
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<PanelStatus | 'all'>('all');
@@ -283,7 +287,9 @@ export function GroupsPanel({
       (g) =>
         (sector === 'all' || (sector === 'none' ? !g.sector_id : g.sector_id === sector)) &&
         (responsible === 'all' ||
-          (responsible === 'none' ? !g.responsible_ids?.length : Boolean(g.responsible_ids?.includes(responsible)))),
+          (responsible === 'none'
+            ? !g.responsible_ids?.length
+            : matchesResponsible({ selected: responsible, groupResponsibleIds: g.responsible_ids ?? [], adminIds: adminResponsibleIds }))),
     );
     if (sector !== 'all') return filtered;
     // em "Todos" o mesmo grupo do WhatsApp (mesmo jid ou mesmo nome) aparece uma só vez, mesmo que esteja em vários setores/números
@@ -294,7 +300,7 @@ export function GroupsPanel({
       keys.forEach((k) => seen.add(k));
       return true;
     });
-  }, [allGroups, sector, responsible]);
+  }, [allGroups, sector, responsible, adminResponsibleIds]);
   const [query, setQuery] = useState('');
 
   // ao voltar de um grupo, o painel reabre com os mesmos filtros (situação, setor e busca)

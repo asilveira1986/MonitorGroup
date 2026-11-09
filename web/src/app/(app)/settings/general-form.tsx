@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { useState, useTransition } from 'react';
+import { toast } from 'sonner';
 import { ActionForm } from '@/components/form-action';
 import { Button, Field, Input, Select, Toggle } from '@/components/ui';
 import type { AppSettings } from '@/lib/types';
-import { saveGeneralSettings } from '@/app/(app)/settings/actions/company';
+import { saveGeneralSettings, setAdminsResponsibleAll } from '@/app/(app)/settings/actions/company';
 
 const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const TIMEZONES = [
@@ -20,6 +22,36 @@ const TIMEZONES = [
   'Europe/Lisbon',
   'UTC',
 ];
+
+/** Administradores como responsáveis de todos os grupos (0162): salva na hora, fora do botão "Salvar configurações". */
+function AdminsResponsibleToggle({ initial, disabled }: { initial: boolean; disabled: boolean }) {
+  const [on, setOn] = useState(initial);
+  const [pending, start] = useTransition();
+  return (
+    <div className="space-y-1">
+      <Toggle
+        checked={on}
+        disabled={disabled || pending}
+        onChange={(checked) => {
+          setOn(checked);
+          start(async () => {
+            const res = await setAdminsResponsibleAll(checked);
+            if (res.ok) toast.success(checked ? 'Administradores são responsáveis de todos os grupos' : 'Administradores deixam de valer como responsáveis de todos os grupos');
+            else {
+              setOn(!checked);
+              toast.error(res.error);
+            }
+          });
+        }}
+        label="Administradores são responsáveis por todos os grupos"
+      />
+      <p className="max-w-xl text-xs text-muted">
+        Além dos responsáveis escolhidos em cada grupo, os administradores aparecem como responsáveis, o filtro de um administrador no Painel de grupos mostra todos os grupos e a cobrança da
+        automação que marca &ldquo;os responsáveis do grupo&rdquo; também marca os administradores (com telefone cadastrado em Configurações › Pessoas). Salva na hora.
+      </p>
+    </div>
+  );
+}
 
 export function GeneralForm({ settings, disabled }: { settings: AppSettings; disabled: boolean }) {
   return (
@@ -97,6 +129,7 @@ export function GeneralForm({ settings, disabled }: { settings: AppSettings; dis
               defaultChecked={settings.auto_monitor_new_groups}
               label="Monitorar automaticamente novos grupos"
             />
+            <AdminsResponsibleToggle initial={settings.admins_responsible_all === true} disabled={disabled} />
           </div>
 
           {!disabled && (

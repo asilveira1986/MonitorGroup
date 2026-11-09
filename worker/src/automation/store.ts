@@ -1,4 +1,5 @@
 import { check, db } from '../db.js';
+import { adminMemberIds, resolveJids, type MemberLite } from './responsibles.js';
 import type { AlertInput, AutomationRule, AutomationStore, EscalationStep, LogAction, NewPending, OpenPending, PendingReply } from './types.js';
 
 type RuleRow = {
@@ -115,9 +116,9 @@ export function createSupabaseStore(): AutomationStore {
 
     async resolveResponsibles(groupId) {
       const group = check(
-        await db.from('groups').select('sector_id, responsible_member_ids, responsible_member_id').eq('id', groupId).maybeSingle(),
+        await db.from('groups').select('company_id, sector_id, responsible_member_ids, responsible_member_id').eq('id', groupId).maybeSingle(),
         'automation group responsibles',
-      ) as { sector_id: string | null; responsible_member_ids: string[] | null; responsible_member_id: string | null } | null;
+      ) as { company_id: string; sector_id: string | null; responsible_member_ids: string[] | null; responsible_member_id: string | null } | null;
       if (!group) return { group: [], sector: [] };
       const groupIds = group.responsible_member_ids?.length ? group.responsible_member_ids : group.responsible_member_id ? [group.responsible_member_id] : [];
       // sem o script 0158 a coluna do setor não existe: só os responsáveis do grupo
@@ -126,21 +127,21 @@ export function createSupabaseStore(): AutomationStore {
         const { data } = await db.from('sectors').select('responsible_member_ids').eq('id', group.sector_id).maybeSingle();
         sectorIds = ((data as { responsible_member_ids: string[] | null } | null)?.responsible_member_ids ?? []) as string[];
       }
-      const all = [...new Set([...groupIds, ...sectorIds])];
-      if (!all.length) return { group: [], sector: [] };
-      const members = (check(await db.from('team_members').select('id, phone, jid, active').in('id', all), 'automation responsibles members') ?? []) as {
-        id: string;
-        phone: string | null;
-        jid: string | null;
-        active: boolean;
-      }[];
-      const jidOf = new Map<string, string>();
-      for (const m of members) {
-        const jid = m.jid ?? (m.phone ? `${m.phone.replace(/\D/g, '')}@s.whatsapp.net` : null);
-        if (m.active && jid) jidOf.set(m.id, jid);
+      const members = (check(
+        await db.from('team_members').select('id, phone, jid, active, user_email').eq('company_id', group.company_id),
+        'automation responsibles members',
+      ) ?? []) as MemberLite[];
+      // administradores como responsáveis de todos os grupos (0162): só se a empresa deixa; sem o script, a coluna não existe
+      let adminIds: string[] = [];
+      const { data: setting, error: settingError } = await db.from('app_settings').select('admins_responsible_all').eq('company_id', group.company_id).maybeSingle();
+      if (!settingError && (setting as { admins_responsible_all: boolean | null } | null)?.admins_responsible_all === true) {
+        const { data: profiles } = await db.from('profiles').select('email, role, platform_admin').eq('company_id', group.company_id).eq('active', true);
+        const emails = ((profiles ?? []) as { email: string | null; role: string | null; platform_admin: boolean | null }[])
+          .filter((p) => p.role === 'admin' || p.platform_admin)
+          .map((p) => p.email ?? '');
+        adminIds = adminMemberIds(members, emails);
       }
-      const pick = (ids: string[]) => [...new Set(ids.map((id) => jidOf.get(id)).filter((j): j is string => Boolean(j)))];
-      return { group: pick(groupIds), sector: pick(sectorIds) };
+      return resolveJids({ groupIds, sectorIds, adminIds, members });
     },
 
     async listNotifyJids() {
