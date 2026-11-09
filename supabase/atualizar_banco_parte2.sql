@@ -259,7 +259,8 @@ begin
   (150, 'Automação: espera antes do acuse (0159)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'automation_rules' and column_name = 'ack_delay_sec')),
   (151, 'Figurinhas: biblioteca da empresa e envio pelo painel (0160)', to_regclass('public.stickers') is not null
       and exists (select 1 from pg_proc where proname = 'send_group_message' and pronamespace = 'public'::regnamespace and prosrc like '%''sticker''%')),
-  (152, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (152, 'Recuperar mensagens antigas de um grupo, experimental (0161)', to_regclass('public.history_requests') is not null and to_regprocedure('public.request_history_recovery(uuid,integer)') is not null),
+  (153, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -268,7 +269,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -7119,6 +7120,103 @@ $$;
 $mig0160$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0161_history_recovery.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0161', $mig0161$
+-- =====================================================================
+-- Recuperar mensagens antigas de um grupo (recurso experimental).
+--
+-- Grupos que ficaram sem monitoramento (antes da 0157) não guardaram o que
+-- chegou nesse intervalo. O administrador pede, na conversa do grupo, para
+-- recuperar os últimos N dias: o worker pergunta ao celular conectado, em
+-- páginas de 50 mensagens (histórico sob demanda do WhatsApp), a partir da
+-- mensagem mais recente guardada, e grava o que faltava como HISTÓRICO
+-- (não abre pendência, não gera alerta nem aciona automação).
+--
+--  * history_requests: um pedido por vez em cada grupo, com o andamento
+--    (pedidos feitos, mensagens vistas e novas, até onde chegou) e o motivo
+--    de ter parado.
+--  * request_history_recovery / cancel_history_recovery: só administradores.
+--  * O worker (chave de serviço) escreve o andamento.
+-- =====================================================================
+
+create table if not exists public.history_requests (
+  id             uuid primary key default gen_random_uuid(),
+  company_id     uuid not null references public.companies(id) on delete cascade,
+  group_id       uuid not null references public.groups(id) on delete cascade,
+  requested_by   uuid default auth.uid(),
+  days           int not null check (days between 1 and 30),
+  since          timestamptz not null,
+  status         text not null default 'pending' check (status in ('pending', 'running', 'done', 'failed', 'cancelled')),
+  requests_sent  int not null default 0,
+  messages_found int not null default 0,
+  messages_added int not null default 0,
+  oldest_at      timestamptz,
+  note           text,
+  created_at     timestamptz not null default now(),
+  started_at     timestamptz,
+  finished_at    timestamptz,
+  updated_at     timestamptz not null default now()
+);
+-- um pedido aberto por grupo
+create unique index if not exists history_requests_open_idx on public.history_requests (group_id) where status in ('pending', 'running');
+create index if not exists history_requests_group_idx on public.history_requests (group_id, created_at desc);
+
+alter table public.history_requests enable row level security;
+drop policy if exists history_requests_read on public.history_requests;
+create policy history_requests_read on public.history_requests for select
+  using ((select public.is_admin()) and company_id = (select public.current_company_id()));
+grant select on public.history_requests to authenticated;
+
+create or replace function public.request_history_recovery(p_group_id uuid, p_days int)
+returns public.history_requests
+language plpgsql security definer set search_path = public as $$
+declare
+  v_group public.groups%rowtype;
+  v_row   public.history_requests;
+begin
+  if not public.is_admin() then
+    raise exception 'Só administradores recuperam mensagens antigas.' using errcode = '42501';
+  end if;
+  if p_days is null or p_days < 1 or p_days > 30 then
+    raise exception 'Escolha um período de 1 a 30 dias.';
+  end if;
+  select * into v_group from public.groups where id = p_group_id and company_id = public.current_company_id();
+  if not found then
+    raise exception 'Grupo não encontrado.';
+  end if;
+  if v_group.removed_at is not null then
+    raise exception 'O número conectado não participa mais deste grupo.';
+  end if;
+  begin
+    insert into public.history_requests (company_id, group_id, days, since)
+    values (v_group.company_id, v_group.id, p_days, now() - make_interval(days => p_days))
+    returning * into v_row;
+  exception when unique_violation then
+    raise exception 'Já existe uma recuperação em andamento neste grupo.';
+  end;
+  return v_row;
+end;
+$$;
+revoke all on function public.request_history_recovery(uuid, int) from public, anon;
+grant execute on function public.request_history_recovery(uuid, int) to authenticated;
+
+create or replace function public.cancel_history_recovery(p_id uuid)
+returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Só administradores cancelam a recuperação.' using errcode = '42501';
+  end if;
+  update public.history_requests
+     set status = 'cancelled', finished_at = now(), updated_at = now(), note = coalesce(note, 'Cancelado por um administrador.')
+   where id = p_id and company_id = public.current_company_id() and status in ('pending', 'running');
+end;
+$$;
+revoke all on function public.cancel_history_recovery(uuid) from public, anon;
+grant execute on function public.cancel_history_recovery(uuid) to authenticated;
+$mig0161$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -7329,6 +7427,7 @@ from (values
   (150, 'Automação: espera antes do acuse (0159)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'automation_rules' and column_name = 'ack_delay_sec')),
   (151, 'Figurinhas: biblioteca da empresa e envio pelo painel (0160)', to_regclass('public.stickers') is not null
       and exists (select 1 from pg_proc where proname = 'send_group_message' and pronamespace = 'public'::regnamespace and prosrc like '%''sticker''%')),
-  (152, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (152, 'Recuperar mensagens antigas de um grupo, experimental (0161)', to_regclass('public.history_requests') is not null and to_regprocedure('public.request_history_recovery(uuid,integer)') is not null),
+  (153, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

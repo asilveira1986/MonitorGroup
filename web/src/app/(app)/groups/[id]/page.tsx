@@ -18,6 +18,7 @@ import { Avatar } from '@/components/avatar';
 import { TagEditor, type CustomerTag } from '@/components/customer-tags';
 import { Conversation } from './conversation';
 import { GroupFiles } from './group-files';
+import { HistoryRecoveryButton } from './history-recovery';
 import { DeleteRemovedGroupButton } from '../removed-groups';
 
 const minutesAgo = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
@@ -298,6 +299,8 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
           <CardHeader
             title="Conversa"
             description="Role para cima para ver as anteriores · azul = cliente, verde = equipe"
+            // recuperar mensagens que não foram guardadas (0161, experimental): só administradores
+            action={isAdminUser && !g.removed_at ? <HistoryRecoveryButton groupId={g.id} timeZone={tz} /> : undefined}
           />
           <Conversation
             groupId={g.id}
