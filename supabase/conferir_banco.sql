@@ -194,6 +194,7 @@ from (values
   (144, 'Disparos: gatilhos de etiqueta e aniversário (0153)', to_regclass('public.broadcast_triggers') is not null and to_regprocedure('public.broadcast_triggers_run()') is not null
       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'contacts' and column_name = 'birthday')),
   (145, 'Gatilhos de disparo: arquivo, variações e janela (0154)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'broadcast_triggers' and column_name = 'media_path')),
-  (146, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (146, 'Log de atividades ignora o aviso de presença (0155)', 'last_seen_at' = any(public.activity_noise())),
+  (147, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
