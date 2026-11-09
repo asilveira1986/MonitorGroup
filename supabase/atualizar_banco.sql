@@ -250,7 +250,8 @@ begin
   (144, 'Disparos: gatilhos de etiqueta e aniversário (0153)', to_regclass('public.broadcast_triggers') is not null and to_regprocedure('public.broadcast_triggers_run()') is not null
       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'contacts' and column_name = 'birthday')),
   (145, 'Gatilhos de disparo: arquivo, variações e janela (0154)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'broadcast_triggers' and column_name = 'media_path')),
-  (146, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (146, 'Log de atividades ignora o aviso de presença (0155)', 'last_seen_at' = any(public.activity_noise())),
+  (147, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -259,7 +260,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -23104,6 +23105,32 @@ notify pgrst, 'reload schema';
 $mig0154$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0155_activity_log_ignore_last_seen.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0155', $mig0155$
+-- =====================================================================
+-- Log de atividades: o aviso de presença não é uma alteração do usuário.
+--
+-- O painel aberto avisa a cada 2 minutos que a pessoa está ativa e isso
+-- grava profiles.last_seen_at (0135). Como o campo não estava na lista de
+-- colunas ignoradas pelo log (activity_noise, 0050), cada aviso virava uma
+-- linha "Alterou o usuário ...: last_seen_at = ..." e escondia as ações
+-- reais. Agora last_seen_at é ignorado: uma alteração que mexe só nele não
+-- gera linha, e se vier junto de outra, só a outra aparece.
+--
+-- As linhas antigas continuam no log; para apagá-las, rode
+-- supabase/limpar_log_last_seen.sql (opcional, separado).
+-- =====================================================================
+
+create or replace function public.activity_noise()
+returns text[] language sql immutable as $$
+  select array['updated_at', 'created_at', 'last_message_at', 'last_client_message_at', 'last_team_message_at',
+               'last_message_preview', 'participants_count', 'pending_count', 'pending_message_id',
+               'conversation_started_at', 'closed_at', 'seen_at', 'seen_via', 'seen_by', 'status_changed_at',
+               'number', 'id', 'last_seen_at']
+$$;
+$mig0155$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -23306,6 +23333,7 @@ from (values
   (144, 'Disparos: gatilhos de etiqueta e aniversário (0153)', to_regclass('public.broadcast_triggers') is not null and to_regprocedure('public.broadcast_triggers_run()') is not null
       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'contacts' and column_name = 'birthday')),
   (145, 'Gatilhos de disparo: arquivo, variações e janela (0154)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'broadcast_triggers' and column_name = 'media_path')),
-  (146, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (146, 'Log de atividades ignora o aviso de presença (0155)', 'last_seen_at' = any(public.activity_noise())),
+  (147, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
