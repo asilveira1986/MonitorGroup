@@ -9,11 +9,14 @@ import { cn } from '@/lib/format';
 import { createSector, deleteSector, saveSector, setDefaultSector, type SectorInput } from '@/app/(app)/settings/actions/sectors';
 import { Row } from '../demand-settings';
 
-export type SectorRow = SectorInput & { id: string };
+export type SectorRow = SectorInput & { id: string; /** pessoas da equipe responsáveis pelo setor (0158) */ responsible_member_ids?: string[] | null };
+export type TeamOption = { id: string; name: string; phone: string | null; active: boolean };
 type Person = { id: string; name: string; email: string; admin: boolean; active: boolean };
 type GroupOption = { id: string; name: string; monitored: boolean; sectorId: string | null };
 
 const EMPTY: SectorInput = { name: '', description: '', can_reply: true, can_manage_demands: true, can_handle_alerts: true };
+
+const sameSet = (set: Set<string>, list: string[]) => set.size === new Set(list).size && list.every((x) => set.has(x));
 
 /** Permissões do setor (ver grupos e conversas é a base de todo setor). */
 function Permissions({
@@ -93,9 +96,12 @@ export function SectorsList({
   members,
   groups,
   defaultSectorId,
+  team,
 }: {
   sectors: SectorRow[];
   users: Person[];
+  /** equipe cadastrada (Configurações › Pessoas): de onde sai o responsável do setor */
+  team: TeamOption[];
   members: { sector_id: string; user_id: string }[];
   groups: GroupOption[];
   defaultSectorId: string | null;
@@ -141,6 +147,7 @@ export function SectorsList({
           const ids = membersOf(s.id);
           const count = groups.filter((g) => g.sectorId === s.id).length;
           const names = ids.map((id) => nameOf.get(id)).filter(Boolean) as string[];
+          const bosses = (s.responsible_member_ids ?? []).map((id) => team.find((t) => t.id === id)?.name).filter(Boolean) as string[];
           return (
             <li key={s.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand-text">
@@ -155,6 +162,7 @@ export function SectorsList({
                   {ids.length} pessoa(s) · {count} grupo(s)
                   {names.length > 0 && ` · ${names.slice(0, 4).join(', ')}${names.length > 4 ? '…' : ''}`}
                 </p>
+                {bosses.length > 0 && <p className="truncate text-xs text-brand-text">Responsável: {bosses.join(', ')}</p>}
               </button>
               <Button size="sm" variant="secondary" onClick={() => setEditing(s.id)}>
                 <Pencil className="h-3.5 w-3.5" /> Editar
@@ -189,6 +197,7 @@ export function SectorsList({
           sector={current}
           users={users}
           memberIds={membersOf(current.id)}
+          team={team}
           groups={groups}
           sectorNames={Object.fromEntries(sectors.map((x) => [x.id, x.name]))}
           onClose={() => setEditing(null)}
@@ -203,6 +212,7 @@ function SectorDialog({
   sector,
   users,
   memberIds,
+  team,
   groups,
   sectorNames,
   onClose,
@@ -210,6 +220,7 @@ function SectorDialog({
   sector: SectorRow;
   users: Person[];
   memberIds: string[];
+  team: TeamOption[];
   groups: GroupOption[];
   sectorNames: Record<string, string>;
   onClose: () => void;
@@ -218,7 +229,8 @@ function SectorDialog({
   const [value, setValue] = useState<SectorInput>({ ...sector, description: sector.description ?? '' });
   const [members, setMembers] = useState(() => new Set(memberIds));
   const [chosen, setChosen] = useState(() => new Set(groups.filter((g) => g.sectorId === sector.id).map((g) => g.id)));
-  const [tab, setTab] = useState<'people' | 'groups'>('people');
+  const [responsible, setResponsible] = useState(() => new Set(sector.responsible_member_ids ?? []));
+  const [tab, setTab] = useState<'people' | 'groups' | 'resp'>('people');
   const [query, setQuery] = useState('');
   const [pending, start] = useTransition();
   useEffect(() => {
@@ -230,6 +242,7 @@ function SectorDialog({
   const q = query.trim().toLowerCase();
   const agents = users.filter((u) => !u.admin);
   const shownPeople = agents.filter((u) => !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+  const shownTeam = team.filter((t) => (t.active || responsible.has(t.id)) && (!q || t.name.toLowerCase().includes(q)));
   const shownGroups = useMemo(
     () =>
       groups
@@ -255,13 +268,15 @@ function SectorDialog({
         removeMembers: [...initialMembers].filter((x) => !members.has(x)),
         addGroups: [...chosen].filter((x) => !initialGroups.has(x)),
         removeGroups: [...initialGroups].filter((x) => !chosen.has(x)),
+        // só envia quando mudou (sem o script 0158 a coluna não existe e o setor continuaria salvando)
+        responsibleMemberIds: sameSet(responsible, sector.responsible_member_ids ?? []) ? undefined : [...responsible],
       });
       if (!res.ok) return void toast.error(res.error);
       toast.success(`Setor ${value.name} salvo`);
       router.refresh();
       onClose();
     });
-  const tabBtn = (k: 'people' | 'groups', label: string) => (
+  const tabBtn = (k: 'people' | 'groups' | 'resp', label: string) => (
     <button
       type="button"
       onClick={() => {
@@ -289,21 +304,33 @@ function SectorDialog({
           <div className="inline-flex rounded-xl border border-line p-1">
             {tabBtn('people', `Pessoas (${members.size})`)}
             {tabBtn('groups', `Grupos (${chosen.size})`)}
+            {tabBtn('resp', `Responsável (${responsible.size})`)}
           </div>
           <label className="relative block">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
             <Input
               type="search"
               className="h-9 pl-9"
-              placeholder={tab === 'people' ? 'Buscar pessoa' : 'Buscar grupo'}
-              aria-label={tab === 'people' ? 'Buscar pessoa' : 'Buscar grupo'}
+              placeholder={tab === 'groups' ? 'Buscar grupo' : 'Buscar pessoa'}
+              aria-label={tab === 'groups' ? 'Buscar grupo' : 'Buscar pessoa'}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
           </label>
         </div>
         <ul className="mx-4 my-2 min-h-40 flex-1 space-y-0.5 overflow-y-auto rounded-xl border border-line p-1.5">
-          {tab === 'people'
+          {tab === 'resp'
+            ? shownTeam.map((t) => (
+                <li key={t.id}>
+                  <label className={item}>
+                    <input type="checkbox" className="h-4 w-4 accent-[var(--brand)]" checked={responsible.has(t.id)} onChange={() => toggle(responsible, t.id, setResponsible)} />
+                    <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                    {!t.active && <Badge tone="critical">inativo</Badge>}
+                    {!t.phone && <span className="shrink-0 text-[9px] text-warning-ink" title="Sem telefone: não dá para marcar no WhatsApp">sem telefone</span>}
+                  </label>
+                </li>
+              ))
+            : tab === 'people'
             ? shownPeople.map((u) => (
                 <li key={u.id}>
                   <label className={item}>
@@ -332,12 +359,18 @@ function SectorDialog({
                   </li>
                 );
               })}
-          {(tab === 'people' ? shownPeople : shownGroups).length === 0 && (
-            <li className="px-2 py-3 text-center text-xs text-muted">{tab === 'people' ? 'Nenhuma pessoa (administradores já veem tudo).' : 'Nenhum grupo encontrado.'}</li>
+          {(tab === 'resp' ? shownTeam : tab === 'people' ? shownPeople : shownGroups).length === 0 && (
+            <li className="px-2 py-3 text-center text-xs text-muted">
+              {tab === 'resp' ? 'Nenhuma pessoa na equipe (cadastre em Configurações › Pessoas).' : tab === 'people' ? 'Nenhuma pessoa (administradores já veem tudo).' : 'Nenhum grupo encontrado.'}
+            </li>
           )}
         </ul>
         <p className="px-4 text-[9px] text-muted">
-          {tab === 'people' ? 'Administradores não aparecem: já veem todos os grupos.' : 'Cada grupo fica num setor só: marcar aqui tira o grupo do setor anterior.'}
+          {tab === 'resp'
+            ? 'Responsável pelo setor: a automação de atendimento pode marcá-lo na cobrança (Configurações › Automação). Pode ser mais de uma pessoa.'
+            : tab === 'people'
+              ? 'Administradores não aparecem: já veem todos os grupos.'
+              : 'Cada grupo fica num setor só: marcar aqui tira o grupo do setor anterior.'}
         </p>
         <details className="mx-4 mt-2 rounded-xl border border-line px-3 py-2 text-sm">
           <summary className="cursor-pointer text-xs font-medium text-ink-2">Mais opções (permissões)</summary>

@@ -132,6 +132,10 @@ para mudar dependências).
   alertas. O worker (`whatsapp.ts`, variável `tracked`) também não guarda arquivos nem aciona avisos, demandas, automação
   de atendimento ou pesquisa de encerramento. Se criar outro efeito colateral por mensagem, coloque-o atrás de `tracked`,
   senão ele passa a valer em grupos desligados (resposta automática a cliente, por exemplo).
+- **Cobranças da automação em etapas (0158).** `automation_rules.escalation_steps` (jsonb) tem uma etapa por cobrança;
+  `stepFor`/`waitMinutesFor` (`automation/service.ts`) escolhem a etapa e o tempo, e `store.resolveResponsibles` traduz
+  os responsáveis do grupo e do setor em WhatsApp na hora de cobrar (sem cópia em memória). Lista vazia = comportamento
+  antigo (`mention_jids` em todas). O formulário (`settings/automation/automation-panel.tsx`) sempre grava ao menos uma etapa.
 - **Mensagens e textos da tela em português.** Erros devolvidos pelas ações são mostrados ao usuário como estão.
 - **Vercel x Railway:** o painel não pode enviar WhatsApp nem rodar tarefas contínuas; tudo que precisa do número
   conectado fica no worker.

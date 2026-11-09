@@ -1,7 +1,7 @@
 import { formatWait } from '../duration.js';
 import { DEFAULT_TIMEZONE, isBusinessHours } from './hours.js';
 import type { Sender } from './sender.js';
-import type { AutomationRule, AutomationStore, PendingReply } from './types.js';
+import type { AutomationRule, AutomationStore, EscalationStep, PendingReply } from './types.js';
 
 /**
  * Automação de atendimento (0144): garante que nenhuma mensagem de cliente fique sem resposta sem depender de
@@ -85,6 +85,23 @@ export function messagePreview(type: string, body: string | null | undefined, ma
   const text = (body ?? '').replace(/\s+/g, ' ').trim();
   const out = type === 'text' || !type ? text : `[${TYPE_LABEL[type] ?? type}]${text ? ` ${text}` : ''}`;
   return out.length > max ? `${out.slice(0, max - 1).trimEnd()}…` : out;
+}
+
+/** Etapa da cobrança de número `index` (0 = a 1ª): a própria etapa ou, passando da última, a última. Sem etapas: null. */
+export function stepFor(rule: Pick<AutomationRule, 'escalationSteps'>, index: number): EscalationStep | null {
+  const steps = rule.escalationSteps ?? [];
+  return steps.length ? steps[Math.min(index, steps.length - 1)] : null;
+}
+
+/**
+ * Minutos que a cobrança de número `index` espera: desde a mensagem do cliente (a 1ª) ou desde a cobrança anterior
+ * (as demais). Vale o tempo da própria etapa; sem ele, "Cobrar depois de" (1ª) ou "Repetir a cada" (demais).
+ */
+export function waitMinutesFor(rule: Pick<AutomationRule, 'escalationSteps' | 'escalateAfterMin' | 'repeatEveryMin'>, index: number): number {
+  const own = index < (rule.escalationSteps ?? []).length ? rule.escalationSteps[index].waitMin : null;
+  const minutes = own ?? (index === 0 ? rule.escalateAfterMin : rule.repeatEveryMin);
+  // as repetições esperam ao menos 1 minuto (como sempre)
+  return Math.max(index === 0 ? 0 : 1, minutes);
 }
 
 const mentionToken = (jid: string) => `@${jid.split('@')[0].split(':')[0]}`;
@@ -328,6 +345,20 @@ export function createAutomation(deps: AutomationDeps) {
       return false;
     }
     const minutes = Math.floor((at.getTime() - pending.receivedAt.getTime()) / 60_000);
+    // quem é marcado nesta cobrança: a etapa (pessoas escolhidas + responsáveis do grupo e do setor) ou, sem etapas, a lista da regra
+    const step = stepFor(rule, pending.escalationCount);
+    let mentions = step ? [...step.mentionJids] : [...rule.mentionJids];
+    if (step && (step.mentionGroupResponsibles || step.mentionSectorResponsibles)) {
+      try {
+        const who = await store.resolveResponsibles(pending.groupId);
+        if (step.mentionGroupResponsibles) mentions.push(...who.group);
+        if (step.mentionSectorResponsibles) mentions.push(...who.sector);
+      } catch (err) {
+        // não impede a cobrança: sai com as pessoas escolhidas
+        logger.warn({ err, group: pending.groupJid }, '[automation] falha ao buscar os responsáveis para marcar');
+      }
+    }
+    mentions = [...new Set(mentions)];
     try {
       await sender.send({
         instanceId: pending.instanceId,
@@ -338,9 +369,9 @@ export function createAutomation(deps: AutomationDeps) {
           client: pending.clientName,
           preview: pending.preview,
           link: link(pending.groupId),
-          mentions: rule.mentionJids,
+          mentions,
         }),
-        mentions: rule.mentionJids,
+        mentions,
       });
     } catch (err) {
       // não conta como cobrança feita: tenta de novo na próxima verificação
@@ -363,7 +394,12 @@ export function createAutomation(deps: AutomationDeps) {
     } catch (err) {
       logger.warn({ err, group: pending.groupJid }, '[automation] falha ao criar o alerta crítico');
     }
-    await store.log(pending.companyId, pending.groupId, 'ESCALATE', `cobrança ${count} de ${rule.maxEscalations} (há ${formatWait(minutes)})`);
+    await store.log(
+      pending.companyId,
+      pending.groupId,
+      'ESCALATE',
+      `cobrança ${count} de ${rule.maxEscalations} (há ${formatWait(minutes)})${step ? ` · marcou ${mentions.length} pessoa(s)` : ''}`,
+    );
     return true;
   };
 
@@ -386,10 +422,9 @@ export function createAutomation(deps: AutomationDeps) {
             continue;
           }
           if (pending.escalationCount >= rule.maxEscalations) continue;
-          const sinceLast = at.getTime() - (pending.lastEscalatedAt ?? pending.receivedAt).getTime();
-          const due =
-            pending.escalationCount === 0 ? age >= rule.escalateAfterMin * 60_000 : sinceLast >= Math.max(1, rule.repeatEveryMin) * 60_000;
-          if (!due) continue;
+          // a 1ª cobrança conta desde a mensagem; as demais, desde a cobrança anterior; cada etapa pode ter o seu tempo
+          const since = pending.escalationCount === 0 ? age : at.getTime() - (pending.lastEscalatedAt ?? pending.receivedAt).getTime();
+          if (since < waitMinutesFor(rule, pending.escalationCount) * 60_000) continue;
           // fora do horário só cobra com escalateOffHours; senão a cobrança sai quando o expediente abrir
           if (!rule.escalateOffHours && !isBusinessHours(rule, at, await timezoneOf(pending.companyId))) continue;
           if (await escalate(pending, rule, at)) sent++;

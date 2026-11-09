@@ -89,3 +89,31 @@ test('grupos escolhidos: de 1 a 500, sem repetir e com identificadores válidos'
   assert.equal(validateGroupIds(['não é id']).ok, false);
   assert.equal(validateGroupIds(Array.from({ length: 501 }, (_, i) => `3f8a1c2e-1111-4222-8333-${String(i).padStart(12, '0')}`)).ok, false);
 });
+
+test('regra: etapas de cobrança são validadas e limpas', () => {
+  const jid = '5551999990001@s.whatsapp.net';
+  const ok = validateRuleInput(
+    {
+      escalationSteps: [
+        { waitMin: '5', mentionGroupResponsibles: true, mentionJids: [jid, jid] },
+        { waitMin: null, mentionSectorResponsibles: true, lixo: 'x' },
+        {},
+      ],
+    },
+    { creating: false },
+  );
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.ok && ok.value.escalationSteps, [
+    { waitMin: 5, mentionGroupResponsibles: true, mentionSectorResponsibles: false, mentionJids: [jid] },
+    { waitMin: null, mentionGroupResponsibles: false, mentionSectorResponsibles: true, mentionJids: [] },
+    { waitMin: null, mentionGroupResponsibles: false, mentionSectorResponsibles: false, mentionJids: [] },
+  ]);
+  // lista vazia vale (volta ao comportamento antigo)
+  assert.deepEqual(validateRuleInput({ escalationSteps: [] }, { creating: false }), { ok: true, value: { escalationSteps: [] } });
+  // inválidos
+  assert.equal(validateRuleInput({ escalationSteps: 'x' }, { creating: false }).ok, false);
+  assert.equal(validateRuleInput({ escalationSteps: Array.from({ length: 11 }, () => ({})) }, { creating: false }).ok, false);
+  assert.equal(validateRuleInput({ escalationSteps: [{ waitMin: -1 }] }, { creating: false }).ok, false);
+  assert.equal(validateRuleInput({ escalationSteps: [{ waitMin: 1.5 }] }, { creating: false }).ok, false);
+  assert.equal(validateRuleInput({ escalationSteps: [{ mentionJids: ['123'] }] }, { creating: false }).ok, false);
+});

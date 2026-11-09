@@ -1,5 +1,20 @@
 /** Automação de atendimento (0144): tipos compartilhados entre o serviço, o envio e o banco. */
 
+/**
+ * Uma etapa de cobrança (0158): a 1ª, a 2ª... Define quem é marcado e, opcionalmente, o tempo daquela cobrança.
+ * Passando da última etapa, repete a última.
+ */
+export type EscalationStep = {
+  /** minutos desta cobrança: desde a mensagem (1ª) ou desde a cobrança anterior (demais); null = o geral da regra */
+  waitMin: number | null;
+  /** marca os responsáveis pelo grupo do cliente */
+  mentionGroupResponsibles: boolean;
+  /** marca os responsáveis pelo setor do grupo do cliente */
+  mentionSectorResponsibles: boolean;
+  /** pessoas escolhidas (jids do WhatsApp) */
+  mentionJids: string[];
+};
+
 export type AutomationRule = {
   groupId: string;
   companyId: string;
@@ -16,8 +31,10 @@ export type AutomationRule = {
   repeatEveryMin: number;
   maxEscalations: number;
   escalateOffHours: boolean;
-  /** quem é marcado na cobrança (jids do WhatsApp) */
+  /** quem é marcado na cobrança (jids do WhatsApp); sem etapas, vale para todas as cobranças */
   mentionJids: string[];
+  /** etapas de cobrança (0158); vazio = todas as cobranças iguais, marcando mentionJids */
+  escalationSteps: EscalationStep[];
   /** 0 = domingo ... 6 = sábado */
   businessDays: number[];
   businessStart: string;
@@ -71,6 +88,8 @@ export interface AutomationStore {
   /** chave geral da empresa (app_settings.automation_enabled): desligada, a automação não age */
   isEnabled(companyId: string): Promise<boolean>;
   getRule(groupId: string): Promise<AutomationRule | null>;
+  /** WhatsApp dos responsáveis pelo grupo e pelo setor do grupo (0158; ativos e com telefone) */
+  resolveResponsibles(groupId: string): Promise<{ group: string[]; sector: string[] }>;
   /** todos os grupos internos em uso (a automação nunca dispara por mensagens neles) */
   listNotifyJids(): Promise<string[]>;
   getOpenPending(groupId: string): Promise<PendingReply | null>;
