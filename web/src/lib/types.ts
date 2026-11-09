@@ -231,6 +231,8 @@ export type AppSettings = {
   business_end: string;
   default_sla_minutes: number;
   auto_monitor_new_groups: boolean;
+  /** administradores valem como responsáveis de todos os grupos (0162; sem o script, fica desligado) */
+  admins_responsible_all?: boolean;
   ignore_acknowledgements: boolean;
   ignore_stickers_emoji?: boolean;
   /** frases do cliente a ignorar (além dos agradecimentos padrão) */

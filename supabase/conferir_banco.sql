@@ -204,6 +204,8 @@ from (values
       and exists (select 1 from pg_proc where proname = 'send_group_message' and pronamespace = 'public'::regnamespace and prosrc like '%''sticker''%')),
   (152, 'Recuperar mensagens antigas de um grupo, experimental (0161)', to_regclass('public.history_requests') is not null and to_regprocedure('public.request_history_recovery(uuid,integer)') is not null
       and to_regprocedure('public.request_history_recovery_all(integer,boolean)') is not null),
-  (153, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (153, 'Administradores como responsáveis de todos os grupos (0162)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'admins_responsible_all')
+      and to_regprocedure('public.admin_team_member_ids()') is not null),
+  (154, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

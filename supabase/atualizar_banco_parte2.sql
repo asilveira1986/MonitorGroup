@@ -261,7 +261,9 @@ begin
       and exists (select 1 from pg_proc where proname = 'send_group_message' and pronamespace = 'public'::regnamespace and prosrc like '%''sticker''%')),
   (152, 'Recuperar mensagens antigas de um grupo, experimental (0161)', to_regclass('public.history_requests') is not null and to_regprocedure('public.request_history_recovery(uuid,integer)') is not null
       and to_regprocedure('public.request_history_recovery_all(integer,boolean)') is not null),
-  (153, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (153, 'Administradores como responsáveis de todos os grupos (0162)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'admins_responsible_all')
+      and to_regprocedure('public.admin_team_member_ids()') is not null),
+  (154, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -270,7 +272,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -7319,6 +7321,44 @@ grant execute on function public.cancel_history_recovery_batch(uuid) to authenti
 $mig0161$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0162_admins_responsible_all.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0162', $mig0162$
+-- =====================================================================
+-- Administradores são responsáveis por todos os grupos.
+--
+--  * app_settings.admins_responsible_all (padrão: ligado): os administradores
+--    da empresa passam a valer como responsáveis de TODOS os grupos, além dos
+--    responsáveis escolhidos em cada grupo. Efeito:
+--      - nas telas, ao lado dos responsáveis do grupo aparece "administradores";
+--      - no Painel de grupos, filtrar por um administrador mostra todos os grupos;
+--      - na automação de atendimento, a cobrança que marca "os responsáveis do
+--        grupo" também marca os administradores (que tenham telefone cadastrado).
+--    "Sem responsável" continua querendo dizer "nenhuma pessoa escolhida no
+--    grupo" (para achar os grupos sem dono).
+--  * admin_team_member_ids(): as pessoas da equipe ligadas, pelo e-mail de
+--    acesso, a um administrador ativo da empresa.
+-- =====================================================================
+
+alter table public.app_settings
+  add column if not exists admins_responsible_all boolean not null default true;
+
+create or replace function public.admin_team_member_ids()
+returns uuid[]
+language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(distinct t.id), '{}')
+  from public.team_members t
+  join public.profiles p on lower(btrim(p.email)) = lower(btrim(t.user_email))
+  where t.company_id = public.current_company_id()
+    and p.company_id = public.current_company_id()
+    and t.active
+    and p.active
+    and (p.role = 'admin' or p.platform_admin)
+$$;
+revoke all on function public.admin_team_member_ids() from public, anon;
+grant execute on function public.admin_team_member_ids() to authenticated;
+$mig0162$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -7531,6 +7571,8 @@ from (values
       and exists (select 1 from pg_proc where proname = 'send_group_message' and pronamespace = 'public'::regnamespace and prosrc like '%''sticker''%')),
   (152, 'Recuperar mensagens antigas de um grupo, experimental (0161)', to_regclass('public.history_requests') is not null and to_regprocedure('public.request_history_recovery(uuid,integer)') is not null
       and to_regprocedure('public.request_history_recovery_all(integer,boolean)') is not null),
-  (153, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (153, 'Administradores como responsáveis de todos os grupos (0162)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'admins_responsible_all')
+      and to_regprocedure('public.admin_team_member_ids()') is not null),
+  (154, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

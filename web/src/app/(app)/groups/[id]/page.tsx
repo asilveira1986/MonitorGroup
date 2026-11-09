@@ -19,6 +19,7 @@ import { TagEditor, type CustomerTag } from '@/components/customer-tags';
 import { Conversation } from './conversation';
 import { GroupFiles } from './group-files';
 import { HistoryRecoveryButton } from './history-recovery';
+import { withAdmins } from '@/lib/responsibles';
 import { DeleteRemovedGroupButton } from '../removed-groups';
 
 const minutesAgo = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
@@ -79,7 +80,11 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
   // responsáveis do grupo (inclui quem foi desativado da equipe, marcado como inativo)
   const allTeam = (members ?? []) as { id: string; name: string; active: boolean }[];
   const responsibleIds: string[] = g.responsible_member_ids?.length ? g.responsible_member_ids : g.responsible_member_id ? [g.responsible_member_id] : [];
-  const responsibleNames = responsibleIds.map((rid) => allTeam.find((m) => m.id === rid)?.name ?? 'Responsável');
+  // administradores valem como responsáveis de todos os grupos (0162): aparecem ao lado dos escolhidos
+  const responsibleNames = withAdmins(
+    responsibleIds.map((rid) => allTeam.find((m) => m.id === rid)?.name ?? 'Responsável'),
+    settings?.admins_responsible_all === true,
+  );
   const teamOptions = allTeam
     .filter((m) => m.active || responsibleIds.includes(m.id))
     .map((m) => ({ id: m.id, name: m.active ? m.name : `${m.name} (inativo)` }));

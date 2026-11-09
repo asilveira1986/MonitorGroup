@@ -27,6 +27,18 @@ export async function saveGeneralSettings(form: FormData): Promise<Result> {
   return result(error);
 }
 
+/** Administradores como responsáveis de todos os grupos (0162): liga ou desliga na hora, sem passar pelo formulário geral. */
+export async function setAdminsResponsibleAll(enabled: boolean): Promise<Result> {
+  const admin = await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('app_settings')
+    .update({ admins_responsible_all: Boolean(enabled), updated_at: new Date().toISOString() })
+    .eq('company_id', admin.company_id);
+  revalidatePath('/', 'layout');
+  return result(error);
+}
+
 export async function addHoliday(form: FormData): Promise<Result> {
   const admin = await requireAdmin();
   const day = String(form.get('day') ?? '');

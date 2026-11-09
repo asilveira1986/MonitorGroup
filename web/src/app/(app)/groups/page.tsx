@@ -9,6 +9,8 @@ import type { Group } from '@/lib/types';
 import { TagChips, type CustomerTag } from '@/components/customer-tags';
 import { GroupsTable } from './groups-table';
 import { HistoryRecoveryAllButton } from './history-recovery-all';
+import { appSettings } from '@/lib/app-settings';
+import { withAdmins } from '@/lib/responsibles';
 import { RemovedGroups, type RemovedGroup } from './removed-groups';
 
 const FILTERS = [
@@ -65,11 +67,12 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
     if (filter === 'monitored') query = query.eq('monitored', true);
     if (filter === 'ignored') query = query.eq('monitored', false);
     if (tag) query = query.contains('tags', [tag]);
-    const [{ data: rows }, { data: team }] = await Promise.all([query.limit(500), supabase.from('team_members').select('id, name')]);
+    const [{ data: rows }, { data: team }, { data: settings }] = await Promise.all([query.limit(500), supabase.from('team_members').select('id, name'), appSettings()]);
+    const adminsOn = settings?.admins_responsible_all === true;
     const teamName = new Map((team ?? []).map((t) => [t.id as string, t.name as string]));
     groups = ((rows ?? []) as Group[]).map((g) => {
       const ids = g.responsible_member_ids?.length ? g.responsible_member_ids : g.responsible_member_id ? [g.responsible_member_id] : [];
-      return { ...g, responsible_names: ids.map((id) => teamName.get(id) ?? 'Responsável') };
+      return { ...g, responsible_names: withAdmins(ids.map((id) => teamName.get(id) ?? 'Responsável'), adminsOn) };
     });
   }
 

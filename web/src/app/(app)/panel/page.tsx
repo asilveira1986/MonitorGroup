@@ -1,7 +1,9 @@
 import { AlertTriangle } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
+import { appSettings } from '@/lib/app-settings';
 import { requireMenu } from '@/lib/auth';
+import { withAdmins } from '@/lib/responsibles';
 import { createClient } from '@/lib/supabase/server';
 import { GroupsPanel, type PanelGroup } from './panel';
 
@@ -15,14 +17,19 @@ export const metadata: Metadata = { title: 'Monitor Group · Painel de grupos' }
 export default async function PanelPage() {
   await requireMenu('/panel');
   const supabase = await createClient();
-  const [{ data, error }, { data: groupSectors }, { data: sectors }, { data: team }, { data: myIds }] = await Promise.all([
+  const [{ data, error }, { data: groupSectors }, { data: sectors }, { data: team }, { data: myIds }, { data: settings }, { data: adminRows }] = await Promise.all([
     supabase.rpc('groups_panel'),
     supabase.from('groups').select('*'),
     supabase.from('sectors').select('id, name').order('name'),
     supabase.from('team_members').select('id, name, active').order('name'),
     // pessoas da equipe ligadas ao e-mail de acesso deste usuário (0059)
     supabase.rpc('my_team_member_ids'),
+    appSettings(),
+    // pessoas da equipe que são administradores (0162): valem como responsáveis de todos os grupos, se a empresa deixa
+    supabase.rpc('admin_team_member_ids'),
   ]);
+  const adminsOn = settings?.admins_responsible_all === true;
+  const adminIds: string[] = adminsOn ? ((adminRows ?? []) as string[]) : [];
   type GroupInfo = {
     id: string;
     sector_id: string | null;
@@ -45,7 +52,7 @@ export default async function PanelPage() {
     jid: infoOf.get(g.id)?.jid ?? null,
     responsible_ids: responsiblesOf(infoOf.get(g.id)),
     closed_at: infoOf.get(g.id)?.closed_at ?? null,
-    responsible_names: responsiblesOf(infoOf.get(g.id)).map((id) => teamName.get(id) ?? 'Responsável'),
+    responsible_names: withAdmins(responsiblesOf(infoOf.get(g.id)).map((id) => teamName.get(id) ?? 'Responsável'), adminsOn),
     photo_jid: withPhoto.has(infoOf.get(g.id)?.jid ?? '') ? (infoOf.get(g.id)?.jid ?? null) : null,
   }));
   // filtro por responsável: toda a equipe ativa + quem ainda é responsável por algum grupo
@@ -55,7 +62,8 @@ export default async function PanelPage() {
     .map((t) => ({
       id: t.id as string,
       name: t.name as string,
-      groups: groups.filter((g) => g.responsible_ids.includes(t.id as string)).length,
+      // administrador responde por todos os grupos do painel (0162)
+      groups: adminIds.includes(t.id as string) ? groups.length : groups.filter((g) => g.responsible_ids.includes(t.id as string)).length,
       // grupos da pessoa que não entram no painel (monitoramento desligado ou o número saiu do grupo)
       hidden: ((groupSectors ?? []) as unknown as GroupInfo[]).filter(
         (g) => (!g.monitored || g.removed_at) && responsiblesOf(g).includes(t.id as string),
@@ -88,6 +96,7 @@ export default async function PanelPage() {
           defaultSector={mine ? 'all' : (geral?.id ?? 'all')}
           myMemberId={mine}
           responsibles={responsibles}
+          adminResponsibleIds={adminIds}
           hasNoResponsible={groups.some((g) => !g.responsible_ids.length)}
         />
       )}
