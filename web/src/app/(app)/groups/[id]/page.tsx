@@ -93,6 +93,8 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
   const sla = (g.sla_minutes ?? settings?.default_sla_minutes ?? 30) * 60;
   const canReplyRole = settings?.reply_allowed !== 'admin' || profile.role === 'admin';
   const viewer = profile.role === 'viewer';
+  // a lista de grupos e o monitoramento são só dos administradores
+  const isAdminUser = profile.role === 'admin' || profile.platform_admin;
   const replyBlocked = viewer
     ? 'Seu perfil é somente para ver os painéis.'
     : !settings?.reply_enabled
@@ -116,10 +118,10 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     <div className="flex flex-col lg:h-[calc(100dvh-4rem)] lg:min-h-[40rem]">
       <LiveMessages groupId={g.id} />
       <Link
-        href={viewer || fromPanel ? '/panel' : g.removed_at ? '/groups?filter=removed' : '/groups'}
+        href={!isAdminUser || viewer || fromPanel ? '/panel' : g.removed_at ? '/groups?filter=removed' : '/groups'}
         className="mb-2 inline-flex items-center gap-1 text-sm text-ink-2 hover:text-ink"
       >
-        <ArrowLeft className="h-4 w-4" /> {viewer || fromPanel ? 'Painel de grupos' : 'Grupos'}
+        <ArrowLeft className="h-4 w-4" /> {!isAdminUser || viewer || fromPanel ? 'Painel de grupos' : 'Grupos'}
       </Link>
 
       <div className="mb-3 flex flex-col gap-3">
@@ -183,7 +185,13 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             <div>
               <p className="mb-0.5 text-[9px] font-medium text-ink-2">Monitoramento</p>
               <div className="flex h-9 items-center [&_span.text-sm]:text-[12px]">
-                <MonitorToggle groupId={g.id} monitored={g.monitored} label="Monitorar este grupo" />
+                {isAdminUser ? (
+                  <MonitorToggle groupId={g.id} monitored={g.monitored} label="Monitorar este grupo" />
+                ) : (
+                  <span className="text-[12px] text-ink-2" title="Só administradores ligam ou desligam o monitoramento">
+                    {g.monitored ? 'Monitorado' : 'Não monitorado'}
+                  </span>
+                )}
               </div>
             </div>
             {profile.role === 'admin' && (

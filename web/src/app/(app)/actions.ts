@@ -17,7 +17,8 @@ export async function markGroupAnswered(groupId: string): Promise<Result> {
 }
 
 export async function setGroupMonitored(groupId: string, monitored: boolean): Promise<Result> {
-  await requireProfile();
+  // ligar ou desligar o monitoramento é só do administrador (o banco também confere, 0156)
+  await requireAdmin();
   const supabase = await createClient();
   const { error } = await supabase.from('groups').update({ monitored }).eq('id', groupId);
   revalidatePath('/', 'layout');

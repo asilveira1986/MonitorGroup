@@ -39,7 +39,7 @@ const OPTIONS: { value: MenuAccess; label: string; icon: LucideIcon }[] = [
   { value: 'none', label: 'Oculto', icon: EyeOff },
 ];
 
-type Item = { href: string; label: string; description: string; locked: boolean; access: MenuAccess };
+type Item = { href: string; label: string; description: string; locked: boolean; adminOnly?: boolean; access: MenuAccess };
 
 export function MenuAccessForm({ items }: { items: Item[] }) {
   const [access, setAccess] = useState<Record<string, MenuAccess>>(() =>
@@ -70,11 +70,12 @@ export function MenuAccessForm({ items }: { items: Item[] }) {
                   <p className="text-xs text-muted">
                     {item.description}
                     {item.locked && ' Sempre disponível para administradores.'}
+                    {item.adminOnly && ' Fixo: outros usuários não têm acesso a este menu.'}
                   </p>
                 </div>
               </div>
               <div role="radiogroup" aria-label={`Quem vê ${item.label}`} className="flex shrink-0 gap-1 rounded-xl bg-surface-2 p-1">
-                {OPTIONS.filter((o) => !(item.locked && o.value === 'none')).map((o) => (
+                {OPTIONS.filter((o) => !(item.locked && o.value === 'none') && !(item.adminOnly && o.value === 'all')).map((o) => (
                   <button
                     key={o.value}
                     type="button"
