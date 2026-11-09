@@ -195,6 +195,7 @@ from (values
       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'contacts' and column_name = 'birthday')),
   (145, 'Gatilhos de disparo: arquivo, variações e janela (0154)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'broadcast_triggers' and column_name = 'media_path')),
   (146, 'Log de atividades ignora o aviso de presença (0155)', 'last_seen_at' = any(public.activity_noise())),
-  (147, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (147, 'Monitoramento do grupo só para administradores (0156)', exists (select 1 from pg_trigger where tgname = 'groups_monitoring_guard' and not tgisinternal)),
+  (148, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

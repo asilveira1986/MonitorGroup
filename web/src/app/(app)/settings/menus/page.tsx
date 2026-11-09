@@ -22,7 +22,9 @@ export default async function MenusSettingsPage() {
             label: i.label,
             description: i.description,
             locked: 'alwaysForAdmins' in i,
-            access: menuAccess(config, i.href),
+            adminOnly: 'adminOnly' in i,
+            // menu só de administradores nunca aparece como "Todos"
+            access: 'adminOnly' in i && menuAccess(config, i.href) === 'all' ? ('admin' as const) : menuAccess(config, i.href),
           }))}
         />
       </div>

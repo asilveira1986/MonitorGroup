@@ -3,7 +3,7 @@
  * Acesso: 'all' = todos os usuários, 'admin' = só administradores, 'none' = oculto para todos.
  * Menu oculto também bloqueia a página (requireMenu).
  */
-import { AGENDA_MENUS, VIEWER_MENUS } from '@/lib/roles';
+import { AGENDA_MENUS, VIEWER_MENUS } from './roles.ts';
 
 export type MenuAccess = 'all' | 'admin' | 'none';
 
@@ -13,7 +13,8 @@ export const MENU_ITEMS = [
   { href: '/pending', label: 'Aguardando resposta', description: 'Fila de clientes esperando resposta.' },
   { href: '/demands', label: 'Demandas', description: 'Pedidos dos clientes e entregas.' },
   { href: '/agenda', label: 'Agenda', description: 'Compromissos de cada pessoa e as demandas para entregar, dia a dia.' },
-  { href: '/groups', label: 'Grupos', description: 'Lista de grupos, monitoramento e conversas.' },
+  // lista de grupos e monitoramento: só administradores (a conversa de cada grupo abre pelo Painel de grupos)
+  { href: '/groups', label: 'Grupos', description: 'Lista de grupos, monitoramento e conversas. Só administradores.', adminOnly: true },
   { href: '/alerts', label: 'Alertas', description: 'Alertas gerados pelas regras.' },
   { href: '/reports', label: 'Relatórios', description: 'Relatórios para imprimir ou exportar.' },
   // Configurações: nunca some para administradores (ninguém se tranca do lado de fora)
@@ -40,6 +41,8 @@ export function canSeeMenu(
   // perfil "Só agenda": só a Agenda
   if (agendaOnly && !isAdmin && !AGENDA_MENUS.includes(href)) return false;
   const item = MENU_ITEMS.find((i) => i.href === href);
+  // menu só de administradores: nenhuma configuração libera para os demais
+  if (item && 'adminOnly' in item && !isAdmin) return false;
   if (item && 'alwaysForAdmins' in item && isAdmin) return true;
   const access = menuAccess(config, href);
   return access === 'all' || (access === 'admin' && isAdmin);
