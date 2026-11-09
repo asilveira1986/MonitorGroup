@@ -8,6 +8,8 @@ import {
   createBotRegistry,
   escalationText,
   messagePreview,
+  stepFor,
+  waitMinutesFor,
   type AutomationMessage,
 } from './service.js';
 import type { AlertInput, AutomationRule, AutomationStore, LogAction, NewPending, OpenPending, PendingReply, SockLike } from './types.js';
@@ -34,6 +36,7 @@ const baseRule: AutomationRule = {
   maxEscalations: 3,
   escalateOffHours: false,
   mentionJids: ['5551999990001@s.whatsapp.net', '5551999990002@s.whatsapp.net'],
+  escalationSteps: [],
   businessDays: [1, 2, 3, 4, 5],
   businessStart: '08:00',
   businessEnd: '18:00',
@@ -55,6 +58,9 @@ function setup(ruleOverrides: Partial<AutomationRule> = {}, start: Date = INSIDE
   let enabled = true;
   let failSend: ((req: Sent) => boolean) | null = null;
   let ids = 0;
+  // responsáveis do grupo e do setor (0158)
+  let responsibles: { group: string[]; sector: string[] } = { group: [], sector: [] };
+  let failResponsibles = false;
 
   const store: AutomationStore = {
     async isEnabled() {
@@ -62,6 +68,10 @@ function setup(ruleOverrides: Partial<AutomationRule> = {}, start: Date = INSIDE
     },
     async getRule(groupId) {
       return groupId === rule.groupId ? { ...rule } : null;
+    },
+    async resolveResponsibles() {
+      if (failResponsibles) throw new Error('falha simulada ao buscar os responsáveis');
+      return responsibles;
     },
     async listNotifyJids() {
       return [rule.notifyGroupJid];
@@ -171,6 +181,8 @@ function setup(ruleOverrides: Partial<AutomationRule> = {}, start: Date = INSIDE
     setGroupStillPending: (v: boolean) => (groupStillPending = v),
     setEnabled: (v: boolean) => (enabled = v),
     failSends: (fn: ((req: Sent) => boolean) | null) => (failSend = fn),
+    setResponsibles: (v: { group: string[]; sector: string[] }) => (responsibles = v),
+    failResponsiblesLookup: (v: boolean) => (failResponsibles = v),
   };
 }
 
@@ -604,4 +616,129 @@ test('o registro de mensagens do bot esquece depois do prazo', () => {
   now = 1500;
   assert.equal(bots.has('A'), false);
   assert.equal(bots.has(undefined), false);
+});
+
+// ------------------------------------------------------------------ cobranças em etapas (0158)
+
+const GRUPO = ['5551900000001@s.whatsapp.net', '5551900000002@s.whatsapp.net'];
+const SETOR = ['5551900000009@s.whatsapp.net'];
+const step = (over: Partial<import('./types.js').EscalationStep> = {}): import('./types.js').EscalationStep => ({
+  waitMin: null,
+  mentionGroupResponsibles: false,
+  mentionSectorResponsibles: false,
+  mentionJids: [],
+  ...over,
+});
+
+test('stepFor: a etapa da cobrança; passando da última, repete a última; sem etapas, null', () => {
+  const a = step({ mentionGroupResponsibles: true });
+  const b = step({ mentionSectorResponsibles: true });
+  assert.equal(stepFor({ escalationSteps: [] }, 0), null);
+  assert.equal(stepFor({ escalationSteps: [a, b] }, 0), a);
+  assert.equal(stepFor({ escalationSteps: [a, b] }, 1), b);
+  assert.equal(stepFor({ escalationSteps: [a, b] }, 5), b);
+});
+
+test('waitMinutesFor: tempo da etapa; sem ele, "cobrar depois de" (1ª) e "repetir a cada" (demais, mínimo 1)', () => {
+  const rule = { escalateAfterMin: 15, repeatEveryMin: 30 };
+  assert.equal(waitMinutesFor({ ...rule, escalationSteps: [] }, 0), 15);
+  assert.equal(waitMinutesFor({ ...rule, escalationSteps: [] }, 1), 30);
+  assert.equal(waitMinutesFor({ ...rule, escalationSteps: [step({ waitMin: 5 }), step({ waitMin: 10 })] }, 0), 5);
+  assert.equal(waitMinutesFor({ ...rule, escalationSteps: [step({ waitMin: 5 }), step({ waitMin: 10 })] }, 1), 10);
+  // além das etapas: repete no ritmo geral
+  assert.equal(waitMinutesFor({ ...rule, escalationSteps: [step({ waitMin: 5 })] }, 2), 30);
+  assert.equal(waitMinutesFor({ escalateAfterMin: 0, repeatEveryMin: 0, escalationSteps: [] }, 0), 0);
+  assert.equal(waitMinutesFor({ escalateAfterMin: 0, repeatEveryMin: 0, escalationSteps: [] }, 1), 1);
+});
+
+test('1ª cobrança marca os responsáveis do grupo; a 2ª marca o responsável do setor', async () => {
+  const t = setup({
+    escalationSteps: [step({ mentionGroupResponsibles: true }), step({ mentionSectorResponsibles: true })],
+  });
+  t.setResponsibles({ group: GRUPO, sector: SETOR });
+  await t.automation.handleMessage(t.client());
+  const cobrancas = () => t.sent.filter((s) => s.text.startsWith('⏰🚨'));
+
+  t.advance(min(16)); // 1ª (cobrar depois de 15)
+  await t.automation.checkEscalations();
+  assert.deepEqual(cobrancas()[0].mentions, GRUPO);
+  assert.ok(cobrancas()[0].text.includes('@5551900000001') && !cobrancas()[0].text.includes('@5551900000009'));
+
+  t.advance(min(30)); // 2ª (repetir a cada 30)
+  await t.automation.checkEscalations();
+  assert.deepEqual(cobrancas()[1].mentions, SETOR);
+  assert.ok(cobrancas()[1].text.includes('@5551900000009') && !cobrancas()[1].text.includes('@5551900000001'));
+
+  t.advance(min(30)); // 3ª: passou da última etapa, repete a última (setor)
+  await t.automation.checkEscalations();
+  assert.deepEqual(cobrancas()[2].mentions, SETOR);
+  assert.equal(t.pendings[0].escalationCount, 3);
+});
+
+test('etapa junta responsáveis do grupo, do setor e pessoas escolhidas, sem repetir ninguém', async () => {
+  const fixo = '5551977770000@s.whatsapp.net';
+  const t = setup({
+    escalationSteps: [step({ mentionGroupResponsibles: true, mentionSectorResponsibles: true, mentionJids: [fixo, GRUPO[0]] })],
+  });
+  t.setResponsibles({ group: GRUPO, sector: [GRUPO[1], ...SETOR] });
+  await t.automation.handleMessage(t.client());
+  t.advance(min(16));
+  await t.automation.checkEscalations();
+  const cobranca = t.sent.find((s) => s.text.startsWith('⏰🚨'))!;
+  assert.deepEqual(new Set(cobranca.mentions), new Set([fixo, ...GRUPO, ...SETOR]));
+  assert.equal(cobranca.mentions!.length, 4);
+  assert.ok(t.logs.at(-1)!.detail!.includes('marcou 4 pessoa(s)'));
+});
+
+test('cada etapa pode ter o seu tempo: 5 min para a 1ª e 10 min depois para a 2ª', async () => {
+  const t = setup({ escalationSteps: [step({ waitMin: 5, mentionGroupResponsibles: true }), step({ waitMin: 10, mentionSectorResponsibles: true })] });
+  t.setResponsibles({ group: GRUPO, sector: SETOR });
+  await t.automation.handleMessage(t.client());
+  const cobrancas = () => t.sent.filter((s) => s.text.startsWith('⏰🚨')).length;
+  t.advance(min(4));
+  await t.automation.checkEscalations();
+  assert.equal(cobrancas(), 0);
+  t.advance(min(1)); // 5 min
+  await t.automation.checkEscalations();
+  assert.equal(cobrancas(), 1);
+  t.advance(min(9)); // 9 min desde a 1ª
+  await t.automation.checkEscalations();
+  assert.equal(cobrancas(), 1);
+  t.advance(min(1)); // 10 min desde a 1ª
+  await t.automation.checkEscalations();
+  assert.equal(cobrancas(), 2);
+});
+
+test('falha ao buscar os responsáveis não impede a cobrança: sai com as pessoas escolhidas', async () => {
+  const fixo = '5551977770000@s.whatsapp.net';
+  const t = setup({ escalationSteps: [step({ mentionGroupResponsibles: true, mentionJids: [fixo] })] });
+  t.failResponsiblesLookup(true);
+  await t.automation.handleMessage(t.client());
+  t.advance(min(16));
+  assert.equal(await t.automation.checkEscalations(), 1);
+  assert.deepEqual(t.sent.find((s) => s.text.startsWith('⏰🚨'))!.mentions, [fixo]);
+  assert.ok(t.logsOut.some((l) => l.level === 'warn' && /responsáveis/.test(l.msg ?? '')));
+});
+
+test('grupo sem responsável cadastrado: cobrança sai mesmo assim, sem marcar ninguém', async () => {
+  const t = setup({ escalationSteps: [step({ mentionGroupResponsibles: true, mentionSectorResponsibles: true })] });
+  t.setResponsibles({ group: [], sector: [] });
+  await t.automation.handleMessage(t.client());
+  t.advance(min(16));
+  assert.equal(await t.automation.checkEscalations(), 1);
+  assert.deepEqual(t.sent.find((s) => s.text.startsWith('⏰🚨'))!.mentions, []);
+});
+
+test('sem etapas, tudo continua como antes: todas as cobranças marcam mentionJids da regra', async () => {
+  const t = setup(); // escalationSteps: []
+  t.setResponsibles({ group: GRUPO, sector: SETOR }); // não são usados
+  await t.automation.handleMessage(t.client());
+  t.advance(min(16));
+  await t.automation.checkEscalations();
+  t.advance(min(30));
+  await t.automation.checkEscalations();
+  const cobrancas = t.sent.filter((s) => s.text.startsWith('⏰🚨'));
+  assert.equal(cobrancas.length, 2);
+  for (const c of cobrancas) assert.deepEqual(c.mentions, baseRule.mentionJids);
+  assert.ok(!t.logs.at(-1)!.detail!.includes('marcou'));
 });

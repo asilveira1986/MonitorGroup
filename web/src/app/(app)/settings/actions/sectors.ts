@@ -39,14 +39,27 @@ export async function createSector(values: SectorInput): Promise<Result & { id?:
  */
 export async function saveSector(
   id: string,
-  values: SectorInput & { addMembers: string[]; removeMembers: string[]; addGroups: string[]; removeGroups: string[] },
+  values: SectorInput & {
+    addMembers: string[];
+    removeMembers: string[];
+    addGroups: string[];
+    removeGroups: string[];
+    /** pessoas da equipe responsáveis pelo setor (0158); ausente = não mexe */
+    responsibleMemberIds?: string[];
+  },
 ): Promise<Result> {
   await requireAdmin();
   const row = cleanSector(values);
   if (!row.name) return { ok: false, error: 'Informe o nome do setor.' };
+  if (values.responsibleMemberIds !== undefined && !values.responsibleMemberIds.every((x) => /^[0-9a-f-]{36}$/i.test(x))) {
+    return { ok: false, error: 'Responsável do setor inválido.' };
+  }
   const supabase = await createClient();
 
-  const { error: e1 } = await supabase.from('sectors').update(row).eq('id', id);
+  const { error: e1 } = await supabase
+    .from('sectors')
+    .update(values.responsibleMemberIds === undefined ? row : { ...row, responsible_member_ids: values.responsibleMemberIds })
+    .eq('id', id);
   if (e1) return result(e1.code === '23505' ? { message: 'Já existe um setor com esse nome.' } : e1);
 
   if (values.removeMembers.length) {

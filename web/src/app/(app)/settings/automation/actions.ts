@@ -21,6 +21,7 @@ const COLUMNS: Record<keyof RuleValues, string> = {
   maxEscalations: 'max_escalations',
   escalateOffHours: 'escalate_off_hours',
   mentionJids: 'mention_jids',
+  escalationSteps: 'escalation_steps',
   businessDays: 'business_days',
   businessStart: 'business_start',
   businessEnd: 'business_end',

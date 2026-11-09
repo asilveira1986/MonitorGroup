@@ -1,6 +1,6 @@
 'use client';
 
-import { BellRing, CheckCheck, Clock, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
+import { Building2, BellRing, CheckCheck, Clock, Pencil, Plus, Save, Search, Trash2, UserCheck, X } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select, Textarea, Toggle } from '@/components/ui';
@@ -30,6 +30,8 @@ export type RuleItem = {
   max_escalations: number;
   escalate_off_hours: boolean;
   mention_jids: string[];
+  /** etapas de cobrança (0158); vazio = todas as cobranças marcam mention_jids */
+  escalation_steps?: { waitMin: number | null; mentionGroupResponsibles: boolean; mentionSectorResponsibles: boolean; mentionJids: string[] }[] | null;
   business_days: number[];
   business_start: string;
   business_end: string;
@@ -59,6 +61,24 @@ export type AutomationMetrics = {
 export type MemberOption = { id: string; name: string; jid: string };
 export type GroupOption = { id: string; name: string; jid: string; sector_id: string | null };
 export type SectorOption = { id: string; name: string };
+
+/** Etapa de cobrança no formulário (tempo como texto, pessoas como conjunto). */
+type StepForm = { wait: string; group: boolean; sector: boolean; jids: Set<string> };
+const MAX_STEPS = 10;
+
+const initialSteps = (rule: RuleItem | null): StepForm[] => {
+  const saved = rule?.escalation_steps ?? [];
+  if (saved.length) {
+    return saved.map((s) => ({
+      wait: s.waitMin == null ? '' : String(s.waitMin),
+      group: Boolean(s.mentionGroupResponsibles),
+      sector: Boolean(s.mentionSectorResponsibles),
+      jids: new Set(s.mentionJids ?? []),
+    }));
+  }
+  // regra antiga (sem etapas): uma etapa com as pessoas que ela já marcava; regra nova: marca os responsáveis do grupo
+  return [{ wait: '', group: !rule, sector: false, jids: new Set(rule?.mention_jids ?? []) }];
+};
 
 const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const DEFAULT_ACK = '✅ Recebemos sua mensagem! Nossa equipe já foi avisada e retorna em breve.';
@@ -211,7 +231,7 @@ function RuleForm({
   const [repeatEvery, setRepeatEvery] = useState(String(rule?.repeat_every_min ?? 30));
   const [maxEscalations, setMaxEscalations] = useState(String(rule?.max_escalations ?? 3));
   const [escalateOffHours, setEscalateOffHours] = useState(rule?.escalate_off_hours ?? false);
-  const [mentions, setMentions] = useState<Set<string>>(new Set(rule?.mention_jids ?? []));
+  const [steps, setSteps] = useState<StepForm[]>(() => initialSteps(rule));
   const [days, setDays] = useState<Set<number>>(new Set(rule?.business_days ?? [1, 2, 3, 4, 5]));
   const [start, setStart] = useState(rule?.business_start ?? '08:00');
   const [end, setEnd] = useState(rule?.business_end ?? '18:00');
@@ -228,6 +248,18 @@ function RuleForm({
     else next.add(value);
     setter(next);
   };
+
+  const patchStep = (i: number, patch: Partial<StepForm>) => setSteps((all) => all.map((s, k) => (k === i ? { ...s, ...patch } : s)));
+  const toggleStepPerson = (i: number, jid: string) =>
+    setSteps((all) =>
+      all.map((s, k) => {
+        if (k !== i) return s;
+        const jids = new Set(s.jids);
+        if (jids.has(jid)) jids.delete(jid);
+        else jids.add(jid);
+        return { ...s, jids };
+      }),
+    );
 
   const save = () =>
     startTransition(async () => {
@@ -246,7 +278,14 @@ function RuleForm({
         repeatEveryMin: repeatEvery,
         maxEscalations,
         escalateOffHours,
-        mentionJids: [...mentions],
+        // etapas (0158); a lista antiga da regra acompanha a 1ª etapa, para quem ainda usa o worker anterior
+        mentionJids: [...steps[0].jids],
+        escalationSteps: steps.map((s) => ({
+          waitMin: s.wait.trim() === '' ? null : s.wait.trim(),
+          mentionGroupResponsibles: s.group,
+          mentionSectorResponsibles: s.sector,
+          mentionJids: [...s.jids],
+        })),
         businessDays: [...days],
         businessStart: start,
         businessEnd: end,
@@ -364,20 +403,76 @@ function RuleForm({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-ink-2">Quem é marcado na cobrança</p>
-          {members.length === 0 ? (
-            <p className="text-xs text-muted">Cadastre os atendentes com telefone em Configurações › Pessoas para poder marcá-los.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {members.map((m) => (
-                <label key={m.id} className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-xs has-[:checked]:border-brand-line has-[:checked]:bg-brand-soft">
-                  <input type="checkbox" className="sr-only" checked={mentions.has(m.jid)} onChange={() => toggleIn(mentions, m.jid, setMentions)} disabled={pending} />
-                  {m.name}
+        <div className="space-y-3">
+          <div>
+            <p className="text-xs font-medium text-ink-2">Cobranças: quem é marcado em cada uma</p>
+            <p className="text-xs text-muted">
+              Cada cobrança é uma mensagem no grupo interno enquanto ninguém responde. A 1ª sai depois de &ldquo;Cobrar depois de&rdquo;; as seguintes, a cada &ldquo;Repetir a cada&rdquo;
+              (ou no tempo próprio da etapa), até o máximo. Passando da última etapa, ela se repete.
+            </p>
+          </div>
+          {steps.map((st, i) => (
+            <div key={i} className="space-y-2.5 rounded-xl border border-line p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold">Cobrança {i + 1}</p>
+                <label className="ml-auto flex items-center gap-1.5 text-xs text-ink-2">
+                  {i === 0 ? 'Esperar (min) desde a mensagem' : 'Esperar (min) desde a cobrança anterior'}
+                  <Input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={st.wait}
+                    placeholder={i === 0 ? escalateAfter : repeatEvery}
+                    onChange={(e) => patchStep(i, { wait: e.target.value })}
+                    className="w-20"
+                    disabled={pending}
+                    aria-label={`Tempo da cobrança ${i + 1} em minutos`}
+                  />
                 </label>
-              ))}
+                {steps.length > 1 && (
+                  <Button variant="ghost" size="sm" onClick={() => setSteps((all) => all.filter((_, k) => k !== i))} disabled={pending} aria-label={`Remover a cobrança ${i + 1}`}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-xs has-[:checked]:border-brand-line has-[:checked]:bg-brand-soft">
+                  <input type="checkbox" className="sr-only" checked={st.group} onChange={() => patchStep(i, { group: !st.group })} disabled={pending} />
+                  <UserCheck className="h-3.5 w-3.5" aria-hidden /> Marcar os responsáveis do grupo
+                </label>
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-xs has-[:checked]:border-brand-line has-[:checked]:bg-brand-soft">
+                  <input type="checkbox" className="sr-only" checked={st.sector} onChange={() => patchStep(i, { sector: !st.sector })} disabled={pending} />
+                  <Building2 className="h-3.5 w-3.5" aria-hidden /> Marcar os responsáveis do setor
+                </label>
+              </div>
+              {members.length === 0 ? (
+                <p className="text-xs text-muted">Cadastre os atendentes com telefone em Configurações › Pessoas para poder marcá-los.</p>
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-[9px] font-medium text-muted">Também marcar:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {members.map((m) => (
+                      <label key={m.id} className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-xs has-[:checked]:border-brand-line has-[:checked]:bg-brand-soft">
+                        <input type="checkbox" className="sr-only" checked={st.jids.has(m.jid)} onChange={() => toggleStepPerson(i, m.jid)} disabled={pending} />
+                        {m.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          ))}
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setSteps((all) => [...all, { wait: '', group: false, sector: true, jids: new Set<string>() }])}
+              disabled={pending || steps.length >= MAX_STEPS}
+            >
+              <Plus className="h-3.5 w-3.5" /> Adicionar cobrança
+            </Button>
+            <p className="text-xs text-muted">Os responsáveis do grupo e do setor são cadastrados em Grupos e em Configurações › Setores.</p>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

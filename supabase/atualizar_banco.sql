@@ -253,7 +253,9 @@ begin
   (146, 'Log de atividades ignora o aviso de presença (0155)', 'last_seen_at' = any(public.activity_noise())),
   (147, 'Monitoramento do grupo só para administradores (0156)', exists (select 1 from pg_trigger where tgname = 'groups_monitoring_guard' and not tgisinternal)),
   (148, 'Grupo sem monitoramento guarda as mensagens (0157)', exists (select 1 from pg_proc where proname = 'ingest_message' and pronamespace = 'public'::regnamespace and prosrc like '%untracked%')),
-  (149, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (149, 'Automação: cobranças em etapas e responsável do setor (0158)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'sectors' and column_name = 'responsible_member_ids')
+      and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'automation_rules' and column_name = 'escalation_steps')),
+  (150, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -262,7 +264,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -23324,6 +23326,73 @@ $$;
 $mig0157$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0158_automation_steps_sector_responsibles.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0158', $mig0158$
+-- =====================================================================
+-- Automação: cobranças em etapas e responsável do setor.
+--
+--  * sectors.responsible_member_ids: as pessoas da equipe responsáveis
+--    pelo setor (Configurações › Setores). A automação pode marcá-las.
+--  * automation_rules.escalation_steps: uma etapa por cobrança (1ª, 2ª...),
+--    cada uma com quem marcar: os responsáveis do grupo do cliente, os
+--    responsáveis do setor do grupo e/ou pessoas escolhidas; e, opcional,
+--    o tempo daquela cobrança (waitMin). Lista vazia = como antes (todas as
+--    cobranças marcam mention_jids). Passando da última etapa, repete a última.
+--    Formato de cada etapa:
+--      {"waitMin": 15, "mentionGroupResponsibles": true,
+--       "mentionSectorResponsibles": false, "mentionJids": ["5551...@s.whatsapp.net"]}
+-- =====================================================================
+
+alter table public.sectors
+  add column if not exists responsible_member_ids uuid[] not null default '{}';
+
+alter table public.automation_rules
+  add column if not exists escalation_steps jsonb not null default '[]';
+
+do $$ begin
+  alter table public.automation_rules
+    add constraint automation_rules_steps_check check (jsonb_typeof(escalation_steps) = 'array' and jsonb_array_length(escalation_steps) <= 10);
+exception when duplicate_object then null; end $$;
+
+-- lista sem repetidos e só com pessoas da equipe da empresa do setor
+create or replace function public.sync_sector_responsibles()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  new.responsible_member_ids := coalesce(array(
+    select x from (select distinct on (x) x, o from unnest(new.responsible_member_ids) with ordinality u(x, o)
+                    where x is not null order by x, o) d order by o), '{}');
+  if exists (select 1 from unnest(new.responsible_member_ids) x
+             where not exists (select 1 from public.team_members t where t.id = x and t.company_id = new.company_id)) then
+    raise exception 'O responsável do setor precisa ser uma pessoa da equipe desta empresa.';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists sectors_sync_responsibles on public.sectors;
+create trigger sectors_sync_responsibles before insert or update of responsible_member_ids on public.sectors
+  for each row execute function public.sync_sector_responsibles();
+
+-- pessoa removida da equipe sai da lista dos setores (e dos grupos, 0056)
+create or replace function public.team_member_drop_sector_responsible()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  update public.sectors set responsible_member_ids = array_remove(responsible_member_ids, old.id)
+   where old.id = any(responsible_member_ids);
+  return old;
+end;
+$$;
+
+drop trigger if exists team_members_drop_sector_responsible on public.team_members;
+create trigger team_members_drop_sector_responsible before delete on public.team_members
+  for each row execute function public.team_member_drop_sector_responsible();
+$mig0158$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -23529,6 +23598,8 @@ from (values
   (146, 'Log de atividades ignora o aviso de presença (0155)', 'last_seen_at' = any(public.activity_noise())),
   (147, 'Monitoramento do grupo só para administradores (0156)', exists (select 1 from pg_trigger where tgname = 'groups_monitoring_guard' and not tgisinternal)),
   (148, 'Grupo sem monitoramento guarda as mensagens (0157)', exists (select 1 from pg_proc where proname = 'ingest_message' and pronamespace = 'public'::regnamespace and prosrc like '%untracked%')),
-  (149, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (149, 'Automação: cobranças em etapas e responsável do setor (0158)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'sectors' and column_name = 'responsible_member_ids')
+      and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'automation_rules' and column_name = 'escalation_steps')),
+  (150, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

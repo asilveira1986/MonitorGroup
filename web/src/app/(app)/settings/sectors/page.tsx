@@ -2,7 +2,7 @@ import { AdminNotice } from '@/components/admin-notice';
 import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { DefaultSector, SectorsList, type SectorRow } from './sectors';
+import { DefaultSector, SectorsList, type SectorRow, type TeamOption } from './sectors';
 
 /**
  * Setores (cadastro simples): cada grupo pertence a um setor e as pessoas do setor só veem e atendem
@@ -13,12 +13,13 @@ export default async function SectorsPage() {
   if (me.role !== 'admin' && !me.platform_admin) return <AdminNotice />;
 
   const supabase = await createClient();
-  const [{ data: sectors }, { data: members }, { data: users }, { data: groups }, { data: settings }] = await Promise.all([
+  const [{ data: sectors }, { data: members }, { data: users }, { data: groups }, { data: settings }, { data: team }] = await Promise.all([
     supabase.from('sectors').select('*').order('name'),
     supabase.from('sector_members').select('sector_id, user_id'),
     supabase.from('profiles').select('id, full_name, email, role, active, platform_admin').order('full_name'),
     supabase.from('groups').select('id, name, sector_id, monitored').is('removed_at', null).order('name'),
     appSettings(),
+    supabase.from('team_members').select('id, name, phone, active').order('name'),
   ]);
   const list = (sectors ?? []) as SectorRow[];
   const allGroups = groups ?? [];
@@ -46,6 +47,7 @@ export default async function SectorsPage() {
           sectorId: (g.sector_id as string | null) ?? null,
         }))}
         defaultSectorId={settings?.default_sector_id ?? null}
+        team={(team ?? []) as TeamOption[]}
       />
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-surface px-5 py-3 text-sm">
         <span className="text-ink-2" title="Número com setor (Configurações › WhatsApp): os grupos novos dele vão para o setor do número">

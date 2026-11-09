@@ -198,7 +198,9 @@ CHECKS=$(cat <<'SQL'
   (146, 'Log de atividades ignora o aviso de presença (0155)', 'last_seen_at' = any(public.activity_noise())),
   (147, 'Monitoramento do grupo só para administradores (0156)', exists (select 1 from pg_trigger where tgname = 'groups_monitoring_guard' and not tgisinternal)),
   (148, 'Grupo sem monitoramento guarda as mensagens (0157)', exists (select 1 from pg_proc where proname = 'ingest_message' and pronamespace = 'public'::regnamespace and prosrc like '%untracked%')),
-  (149, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (149, 'Automação: cobranças em etapas e responsável do setor (0158)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'sectors' and column_name = 'responsible_member_ids')
+      and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'automation_rules' and column_name = 'escalation_steps')),
+  (150, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

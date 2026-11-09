@@ -5,6 +5,17 @@
 
 export type Validation<T> = { ok: true; value: T } | { ok: false; error: string };
 
+/** Etapa de cobrança (0158): a 1ª, a 2ª... Passando da última, repete a última. */
+export type EscalationStep = {
+  /** minutos desta cobrança (desde a mensagem, na 1ª; desde a cobrança anterior, nas demais); null = o geral da regra */
+  waitMin: number | null;
+  mentionGroupResponsibles: boolean;
+  mentionSectorResponsibles: boolean;
+  mentionJids: string[];
+};
+
+export const MAX_STEPS = 10;
+
 /** Campos que o administrador pode editar numa regra. Qualquer outro campo recebido é ignorado. */
 export type RuleValues = {
   enabled: boolean;
@@ -19,6 +30,7 @@ export type RuleValues = {
   maxEscalations: number;
   escalateOffHours: boolean;
   mentionJids: string[];
+  escalationSteps: EscalationStep[];
   businessDays: number[];
   businessStart: string;
   businessEnd: string;
@@ -95,6 +107,34 @@ export function validateRuleInput(input: RuleInput, opts: { creating: boolean })
       return { ok: false, error: 'Pessoas marcadas inválidas: use o número com DDI (por exemplo, 5551999998888).' };
     }
     out.mentionJids = [...new Set(jids as string[])];
+  }
+
+  if (input.escalationSteps !== undefined) {
+    const steps = input.escalationSteps;
+    if (!Array.isArray(steps) || steps.length > MAX_STEPS) return { ok: false, error: `Cobranças: no máximo ${MAX_STEPS} etapas.` };
+    const clean: EscalationStep[] = [];
+    for (const raw of steps as unknown[]) {
+      const s = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+      let waitMin: number | null = null;
+      if (s.waitMin !== undefined && s.waitMin !== null && s.waitMin !== '') {
+        const n = typeof s.waitMin === 'string' ? Number(s.waitMin.trim()) : s.waitMin;
+        if (typeof n !== 'number' || !Number.isInteger(n) || n < 0 || n > 100_000) {
+          return { ok: false, error: 'Cobranças: o tempo de cada etapa precisa ser um número inteiro maior ou igual a zero.' };
+        }
+        waitMin = n;
+      }
+      const jids = s.mentionJids ?? [];
+      if (!Array.isArray(jids) || jids.length > 20 || !jids.every((j) => typeof j === 'string' && MENTION.test(j))) {
+        return { ok: false, error: 'Cobranças: pessoas marcadas inválidas.' };
+      }
+      clean.push({
+        waitMin,
+        mentionGroupResponsibles: s.mentionGroupResponsibles === true,
+        mentionSectorResponsibles: s.mentionSectorResponsibles === true,
+        mentionJids: [...new Set(jids as string[])],
+      });
+    }
+    out.escalationSteps = clean;
   }
 
   if (input.notifyGroupJid !== undefined) {
