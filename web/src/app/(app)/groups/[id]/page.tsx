@@ -11,6 +11,7 @@ import type { Group, Message, OutgoingMessage } from '@/lib/types';
 import { markGroupAnswered } from '../../actions';
 import { LiveMessages, MonitorToggle, ResponsiblesSelect, SectorSelect, SlaForm } from '../group-controls';
 import { GroupMembers, type GroupMember } from './members';
+import { GroupStats } from './group-stats';
 import { PAGE_SIZE } from './constants';
 import type { QuickReply } from '@/lib/quick-replies';
 import { Avatar } from '@/components/avatar';
@@ -248,19 +249,16 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
 
       {/* coluna da esquerda com largura fixa: os nomes e números dos membros cabem inteiros */}
       <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-1 lg:content-start">
-          {[
-            { label: 'Msgs de clientes (30d)', value: formatNumber(st.received) },
-            { label: 'Msgs da equipe (30d)', value: formatNumber(st.sent) },
-            { label: 'Tempo médio de resposta', value: formatDuration(st.avg_response_seconds) },
-            { label: 'Dentro do SLA', value: inSla == null ? '—' : `${inSla.toFixed(0)}%` },
-          ].map((k) => (
-            <Card key={k.label} className="p-4">
-              <p className="text-xs text-ink-2">{k.label}</p>
-              <p className="mt-1 text-2xl font-semibold">{k.value}</p>
-            </Card>
-          ))}
-          <div id="membros" className="col-span-2 scroll-mt-20 lg:col-span-1">
+        <div className="grid gap-4 lg:content-start">
+          <GroupStats
+            stats={[
+              { label: 'Msgs clientes (30d)', title: 'Mensagens de clientes (30 dias)', value: formatNumber(st.received) },
+              { label: 'Msgs equipe (30d)', title: 'Mensagens da equipe (30 dias)', value: formatNumber(st.sent) },
+              { label: 'Resposta média', title: 'Tempo médio de resposta', value: formatDuration(st.avg_response_seconds) },
+              { label: 'Dentro do SLA', value: inSla == null ? '—' : `${inSla.toFixed(0)}%` },
+            ]}
+          />
+          <div id="membros" className="scroll-mt-20">
             <GroupMembers members={(groupMembers ?? []) as GroupMember[]} total={g.participants_count} canPrivate={Boolean(canPrivate)} responsibleIds={responsibleIds} />
           </div>
         </div>
