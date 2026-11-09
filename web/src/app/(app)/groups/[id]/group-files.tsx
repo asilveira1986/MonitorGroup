@@ -69,28 +69,28 @@ export function GroupFiles({ groupId, timeZone }: { groupId: string; timeZone?: 
   const others = rows.filter((r) => !visual.includes(r));
 
   return (
-    <Card className="mt-4">
+    <Card className="lg:flex lg:min-h-0 lg:flex-col">
       <button
         type="button"
         onClick={() => {
           if (!open) void load(true);
           setOpen(!open);
         }}
-        className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left sm:px-5"
+        className="flex w-full shrink-0 items-center justify-between gap-3 px-3 py-2.5 text-left"
         aria-expanded={open}
       >
         <span className="flex items-center gap-2">
-          <FolderOpen className="h-5 w-5 text-muted" />
+          <FolderOpen className="h-4 w-4 shrink-0 text-muted" />
           <span>
-            <span className="block text-sm font-semibold">Arquivos do grupo</span>
-            <span className="block text-xs text-ink-2">Imagens, vídeos, documentos e áudios enviados no grupo</span>
+            <span className="block text-sm font-semibold leading-tight">Arquivos do grupo</span>
+            <span className="block text-xs text-ink-2">Imagens, vídeos, documentos e áudios</span>
           </span>
         </span>
-        <ChevronDown className={cn('h-5 w-5 text-muted transition', open && 'rotate-180')} />
+        <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted transition', open && 'rotate-180')} />
       </button>
 
       {open && (
-        <div className="border-t border-line px-4 pb-5 pt-3 sm:px-5">
+        <div className="border-t border-line px-3 pb-3 pt-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Tipo de arquivo">
             {KINDS.map((k) => (
               <button
@@ -120,7 +120,7 @@ export function GroupFiles({ groupId, timeZone }: { groupId: string; timeZone?: 
           ) : (
             <>
               {visual.length > 0 && (
-                <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+                <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-3">
                   {visual.map((r) => (
                     <li key={r.id} className="group relative aspect-square overflow-hidden rounded-xl bg-surface-2">
                       {r.message_type === 'video' ? (
