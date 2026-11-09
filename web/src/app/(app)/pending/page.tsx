@@ -80,7 +80,7 @@ export default async function PendingPage() {
                 <span className="text-lg font-semibold">
                   <LiveTimer since={item.pending_since} />
                 </span>
-                <span className="text-[10px] font-medium uppercase tracking-wide">
+                <span className="text-[9px] font-medium uppercase tracking-wide">
                   {item.overdue ? 'fora do SLA' : 'esperando'}
                 </span>
               </div>

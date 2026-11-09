@@ -103,7 +103,7 @@ export function DemandsBoard({
             >
               {t.label}
               {t.value === 'open' && openCount > 0 && (
-                <span className="tabular rounded-full bg-warning px-1.5 text-[10px] font-semibold text-black">{openCount}</span>
+                <span className="tabular rounded-full bg-warning px-1.5 text-[9px] font-semibold text-black">{openCount}</span>
               )}
             </button>
           ))}
@@ -197,7 +197,7 @@ export function DemandsBoard({
                     <td className="max-w-[340px] px-3 py-3">
                       <p className="line-clamp-2 font-medium">{d.description}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
-                        {d.type && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2">{d.type}</span>}
+                        {d.type && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[9px] text-ink-2">{d.type}</span>}
                         <Signals d={d} />
                       </div>
                     </td>

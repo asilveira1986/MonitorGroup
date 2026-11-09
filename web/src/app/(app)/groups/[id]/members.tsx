@@ -86,7 +86,7 @@ export function GroupMembers({
                     hasPhoto={m.has_avatar}
                     name={m.name || label}
                     className={cn(
-                      'h-8 w-8 rounded-full text-[11px]',
+                      'h-8 w-8 rounded-full text-[9px]',
                       m.team || m.is_me ? 'bg-deep text-on-deep' : 'bg-brand-soft text-brand-text',
                     )}
                     fallback={
@@ -123,7 +123,7 @@ export function GroupMembers({
                   <div className="flex shrink-0 flex-col items-end gap-0.5">
                     {canPrivate && !m.is_me && <CallPrivateButton jid={m.jid} phone={m.phone} name={m.name} compact className="p-1" />}
                     {m.role !== 'member' && !m.team && (
-                      <span className="text-[10px] text-muted">{m.role === 'superadmin' ? 'criador' : 'admin'}</span>
+                      <span className="text-[9px] text-muted">{m.role === 'superadmin' ? 'criador' : 'admin'}</span>
                     )}
                   </div>
                 </li>

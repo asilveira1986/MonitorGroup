@@ -134,7 +134,7 @@ export function GroupFiles({ groupId, timeZone }: { groupId: string; timeZone?: 
                           <img src={`/media/${r.id}`} alt={r.body ?? 'Imagem'} loading="lazy" className="h-full w-full object-cover" />
                         </button>
                       )}
-                      <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-4 text-[10px] text-white">
+                      <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-4 text-[9px] text-white">
                         {r.sender_name ?? (r.from_team ? 'Equipe' : 'Cliente')} · {formatDateTime(r.sent_at, timeZone)}
                       </span>
                     </li>
@@ -158,7 +158,7 @@ export function GroupFiles({ groupId, timeZone }: { groupId: string; timeZone?: 
                             {r.body || 'Documento'}
                           </a>
                         )}
-                        <p className="truncate text-[11px] text-muted">
+                        <p className="truncate text-[9px] text-muted">
                           {r.sender_name ?? (r.from_team ? 'Equipe' : 'Cliente')} · {formatDateTime(r.sent_at, timeZone)}
                           {r.media_size ? ` · ${size(r.media_size)}` : ''}
                         </p>

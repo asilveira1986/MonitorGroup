@@ -107,7 +107,7 @@ export function DemandNotice({
             aria-label="Texto do aviso"
             className="font-mono text-xs"
           />
-          <p className="mt-1.5 text-[11px] text-muted">
+          <p className="mt-1.5 text-[9px] text-muted">
             Variáveis:{' '}
             {k.vars.map((v) => (
               <code key={v} className="mr-1">{`{${v}}`}</code>

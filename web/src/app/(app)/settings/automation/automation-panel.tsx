@@ -70,7 +70,7 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
     <div className="rounded-xl border border-line bg-surface px-3 py-2.5">
       <p className="text-xs text-ink-2">{label}</p>
       <p className="tabular mt-0.5 text-xl font-semibold text-ink">{value}</p>
-      {hint && <p className="text-[11px] text-muted">{hint}</p>}
+      {hint && <p className="text-[9px] text-muted">{hint}</p>}
     </div>
   );
 }
@@ -161,8 +161,8 @@ export function GroupPicker({
             <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm hover:bg-surface-2">
               <input type="checkbox" checked={selected.has(g.id)} onChange={() => toggleOne(g.id)} disabled={disabled} className="h-4 w-4 accent-[var(--brand)]" />
               <span className="min-w-0 flex-1 truncate text-ink">{g.name}</span>
-              <span className="shrink-0 text-[11px] text-muted">{sectorLabel(sectors, g.sector_id)}</span>
-              {takenGroupIds.has(g.id) && <Badge className="py-0 text-[10px]">já tem regra</Badge>}
+              <span className="shrink-0 text-[9px] text-muted">{sectorLabel(sectors, g.sector_id)}</span>
+              {takenGroupIds.has(g.id) && <Badge className="py-0 text-[9px]">já tem regra</Badge>}
             </label>
           </li>
         ))}

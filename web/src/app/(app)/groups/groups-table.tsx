@@ -22,11 +22,11 @@ function Status({ g }: { g: Group }) {
 function SectorTag({ g }: { g: Group }) {
   if (g.sectors === undefined) return null;
   return g.sectors?.name ? (
-    <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted">
+    <span className="mt-0.5 inline-flex items-center gap-1 text-[9px] text-muted">
       <Building2 className="h-3 w-3" aria-hidden /> {g.sectors.name}
     </span>
   ) : (
-    <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-warning-ink" title="Só administradores veem este grupo">
+    <span className="mt-0.5 inline-flex items-center gap-1 text-[9px] text-warning-ink" title="Só administradores veem este grupo">
       <Building2 className="h-3 w-3" aria-hidden /> sem setor
     </span>
   );
@@ -37,12 +37,12 @@ function ResponsibleTag({ g }: { g: Group }) {
   const names = g.responsible_names ?? (g.team_members?.name ? [g.team_members.name] : []);
   if (!names.length)
     return (
-      <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted" title="Nenhum responsável da equipe definido">
+      <span className="mt-0.5 inline-flex items-center gap-1 text-[9px] text-muted" title="Nenhum responsável da equipe definido">
         <UserCheck className="h-3 w-3" aria-hidden /> sem responsável
       </span>
     );
   return (
-    <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-ink-2" title={names.length > 1 ? 'Responsáveis pelo grupo' : 'Responsável pelo grupo'}>
+    <span className="mt-0.5 inline-flex items-center gap-1 text-[9px] text-ink-2" title={names.length > 1 ? 'Responsáveis pelo grupo' : 'Responsável pelo grupo'}>
       <UserCheck className="h-3 w-3" aria-hidden /> {names.join(', ')}
     </span>
   );
@@ -67,7 +67,7 @@ export function GroupsTable({ groups, photos, tags = [] }: { groups: Group[]; ph
               <span className="min-w-0 flex-1">
                 <span className="flex items-center justify-between gap-2">
                   <span className="truncate font-medium">{g.name}</span>
-                  <span className="shrink-0 text-[11px] text-muted">{timeAgo(g.last_message_at)}</span>
+                  <span className="shrink-0 text-[9px] text-muted">{timeAgo(g.last_message_at)}</span>
                 </span>
                 <span className="mt-0.5 block truncate text-sm text-ink-2">{g.last_message_preview ?? '—'}</span>
                 <span className="flex flex-wrap gap-x-3">

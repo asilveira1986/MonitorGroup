@@ -224,7 +224,7 @@ function RemindersPicker({ value, onChange, allDay }: { value: number[]; onChang
           ))}
         </select>
       )}
-      {!value.length && <span className="text-[11px] text-muted">Sem lembrete</span>}
+      {!value.length && <span className="text-[9px] text-muted">Sem lembrete</span>}
     </div>
   );
 }
@@ -322,7 +322,7 @@ function PeoplePicker({
           </label>
         ))}
       </div>
-      <p className="text-[11px] text-muted">{value.length ? `${value.length} pessoa(s) — aparece na agenda de cada uma` : 'Ninguém marcado: fica só na sua agenda.'}</p>
+      <p className="text-[9px] text-muted">{value.length ? `${value.length} pessoa(s) — aparece na agenda de cada uma` : 'Ninguém marcado: fica só na sua agenda.'}</p>
     </div>
   );
 }
@@ -447,7 +447,7 @@ function EventDialog({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium text-ink-2">Hora</span>
-                  <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-ink-2">
+                  <label className="inline-flex cursor-pointer items-center gap-1 text-[9px] text-ink-2">
                     <input type="checkbox" checked={allDay} onChange={(e) => changeAllDay(e.target.checked)} className="h-3.5 w-3.5 accent-[var(--brand)]" />
                     dia todo
                   </label>
@@ -687,9 +687,9 @@ export function EventDetails({
             <p className="flex flex-wrap items-center gap-1.5 text-xs font-medium" style={{ color }}>
               {type ? <Tag className="h-3.5 w-3.5" /> : <CalendarClock className="h-3.5 w-3.5" />} {type?.name ?? 'Compromisso'}
               {event.done_at ? (
-                <span className="rounded-full bg-good/15 px-2 py-0.5 text-[11px] text-good-ink">concluído</span>
+                <span className="rounded-full bg-good/15 px-2 py-0.5 text-[9px] text-good-ink">concluído</span>
               ) : (
-                past && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2">já passou</span>
+                past && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[9px] text-ink-2">já passou</span>
               )}
             </p>
             <h2 className={`mt-1 text-lg font-semibold break-words ${event.done_at ? 'line-through opacity-70' : ''}`}>{event.title}</h2>

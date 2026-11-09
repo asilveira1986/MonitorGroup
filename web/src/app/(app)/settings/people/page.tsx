@@ -226,7 +226,7 @@ export default async function PeoplePage() {
         <details className="group rounded-2xl border border-line bg-surface">
           <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium sm:px-5">
             <ChevronRight className="h-4 w-4 text-muted transition group-open:rotate-90" />
-            Convites pendentes <span className="tabular rounded-full bg-surface-2 px-2 text-[11px] text-ink-2">{invites.length}</span>
+            Convites pendentes <span className="tabular rounded-full bg-surface-2 px-2 text-[9px] text-ink-2">{invites.length}</span>
           </summary>
           <p className="px-4 pb-2 text-xs text-ink-2 sm:px-5">
             E-mails autorizados que ainda não entraram. Sem senha cadastrada, remova e cadastre de novo com uma senha inicial.

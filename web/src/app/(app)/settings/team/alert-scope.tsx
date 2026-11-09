@@ -27,7 +27,7 @@ export function AlertScope({ member, groups }: { member: { id: string; name: str
   return (
     <label
       className={cn(
-        'inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-medium',
+        'inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1 text-[9px] font-medium',
         only ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2 hover:bg-surface-2',
         pending && 'opacity-60',
       )}

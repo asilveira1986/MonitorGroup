@@ -102,7 +102,7 @@ function Ticks({ status, receipts, recipients, nameOf }: { status: number | null
   return (
     <span title={title} aria-label={title} className={cn('inline-flex items-center gap-0.5', allRead ? 'text-sky-500' : 'text-muted')}>
       <Icon className="h-3.5 w-3.5" />
-      {!allRead && read.length > 0 && <span className="tabular text-[10px] text-sky-600">{read.length}</span>}
+      {!allRead && read.length > 0 && <span className="tabular text-[9px] text-sky-600">{read.length}</span>}
     </span>
   );
 }
@@ -131,7 +131,7 @@ function Reactions({ list, alignEnd }: { list: Reaction[]; alignEnd: boolean }) 
           className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-1.5 py-0.5 text-xs shadow-sm"
         >
           <span aria-hidden>{emoji}</span>
-          {rs.length > 1 && <span className="tabular text-[10px] font-semibold text-ink-2">{rs.length}</span>}
+          {rs.length > 1 && <span className="tabular text-[9px] font-semibold text-ink-2">{rs.length}</span>}
           <span className="sr-only">{`${emoji} de ${rs.map(who).join(', ')}`}</span>
         </span>
       ))}
@@ -463,7 +463,7 @@ export function Conversation({
               {loading ? 'Carregando…' : 'Carregar mensagens anteriores'}
             </button>
           ) : (
-            messages.length > 0 && <span className="text-[11px] text-muted">Início do histórico registrado</span>
+            messages.length > 0 && <span className="text-[9px] text-muted">Início do histórico registrado</span>
           )}
         </div>
 
@@ -496,7 +496,7 @@ export function Conversation({
             <div key={m.id}>
               {showDay && (
                 <div className="my-3 flex justify-center">
-                  <span className="rounded-full bg-surface-2 px-3 py-1 text-[11px] text-muted">{day}</span>
+                  <span className="rounded-full bg-surface-2 px-3 py-1 text-[9px] text-muted">{day}</span>
                 </div>
               )}
               <div className={cn('flex', m.from_team ? 'justify-end' : 'justify-start')}>
@@ -518,7 +518,7 @@ export function Conversation({
                         onClick={() => {
                           void navigator.clipboard?.writeText(formatPhone(phone)).then(() => toast.success('Telefone copiado'));
                         }}
-                        className="tabular text-[11px] text-muted hover:text-ink"
+                        className="tabular text-[9px] text-muted hover:text-ink"
                         title="Copiar telefone"
                       >
                         {formatPhone(phone)}
@@ -530,7 +530,7 @@ export function Conversation({
                     {m.demand_id && (
                       <Link
                         href={`/demands?status=all&id=${m.demand_id}`}
-                        className="inline-flex items-center gap-1 rounded-full bg-series-1/12 px-2 py-0.5 text-[10px] font-medium text-series-1 hover:underline"
+                        className="inline-flex items-center gap-1 rounded-full bg-series-1/12 px-2 py-0.5 text-[9px] font-medium text-series-1 hover:underline"
                       >
                         <ClipboardList className="h-3 w-3" /> demanda
                       </Link>
@@ -633,7 +633,7 @@ export function Conversation({
                         );
                       })()}
                       {m.forwarded && (
-                        <p className="mb-0.5 inline-flex items-center gap-1 text-[11px] italic text-muted">
+                        <p className="mb-0.5 inline-flex items-center gap-1 text-[9px] italic text-muted">
                           <Forward className="h-3 w-3" /> Encaminhada
                         </p>
                       )}
@@ -647,15 +647,15 @@ export function Conversation({
                       </p>
                     </>
                   )}
-                  <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-muted">
+                  <div className="mt-1 flex items-center justify-end gap-2 text-[9px] text-muted">
                     {m.closes_conversation && (
-                      <Badge tone="good" className="py-0 text-[10px]">
+                      <Badge tone="good" className="py-0 text-[9px]">
                         <Lock className="h-3 w-3" /> encerrou a conversa
                       </Badge>
                     )}
                     {!m.from_team && MEDIA_TYPES.has(m.message_type) && <MediaSeen message={m} timeZone={timeZone} viewed={viewed.has(m.id)} />}
                     {m.response_time_seconds != null && (
-                      <Badge tone={m.response_time_seconds <= slaSeconds ? 'good' : 'critical'} className="py-0 text-[10px]">
+                      <Badge tone={m.response_time_seconds <= slaSeconds ? 'good' : 'critical'} className="py-0 text-[9px]">
                         respondeu em {formatDuration(m.response_time_seconds)}
                       </Badge>
                     )}
@@ -681,7 +681,7 @@ export function Conversation({
               </div>
               {reactionsOf.get(m.id)?.length ? <Reactions list={reactionsOf.get(m.id)!} alignEnd={m.from_team} /> : null}
               {m.closes_conversation && (
-                <div className="my-3 flex items-center gap-2 text-[11px] text-good-ink" role="separator">
+                <div className="my-3 flex items-center gap-2 text-[9px] text-good-ink" role="separator">
                   <span className="h-px flex-1 bg-good/30" />
                   <Lock className="h-3 w-3" /> Conversa encerrada · a próxima mensagem do cliente inicia uma nova
                   <span className="h-px flex-1 bg-good/30" />

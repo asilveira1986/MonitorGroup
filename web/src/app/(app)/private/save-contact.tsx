@@ -49,7 +49,7 @@ export function SaveContactButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 rounded-full border border-dashed border-line px-2 py-0.5 text-[11px] font-medium text-ink-2 hover:border-brand-line hover:text-ink"
+        className="inline-flex items-center gap-1 rounded-full border border-dashed border-line px-2 py-0.5 text-[9px] font-medium text-ink-2 hover:border-brand-line hover:text-ink"
         title={current ? 'Editar o contato cadastrado no sistema' : 'Cadastrar este número nos Contatos do sistema'}
       >
         {current ? <Pencil className="h-3 w-3" /> : <UserPlus className="h-3 w-3" />} {current ? 'Editar contato' : 'Adicionar contato'}

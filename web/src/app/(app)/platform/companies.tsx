@@ -80,7 +80,7 @@ function Usage({ icon: Icon, label, value, max }: { icon: typeof Users; label: s
   const full = max != null && value >= max;
   return (
     <div className="min-w-0 rounded-xl bg-surface-2/60 px-3 py-2">
-      <p className="flex items-center gap-1.5 text-[11px] text-muted">
+      <p className="flex items-center gap-1.5 text-[9px] text-muted">
         <Icon className="h-3.5 w-3.5" aria-hidden /> {label}
       </p>
       <p className={cn('mt-0.5 text-sm font-semibold', full && 'text-warning-ink')}>

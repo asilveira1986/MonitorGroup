@@ -149,7 +149,7 @@ export function SectorsList({
               <button type="button" onClick={() => setEditing(s.id)} className="min-w-0 flex-1 basis-48 text-left">
                 <p className="truncate text-sm font-medium hover:underline">
                   {s.name}
-                  {defaultSectorId === s.id && <span className="ml-2 text-[11px] font-normal text-muted">recebe os grupos novos (de número sem setor)</span>}
+                  {defaultSectorId === s.id && <span className="ml-2 text-[9px] font-normal text-muted">recebe os grupos novos (de número sem setor)</span>}
                 </p>
                 <p className="truncate text-xs text-muted">
                   {ids.length} pessoa(s) · {count} grupo(s)
@@ -323,11 +323,11 @@ function SectorDialog({
                       <input type="checkbox" className="h-4 w-4 accent-[var(--brand)]" checked={checked} onChange={() => toggle(chosen, g.id, setChosen)} />
                       <span className={cn('min-w-0 flex-1 truncate', !g.monitored && 'text-muted')}>{g.name}</span>
                       {other && (
-                        <span className={cn('shrink-0 text-[11px]', checked ? 'text-warning-ink' : 'text-muted')} title={checked ? `Ao salvar, sai do setor ${other}` : `Hoje no setor ${other}`}>
+                        <span className={cn('shrink-0 text-[9px]', checked ? 'text-warning-ink' : 'text-muted')} title={checked ? `Ao salvar, sai do setor ${other}` : `Hoje no setor ${other}`}>
                           {checked ? `sai de ${other}` : other}
                         </span>
                       )}
-                      {!g.sectorId && !checked && <span className="shrink-0 text-[11px] text-warning-ink">sem setor</span>}
+                      {!g.sectorId && !checked && <span className="shrink-0 text-[9px] text-warning-ink">sem setor</span>}
                     </label>
                   </li>
                 );
@@ -336,7 +336,7 @@ function SectorDialog({
             <li className="px-2 py-3 text-center text-xs text-muted">{tab === 'people' ? 'Nenhuma pessoa (administradores já veem tudo).' : 'Nenhum grupo encontrado.'}</li>
           )}
         </ul>
-        <p className="px-4 text-[11px] text-muted">
+        <p className="px-4 text-[9px] text-muted">
           {tab === 'people' ? 'Administradores não aparecem: já veem todos os grupos.' : 'Cada grupo fica num setor só: marcar aqui tira o grupo do setor anterior.'}
         </p>
         <details className="mx-4 mt-2 rounded-xl border border-line px-3 py-2 text-sm">

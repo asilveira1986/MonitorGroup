@@ -70,7 +70,7 @@ function CommitmentTriggers({
           placeholder="verificar, corrigir, realizar, ajustar, enviar"
           aria-label="Verbos de ação do compromisso"
         />
-        <p className="mt-1 text-[11px] text-muted">
+        <p className="mt-1 text-[9px] text-muted">
           No infinitivo. Cada verbo vale em qualquer forma de compromisso: <i>vou/vamos/irei/iremos corrigir</i>,{' '}
           <i>vou já te enviar</i>, <i>estou corrigindo</i>, <i>corrigirei</i>, <i>fico de corrigir</i>, <i>já corrijo</i>. Com
           negação antes (<i>não vou conseguir verificar</i>) não abre demanda.
@@ -86,7 +86,7 @@ function CommitmentTriggers({
           placeholder="te retorno, dar uma olhada, deixa comigo, prazo"
           aria-label="Frases de compromisso da equipe"
         />
-        <p className="mt-1 text-[11px] text-muted">Basta a frase aparecer na mensagem.</p>
+        <p className="mt-1 text-[9px] text-muted">Basta a frase aparecer na mensagem.</p>
       </div>
       <div className="rounded-xl border border-line bg-surface-2/50 p-3">
         <p className="mb-1.5 text-xs font-medium">Testar uma resposta da equipe</p>

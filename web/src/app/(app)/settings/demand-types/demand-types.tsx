@@ -91,7 +91,7 @@ export function DemandTypes({ initial, counts, canEdit }: { initial: DemandType[
             </div>
             <div className="sm:w-56">
               <Input value={r.name} onChange={(e) => set(r.key, { name: e.target.value })} placeholder="Nome do tipo" aria-label="Nome do tipo" maxLength={60} disabled={lock} />
-              <p className="mt-1 text-[11px] text-muted">
+              <p className="mt-1 text-[9px] text-muted">
                 {r.orig && counts[r.orig] ? `${counts[r.orig]} demanda(s) com este tipo` : 'nenhuma demanda ainda'}
                 {r.orig && r.name.trim() && r.name.trim() !== r.orig && <span className="text-warning-ink"> · será renomeado</span>}
               </p>
@@ -107,7 +107,7 @@ export function DemandTypes({ initial, counts, canEdit }: { initial: DemandType[
               {toTags(r.draft).length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {toTags(r.draft).map((k) => (
-                    <span key={k} className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2">
+                    <span key={k} className="rounded-full bg-surface-2 px-2 py-0.5 text-[9px] text-ink-2">
                       {k}
                     </span>
                   ))}

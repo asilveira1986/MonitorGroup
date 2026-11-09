@@ -191,14 +191,14 @@ export function QuickReplies({
               />
             </label>
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] text-muted">Inserir:</span>
+              <span className="text-[9px] text-muted">Inserir:</span>
               {QUICK_REPLY_VARIABLES.map((v) => (
                 <button
                   key={v.key}
                   type="button"
                   onClick={() => insertVar(v.key)}
                   title={v.label}
-                  className="rounded-full border border-line px-2 py-0.5 text-[11px] font-medium text-ink-2 hover:border-brand-line hover:text-ink"
+                  className="rounded-full border border-line px-2 py-0.5 text-[9px] font-medium text-ink-2 hover:border-brand-line hover:text-ink"
                 >
                   {`{${v.key}}`}
                 </button>
@@ -261,7 +261,7 @@ export function QuickReplies({
                   </span>
                   <div className="min-w-0 flex-1">
                     {r.shortcut === closing && (
-                      <span className="mb-0.5 inline-flex items-center gap-1 rounded-full bg-good/15 px-1.5 py-px text-[10px] font-medium text-good-ink">
+                      <span className="mb-0.5 inline-flex items-center gap-1 rounded-full bg-good/15 px-1.5 py-px text-[9px] font-medium text-good-ink">
                         <Lock className="h-3 w-3" /> encerra a conversa
                       </span>
                     )}

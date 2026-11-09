@@ -31,7 +31,7 @@ export default function LoginPage() {
         </svg>
         <Logo size={40} className="relative" />
         <div className="relative max-w-md">
-          <span className="font-mono inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.08em] text-ink-2">
+          <span className="font-mono inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[9px] uppercase tracking-[0.08em] text-ink-2">
             <span className="h-2 w-2 rounded-full bg-brand" aria-hidden /> Monitoramento ao vivo
           </span>
           <h2 className="mt-5 text-4xl font-bold leading-tight">Nenhuma conversa fica sem resposta.</h2>

@@ -66,7 +66,7 @@ export function IgnoreSettings({ settings, disabled }: { settings: AppSettings; 
             <>
               Lista padrão, que vale sempre:{' '}
               {DEFAULT_ACK_EXAMPLES.map((e) => (
-                <span key={e} className="mr-1 inline-block rounded-full bg-surface-2 px-1.5 py-px text-[11px] text-ink-2">
+                <span key={e} className="mr-1 inline-block rounded-full bg-surface-2 px-1.5 py-px text-[9px] text-ink-2">
                   {e}
                 </span>
               ))}
@@ -131,13 +131,13 @@ export function IgnoreSettings({ settings, disabled }: { settings: AppSettings; 
             )}
             {!lock && (
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] text-muted">Sugestões:</span>
+                <span className="text-[9px] text-muted">Sugestões:</span>
                 {SUGGESTIONS.filter((s) => !phrases.some((p) => p.toLowerCase() === s)).map((s) => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => add(s)}
-                    className="rounded-full border border-dashed border-line px-2 py-0.5 text-[11px] text-ink-2 hover:border-brand-line hover:text-brand-text"
+                    className="rounded-full border border-dashed border-line px-2 py-0.5 text-[9px] text-ink-2 hover:border-brand-line hover:text-brand-text"
                   >
                     + {s}
                   </button>

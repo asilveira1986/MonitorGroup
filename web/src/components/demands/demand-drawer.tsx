@@ -238,7 +238,7 @@ export function DemandDrawer({
 
           {demand.status === 'entregue' && demand.delivery_note && (
             <p className="rounded-xl border border-good/30 bg-good/10 px-3 py-2 text-sm text-ink">
-              <span className="block text-[11px] font-semibold uppercase tracking-wide text-good-ink">Observação da entrega</span>
+              <span className="block text-[9px] font-semibold uppercase tracking-wide text-good-ink">Observação da entrega</span>
               <span className="whitespace-pre-wrap">{demand.delivery_note}</span>
             </p>
           )}

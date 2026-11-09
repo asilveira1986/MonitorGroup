@@ -20,7 +20,7 @@ export function TagChips({ ids, all, size = 'sm' }: { ids: string[] | null | und
       {tags.map((t) => (
         <span
           key={t.id}
-          className={`inline-flex items-center gap-1 rounded-full font-medium text-ink ${size === 'xs' ? 'px-1.5 text-[10px] leading-4' : 'px-2 py-0.5 text-[11px]'}`}
+          className={`inline-flex items-center gap-1 rounded-full font-medium text-ink ${size === 'xs' ? 'px-1.5 text-[9px] leading-4' : 'px-2 py-0.5 text-[9px]'}`}
           style={{ backgroundColor: `${hexOf(t.color)}24`, boxShadow: `inset 0 0 0 1px ${hexOf(t.color)}55` }}
         >
           <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: hexOf(t.color) }} aria-hidden />
@@ -101,7 +101,7 @@ export function TagEditor({
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="inline-flex items-center gap-1 rounded-full border border-dashed border-line px-2 py-0.5 text-[11px] font-medium text-ink-2 hover:border-brand-line hover:text-ink"
+          className="inline-flex items-center gap-1 rounded-full border border-dashed border-line px-2 py-0.5 text-[9px] font-medium text-ink-2 hover:border-brand-line hover:text-ink"
           aria-expanded={open}
         >
           {tags.length ? <Tag className="h-3 w-3" /> : <Plus className="h-3 w-3" />} {tags.length ? 'Etiquetas' : 'Etiqueta'}
