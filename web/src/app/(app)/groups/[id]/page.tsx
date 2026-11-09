@@ -90,6 +90,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     avg_response_seconds?: number | null;
     in_sla?: number;
   };
+  const pendingText = `${g.pending_count} ${g.pending_count === 1 ? 'mensagem sem resposta' : 'mensagens sem resposta'}`;
   const sla = (g.sla_minutes ?? settings?.default_sla_minutes ?? 30) * 60;
   const canReplyRole = settings?.reply_allowed !== 'admin' || profile.role === 'admin';
   const viewer = profile.role === 'viewer';
@@ -179,7 +180,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
         </GroupTitleRow>
         {/* perfil "somente ver painéis": sem os controles do grupo */}
         {!g.removed_at && !viewer && (
-          <div className="grid gap-3 rounded-2xl border border-line bg-surface px-3 py-2.5 sm:grid-cols-2 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1.2fr)] lg:items-end lg:gap-4">
+          <div className="grid gap-3 rounded-2xl border border-line bg-surface px-3 py-2.5 sm:grid-cols-2 xl:grid-cols-[auto_minmax(8rem,1fr)_minmax(10rem,1.4fr)_auto] xl:items-end lg:gap-4">
             <div>
               <p className="mb-0.5 text-[11px] font-medium text-ink-2">Monitoramento</p>
               <div className="flex h-9 items-center">
@@ -212,12 +213,11 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
               </div>
             )}
             {g.pending_since && (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-warning/50 bg-warning/5 px-3 py-1.5 sm:col-span-2 lg:col-span-1">
-                <p className="flex items-center gap-2 text-sm">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-warning/50 bg-warning/5 px-3 py-1.5 sm:col-span-2 xl:col-span-1 xl:flex-nowrap">
+                <p className="flex items-center gap-2 whitespace-nowrap text-sm">
                   <Hourglass className="h-4 w-4 shrink-0 text-warning-ink" />
                   <span>
-                    <strong>{g.pending_count} mensagem(ns)</strong> de cliente aguardando resposta{' '}
-                    {timeAgo(g.pending_since)}.
+                    <strong>{pendingText}</strong> {timeAgo(g.pending_since)}
                   </span>
                 </p>
                 {/* só quem pode alterar dados e tratar alertas do setor do grupo (o banco recusa os demais) */}
@@ -262,7 +262,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
           <p className="flex items-center gap-2 text-sm">
             <Hourglass className="h-4 w-4 text-warning-ink" />
             <span>
-              <strong>{g.pending_count} mensagem(ns)</strong> de cliente aguardando resposta {timeAgo(g.pending_since)}.
+              <strong>{pendingText}</strong> {timeAgo(g.pending_since)}
             </span>
           </p>
           {/* só quem pode alterar dados e tratar alertas do setor do grupo (o banco recusa os demais) */}
