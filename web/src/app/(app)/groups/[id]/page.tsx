@@ -90,7 +90,6 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     avg_response_seconds?: number | null;
     in_sla?: number;
   };
-  const pendingText = `${g.pending_count} ${g.pending_count === 1 ? 'mensagem sem resposta' : 'mensagens sem resposta'}`;
   const sla = (g.sla_minutes ?? settings?.default_sla_minutes ?? 30) * 60;
   const canReplyRole = settings?.reply_allowed !== 'admin' || profile.role === 'admin';
   const viewer = profile.role === 'viewer';
@@ -190,7 +189,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             {profile.role === 'admin' && (
               <div>
                 <p className="mb-0.5 flex items-center gap-1 text-[11px] font-medium text-ink-2">
-                  <Building2 className="h-3.5 w-3.5" /> Setor (quem vê e atende o grupo)
+                  <Building2 className="h-3.5 w-3.5" /> Setor
                 </p>
                 <SectorSelect groupId={g.id} sectorId={g.sector_id ?? null} sectors={sectors ?? []} />
               </div>
@@ -217,7 +216,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
                 <p className="flex items-center gap-2 whitespace-nowrap text-sm">
                   <Hourglass className="h-4 w-4 shrink-0 text-warning-ink" />
                   <span>
-                    <strong>{pendingText}</strong> {timeAgo(g.pending_since)}
+                    <strong>Sem resposta</strong> {timeAgo(g.pending_since)}
                   </span>
                 </p>
                 {/* só quem pode alterar dados e tratar alertas do setor do grupo (o banco recusa os demais) */}
@@ -262,7 +261,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
           <p className="flex items-center gap-2 text-sm">
             <Hourglass className="h-4 w-4 text-warning-ink" />
             <span>
-              <strong>{pendingText}</strong> {timeAgo(g.pending_since)}
+              <strong>Sem resposta</strong> {timeAgo(g.pending_since)}
             </span>
           </p>
           {/* só quem pode alterar dados e tratar alertas do setor do grupo (o banco recusa os demais) */}
