@@ -26,7 +26,7 @@ export function UpdatePasswordForm({ firstAccess }: { firstAccess: boolean }) {
       return;
     }
     toast.success('Senha atualizada!');
-    router.replace('/dashboard');
+    router.replace('/panel');
     router.refresh();
   }
 

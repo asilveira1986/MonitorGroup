@@ -238,6 +238,7 @@ export function GroupsPanel({
   defaultSector,
   responsibles,
   hasNoResponsible,
+  myMemberId = null,
 }: {
   /** pessoas da equipe e quantos grupos (no painel) cada uma é responsável */
   /** hidden: grupos da pessoa fora do painel (não monitorados ou de que o número saiu) */
@@ -248,19 +249,21 @@ export function GroupsPanel({
   hasNoSector: boolean;
   /** Setor que abre selecionado (o Geral); 'all' quando não existe. */
   defaultSector: string;
+  /** pessoa da equipe ligada ao usuário que abriu o painel (com grupos): o painel abre filtrado nela */
+  myMemberId?: string | null;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<PanelStatus | 'all'>('all');
   // setor: 'all' (todos), 'none' (sem setor) ou o id do setor
   const [sector, setSector] = useState(defaultSector);
   // responsável: 'all', 'none' (sem responsável) ou o id da pessoa da equipe
-  const [responsible, setResponsibleState] = useState('all');
-  // lembra a escolha neste navegador (ex.: cada atendente abre já nos seus grupos)
+  // ao abrir o sistema, o painel já vem nos grupos do próprio usuário; a escolha feita depois vale só nesta sessão do navegador
+  const [responsible, setResponsibleState] = useState(myMemberId ?? 'all');
   useEffect(() => {
     const load = () => {
       try {
-        const saved = localStorage.getItem(RESPONSIBLE_KEY);
-        if (saved && (saved === 'none' || responsibles.some((r) => r.id === saved))) setResponsibleState(saved);
+        const saved = sessionStorage.getItem(RESPONSIBLE_KEY);
+        if (saved && (saved === 'all' || saved === 'none' || responsibles.some((r) => r.id === saved))) setResponsibleState(saved);
       } catch {
         /* sem armazenamento local */
       }
@@ -270,7 +273,7 @@ export function GroupsPanel({
   const setResponsible = (value: string) => {
     setResponsibleState(value);
     try {
-      localStorage.setItem(RESPONSIBLE_KEY, value);
+      sessionStorage.setItem(RESPONSIBLE_KEY, value);
     } catch {
       /* sem armazenamento local */
     }

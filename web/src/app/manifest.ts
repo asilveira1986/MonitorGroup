@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'Monitor Group',
     description: 'Monitoramento de grupos de WhatsApp: garanta que todo cliente seja respondido.',
     id: '/',
-    start_url: '/dashboard',
+    start_url: '/panel',
     scope: '/',
     display: 'standalone',
     background_color: '#0b1220',

@@ -31,7 +31,7 @@ function explain(message: string): string {
 export function LoginForm({ configProblem }: { configProblem: string | null }) {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get('next') ?? '/dashboard';
+  const next = params.get('next') ?? '/panel';
   const [loading, setLoading] = useState<'password' | 'reset' | null>(null);
   const [email, setEmail] = useState('');
 
