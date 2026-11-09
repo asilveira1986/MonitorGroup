@@ -127,13 +127,13 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
           <h3 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-ink">{g.name}</h3>
         </div>
         {g.closed_at && (g.status === 'answered' || g.status === 'neutral') && (
-          <p className="mt-0.5 flex items-center gap-1 pl-3.5 text-[11px] font-medium text-good-ink" title="Encerrada pela mensagem de fechamento">
+          <p className="mt-0.5 flex items-center gap-1 pl-3.5 text-[9px] font-medium text-good-ink" title="Encerrada pela mensagem de fechamento">
             <Lock className="h-3 w-3 shrink-0" aria-hidden /> conversa encerrada
           </p>
         )}
         {Boolean(g.responsible_names?.length) && (
           <p
-            className="mt-0.5 flex items-center gap-1 truncate pl-3.5 text-[11px] text-ink-2"
+            className="mt-0.5 flex items-center gap-1 truncate pl-3.5 text-[9px] text-ink-2"
             title={`${g.responsible_names!.length > 1 ? 'Responsáveis' : 'Responsável'}: ${g.responsible_names!.join(', ')}`}
           >
             <UserCheck className="h-3 w-3 shrink-0" aria-hidden /> <span className="truncate">{g.responsible_names!.join(', ')}</span>
@@ -142,7 +142,7 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
         {time && !quiet && (
           <p
             className={cn(
-              'mt-0.5 flex items-center gap-1 pl-3.5 text-[11px] tabular',
+              'mt-0.5 flex items-center gap-1 pl-3.5 text-[9px] tabular',
               g.status === 'late' ? 'font-semibold text-critical-ink' : g.status === 'waiting' ? 'font-semibold text-warning-ink' : 'text-muted',
             )}
             title={time.title}
@@ -184,7 +184,7 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
           </p>
         )}
         {g.pending_count > 0 && (
-          <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold', s.badge)}>
+          <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-semibold', s.badge)}>
             <s.icon className="h-3 w-3" aria-hidden />
             {g.pending_count} sem resposta
           </span>
@@ -207,7 +207,7 @@ const FIELD =
 /** campo com filtro aplicado: destacado para ver de relance o que está filtrando */
 const ACTIVE_FIELD = 'border-brand-line bg-brand-soft/40 font-medium';
 const CHIP = 'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition';
-const COUNT = 'tabular min-w-[1.375rem] rounded-full px-1.5 py-px text-center text-[11px] font-semibold';
+const COUNT = 'tabular min-w-[1.375rem] rounded-full px-1.5 py-px text-center text-[9px] font-semibold';
 
 /** Campo do filtro com o nome em cima. */
 function FilterField({
@@ -223,7 +223,7 @@ function FilterField({
 }) {
   return (
     <label className={cn('block min-w-0', className)}>
-      <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+      <span className="mb-1 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-muted">
         {Icon && <Icon className="h-3.5 w-3.5" aria-hidden />} {label}
       </span>
       {children}

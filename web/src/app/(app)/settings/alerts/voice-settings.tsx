@@ -107,7 +107,7 @@ function TemplateEditor({
             aria-label={`Frase falada: ${title}`}
           />
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-muted">Inserir:</span>
+            <span className="text-[9px] text-muted">Inserir:</span>
             {VOICE_VARIABLES[event].map((v) => (
               <button
                 key={v.key}
@@ -115,7 +115,7 @@ function TemplateEditor({
                 disabled={disabled}
                 onClick={() => insert(v.key)}
                 className={cn(
-                  'rounded-full border px-2 py-0.5 text-[11px] font-medium transition',
+                  'rounded-full border px-2 py-0.5 text-[9px] font-medium transition',
                   text.includes(`{${v.key}}`)
                     ? 'border-brand-line bg-brand-soft text-brand-text'
                     : 'border-line text-ink-2 hover:border-brand-line hover:text-ink',

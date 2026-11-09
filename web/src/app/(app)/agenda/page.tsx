@@ -302,12 +302,12 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         </p>
         <p className="line-clamp-2 text-xs text-ink-2">{e.notes || 'Compromisso'}</p>
         {((e.people?.length ?? 0) > 1 || (agendaTeam && (e.people?.length ?? 0) > 0)) && (
-          <p className="mt-0.5 truncate text-[11px] text-muted" title="Participantes">
+          <p className="mt-0.5 truncate text-[9px] text-muted" title="Participantes">
             👥 {(e.people ?? []).map((id) => people.find((p) => p.id === id)?.name ?? 'usuário').join(', ')}
           </p>
         )}
       </Link>
-      {e.done_at && <span className="text-[11px] font-medium text-good-ink">concluído</span>}
+      {e.done_at && <span className="text-[9px] font-medium text-good-ink">concluído</span>}
       <EventActions event={e} timeZone={timeZone} people={pickPeople} teams={agendaTeams} types={types} />
     </li>
   );
@@ -315,7 +315,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     entries.length > 0 && (
       <Card key={key} className="overflow-hidden">
         <h2 className={cn('flex items-center gap-2 border-b border-line px-4 py-2.5 text-sm font-semibold sm:px-5', tone === 'critical' && 'text-critical-ink')}>
-          {title} <span className="tabular rounded-full bg-surface-2 px-2 text-[11px] font-semibold text-ink-2">{entries.length}</span>
+          {title} <span className="tabular rounded-full bg-surface-2 px-2 text-[9px] font-semibold text-ink-2">{entries.length}</span>
         </h2>
         <ul className="divide-y divide-line">{entries.map((x) => (x.kind === 'event' ? eventItem(x.e) : demandItem(x.r, x.done)))}</ul>
       </Card>
@@ -331,7 +331,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           href={href({ evento: e.id })}
           scroll={false}
           title={`${e.all_day ? 'Dia todo' : formatTime(e.starts_at, timeZone)} · ${e.title}${e.notes ? ` · ${e.notes}` : ''}`}
-          className={cn('block truncate rounded-md border-l-2 px-1.5 py-0.5 text-[11px] text-ink hover:brightness-95', e.done_at && 'line-through opacity-60')}
+          className={cn('block truncate rounded-md border-l-2 px-1.5 py-0.5 text-[9px] text-ink hover:brightness-95', e.done_at && 'line-through opacity-60')}
           style={{ borderLeftColor: colorOf(e), backgroundColor: `${colorOf(e)}1f` }}
         >
           <span className="tabular font-semibold" style={{ color: colorOf(e) }}>
@@ -350,7 +350,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         href={`/demands?id=${r.id}`}
         title={`#${r.number} ${r.description} · ${r.groups?.name ?? ''}${done ? ' · entregue' : overdue ? ' · prazo vencido' : ''}`}
         className={cn(
-          'block truncate rounded-md border-l-2 px-1.5 py-0.5 text-[11px] text-ink',
+          'block truncate rounded-md border-l-2 px-1.5 py-0.5 text-[9px] text-ink',
           done
             ? 'border-good bg-good/10 hover:bg-good/20'
             : overdue
@@ -367,7 +367,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   };
 
   const legend = (
-    <p className="flex flex-wrap gap-3 text-[11px] text-muted">
+    <p className="flex flex-wrap gap-3 text-[9px] text-muted">
       <span className="inline-flex items-center gap-1">
         <span className="h-2 w-2 rounded-full bg-warning" /> demanda a entregar
       </span>
@@ -507,7 +507,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                       </Link>
                       <div className="space-y-1">
                         {list.map(chip)}
-                        {!list.length && <p className="px-1.5 text-[11px] text-muted md:hidden">Livre</p>}
+                        {!list.length && <p className="px-1.5 text-[9px] text-muted md:hidden">Livre</p>}
                       </div>
                     </div>
                   );
@@ -519,7 +519,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
 
           {view === 'mes' && (
             <Card className="overflow-hidden">
-              <div className="grid grid-cols-7 border-b border-line text-center text-[11px] font-medium text-muted">
+              <div className="grid grid-cols-7 border-b border-line text-center text-[9px] font-medium text-muted">
                 {WEEKDAYS.map((w) => (
                   <span key={w} className="py-2">
                     {w}
@@ -555,13 +555,13 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                       {/* celular: só a quantidade; telas maiores: os itens */}
                       {list.length > 0 && (
                         <Link href={href({ vista: 'dia', data: k })} className="block sm:hidden">
-                          <span className="tabular rounded-full bg-surface-2 px-1.5 text-[10px] font-semibold text-ink-2">{list.length}</span>
+                          <span className="tabular rounded-full bg-surface-2 px-1.5 text-[9px] font-semibold text-ink-2">{list.length}</span>
                         </Link>
                       )}
                       <div className="hidden space-y-0.5 sm:block">
                         {list.slice(0, max).map(chip)}
                         {list.length > max && (
-                          <Link href={href({ vista: 'dia', data: k })} className="block px-1.5 text-[11px] font-medium text-brand-text hover:underline">
+                          <Link href={href({ vista: 'dia', data: k })} className="block px-1.5 text-[9px] font-medium text-brand-text hover:underline">
                             +{list.length - max} mais
                           </Link>
                         )}

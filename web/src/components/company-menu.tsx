@@ -95,11 +95,11 @@ export function CompanyMenu({
                       if (res && !res.ok) toast.error(res.error);
                     });
                   }}
-                  className={cn('flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-white/[0.06]', selected && 'bg-white/[0.08] font-semibold')}
+                  className={cn('flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] hover:bg-white/[0.06]', selected && 'bg-white/[0.08] font-semibold')}
                 >
                   <CompanyLogo id={c.id} current={selected} hasLogo={c.hasLogo} name={c.name} className="h-6 w-6" />
                   <span className="min-w-0 flex-1 truncate">{c.name}</span>
-                  {!c.active && <span className="shrink-0 text-[10px] text-critical-ink">suspensa</span>}
+                  {!c.active && <span className="shrink-0 text-[9px] text-critical-ink">suspensa</span>}
                   {selected && <Check className="h-3.5 w-3.5 shrink-0 text-brand-text" />}
                 </button>
               </li>

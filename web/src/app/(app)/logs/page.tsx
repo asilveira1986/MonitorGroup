@@ -152,7 +152,7 @@ export default async function LogsPage({ searchParams }: { searchParams: Promise
                     {changes.length > 0 && (
                       <details className="mt-1 text-xs text-ink-2">
                         <summary className="cursor-pointer text-muted hover:text-ink">ver o que mudou ({changes.length})</summary>
-                        <ul className="mt-1 space-y-0.5 rounded-lg bg-surface-2/60 p-2 font-mono text-[11px]">
+                        <ul className="mt-1 space-y-0.5 rounded-lg bg-surface-2/60 p-2 font-mono text-[9px]">
                           {changes.map(([k, v]) => (
                             <li key={k} className="break-all">
                               <span className="text-ink">{k}</span>: {show(v.de).slice(0, 120)} → {show(v.para).slice(0, 120)}

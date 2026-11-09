@@ -361,7 +361,7 @@ export function ContactsBook({ tags }: { tags: CustomerTag[] }) {
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-1.5">
                   <span className="truncate text-sm font-medium">{title}</span>
-                  <span className="flex gap-1 text-[10px]">
+                  <span className="flex gap-1 text-[9px]">
                     {c.id && <span className="rounded-full bg-warning/15 px-1.5 text-warning-ink" title="Cadastrado no sistema">sistema</span>}
                     {c.saved && <span className="rounded-full bg-surface-2 px-1.5 text-ink-2" title="Salvo na agenda do WhatsApp conectado">agenda</span>}
                     {c.chat && <span className="rounded-full bg-brand-soft px-1.5 text-brand-text" title="Tem conversa no privado">conversa</span>}

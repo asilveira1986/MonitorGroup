@@ -295,7 +295,7 @@ export function InstancesPanel({
                   ) : (
                     <div className="flex flex-col items-center gap-2 text-xs text-neutral-500">
                       <Loader2 className="h-6 w-6 animate-spin" /> Gerando QR code…
-                      <span className="px-4 text-center text-[11px]">
+                      <span className="px-4 text-center text-[9px]">
                         Se demorar mais de 1 minuto, verifique se o worker está no ar.
                       </span>
                     </div>

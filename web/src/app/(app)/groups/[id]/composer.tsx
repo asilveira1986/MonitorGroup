@@ -282,7 +282,7 @@ export function Composer({
               </button>
             </div>
           ))}
-          {files.length > 1 && <p className="px-1 text-[11px] text-muted">Os {files.length} arquivos vão em mensagens separadas, na ordem; o texto é a legenda do primeiro.</p>}
+          {files.length > 1 && <p className="px-1 text-[9px] text-muted">Os {files.length} arquivos vão em mensagens separadas, na ordem; o texto é a legenda do primeiro.</p>}
         </div>
       )}
       {closing && (
@@ -326,7 +326,7 @@ export function Composer({
             role="listbox"
             aria-label="Marcar alguém do grupo"
           >
-            <p className="flex items-center gap-1.5 border-b border-line px-3 py-1.5 text-[11px] font-medium text-muted">
+            <p className="flex items-center gap-1.5 border-b border-line px-3 py-1.5 text-[9px] font-medium text-muted">
               @ Marcar alguém do grupo · ↑↓ escolhe · Enter insere · Esc fecha
             </p>
             <ul className="max-h-64 overflow-y-auto py-1">
@@ -360,7 +360,7 @@ export function Composer({
             role="listbox"
             aria-label="Mensagens rápidas"
           >
-            <p className="flex items-center gap-1.5 border-b border-line px-3 py-1.5 text-[11px] font-medium text-muted">
+            <p className="flex items-center gap-1.5 border-b border-line px-3 py-1.5 text-[9px] font-medium text-muted">
               <Zap className="h-3.5 w-3.5" /> Mensagens rápidas · ↑↓ escolhe · Enter insere · Esc fecha
             </p>
             {options.length === 0 ? (
@@ -565,13 +565,13 @@ export function OutgoingBubble({ item, quoted, renderText }: { item: OutgoingMes
             {item.body && <p className="whitespace-pre-wrap break-words text-ink">{renderText ? renderText(item.body) : item.body}</p>}
           </>
         )}
-        <div className={cn('mt-1 flex items-center justify-end gap-1 text-[11px]', s.cls)}>
+        <div className={cn('mt-1 flex items-center justify-end gap-1 text-[9px]', s.cls)}>
           <s.icon className={cn('h-3 w-3', item.status === 'sending' && 'animate-spin')} aria-hidden />
           {s.label}
         </div>
         {item.status === 'failed' && (
           <div className="mt-1 border-t border-critical/20 pt-1.5">
-            {item.error && <p className="text-[11px] text-critical-ink">{item.error}</p>}
+            {item.error && <p className="text-[9px] text-critical-ink">{item.error}</p>}
             <div className="mt-1 flex justify-end gap-1">
               <button
                 onClick={() => run(() => retryGroupMessage(item.id))}

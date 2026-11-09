@@ -261,7 +261,7 @@ export function MessageSenderPicker({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-[11px] text-muted underline-offset-2 hover:text-brand-text hover:underline"
+        className="text-[9px] text-muted underline-offset-2 hover:text-brand-text hover:underline"
         title="O WhatsApp não informou quem mandou esta mensagem: indique se foi alguém da equipe"
       >
         quem enviou?
@@ -284,7 +284,7 @@ export function MessageSenderPicker({
           router.refresh();
         });
       }}
-      className="h-6 rounded-md border border-line bg-surface px-1 text-[11px] text-ink"
+      className="h-6 rounded-md border border-line bg-surface px-1 text-[9px] text-ink"
       aria-label="Quem enviou esta mensagem"
     >
       <option value="">Cliente</option>

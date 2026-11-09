@@ -158,7 +158,7 @@ export function SidebarNav({
         <span className={cn('flex-1 whitespace-nowrap', COLLAPSED_HIDE)}>{item.label}</span>
         {/* recolhido: só um ponto sobre o ícone indicando que há itens */}
         {count > 0 && <span className={cn('absolute right-2.5 top-1.5 hidden h-2 w-2 rounded-full ring-2 ring-surface', COLLAPSED_SHOW, DOT[kind])} aria-hidden />}
-        {count > 0 && <span className={cn(COLLAPSED_HIDE, 'tabular shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none', PILL[kind])}>{badgeText(count)}</span>}
+        {count > 0 && <span className={cn(COLLAPSED_HIDE, 'tabular shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none', PILL[kind])}>{badgeText(count)}</span>}
       </Link>
     );
   };
@@ -181,14 +181,14 @@ export function SidebarNav({
               aria-expanded={open}
               aria-controls={listId}
               className={cn(
-                'mt-1.5 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted transition hover:text-ink-2 lg:py-1',
+                'mt-1.5 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-[9px] font-semibold uppercase tracking-wider text-muted transition hover:text-ink-2 lg:py-1',
                 COLLAPSED_HIDE,
               )}
             >
               <Icon className="h-3.5 w-3.5 shrink-0" />
               <span className="flex-1 text-left">{entry.label}</span>
               {badge && (
-                <span className={cn('tabular shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold normal-case leading-none tracking-normal', PILL[badge.kind])}>{badgeText(badge.count)}</span>
+                <span className={cn('tabular shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold normal-case leading-none tracking-normal', PILL[badge.kind])}>{badgeText(badge.count)}</span>
               )}
               <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 transition-transform', !open && '-rotate-90')} />
             </button>

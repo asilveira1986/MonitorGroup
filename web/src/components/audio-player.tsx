@@ -72,7 +72,7 @@ export function AudioPlayer({
           className="h-1 w-full cursor-pointer accent-[var(--brand)]"
           style={{ background: `linear-gradient(to right, var(--brand) ${pct}%, var(--line) ${pct}%)` }}
         />
-        <div className="mt-0.5 flex items-center justify-between text-[10px] text-muted">
+        <div className="mt-0.5 flex items-center justify-between text-[9px] text-muted">
           <span className="tabular inline-flex items-center gap-1">
             {voice && <Mic className="h-3 w-3" aria-hidden />}
             {playing || current > 0 ? `${clock(current)} / ${total ? clock(total) : '—'}` : total ? clock(total) : '—'}

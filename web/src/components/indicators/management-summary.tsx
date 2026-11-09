@@ -95,7 +95,7 @@ function Delta({
   if (value == null || previous == null) return null;
   const diff = value - previous;
   if (Math.abs(diff) < (format === 'percent' ? 0.05 : 1)) {
-    return <span className="text-[11px] text-muted">= {label}</span>;
+    return <span className="text-[9px] text-muted">= {label}</span>;
   }
   const good = (diff > 0) === (better === 'up');
   const amount =
@@ -107,7 +107,7 @@ function Delta({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold',
+        'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold',
         good ? 'bg-good/12 text-good-ink' : 'bg-critical/10 text-critical-ink',
       )}
       title={`Em ${label}: ${fmt(previous, format)}`}
@@ -193,7 +193,7 @@ function StackBar({ parts, total }: { parts: { label: string; value: number; col
               />
             ))}
       </div>
-      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-2">
+      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[9px] text-ink-2">
         {parts.map((p) => (
           <li key={p.label} className="inline-flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-sm" style={{ background: p.color }} aria-hidden />
@@ -331,7 +331,7 @@ function NowTile({
         <span className={cn('block truncate font-semibold leading-tight tracking-tight', /^\d/.test(value) ? 'tabular text-2xl' : 'py-0.5 text-xl', t.text)}>
           {value}
         </span>
-        <span className="line-clamp-2 block text-[11px] leading-snug text-muted">{note}</span>
+        <span className="line-clamp-2 block text-[9px] leading-snug text-muted">{note}</span>
       </span>
       <ArrowRight className="h-4 w-4 shrink-0 text-muted opacity-0 transition group-hover:opacity-100" aria-hidden />
       <span className="sr-only">{t.label}</span>
@@ -387,11 +387,11 @@ export function ManagementSummary({
               <span className={cn('text-2xl font-semibold tabular tracking-tight', d.sla_rate?.value != null && TONE[slaTone].text)}>
                 {fmt(d.sla_rate?.value, 'percent')}
               </span>
-              <span className="text-[11px] leading-tight text-muted">dentro do SLA</span>
+              <span className="text-[9px] leading-tight text-muted">dentro do SLA</span>
             </Ring>
             <div className="min-w-0 space-y-1.5 lg:hidden xl:block xl:w-44">
               {d.sla_rate?.value != null && (
-                <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', TONE[slaTone].icon)}>
+                <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium', TONE[slaTone].icon)}>
                   {(() => {
                     const I = TONE[slaTone].Icon;
                     return <I className="h-3.5 w-3.5" aria-hidden />;
@@ -399,7 +399,7 @@ export function ManagementSummary({
                   {TONE[slaTone].label}
                 </span>
               )}
-              <p className="text-[11px] leading-snug text-muted">{d.sla_rate?.hint ?? 'Sem respostas no período'}</p>
+              <p className="text-[9px] leading-snug text-muted">{d.sla_rate?.hint ?? 'Sem respostas no período'}</p>
               <Delta value={d.sla_rate?.value} previous={p?.sla_rate?.value} better="up" format="percent" label={comparisonLabel} />
             </div>
           </div>
@@ -426,7 +426,7 @@ export function ManagementSummary({
             <div className="pt-3">
               <p className="mb-1 flex items-center justify-between text-xs text-ink-2">
                 <span className="font-medium">Fluxo de mensagens {d.flow_hourly ? 'por hora' : 'por dia'}</span>
-                <span className="flex items-center gap-3 text-[11px]">
+                <span className="flex items-center gap-3 text-[9px]">
                   <span className="inline-flex items-center gap-1">
                     <span className="h-2 w-2 rounded-full bg-series-1" /> Recebidas
                   </span>
@@ -534,7 +534,7 @@ export function ManagementSummary({
                   </Link>
                 ))}
                 {d.resolution_time?.value != null && (
-                  <p className="text-[11px] text-muted">Tempo médio do pedido até a entrega: {formatDuration(d.resolution_time.value)}</p>
+                  <p className="text-[9px] text-muted">Tempo médio do pedido até a entrega: {formatDuration(d.resolution_time.value)}</p>
                 )}
               </div>
             </div>
@@ -548,7 +548,7 @@ export function ManagementSummary({
               >
                 <span className="text-xl font-semibold tabular">{fmt(d.promise_kept?.value, 'percent')}</span>
               </Ring>
-              <span className="text-[11px] text-muted">prazos cumpridos</span>
+              <span className="text-[9px] text-muted">prazos cumpridos</span>
             </div>
           </div>
         </Card>
@@ -565,7 +565,7 @@ export function ManagementSummary({
               <Ring value={d.conversations_closed_rate} size={112} stroke={10} color={closedColor} label="Conversas fechadas">
                 <span className="text-xl font-semibold tabular">{fmt(d.conversations_closed_rate, 'percent')}</span>
               </Ring>
-              <span className="text-[11px] text-muted">conversas fechadas</span>
+              <span className="text-[9px] text-muted">conversas fechadas</span>
               <Delta value={d.conversations_closed_rate} previous={p?.conversations_closed_rate} better="up" format="percent" label={comparisonLabel} />
             </div>
             <div className="min-w-0 space-y-4">
@@ -596,7 +596,7 @@ export function ManagementSummary({
                 <span className="block h-2.5 overflow-hidden rounded-full bg-surface-2">
                   <span className="block h-full rounded-full bg-brand" style={{ width: `${activeShare}%` }} />
                 </span>
-                <p className={cn('mt-1.5 text-[11px]', silent ? 'text-warning-ink' : 'text-muted')}>
+                <p className={cn('mt-1.5 text-[9px]', silent ? 'text-warning-ink' : 'text-muted')}>
                   {silent ? `${formatNumber(silent)} grupo(s) silencioso(s) há dias` : 'Nenhum grupo silencioso'}
                 </p>
               </Link>

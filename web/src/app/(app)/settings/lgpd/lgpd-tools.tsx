@@ -54,7 +54,7 @@ export function RetentionCard({ months, disabled }: { months: number | null; dis
             <Save className="h-3.5 w-3.5" /> Salvar
           </Button>
         )}
-        <p className="w-full text-[11px] text-muted">A LGPD pede guardar os dados pessoais só pelo tempo necessário para a finalidade (art. 15 e 16).</p>
+        <p className="w-full text-[9px] text-muted">A LGPD pede guardar os dados pessoais só pelo tempo necessário para a finalidade (art. 15 e 16).</p>
       </div>
     </Card>
   );
@@ -139,7 +139,7 @@ export function TitularRequests() {
             <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {ROWS.map((r) => (
                 <div key={r.key} className="rounded-lg bg-surface-2 px-3 py-2">
-                  <dt className="text-[11px] text-muted">{r.label}</dt>
+                  <dt className="text-[9px] text-muted">{r.label}</dt>
                   <dd className="tabular text-lg font-semibold">{Number(found[r.key] ?? 0)}</dd>
                 </div>
               ))}

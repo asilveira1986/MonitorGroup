@@ -71,7 +71,7 @@ function HourColumns({
 
       <div className="flex gap-2">
         {/* eixo: só o topo e o zero, em cinza discreto */}
-        <div className="mt-5 flex h-40 w-7 shrink-0 flex-col justify-between text-right text-[10px] tabular-nums text-muted">
+        <div className="mt-5 flex h-40 w-7 shrink-0 flex-col justify-between text-right text-[9px] tabular-nums text-muted">
           <span>{formatNumber(top)}</span>
           <span>{formatNumber(top / 2)}</span>
           <span>0</span>
@@ -119,7 +119,7 @@ function HourColumns({
           {/* rótulo do pico, sem precisar passar o mouse */}
           {shown === null && data[peak].value > 0 && (
             <span
-              className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap text-[11px] font-semibold text-ink"
+              className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap text-[9px] font-semibold text-ink"
               style={{
                 left: `${((peak + 0.5) / data.length) * 100}%`,
                 bottom: `calc(${(data[peak].value / top) * 100}% + 4px)`,
@@ -149,7 +149,7 @@ function HourColumns({
         </div>
       </div>
       {/* horas a cada 3h */}
-      <div className="ml-9 mt-1 flex text-[10px] text-muted">
+      <div className="ml-9 mt-1 flex text-[9px] text-muted">
         {data.map((d, i) => (
           <span key={d.label} className="flex-1 text-center">
             {i % 3 === 0 ? d.label : ''}
@@ -187,7 +187,7 @@ function DayBars({ data, total, business }: { data: Point[]; total: number; busi
         ))}
       </ul>
       {business && business.days.length < 7 && (
-        <p className="mt-2 text-[11px] text-muted">Dias em cinza claro estão fora do expediente.</p>
+        <p className="mt-2 text-[9px] text-muted">Dias em cinza claro estão fora do expediente.</p>
       )}
     </figure>
   );

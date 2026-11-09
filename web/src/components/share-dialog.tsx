@@ -207,7 +207,7 @@ export function ShareDialog({
                         >
                           {t.kind === 'group' ? <Users className="h-4 w-4 shrink-0 text-ink-2" /> : <MessageCircle className="h-4 w-4 shrink-0 text-ink-2" />}
                           <span className="min-w-0 flex-1 truncate">{t.name}</span>
-                          {t.hint && <span className="shrink-0 text-[11px] text-muted">{t.hint}</span>}
+                          {t.hint && <span className="shrink-0 text-[9px] text-muted">{t.hint}</span>}
                         </button>
                       ))
                     ) : (

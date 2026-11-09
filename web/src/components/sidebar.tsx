@@ -76,7 +76,7 @@ export function Sidebar({
     // eslint-disable-next-line @next/next/no-img-element -- foto privada por link temporário
     <img src={me?.photoSrc || user.avatarUrl || ''} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
   ) : (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-[#8fc41a] text-[10px] font-bold text-brand-ink">
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-[#8fc41a] text-[9px] font-bold text-brand-ink">
       {user.initials || user.name.slice(0, 2).toUpperCase()}
     </span>
   );
@@ -105,7 +105,7 @@ export function Sidebar({
           {avatar}
           <span className={cn('min-w-0 flex-1', COLLAPSED_HIDE)}>
             <span className="block truncate text-[calc(0.875rem-1px)] font-medium leading-tight text-ink">{user.name}</span>
-            <span className="block truncate text-[10px] leading-tight text-muted">{ROLE_LABEL[user.role as keyof typeof ROLE_LABEL] ?? 'Atendente'} · meu perfil</span>
+            <span className="block truncate text-[9px] leading-tight text-muted">{ROLE_LABEL[user.role as keyof typeof ROLE_LABEL] ?? 'Atendente'} · meu perfil</span>
           </span>
         </ProfileDialog>
       ) : (
@@ -113,7 +113,7 @@ export function Sidebar({
           {avatar}
           <div className={cn('min-w-0 flex-1', COLLAPSED_HIDE)}>
             <p className="truncate text-[calc(0.875rem-1px)] font-medium leading-tight text-ink">{user.name}</p>
-            <p className="truncate text-[10px] leading-tight text-muted">{ROLE_LABEL[user.role as keyof typeof ROLE_LABEL] ?? 'Atendente'}</p>
+            <p className="truncate text-[9px] leading-tight text-muted">{ROLE_LABEL[user.role as keyof typeof ROLE_LABEL] ?? 'Atendente'}</p>
           </div>
         </div>
       )}

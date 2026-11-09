@@ -105,7 +105,7 @@ function KpiList({
                 <Link
                   href={`/groups/${it.group_id}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-line px-2 py-0.5 text-[11px] font-medium text-ink-2 hover:border-brand-line hover:text-brand-text"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-line px-2 py-0.5 text-[9px] font-medium text-ink-2 hover:border-brand-line hover:text-brand-text"
                 >
                   Ver grupo <ArrowUpRight className="h-3 w-3" aria-hidden />
                 </Link>
@@ -140,7 +140,7 @@ function KpiList({
                   e.stopPropagation();
                   ack(it.ack_id!);
                 }}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[11px] font-medium text-ink-2 hover:border-brand-line hover:text-brand-text disabled:opacity-50"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[9px] font-medium text-ink-2 hover:border-brand-line hover:text-brand-text disabled:opacity-50"
                 title="Marcar como visto"
               >
                 <CheckCheck className="h-3.5 w-3.5" aria-hidden /> dar baixa
@@ -416,13 +416,13 @@ function HeatmapGrid({ data, withHint }: { data: HeatmapData; withHint?: boolean
         <div className="inline-grid min-w-full gap-[2px]" style={{ gridTemplateColumns: `36px repeat(${data.cols.length}, minmax(14px, 1fr))` }}>
           <span />
           {data.cols.map((c, i) => (
-            <span key={c} className="text-center text-[10px] text-muted">
+            <span key={c} className="text-center text-[9px] text-muted">
               {i % 3 === 0 ? c : ''}
             </span>
           ))}
           {data.rows.map((r, ri) => (
             <div key={r} className="contents">
-              <span className="pr-1 text-right text-[11px] leading-5 text-muted">{r}</span>
+              <span className="pr-1 text-right text-[9px] leading-5 text-muted">{r}</span>
               {data.values[ri].map((v, ci) => (
                 <span
                   key={ci}
@@ -440,7 +440,7 @@ function HeatmapGrid({ data, withHint }: { data: HeatmapData; withHint?: boolean
           ))}
         </div>
       </div>
-      <div className="mt-2 flex items-center justify-end gap-2 text-[11px] text-muted">
+      <div className="mt-2 flex items-center justify-end gap-2 text-[9px] text-muted">
         menos
         {[0.18, 0.45, 0.72, 1].map((t) => (
           <span key={t} className="h-3 w-3 rounded-[3px]" style={{ background: `color-mix(in oklab, var(--series-1) ${t * 100}%, var(--surface))` }} />

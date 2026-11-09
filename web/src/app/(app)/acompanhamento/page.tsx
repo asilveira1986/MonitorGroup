@@ -95,7 +95,7 @@ export default async function MonitorPage() {
                 >
                   {formatNumber(t.value)}
                 </p>
-                <p className="mt-0.5 text-[11px] text-muted">{t.hint}</p>
+                <p className="mt-0.5 text-[9px] text-muted">{t.hint}</p>
               </Card>
             ))}
           </div>
@@ -223,7 +223,7 @@ function Metric({ label, value, of, tone }: { label: string; value: number; of?:
         {formatNumber(value)}
         {of != null && <span className="text-xs font-normal text-muted">/{formatNumber(of)}</span>}
       </p>
-      <p className="text-[10px] uppercase tracking-wide text-muted">{label}</p>
+      <p className="text-[9px] uppercase tracking-wide text-muted">{label}</p>
     </div>
   );
 }

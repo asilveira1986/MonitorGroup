@@ -90,7 +90,7 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
             >
               {f.label}
               {f.value === 'removed' && (removedCount ?? 0) > 0 && (
-                <span className="tabular rounded-full bg-critical px-1.5 text-[10px] font-semibold text-white">
+                <span className="tabular rounded-full bg-critical px-1.5 text-[9px] font-semibold text-white">
                   {removedCount}
                 </span>
               )}

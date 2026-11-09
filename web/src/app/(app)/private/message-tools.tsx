@@ -113,7 +113,7 @@ export function PrivateReactions({ list, alignEnd }: { list: PrivateReaction[]; 
           className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-1.5 py-0.5 text-xs shadow-sm"
         >
           {emoji}
-          {rs.length > 1 && <span className="tabular text-[10px] font-semibold text-ink-2">{rs.length}</span>}
+          {rs.length > 1 && <span className="tabular text-[9px] font-semibold text-ink-2">{rs.length}</span>}
         </span>
       ))}
     </div>

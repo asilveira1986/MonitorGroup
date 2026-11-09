@@ -559,7 +559,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
   return (
     <div className="pointer-events-none fixed bottom-3 right-3 z-[100] flex w-[min(27rem,calc(100vw-1.5rem))] flex-col items-end gap-1.5 sm:bottom-4 sm:right-4">
       {items.length > 1 && (
-        <span className="pointer-events-auto rounded-full bg-ink px-2 py-0.5 text-[10px] font-semibold text-surface shadow" aria-live="polite">
+        <span className="pointer-events-auto rounded-full bg-ink px-2 py-0.5 text-[9px] font-semibold text-surface shadow" aria-live="polite">
           +{items.length - 1} aviso(s) na fila
         </span>
       )}
@@ -575,7 +575,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
           <span className="msgalert-bell flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20">
             <Icon className="h-3 w-3" aria-hidden />
           </span>
-          <p id="msgalert-title" className="min-w-0 flex-1 truncate text-[10px] font-extrabold uppercase tracking-wide">
+          <p id="msgalert-title" className="min-w-0 flex-1 truncate text-[9px] font-extrabold uppercase tracking-wide">
             {current.heading}
           </p>
           {config.autoClose > 0 && (
@@ -589,31 +589,31 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         <div className="px-2.5 py-2">
           <p className="truncate text-sm font-bold leading-tight text-ink">{current.group}</p>
           {current.who && (
-            <p className="mt-0.5 truncate text-[11px] font-semibold text-ink-2">
+            <p className="mt-0.5 truncate text-[9px] font-semibold text-ink-2">
               {current.who}
               {current.phone && <span className="font-normal text-muted"> · {current.phone}</span>}
             </p>
           )}
           {current.text && (
-            <p className="mt-1.5 line-clamp-2 whitespace-pre-line rounded-lg bg-surface-2 px-2 py-1 text-[11px] leading-snug text-ink">
+            <p className="mt-1.5 line-clamp-2 whitespace-pre-line rounded-lg bg-surface-2 px-2 py-1 text-[9px] leading-snug text-ink">
               {current.text}
             </p>
           )}
-          {current.note && <p className="mt-1.5 text-[10px] font-semibold leading-snug text-critical-ink">{current.note}</p>}
+          {current.note && <p className="mt-1.5 text-[9px] font-semibold leading-snug text-critical-ink">{current.note}</p>}
         </div>
 
         <div className="flex gap-1.5 border-t border-line bg-surface-2/60 px-2.5 py-1.5">
           <button
             type="button"
             onClick={go}
-            className={cn('flex-1 rounded-lg px-2 py-1 text-[11px] font-bold hover:opacity-90', t.button)}
+            className={cn('flex-1 rounded-lg px-2 py-1 text-[9px] font-bold hover:opacity-90', t.button)}
           >
             {current.action}
           </button>
           <button
             type="button"
             onClick={dismiss}
-            className="rounded-lg border border-line bg-surface px-2 py-1 text-[11px] font-medium text-ink-2 hover:text-ink"
+            className="rounded-lg border border-line bg-surface px-2 py-1 text-[9px] font-medium text-ink-2 hover:text-ink"
           >
             Fechar
           </button>

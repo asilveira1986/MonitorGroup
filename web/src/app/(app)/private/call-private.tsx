@@ -44,7 +44,7 @@ export function CallPrivateButton({
       aria-label={label}
       className={cn(
         'inline-flex items-center gap-1 rounded-full text-muted hover:bg-surface-2 hover:text-brand-text disabled:opacity-50',
-        compact ? 'p-0.5' : 'px-2 py-0.5 text-[11px] font-medium',
+        compact ? 'p-0.5' : 'px-2 py-0.5 text-[9px] font-medium',
         className,
       )}
     >

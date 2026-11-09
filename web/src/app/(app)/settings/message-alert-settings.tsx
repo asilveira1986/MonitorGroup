@@ -97,7 +97,7 @@ export function MessageAlertSettings({ settings, disabled }: { settings: AppSett
                         key={k}
                         type="button"
                         onClick={() => playAlertSound(k)}
-                        className="inline-flex items-center gap-1 rounded-full border border-line px-2.5 py-1 text-[11px] font-medium text-ink-2 hover:border-brand-line hover:text-ink"
+                        className="inline-flex items-center gap-1 rounded-full border border-line px-2.5 py-1 text-[9px] font-medium text-ink-2 hover:border-brand-line hover:text-ink"
                         title={`Ouvir o som de: ${SOUND_LABEL[k]}`}
                       >
                         <Play className="h-3 w-3" aria-hidden /> {SOUND_LABEL[k]}

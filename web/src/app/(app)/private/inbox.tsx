@@ -173,7 +173,7 @@ function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: 
                       {c.name && c.notify && c.notify !== c.name ? ` · ${c.notify}` : ''}
                     </span>
                   </span>
-                  <span className="flex shrink-0 gap-1 text-[10px]">
+                  <span className="flex shrink-0 gap-1 text-[9px]">
                     {c.saved && <span className="rounded-full bg-surface-2 px-1.5 text-ink-2" title="Salvo na agenda do WhatsApp conectado">agenda</span>}
                     {c.chat && <span className="rounded-full bg-brand-soft px-1.5 text-brand-text" title="Já tem conversa no sistema">conversa</span>}
                     {c.team && <span className="rounded-full bg-good/15 px-1.5 text-good-ink" title="Pessoa da equipe">equipe</span>}
@@ -502,7 +502,7 @@ function ChatView({
               <div key={m.id}>
                 {showDay && (
                   <div className="my-3 flex justify-center">
-                    <span className="rounded-full bg-surface px-3 py-1 text-[11px] text-muted shadow-sm">{day}</span>
+                    <span className="rounded-full bg-surface px-3 py-1 text-[9px] text-muted shadow-sm">{day}</span>
                   </div>
                 )}
                 <div className={cn('flex', m.from_me ? 'justify-end' : 'justify-start')}>
@@ -528,7 +528,7 @@ function ChatView({
                         />
                       </span>
                     )}
-                    {m.from_me && m.sender_name && <p className="mb-0.5 text-[11px] font-semibold text-brand-text">{m.sender_name}</p>}
+                    {m.from_me && m.sender_name && <p className="mb-0.5 text-[9px] font-semibold text-brand-text">{m.sender_name}</p>}
                     {m.deleted_at ? (
                       <p className="italic text-ink-2">{m.from_me ? '🚫 Você apagou esta mensagem' : '🚫 Esta mensagem foi apagada'}</p>
                     ) : editing === m.id ? (
@@ -537,7 +537,7 @@ function ChatView({
                       <>
                         {m.anonymized_at && <p className="text-xs italic text-muted">🔒 Conteúdo apagado (prazo de guarda / LGPD)</p>}
                         {m.forwarded && (
-                          <p className="mb-0.5 inline-flex items-center gap-1 text-[11px] italic text-muted">
+                          <p className="mb-0.5 inline-flex items-center gap-1 text-[9px] italic text-muted">
                             <Forward className="h-3 w-3" /> Encaminhada
                           </p>
                         )}
@@ -561,7 +561,7 @@ function ChatView({
                         )}
                       </>
                     )}
-                    <p className="mt-1 flex items-center justify-end gap-1 text-[11px] text-muted">
+                    <p className="mt-1 flex items-center justify-end gap-1 text-[9px] text-muted">
                       {m.edited_at && !m.deleted_at && (
                         <span className="italic" title={m.original_body ? `Antes: ${m.original_body}` : 'Mensagem editada'}>
                           editada
@@ -591,7 +591,7 @@ function ChatView({
                   )
                 )}
                 {o.body && <p className="whitespace-pre-wrap break-words">{o.body}</p>}
-                <p className={cn('mt-1 flex items-center justify-end gap-1 text-[11px]', o.status === 'failed' ? 'text-critical-ink' : 'text-muted')}>
+                <p className={cn('mt-1 flex items-center justify-end gap-1 text-[9px]', o.status === 'failed' ? 'text-critical-ink' : 'text-muted')}>
                   {o.status === 'failed' ? (
                     <>
                       <AlertCircle className="h-3.5 w-3.5" /> {o.error ?? 'não enviada'}
@@ -633,7 +633,7 @@ function ChatView({
               </button>
             </div>
           ))}
-          {files.length > 1 && <p className="px-1 pb-1 text-[11px] text-muted">Os {files.length} arquivos vão em mensagens separadas, na ordem; o texto é a legenda do primeiro.</p>}
+          {files.length > 1 && <p className="px-1 pb-1 text-[9px] text-muted">Os {files.length} arquivos vão em mensagens separadas, na ordem; o texto é a legenda do primeiro.</p>}
         </div>
       )}
       <form
@@ -858,17 +858,17 @@ export function PrivateInbox({
               onClick={() => setTab(t.key)}
               title={t.title}
               className={cn(
-                'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-1 text-[11px] font-medium',
+                'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-1 text-[9px] font-medium',
                 tab === t.key ? 'btn-signal text-brand-ink' : 'bg-surface-2 text-ink-2 hover:text-ink',
               )}
             >
               {t.label}
               {t.unread > 0 ? (
-                <span className="tabular rounded-full bg-good px-1.5 text-[10px] font-semibold text-white" title="Não lidas">
+                <span className="tabular rounded-full bg-good px-1.5 text-[9px] font-semibold text-white" title="Não lidas">
                   {t.unread}
                 </span>
               ) : (
-                (t.count ?? 0) > 0 && <span className="tabular text-[10px] opacity-70">{t.count}</span>
+                (t.count ?? 0) > 0 && <span className="tabular text-[9px] opacity-70">{t.count}</span>
               )}
             </button>
           ))}
@@ -935,7 +935,7 @@ export function PrivateInbox({
                     <span className="flex items-baseline gap-2">
                       <span className={cn('min-w-0 flex-1 truncate text-sm', c.unread_count ? 'font-semibold' : 'font-medium')}>{title}</span>
                       {c.last_message_at && (
-                        <span className="shrink-0 text-[11px] text-muted" suppressHydrationWarning>
+                        <span className="shrink-0 text-[9px] text-muted" suppressHydrationWarning>
                           {timeAgo(c.last_message_at)}
                         </span>
                       )}
@@ -943,22 +943,22 @@ export function PrivateInbox({
                     <span className="flex items-center gap-2">
                       <span className="min-w-0 flex-1 truncate text-xs text-ink-2">{c.last_message_preview ?? 'sem mensagens'}</span>
                       {c.unread_count > 0 && (
-                        <span className="tabular shrink-0 rounded-full bg-good px-1.5 text-[10px] font-semibold text-white">{c.unread_count}</span>
+                        <span className="tabular shrink-0 rounded-full bg-good px-1.5 text-[9px] font-semibold text-white">{c.unread_count}</span>
                       )}
                     </span>
                     <span className="mt-0.5 flex flex-wrap items-center gap-1">
                       {/* aguardando → quem está atendendo (ao responder ou assumir) → finalizado, sem o nome */}
                       {c.closed_at ? (
-                        <span className="rounded-full bg-surface-2 px-1.5 text-[10px] font-medium leading-4 text-ink-2">finalizado</span>
+                        <span className="rounded-full bg-surface-2 px-1.5 text-[9px] font-medium leading-4 text-ink-2">finalizado</span>
                       ) : !c.assigned_to ? (
-                        <span className="rounded-full bg-warning/15 px-1.5 text-[10px] font-medium leading-4 text-warning-ink">aguardando</span>
+                        <span className="rounded-full bg-warning/15 px-1.5 text-[9px] font-medium leading-4 text-warning-ink">aguardando</span>
                       ) : (
-                        <span className="rounded-full bg-good/15 px-1.5 text-[10px] font-medium leading-4 text-good-ink" title="Quem está atendendo">
+                        <span className="rounded-full bg-good/15 px-1.5 text-[9px] font-medium leading-4 text-good-ink" title="Quem está atendendo">
                           {ownerName(c.assigned_to)}
                         </span>
                       )}
                       {sectorOf(c) && !sectorFilter && (
-                        <span className="rounded-full bg-series-1/10 px-1.5 text-[10px] font-medium leading-4 text-series-1">{sectorName(sectorOf(c))}</span>
+                        <span className="rounded-full bg-series-1/10 px-1.5 text-[9px] font-medium leading-4 text-series-1">{sectorName(sectorOf(c))}</span>
                       )}
                       <TagChips ids={c.tags} all={tags} size="xs" />
                     </span>
