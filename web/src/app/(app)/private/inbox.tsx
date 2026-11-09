@@ -152,7 +152,7 @@ function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: 
           )}
           {contacts?.length === 0 && (
             <li className="px-3 py-3 text-sm text-muted">
-              Nenhum contato encontrado. Use “Sincronizar contatos” para trazer a agenda do WhatsApp conectado, ou digite o número acima.
+              Nenhum contato encontrado. Use “Sincronizar contatos” em Contatos para trazer a agenda do WhatsApp conectado, ou digite o número acima.
             </li>
           )}
           {contacts?.slice(0, shown).map((c) => {
