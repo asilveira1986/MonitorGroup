@@ -199,6 +199,7 @@ from (values
   (148, 'Grupo sem monitoramento guarda as mensagens (0157)', exists (select 1 from pg_proc where proname = 'ingest_message' and pronamespace = 'public'::regnamespace and prosrc like '%untracked%')),
   (149, 'Automação: cobranças em etapas e responsável do setor (0158)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'sectors' and column_name = 'responsible_member_ids')
       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'automation_rules' and column_name = 'escalation_steps')),
-  (150, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (150, 'Automação: espera antes do acuse (0159)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'automation_rules' and column_name = 'ack_delay_sec')),
+  (151, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

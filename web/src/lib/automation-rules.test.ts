@@ -117,3 +117,14 @@ test('regra: etapas de cobrança são validadas e limpas', () => {
   assert.equal(validateRuleInput({ escalationSteps: [{ waitMin: 1.5 }] }, { creating: false }).ok, false);
   assert.equal(validateRuleInput({ escalationSteps: [{ mentionJids: ['123'] }] }, { creating: false }).ok, false);
 });
+
+test('regra: espera antes do acuse (segundos, de 0 a 600)', () => {
+  assert.deepEqual(validateRuleInput({ ackDelaySec: '20' }, { creating: false }), { ok: true, value: { ackDelaySec: 20 } });
+  assert.deepEqual(validateRuleInput({ ackDelaySec: 0 }, { creating: false }), { ok: true, value: { ackDelaySec: 0 } });
+  assert.deepEqual(validateRuleInput({ ackDelaySec: 600 }, { creating: false }), { ok: true, value: { ackDelaySec: 600 } });
+  const alto = validateRuleInput({ ackDelaySec: 601 }, { creating: false });
+  assert.equal(alto.ok, false);
+  assert.match(alto.ok ? '' : alto.error, /no máximo 600/);
+  assert.equal(validateRuleInput({ ackDelaySec: -1 }, { creating: false }).ok, false);
+  assert.equal(validateRuleInput({ ackDelaySec: 1.5 }, { creating: false }).ok, false);
+});

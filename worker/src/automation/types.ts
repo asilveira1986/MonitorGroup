@@ -23,6 +23,8 @@ export type AutomationRule = {
   ackMessage: string;
   ackOffHours: string;
   ackCooldownMin: number;
+  /** segundos de espera antes do acuse (0 = na hora); o aviso e o alerta saem na hora (0159) */
+  ackDelaySec: number;
   lastAckAt: Date | null;
   /** grupo interno que recebe o aviso e a cobrança (por exemplo, o Trabalhista) */
   notifyGroupJid: string;

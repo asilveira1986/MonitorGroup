@@ -23,6 +23,7 @@ export type RuleItem = {
   ack_message: string;
   ack_off_hours: string;
   ack_cooldown_min: number;
+  ack_delay_sec?: number | null;
   notify_group_jid: string;
   notify_group_name: string;
   escalate_after_min: number;
@@ -226,6 +227,7 @@ function RuleForm({
   const [ackMessage, setAckMessage] = useState(rule?.ack_message ?? DEFAULT_ACK);
   const [ackOffHours, setAckOffHours] = useState(rule?.ack_off_hours ?? DEFAULT_ACK_OFF);
   const [ackCooldown, setAckCooldown] = useState(String(rule?.ack_cooldown_min ?? 30));
+  const [ackDelay, setAckDelay] = useState(String(rule?.ack_delay_sec ?? 0));
   const [notifyJid, setNotifyJid] = useState(rule?.notify_group_jid ?? '');
   const [escalateAfter, setEscalateAfter] = useState(String(rule?.escalate_after_min ?? 15));
   const [repeatEvery, setRepeatEvery] = useState(String(rule?.repeat_every_min ?? 30));
@@ -272,6 +274,7 @@ function RuleForm({
         ackMessage,
         ackOffHours,
         ackCooldownMin: ackCooldown,
+        ackDelaySec: ackDelay,
         notifyGroupJid: notifyJid,
         notifyGroupName: notify?.name ?? rule?.notify_group_name ?? 'Grupo interno',
         escalateAfterMin: escalateAfter,
@@ -373,7 +376,10 @@ function RuleForm({
           </Field>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <Field label="Esperar antes do acuse (s)" hint="0 = envia na hora. Se a equipe responder nesse tempo, o acuse não sai.">
+            <Input type="number" min={0} max={600} inputMode="numeric" value={ackDelay} onChange={(e) => setAckDelay(e.target.value)} disabled={pending || !ackEnabled} />
+          </Field>
           <Field label="Intervalo entre acuses (min)" hint="Não repete o acuse dentro deste tempo.">
             <Input type="number" min={0} inputMode="numeric" value={ackCooldown} onChange={(e) => setAckCooldown(e.target.value)} disabled={pending} />
           </Field>

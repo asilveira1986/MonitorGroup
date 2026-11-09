@@ -28,6 +28,7 @@ const baseRule: AutomationRule = {
   ackMessage: 'ACK DENTRO',
   ackOffHours: 'ACK FORA',
   ackCooldownMin: 30,
+  ackDelaySec: 0,
   lastAckAt: null,
   notifyGroupJid: 'interno@g.us',
   notifyGroupName: 'Trabalhista',
@@ -61,6 +62,8 @@ function setup(ruleOverrides: Partial<AutomationRule> = {}, start: Date = INSIDE
   // responsáveis do grupo e do setor (0158)
   let responsibles: { group: string[]; sector: string[] } = { group: [], sector: [] };
   let failResponsibles = false;
+  // acuses com espera (0159): o relógio é manual
+  const scheduled: { fn: () => void; ms: number }[] = [];
 
   const store: AutomationStore = {
     async isEnabled() {
@@ -144,6 +147,7 @@ function setup(ruleOverrides: Partial<AutomationRule> = {}, start: Date = INSIDE
     now: () => current,
     ruleCacheMs: 0,
     checkIntervalMs: 60_000,
+    schedule: (fn, ms) => void scheduled.push({ fn, ms }),
   });
 
   const client = (over: Partial<AutomationMessage> = {}): AutomationMessage => ({
@@ -181,6 +185,11 @@ function setup(ruleOverrides: Partial<AutomationRule> = {}, start: Date = INSIDE
     setGroupStillPending: (v: boolean) => (groupStillPending = v),
     setEnabled: (v: boolean) => (enabled = v),
     failSends: (fn: ((req: Sent) => boolean) | null) => (failSend = fn),
+    scheduled,
+    runScheduled: async () => {
+      for (const s of scheduled.splice(0)) s.fn();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    },
     setResponsibles: (v: { group: string[]; sector: string[] }) => (responsibles = v),
     failResponsiblesLookup: (v: boolean) => (failResponsibles = v),
   };
@@ -741,4 +750,59 @@ test('sem etapas, tudo continua como antes: todas as cobranças marcam mentionJi
   assert.equal(cobrancas.length, 2);
   for (const c of cobrancas) assert.deepEqual(c.mentions, baseRule.mentionJids);
   assert.ok(!t.logs.at(-1)!.detail!.includes('marcou'));
+});
+
+// ------------------------------------------------------------------ espera antes do acuse (0159)
+
+test('espera 0: acuse na hora e depois o aviso, como sempre', async () => {
+  const t = setup();
+  await t.automation.handleMessage(t.client());
+  assert.equal(t.scheduled.length, 0);
+  assert.equal(t.sent[0].text, 'ACK DENTRO');
+  assert.equal(t.sent[1].jid, 'interno@g.us');
+});
+
+test('espera de 20 s: o aviso e o alerta saem na hora e o acuse só depois da espera', async () => {
+  const t = setup({ ackDelaySec: 20 });
+  await t.automation.handleMessage(t.client());
+  // na hora: aviso no grupo interno e alerta em tela, sem acuse
+  assert.equal(t.sent.length, 1);
+  assert.equal(t.sent[0].jid, 'interno@g.us');
+  assert.equal(t.alerts.length, 1);
+  assert.equal(t.scheduled.length, 1);
+  assert.equal(t.scheduled[0].ms, 20_000);
+  t.advance(20_000);
+  await t.runScheduled();
+  assert.equal(t.sent.length, 2);
+  assert.equal(t.sent[1].jid, 'cliente@g.us');
+  assert.equal(t.sent[1].text, 'ACK DENTRO');
+  assert.equal(t.logs.filter((l) => l.action === 'ACK').length, 1);
+});
+
+test('se a equipe responder durante a espera, o acuse não é enviado', async () => {
+  const t = setup({ ackDelaySec: 30 });
+  await t.automation.handleMessage(t.client());
+  t.advance(10_000);
+  await t.automation.handleMessage(t.team()); // equipe respondeu: encerra a demanda
+  t.advance(20_000);
+  await t.runScheduled();
+  assert.ok(!t.sent.some((s) => s.jid === 'cliente@g.us'), 'nenhum acuse no grupo do cliente');
+  assert.equal(t.logs.filter((l) => l.action === 'ACK').length, 0);
+});
+
+test('automação desligada durante a espera: o acuse não é enviado', async () => {
+  const t = setup({ ackDelaySec: 15 });
+  await t.automation.handleMessage(t.client());
+  t.setEnabled(false);
+  t.advance(15_000);
+  await t.runScheduled();
+  assert.ok(!t.sent.some((s) => s.jid === 'cliente@g.us'));
+});
+
+test('o acuse com espera segue o texto fora do horário e respeita o intervalo entre acuses', async () => {
+  const t = setup({ ackDelaySec: 10 }, NIGHT);
+  await t.automation.handleMessage(t.client());
+  t.advance(10_000);
+  await t.runScheduled();
+  assert.equal(t.sent.find((s) => s.jid === 'cliente@g.us')!.text, 'ACK FORA');
 });
