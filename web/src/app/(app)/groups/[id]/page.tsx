@@ -140,7 +140,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             className="h-10 w-10 rounded-xl bg-brand-soft text-sm text-brand-text sm:h-11 sm:w-11 sm:text-base"
           />
           <div>
-            <h1 className="text-lg font-semibold leading-tight tracking-tight break-words sm:text-xl">{g.name}</h1>
+            <h1 className="text-[16px] font-semibold leading-tight tracking-tight break-words">{g.name}</h1>
             <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
             <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-ink-2">
               <Users className="h-3.5 w-3.5" />{' '}
@@ -181,14 +181,14 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
         {!g.removed_at && !viewer && (
           <div className="grid gap-3 rounded-2xl border border-line bg-surface px-3 py-2.5 sm:grid-cols-2 xl:grid-cols-[auto_minmax(8rem,1fr)_minmax(10rem,1.4fr)_auto] xl:items-end lg:gap-4">
             <div>
-              <p className="mb-0.5 text-[11px] font-medium text-ink-2">Monitoramento</p>
-              <div className="flex h-9 items-center">
+              <p className="mb-0.5 text-[9px] font-medium text-ink-2">Monitoramento</p>
+              <div className="flex h-9 items-center [&_span.text-sm]:text-[12px]">
                 <MonitorToggle groupId={g.id} monitored={g.monitored} label="Monitorar este grupo" />
               </div>
             </div>
             {profile.role === 'admin' && (
               <div>
-                <p className="mb-0.5 flex items-center gap-1 text-[11px] font-medium text-ink-2">
+                <p className="mb-0.5 flex items-center gap-1 text-[9px] font-medium text-ink-2">
                   <Building2 className="h-3.5 w-3.5" /> Setor
                 </p>
                 <SectorSelect groupId={g.id} sectorId={g.sector_id ?? null} sectors={sectors ?? []} />
@@ -196,12 +196,12 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             )}
             {profile.role === 'admin' && (
               <div>
-                <p className="mb-0.5 flex items-center gap-1 text-[11px] font-medium text-ink-2">
+                <p className="mb-0.5 flex items-center gap-1 text-[9px] font-medium text-ink-2">
                   <UserCheck className="h-3.5 w-3.5" /> Responsáveis pelo grupo (da equipe)
                 </p>
                 <ResponsiblesSelect groupId={g.id} memberIds={responsibleIds} members={teamOptions} />
                 {teamOptions.length === 0 && (
-                  <p className="mt-1 text-[11px] text-muted">
+                  <p className="mt-1 text-[9px] text-muted">
                     Cadastre as pessoas em{' '}
                     <Link href="/settings/people" className="underline">
                       Configurações › Pessoas
@@ -213,7 +213,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             )}
             {g.pending_since && (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-warning/50 bg-warning/5 px-3 py-1.5 sm:col-span-2 xl:col-span-1 xl:flex-nowrap">
-                <p className="flex items-center gap-2 whitespace-nowrap text-sm">
+                <p className="flex items-center gap-2 whitespace-nowrap text-[12px]">
                   <Hourglass className="h-4 w-4 shrink-0 text-warning-ink" />
                   <span>
                     <strong>Sem resposta</strong> {timeAgo(g.pending_since)}

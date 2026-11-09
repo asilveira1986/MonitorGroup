@@ -26,7 +26,7 @@ export function SectorSelect({
       value={value}
       disabled={pending}
       aria-label="Setor do grupo"
-      className="h-9 text-sm"
+      className="h-9 text-[12px] sm:text-[12px]"
       onChange={(e) => {
         const next = e.target.value;
         const prev = value;
@@ -101,11 +101,11 @@ export function ResponsiblesSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label="Responsáveis pelo grupo"
-        className="flex min-h-9 w-full flex-wrap items-center gap-1 rounded-xl border border-line bg-surface px-2 py-1 text-left text-sm hover:bg-surface-2"
+        className="flex min-h-9 w-full flex-wrap items-center gap-1 rounded-xl border border-line bg-surface px-2 py-1 text-left text-[12px] hover:bg-surface-2"
       >
         {value.length ? (
           value.map((id) => (
-            <span key={id} className="inline-flex items-center gap-1 rounded-full bg-brand-soft py-0.5 pl-2 pr-1 text-xs font-medium text-brand-text">
+            <span key={id} className="inline-flex items-center gap-1 rounded-full bg-brand-soft py-0.5 pl-2 pr-1 text-[12px] font-medium text-brand-text">
               {nameOf.get(id) ?? 'Responsável'}
               <span
                 role="button"
