@@ -202,6 +202,8 @@ from (values
   (150, 'Automação: espera antes do acuse (0159)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'automation_rules' and column_name = 'ack_delay_sec')),
   (151, 'Figurinhas: biblioteca da empresa e envio pelo painel (0160)', to_regclass('public.stickers') is not null
       and exists (select 1 from pg_proc where proname = 'send_group_message' and pronamespace = 'public'::regnamespace and prosrc like '%''sticker''%')),
-  (152, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (152, 'Recuperar mensagens antigas de um grupo, experimental (0161)', to_regclass('public.history_requests') is not null and to_regprocedure('public.request_history_recovery(uuid,integer)') is not null
+      and to_regprocedure('public.request_history_recovery_all(integer,boolean)') is not null),
+  (153, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { Group } from '@/lib/types';
 import { TagChips, type CustomerTag } from '@/components/customer-tags';
 import { GroupsTable } from './groups-table';
+import { HistoryRecoveryAllButton } from './history-recovery-all';
 import { RemovedGroups, type RemovedGroup } from './removed-groups';
 
 const FILTERS = [
@@ -33,6 +34,10 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
     .from('groups')
     .select('id', { count: 'exact', head: true })
     .not('removed_at', 'is', null);
+  // quantos grupos ativos a recuperação em todos os grupos atinge (só para o administrador geral da plataforma)
+  const { count: activeCount } = profile.platform_admin
+    ? await supabase.from('groups').select('id', { count: 'exact', head: true }).is('removed_at', null)
+    : { count: 0 };
 
   let groups: Group[] = [];
   let removed: RemovedGroup[] = [];
@@ -75,6 +80,12 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
   return (
     <>
       <PageHeader title="Grupos" description="Todos os grupos do WhatsApp conectado. Escolha quais devem ser monitorados." />
+      {/* recuperar mensagens que não foram guardadas, em todos os grupos (0161, experimental): só o administrador geral */}
+      {profile.platform_admin && filter !== 'removed' && (
+        <div className="-mt-2 mb-3 flex justify-end">
+          <HistoryRecoveryAllButton activeGroups={activeCount ?? 0} />
+        </div>
+      )}
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <GroupSearch q={q} filter={filter} tag={tag} />

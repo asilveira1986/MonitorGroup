@@ -503,6 +503,17 @@ Ative em **Configurações › WhatsApp › Respostas e mensagens** (somente adm
 
 
 **Mencionar pessoas (@):** na caixa de resposta do grupo, digite **@** para abrir a lista dos participantes do grupo (a busca aceita nome sem acento ou parte do telefone). Use as setas, **Enter** ou **Tab** para escolher e **Esc** para fechar. O nome entra no texto como no WhatsApp (`@Maria Silva`) e, no envio, o sistema marca a pessoa de verdade: ela é avisada e o WhatsApp mostra o nome. Vale também na legenda de arquivos e na mensagem de fechamento. Se você apagar ou editar o `@Nome` depois de escolher, a pessoa deixa de ser marcada. Até 50 pessoas por mensagem. Precisa do script do banco (item 0147) e do worker atualizado.
+## Recuperar mensagens antigas de um grupo (0161, experimental)
+
+Grupos que ficaram **sem monitoramento antes da 0157** não guardaram o que chegou nesse intervalo. Na conversa do grupo, administradores têm o botão **Recuperar mensagens**: escolha o período (1 a 30 dias) e o worker pergunta ao **celular conectado**, em páginas de 50 mensagens (histórico sob demanda do WhatsApp), partindo da mensagem mais recente guardada e voltando até o início do período. O andamento aparece na janela (mensagens novas, vistas, pedidos, até onde chegou) e dá para cancelar.
+
+- **Todos os grupos de uma vez (administrador geral da plataforma):** na lista *Grupos*, o botão **Recuperar mensagens de todos** pede a recuperação de todos os grupos ativos da empresa (ou só dos sem monitoramento). O worker faz **um grupo de cada vez**, com pausa entre eles, e a janela mostra o andamento do lote (grupos concluídos, com falha, na fila; mensagens novas; motivos das falhas) e **Cancelar tudo**. Se o celular de uma conexão parar de responder, os demais grupos dela são encerrados na hora com o motivo (por 10 minutos), em vez de esperar grupo por grupo; peça de novo depois. Em empresas com muitos grupos pode levar horas.
+- As mensagens voltam só como **histórico**: não abrem pendência, não calculam tempo de resposta nem acionam alertas, demandas, automação ou pesquisa. A situação do grupo não muda (use *Recalcular grupos* se quiser refazer pendências e tempos).
+- **Arquivos** (imagens, áudios) **não** são baixados: a mensagem aparece com o tipo e a legenda.
+- Depende do celular: ligado, com internet e com o WhatsApp respondendo. O WhatsApp pode devolver menos, ou recusar; não é garantido. Um pedido por grupo por vez; até 100 pedidos (cerca de 5 mil mensagens) por execução; se parar no limite, peça de novo.
+- Pedidos que ficam 30 minutos sem conexão, ou rodando por mais de 10 minutos sem andamento (o worker reiniciou), são encerrados com o motivo.
+- Ordem para publicar: script do banco (`atualizar_banco_parte2.sql`, item 0161) e depois o worker no Railway.
+
 ## Figurinhas (0160)
 
 Na conversa de um grupo, o botão **Figurinhas** (ao lado do clipe) abre a biblioteca **da empresa toda**:

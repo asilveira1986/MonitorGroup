@@ -36,12 +36,21 @@ import { contactName, isPrivateJid, privateEnabled, saveContacts } from './priva
 import { selfReadIds } from './receipts.js';
 import { audioContent } from './audio.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
+import { runHistoryRecovery, type Cursor, type Page, type RecoveryResult } from './history-recovery.js';
 
 const MAX_QR_ATTEMPTS = 6; // ~2 minutos esperando a leitura do QR code
 /** respostas do painel que não saíram neste prazo (WhatsApp desconectado) falham em vez de sair atrasadas */
 const OUTBOX_EXPIRE_MS = 10 * 60_000;
 const POLL_MS = 3_000;
 const HEARTBEAT_MS = 60_000;
+const RECOVERY_POLL_MS = 30_000;
+/** depois de um celular mudo, os demais pedidos dessa conexão são encerrados por este tempo */
+const RECOVERY_MUTE_MS = 10 * 60_000;
+const RECOVERY_BETWEEN_GROUPS_MS = 3_000;
+/** espera pela resposta do celular a cada pedido de histórico (0161) */
+const RECOVERY_REPLY_MS = 45_000;
+/** depois da primeira parte da resposta, espera um instante por partes seguintes */
+const RECOVERY_QUIET_MS = 2_000;
 // mensagens sem remetente: pede ao celular o reenvio (sob demanda) de tempos em tempos
 const RECOVER_SENDERS_MS = 6 * 60 * 60_000;
 
@@ -76,6 +85,8 @@ type Session = {
   lidNames: Map<string, string>;
   /** fotos de perfil dos participantes e do grupo (uma de cada vez) */
   avatars: AvatarQueue;
+  /** recuperação de mensagens antigas em andamento (0161): recebe as respostas do histórico sob demanda */
+  recovery?: { groupJid: string; deliver: (messages: WAMessage[]) => void } | null;
 };
 
 type HistoryImport = {
@@ -232,6 +243,8 @@ export class WhatsAppManager {
     setInterval(() => {
       for (const s of this.sessions.values()) void this.recoverUnknownSenders(s);
     }, RECOVER_SENDERS_MS);
+    // recuperação de mensagens antigas pedida no painel (0161, experimental)
+    setInterval(() => void this.processRecoveries(), RECOVERY_POLL_MS);
   }
 
   status() {
@@ -753,6 +766,8 @@ export class WhatsAppManager {
     // histórico enviado pelo WhatsApp após o pareamento
     sock.ev.on('messaging-history.set', ({ messages, contacts, syncType }) => {
       if (contacts?.length) void saveContacts(instanceId, session.companyId, contacts).catch((err) => log.warn({ err }, 'contatos'));
+      // resposta ao pedido da recuperação de mensagens antigas (0161): vazia também conta (o celular não tem mais nada)
+      if (syncType === proto.HistorySync.HistorySyncType.ON_DEMAND) session.recovery?.deliver(messages);
       if (!messages.length) return;
       // resposta ao pedido de mensagens sem remetente (0081): só completa quem enviou
       if (syncType === proto.HistorySync.HistorySyncType.ON_DEMAND) {
@@ -1269,6 +1284,215 @@ export class WhatsAppManager {
     });
     if (error) logger.warn({ err: error.message }, 'não foi possível identificar o remetente pela citação');
     else logger.info({ messageId: target.id, team: me || Boolean(member) }, 'remetente identificado pela citação');
+  }
+
+  // ------------------------------------------------------------------ recuperar mensagens antigas (0161, experimental)
+  private recoveryBusy = false;
+  /** conexão -> até quando não insistir (o celular não respondeu ao último pedido) */
+  private recoveryMuted = new Map<string, number>();
+
+  /** Pedidos de recuperação do painel: um de cada vez, na conexão do grupo. Sem o script 0161, não faz nada. */
+  private async processRecoveries() {
+    if (this.recoveryBusy) return;
+    this.recoveryBusy = true;
+    try {
+      const now = new Date();
+      // interrompidos (o worker reiniciou no meio): encerra com o motivo
+      await db
+        .from('history_requests')
+        .update({ status: 'failed', note: 'Interrompido (o worker reiniciou ou perdeu a conexão). Peça de novo.', finished_at: now.toISOString(), updated_at: now.toISOString() })
+        .eq('status', 'running')
+        .lt('updated_at', new Date(now.getTime() - 10 * 60_000).toISOString());
+
+      const { data, error } = await db
+        .from('history_requests')
+        .select('id, group_id, since, created_at, groups!inner(jid, instance_id)')
+        .eq('status', 'pending')
+        .order('created_at')
+        .limit(50);
+      if (error || !data?.length) return;
+      for (const req of data as unknown as { id: string; group_id: string; since: string; created_at: string; groups: { jid: string; instance_id: string } }[]) {
+        const session = this.sessions.get(req.groups.instance_id);
+        if (!session || session.stopped || !session.sock.user) {
+          // sem conexão há muito tempo: encerra em vez de ficar pendente para sempre
+          if (now.getTime() - new Date(req.created_at).getTime() > 30 * 60_000) {
+            await db
+              .from('history_requests')
+              .update({ status: 'failed', note: 'O número conectado ficou desconectado. Reconecte e peça de novo.', finished_at: now.toISOString(), updated_at: now.toISOString() })
+              .eq('id', req.id)
+              .eq('status', 'pending');
+          }
+          continue;
+        }
+        // o celular não respondeu há pouco: em vez de esperar de novo grupo por grupo, encerra com o motivo (pedido em lote)
+        if (Date.now() < (this.recoveryMuted.get(req.groups.instance_id) ?? 0)) {
+          await db
+            .from('history_requests')
+            .update({ status: 'failed', note: 'Pulado: o celular não respondeu há pouco. Peça de novo mais tarde.', finished_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+            .eq('id', req.id)
+            .eq('status', 'pending');
+          continue;
+        }
+        const { data: claimed } = await db
+          .from('history_requests')
+          .update({ status: 'running', started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq('id', req.id)
+          .eq('status', 'pending')
+          .select('id');
+        if (!claimed?.length) continue;
+        const result = await this.runRecovery(session, req);
+        if (result?.noReply) this.recoveryMuted.set(req.groups.instance_id, Date.now() + RECOVERY_MUTE_MS);
+        // pausa entre grupos (pedido em lote), para não parecer abuso ao WhatsApp
+        await new Promise((resolve) => setTimeout(resolve, RECOVERY_BETWEEN_GROUPS_MS));
+      }
+    } catch (err) {
+      logger.warn({ err }, 'falha ao processar a recuperação de mensagens antigas');
+    } finally {
+      this.recoveryBusy = false;
+    }
+  }
+
+  private async runRecovery(session: Session, req: { id: string; group_id: string; since: string; groups: { jid: string } }): Promise<RecoveryResult | null> {
+    const log = logger.child({ group: req.groups.jid, request: req.id });
+    const touch = (patch: Record<string, unknown>) =>
+      db.from('history_requests').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', req.id);
+    try {
+      const result = await runHistoryRecovery({
+        sinceMs: new Date(req.since).getTime(),
+        anchor: async () => {
+          const { data } = await db
+            .from('messages')
+            .select('wa_message_id, from_me, sender_jid, sent_at')
+            .eq('group_id', req.group_id)
+            .order('sent_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (!data) return null;
+          return { id: data.wa_message_id as string, fromMe: Boolean(data.from_me), participant: (data.sender_jid as string | null) ?? null, at: new Date(data.sent_at as string).getTime() };
+        },
+        fetchPage: (cursor) => this.fetchHistoryPage(session, req.group_id, req.groups.jid, cursor),
+        progress: async (p) => {
+          await touch({ requests_sent: p.requests, messages_found: p.found, messages_added: p.added, oldest_at: p.oldestAt ? new Date(p.oldestAt).toISOString() : null });
+        },
+        isCancelled: async () => {
+          const { data } = await db.from('history_requests').select('status').eq('id', req.id).maybeSingle();
+          return data?.status === 'cancelled';
+        },
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      });
+      await touch({
+        status: result.status,
+        note: result.note,
+        requests_sent: result.requests,
+        messages_found: result.found,
+        messages_added: result.added,
+        oldest_at: result.oldestAt ? new Date(result.oldestAt).toISOString() : null,
+        finished_at: new Date().toISOString(),
+      });
+      log.info({ status: result.status, requests: result.requests, found: result.found, added: result.added }, 'recuperação de mensagens antigas concluída');
+      return result;
+    } catch (err) {
+      log.error({ err }, 'falha na recuperação de mensagens antigas');
+      await touch({ status: 'failed', note: 'Erro inesperado no worker. Peça de novo; se repetir, veja o log.', finished_at: new Date().toISOString() });
+      return null;
+    }
+  }
+
+  /** Um pedido ao celular: mensagens anteriores à âncora. null = o celular não respondeu a tempo. */
+  private async fetchHistoryPage(session: Session, groupId: string, groupJid: string, cursor: Cursor): Promise<Page | null> {
+    if (session.stopped || !session.sock.user) return null;
+    const collected = new Map<string, WAMessage>();
+    let replied = false;
+    let finish: () => void = () => {};
+    const done = new Promise<void>((resolve) => (finish = resolve));
+    let quiet: ReturnType<typeof setTimeout> | null = null;
+    session.recovery = {
+      groupJid,
+      deliver: (messages) => {
+        replied = true;
+        for (const m of messages) if (m.key.remoteJid === groupJid && m.key.id) collected.set(m.key.id, m);
+        if (quiet) clearTimeout(quiet);
+        quiet = setTimeout(finish, RECOVERY_QUIET_MS);
+      },
+    };
+    const overall = setTimeout(finish, RECOVERY_REPLY_MS);
+    try {
+      await session.sock.fetchMessageHistory(
+        50,
+        { remoteJid: groupJid, id: cursor.id, fromMe: cursor.fromMe, participant: cursor.participant ?? undefined },
+        cursor.at,
+      );
+      await done;
+    } finally {
+      if (quiet) clearTimeout(quiet);
+      clearTimeout(overall);
+      session.recovery = null;
+    }
+    if (!replied) return null;
+    const messages = [...collected.values()];
+    if (!messages.length) return { found: 0, added: 0, oldest: null };
+    const added = await this.ingestRecovered(session, groupId, messages);
+    let oldest: WAMessage = messages[0];
+    for (const m of messages) if (toSeconds(m.messageTimestamp) < toSeconds(oldest.messageTimestamp)) oldest = m;
+    return {
+      found: messages.length,
+      added,
+      oldest: { id: oldest.key.id!, fromMe: Boolean(oldest.key.fromMe), participant: oldest.key.participant ?? null, at: toSeconds(oldest.messageTimestamp) * 1000 },
+    };
+  }
+
+  /**
+   * Grava as mensagens recuperadas só como HISTÓRICO da conversa: não abre pendência, não calcula tempo de resposta e não
+   * mexe na situação do grupo (nem aciona alertas, demandas, automação ou pesquisa). Arquivos (imagens, áudios) não são
+   * baixados: a mensagem aparece com o tipo e a legenda. Devolve quantas eram novas.
+   */
+  private async ingestRecovered(session: Session, groupId: string, messages: WAMessage[]): Promise<number> {
+    const rows: Record<string, unknown>[] = [];
+    const byWaId = new Map<string, WAMessage>();
+    for (const msg of messages) {
+      if (!msg.key.id || !msg.message) continue;
+      const content = extractContent(msg.message);
+      if (!content) continue;
+      try {
+        const d = await this.describeMessage(session, msg, content);
+        byWaId.set(msg.key.id, msg);
+        rows.push({
+          group_id: groupId,
+          wa_message_id: msg.key.id,
+          sender_jid: d.participant,
+          sender_phone: d.senderPhone,
+          sender_name: d.senderName,
+          from_me: d.fromMe,
+          from_team: d.fromTeam,
+          team_member_id: d.member?.id ?? null,
+          message_type: content.type,
+          body: content.body,
+          sent_at: new Date(d.sentAtSeconds * 1000).toISOString(),
+          opens_pending: false,
+          ignored_as_last: d.ignoredAsLast,
+          closes_conversation: false,
+        });
+      } catch (err) {
+        logger.warn({ err, id: msg.key.id }, 'mensagem recuperada ignorada');
+      }
+    }
+    let added = 0;
+    for (let i = 0; i < rows.length; i += HISTORY_BATCH) {
+      const inserted = (check(
+        await db
+          .from('messages')
+          .upsert(rows.slice(i, i + HISTORY_BATCH), { onConflict: 'group_id,wa_message_id', ignoreDuplicates: true })
+          .select('id, wa_message_id'),
+        'recovered insert',
+      ) ?? []) as { id: string; wa_message_id: string }[];
+      added += inserted.length;
+      // citações e "encaminhada" das mensagens novas (0090, 0105)
+      for (const row of inserted) {
+        const msg = byWaId.get(row.wa_message_id);
+        if (msg) await this.saveQuote(row.id, msg).catch(() => {});
+      }
+    }
+    return added;
   }
 
   /**

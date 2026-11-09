@@ -136,6 +136,11 @@ para mudar dependências).
   `stepFor`/`waitMinutesFor` (`automation/service.ts`) escolhem a etapa e o tempo, e `store.resolveResponsibles` traduz
   os responsáveis do grupo e do setor em WhatsApp na hora de cobrar (sem cópia em memória). Lista vazia = comportamento
   antigo (`mention_jids` em todas). O formulário (`settings/automation/automation-panel.tsx`) sempre grava ao menos uma etapa.
+- **Recuperar mensagens antigas (0161, experimental).** O passeio para trás no histórico do celular fica em
+  `worker/src/history-recovery.ts` (função pura, com testes; quem chama injeta o pedido ao WhatsApp e a gravação); a
+  ligação com o Baileys está em `whatsapp.ts` (`processRecoveries`, `fetchHistoryPage`, `ingestRecovered`). As
+  mensagens entram como histórico (`opens_pending = false`) e **não** passam por `handleMessage`; não chame
+  `rebuild_group_state` aqui sem pensar: ele recalcula a situação do grupo a partir das mensagens.
 - **Mensagens e textos da tela em português.** Erros devolvidos pelas ações são mostrados ao usuário como estão.
 - **Vercel x Railway:** o painel não pode enviar WhatsApp nem rodar tarefas contínuas; tudo que precisa do número
   conectado fica no worker.
