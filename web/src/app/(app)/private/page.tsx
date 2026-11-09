@@ -4,7 +4,6 @@ import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { ContactsSync } from './contacts-sync';
 import { PrivateInbox, type PrivateChat } from './inbox';
 import type { ChatAgent } from './owner-control';
 import type { CustomerTag } from '@/components/customer-tags';
@@ -57,19 +56,6 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
   const sectorFilter = usedSectors.size
     ? { options: ((sectorRows ?? []) as { id: string; name: string }[]).filter((s) => usedSectors.has(s.id)), byInstance }
     : undefined;
-  // situação dos contatos (0072) e quantos estão guardados
-  const [{ data: conns }, { count: contacts }, { count: named }] = await Promise.all([
-    supabase.from('whatsapp_instances').select('contacts_sync_status, contacts_synced_at').eq('company_id', profile.company_id ?? ''),
-    supabase.from('wa_contacts').select('jid', { count: 'exact', head: true }),
-    supabase.from('wa_contacts').select('jid', { count: 'exact', head: true }).not('name', 'is', null),
-  ]);
-  // todas as conexões da empresa: sincronizando se alguma estiver; a sincronização mais recente
-  const rows = (conns ?? []) as { contacts_sync_status: string | null; contacts_synced_at: string | null }[];
-  const latest = [...rows].sort((x, y) => ((y.contacts_synced_at ?? '') > (x.contacts_synced_at ?? '') ? 1 : -1))[0];
-  const sync = {
-    contacts_sync_status: rows.some((r) => r.contacts_sync_status === 'syncing') ? 'syncing' : (latest?.contacts_sync_status ?? null),
-    contacts_synced_at: latest?.contacts_synced_at ?? null,
-  };
   const sp = await searchParams;
 
   return (
@@ -93,11 +79,6 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
               <MessageCircle className="h-4 w-4" /> O WhatsApp desta empresa está desconectado: as mensagens novas chegam quando ele reconectar.
             </p>
           )}
-          <ContactsSync
-            status={sync.contacts_sync_status}
-            syncedAt={sync.contacts_synced_at}
-            count={contacts ?? 0} named={named ?? 0}
-          />
           <PrivateInbox
             initialChats={(chats ?? []) as PrivateChat[]}
             selectedId={typeof sp.c === 'string' ? sp.c : null}

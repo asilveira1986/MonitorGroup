@@ -506,7 +506,7 @@ export function Composer({
           </button>
         )}
       </div>
-      <p className="mt-1.5 text-[11px] text-muted">
+      <p className="mt-1.5 text-[9px] text-muted">
         Sai pelo número conectado e aparece também no celular
         {config.signName ? ` · assinada como *${config.userName}:*` : ''} · Enter envia, Shift+Enter quebra a linha · 📎 anexa um arquivo · 🎤 grava um áudio
         {quick.length > 0 ? ' · \\ + atalho insere uma mensagem rápida' : ''}

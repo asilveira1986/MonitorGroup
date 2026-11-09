@@ -503,13 +503,13 @@ export function Conversation({
                 <div
                   id={`msg-${m.id}`}
                   className={cn(
-                    'max-w-[88%] rounded-2xl px-3.5 py-2 text-sm shadow-sm transition-shadow sm:max-w-[80%]',
+                    'max-w-[88%] rounded-2xl px-3.5 py-2 text-[12px] shadow-sm transition-shadow sm:max-w-[80%]',
                     m.from_team ? 'rounded-br-md bg-brand-soft' : 'rounded-bl-md border border-line bg-surface',
                     pendingSince && !m.from_team && m.sent_at >= pendingSince && 'ring-2 ring-warning/60',
                   )}
                 >
                   <div className="mb-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 [&>*]:whitespace-nowrap">
-                    <span className={cn('text-xs font-semibold', m.from_team ? 'text-brand-text' : 'text-series-1')}>
+                    <span className={cn('text-[9px] font-semibold', m.from_team ? 'text-brand-text' : 'text-series-1')}>
                       {sender}
                     </span>
                     {showPhone && (
