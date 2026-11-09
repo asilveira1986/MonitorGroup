@@ -503,6 +503,14 @@ Ative em **Configurações › WhatsApp › Respostas e mensagens** (somente adm
 
 
 **Mencionar pessoas (@):** na caixa de resposta do grupo, digite **@** para abrir a lista dos participantes do grupo (a busca aceita nome sem acento ou parte do telefone). Use as setas, **Enter** ou **Tab** para escolher e **Esc** para fechar. O nome entra no texto como no WhatsApp (`@Maria Silva`) e, no envio, o sistema marca a pessoa de verdade: ela é avisada e o WhatsApp mostra o nome. Vale também na legenda de arquivos e na mensagem de fechamento. Se você apagar ou editar o `@Nome` depois de escolher, a pessoa deixa de ser marcada. Até 50 pessoas por mensagem. Precisa do script do banco (item 0147) e do worker atualizado.
+## Figurinhas (0160)
+
+Na conversa de um grupo, o botão **Figurinhas** (ao lado do clipe) abre a biblioteca **da empresa toda**:
+- **Biblioteca:** figurinhas guardadas pela empresa; as favoritas (estrela) aparecem primeiro. Clicar numa envia como **figurinha de verdade** pelo número conectado, citando a mensagem escolhida, se houver. Quem pode responder adiciona (arquivo `.webp` de até 1 MB) e marca favoritas; só administradores excluem.
+- **Recebidas:** as últimas figurinhas que chegaram naquele grupo. Dá para enviar direto ou **salvar na biblioteca** (o arquivo é copiado para a pasta da empresa e não some com a limpeza das mensagens).
+
+Limites: é a biblioteca do sistema, não as figurinhas salvas no celular do número conectado (o WhatsApp não as expõe de forma estável). O grupo precisa ter *Responder pelo sistema* ligado e o monitoramento ativo, como nas outras respostas. Ordem para publicar: script do banco (`atualizar_banco_parte2.sql`, item 0160) e depois o worker no Railway.
+
 ## Automação de atendimento (acuse, alerta, aviso e cobrança)
 
 Garante que nenhuma mensagem de cliente fique sem resposta, sem depender de alguém acompanhando os grupos. Fica em **Configurações › Atendimento › Automação de atendimento** (administradores criam e editam as regras; todos veem as demandas abertas). **Começa desligada:** há uma **chave geral** no topo da tela (*Automação ligada/desligada*, só administradores) e, além dela, só age nos grupos que têm regra. Com a chave **desligada** o sistema não responde aos clientes, não avisa o grupo interno nem cobra; as regras e as demandas abertas ficam guardadas, e uma resposta da equipe no grupo ainda encerra a demanda aberta. Dá para ligar e desligar quando quiser (a mudança vale em até 30 segundos).
