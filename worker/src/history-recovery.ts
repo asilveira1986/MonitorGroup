@@ -18,7 +18,12 @@ export type Page = { found: number; added: number; oldest: Cursor | null };
 
 export type RecoveryProgress = { requests: number; found: number; added: number; oldestAt: number | null };
 
-export type RecoveryResult = RecoveryProgress & { status: 'done' | 'failed' | 'cancelled'; note: string };
+export type RecoveryResult = RecoveryProgress & {
+  status: 'done' | 'failed' | 'cancelled';
+  note: string;
+  /** falhou porque o celular não respondeu nenhum pedido (quem processa vários grupos pode parar de insistir) */
+  noReply?: boolean;
+};
 
 export type RecoveryDeps = {
   /** início do período pedido (ms): para ao chegar nele */
@@ -45,7 +50,7 @@ export async function runHistoryRecovery(deps: RecoveryDeps): Promise<RecoveryRe
   const delayMs = deps.delayMs ?? 3000;
   const noReplyLimit = deps.noReplyLimit ?? 2;
   const total: RecoveryProgress = { requests: 0, found: 0, added: 0, oldestAt: null };
-  const finish = (status: RecoveryResult['status'], note: string): RecoveryResult => ({ ...total, status, note });
+  const finish = (status: RecoveryResult['status'], note: string, extra: Partial<RecoveryResult> = {}): RecoveryResult => ({ ...total, status, note, ...extra });
 
   let cursor = await deps.anchor();
   if (!cursor) return finish('failed', 'O grupo não tem nenhuma mensagem guardada para servir de ponto de partida.');
@@ -62,7 +67,7 @@ export async function runHistoryRecovery(deps: RecoveryDeps): Promise<RecoveryRe
       if (noReply >= noReplyLimit) {
         return total.found > 0
           ? finish('done', 'O celular parou de responder. O que veio até aqui foi gravado; tente de novo mais tarde.')
-          : finish('failed', 'O celular não respondeu. Ele precisa estar ligado, com internet e com o WhatsApp conectado.');
+          : finish('failed', 'O celular não respondeu. Ele precisa estar ligado, com internet e com o WhatsApp conectado.', { noReply: true });
       }
       await deps.sleep(delayMs);
       continue; // tenta de novo a mesma página

@@ -78,6 +78,7 @@ test('celular sem responder desde o início: falha com o motivo e tenta duas vez
   assert.match(r.note, /celular não respondeu/);
   assert.equal(r.requests, 2);
   assert.equal(r.added, 0);
+  assert.equal(r.noReply, true); // quem processa vários grupos usa isto para parar de insistir
 });
 
 test('uma falha isolada do celular não derruba: tenta de novo a mesma página', async () => {
@@ -94,6 +95,7 @@ test('celular para de responder no meio: conclui com o que veio, sem falhar', as
   assert.equal(r.status, 'done');
   assert.match(r.note, /parou de responder/);
   assert.equal(r.added, 30);
+  assert.equal(r.noReply, undefined, 'veio alguma coisa: não é celular mudo');
 });
 
 test('cancelado no meio: para antes do próximo pedido', async () => {

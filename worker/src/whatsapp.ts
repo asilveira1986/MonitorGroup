@@ -36,7 +36,7 @@ import { contactName, isPrivateJid, privateEnabled, saveContacts } from './priva
 import { selfReadIds } from './receipts.js';
 import { audioContent } from './audio.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
-import { runHistoryRecovery, type Cursor, type Page } from './history-recovery.js';
+import { runHistoryRecovery, type Cursor, type Page, type RecoveryResult } from './history-recovery.js';
 
 const MAX_QR_ATTEMPTS = 6; // ~2 minutos esperando a leitura do QR code
 /** respostas do painel que não saíram neste prazo (WhatsApp desconectado) falham em vez de sair atrasadas */
@@ -44,6 +44,9 @@ const OUTBOX_EXPIRE_MS = 10 * 60_000;
 const POLL_MS = 3_000;
 const HEARTBEAT_MS = 60_000;
 const RECOVERY_POLL_MS = 30_000;
+/** depois de um celular mudo, os demais pedidos dessa conexão são encerrados por este tempo */
+const RECOVERY_MUTE_MS = 10 * 60_000;
+const RECOVERY_BETWEEN_GROUPS_MS = 3_000;
 /** espera pela resposta do celular a cada pedido de histórico (0161) */
 const RECOVERY_REPLY_MS = 45_000;
 /** depois da primeira parte da resposta, espera um instante por partes seguintes */
@@ -1285,6 +1288,8 @@ export class WhatsAppManager {
 
   // ------------------------------------------------------------------ recuperar mensagens antigas (0161, experimental)
   private recoveryBusy = false;
+  /** conexão -> até quando não insistir (o celular não respondeu ao último pedido) */
+  private recoveryMuted = new Map<string, number>();
 
   /** Pedidos de recuperação do painel: um de cada vez, na conexão do grupo. Sem o script 0161, não faz nada. */
   private async processRecoveries() {
@@ -1304,7 +1309,7 @@ export class WhatsAppManager {
         .select('id, group_id, since, created_at, groups!inner(jid, instance_id)')
         .eq('status', 'pending')
         .order('created_at')
-        .limit(5);
+        .limit(50);
       if (error || !data?.length) return;
       for (const req of data as unknown as { id: string; group_id: string; since: string; created_at: string; groups: { jid: string; instance_id: string } }[]) {
         const session = this.sessions.get(req.groups.instance_id);
@@ -1319,14 +1324,26 @@ export class WhatsAppManager {
           }
           continue;
         }
+        // o celular não respondeu há pouco: em vez de esperar de novo grupo por grupo, encerra com o motivo (pedido em lote)
+        if (Date.now() < (this.recoveryMuted.get(req.groups.instance_id) ?? 0)) {
+          await db
+            .from('history_requests')
+            .update({ status: 'failed', note: 'Pulado: o celular não respondeu há pouco. Peça de novo mais tarde.', finished_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+            .eq('id', req.id)
+            .eq('status', 'pending');
+          continue;
+        }
         const { data: claimed } = await db
           .from('history_requests')
-          .update({ status: 'running', started_at: now.toISOString(), updated_at: now.toISOString() })
+          .update({ status: 'running', started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
           .eq('id', req.id)
           .eq('status', 'pending')
           .select('id');
         if (!claimed?.length) continue;
-        await this.runRecovery(session, req);
+        const result = await this.runRecovery(session, req);
+        if (result?.noReply) this.recoveryMuted.set(req.groups.instance_id, Date.now() + RECOVERY_MUTE_MS);
+        // pausa entre grupos (pedido em lote), para não parecer abuso ao WhatsApp
+        await new Promise((resolve) => setTimeout(resolve, RECOVERY_BETWEEN_GROUPS_MS));
       }
     } catch (err) {
       logger.warn({ err }, 'falha ao processar a recuperação de mensagens antigas');
@@ -1335,7 +1352,7 @@ export class WhatsAppManager {
     }
   }
 
-  private async runRecovery(session: Session, req: { id: string; group_id: string; since: string; groups: { jid: string } }) {
+  private async runRecovery(session: Session, req: { id: string; group_id: string; since: string; groups: { jid: string } }): Promise<RecoveryResult | null> {
     const log = logger.child({ group: req.groups.jid, request: req.id });
     const touch = (patch: Record<string, unknown>) =>
       db.from('history_requests').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', req.id);
@@ -1373,9 +1390,11 @@ export class WhatsAppManager {
         finished_at: new Date().toISOString(),
       });
       log.info({ status: result.status, requests: result.requests, found: result.found, added: result.added }, 'recuperação de mensagens antigas concluída');
+      return result;
     } catch (err) {
       log.error({ err }, 'falha na recuperação de mensagens antigas');
       await touch({ status: 'failed', note: 'Erro inesperado no worker. Peça de novo; se repetir, veja o log.', finished_at: new Date().toISOString() });
+      return null;
     }
   }
 
