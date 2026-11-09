@@ -9,7 +9,7 @@ import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { Group, Message, OutgoingMessage } from '@/lib/types';
 import { markGroupAnswered } from '../../actions';
-import { LiveMessages, MonitorToggle, ResponsiblesSelect, SectorSelect, SlaForm } from '../group-controls';
+import { LiveMessages, MonitorToggle, ResponsiblesSelect, SectorSelect } from '../group-controls';
 import { GroupMembers, type GroupMember } from './members';
 import { GroupTitleRow } from './group-stats';
 import { PAGE_SIZE } from './constants';
@@ -179,7 +179,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
         </GroupTitleRow>
         {/* perfil "somente ver painéis": sem os controles do grupo */}
         {!g.removed_at && !viewer && (
-          <div className="grid gap-3 rounded-2xl border border-line bg-surface px-3 py-2.5 sm:grid-cols-2 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.4fr)_auto] lg:items-end lg:gap-4">
+          <div className="grid gap-3 rounded-2xl border border-line bg-surface px-3 py-2.5 sm:grid-cols-2 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1.2fr)] lg:items-end lg:gap-4">
             <div>
               <p className="mb-0.5 text-[11px] font-medium text-ink-2">Monitoramento</p>
               <div className="flex h-9 items-center">
@@ -211,10 +211,23 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
                 )}
               </div>
             )}
-            <div>
-              <p className="mb-0.5 text-[11px] font-medium text-ink-2">SLA de resposta do grupo</p>
-              <SlaForm groupId={g.id} sla={g.sla_minutes} defaultSla={settings?.default_sla_minutes ?? 30} />
-            </div>
+            {g.pending_since && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-warning/50 bg-warning/5 px-3 py-1.5 sm:col-span-2 lg:col-span-1">
+                <p className="flex items-center gap-2 text-sm">
+                  <Hourglass className="h-4 w-4 shrink-0 text-warning-ink" />
+                  <span>
+                    <strong>{g.pending_count} mensagem(ns)</strong> de cliente aguardando resposta{' '}
+                    {timeAgo(g.pending_since)}.
+                  </span>
+                </p>
+                {/* só quem pode alterar dados e tratar alertas do setor do grupo (o banco recusa os demais) */}
+                {canAlertsHere !== false && (
+                  <ActionButton action={markGroupAnswered.bind(null, g.id)} success="Marcada como respondida">
+                    <CheckCheck className="h-3.5 w-3.5" /> Marcar como respondida
+                  </ActionButton>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -243,7 +256,8 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
         </Card>
       )}
 
-      {g.pending_since && (
+      {/* o aviso fica nos controles do grupo; aqui só para quem não vê os controles (grupo excluído ou perfil só leitura) */}
+      {g.pending_since && (g.removed_at || viewer) && (
         <Card className="mb-3 flex flex-col gap-2 border-warning/50 bg-warning/5 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-center gap-2 text-sm">
             <Hourglass className="h-4 w-4 text-warning-ink" />
