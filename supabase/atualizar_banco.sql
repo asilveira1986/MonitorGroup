@@ -255,7 +255,8 @@ begin
   (148, 'Grupo sem monitoramento guarda as mensagens (0157)', exists (select 1 from pg_proc where proname = 'ingest_message' and pronamespace = 'public'::regnamespace and prosrc like '%untracked%')),
   (149, 'Automação: cobranças em etapas e responsável do setor (0158)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'sectors' and column_name = 'responsible_member_ids')
       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'automation_rules' and column_name = 'escalation_steps')),
-  (150, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (150, 'Automação: espera antes do acuse (0159)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'automation_rules' and column_name = 'ack_delay_sec')),
+  (151, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -264,7 +265,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -23393,6 +23394,22 @@ create trigger team_members_drop_sector_responsible before delete on public.team
 $mig0158$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0159_automation_ack_delay.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0159', $mig0159$
+-- =====================================================================
+-- Automação: espera antes do acuse de recebimento.
+--
+-- automation_rules.ack_delay_sec: segundos entre a mensagem do cliente e o
+-- acuse no grupo dele (0 = na hora, como sempre). O aviso no grupo interno e
+-- o alerta em tela continuam saindo na hora. Se a equipe responder durante a
+-- espera, o acuse não é enviado. Máximo de 10 minutos.
+-- =====================================================================
+
+alter table public.automation_rules
+  add column if not exists ack_delay_sec int not null default 0 check (ack_delay_sec >= 0 and ack_delay_sec <= 600);
+$mig0159$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -23600,6 +23617,7 @@ from (values
   (148, 'Grupo sem monitoramento guarda as mensagens (0157)', exists (select 1 from pg_proc where proname = 'ingest_message' and pronamespace = 'public'::regnamespace and prosrc like '%untracked%')),
   (149, 'Automação: cobranças em etapas e responsável do setor (0158)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'sectors' and column_name = 'responsible_member_ids')
       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'automation_rules' and column_name = 'escalation_steps')),
-  (150, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (150, 'Automação: espera antes do acuse (0159)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'automation_rules' and column_name = 'ack_delay_sec')),
+  (151, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

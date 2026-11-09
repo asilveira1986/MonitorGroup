@@ -14,6 +14,7 @@ const COLUMNS: Record<keyof RuleValues, string> = {
   ackMessage: 'ack_message',
   ackOffHours: 'ack_off_hours',
   ackCooldownMin: 'ack_cooldown_min',
+  ackDelaySec: 'ack_delay_sec',
   notifyGroupJid: 'notify_group_jid',
   notifyGroupName: 'notify_group_name',
   escalateAfterMin: 'escalate_after_min',

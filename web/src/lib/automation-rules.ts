@@ -15,6 +15,7 @@ export type EscalationStep = {
 };
 
 export const MAX_STEPS = 10;
+export const MAX_ACK_DELAY_SEC = 600;
 
 /** Campos que o administrador pode editar numa regra. Qualquer outro campo recebido é ignorado. */
 export type RuleValues = {
@@ -23,6 +24,8 @@ export type RuleValues = {
   ackMessage: string;
   ackOffHours: string;
   ackCooldownMin: number;
+  /** segundos de espera antes do acuse (0 = na hora), no máximo 600 */
+  ackDelaySec: number;
   notifyGroupJid: string;
   notifyGroupName: string;
   escalateAfterMin: number;
@@ -43,8 +46,9 @@ export const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_TEXT = 1000;
 const MENTION = /^\d{8,15}@(s\.whatsapp\.net|lid)$/;
 
-const INTEGER_FIELDS: { key: 'ackCooldownMin' | 'escalateAfterMin' | 'repeatEveryMin' | 'maxEscalations'; label: string }[] = [
+const INTEGER_FIELDS: { key: 'ackCooldownMin' | 'ackDelaySec' | 'escalateAfterMin' | 'repeatEveryMin' | 'maxEscalations'; label: string }[] = [
   { key: 'ackCooldownMin', label: 'Intervalo entre acuses (min)' },
+  { key: 'ackDelaySec', label: 'Esperar antes do acuse (segundos)' },
   { key: 'escalateAfterMin', label: 'Cobrar depois de (min)' },
   { key: 'repeatEveryMin', label: 'Repetir a cada (min)' },
   { key: 'maxEscalations', label: 'Máximo de cobranças' },
@@ -72,6 +76,10 @@ export function validateRuleInput(input: RuleInput, opts: { creating: boolean })
       return { ok: false, error: `${label}: informe um número inteiro maior ou igual a zero.` };
     }
     out[key] = n;
+  }
+
+  if (out.ackDelaySec !== undefined && out.ackDelaySec > MAX_ACK_DELAY_SEC) {
+    return { ok: false, error: `Esperar antes do acuse: no máximo ${MAX_ACK_DELAY_SEC} segundos (10 minutos).` };
   }
 
   for (const key of ['ackMessage', 'ackOffHours'] as const) {

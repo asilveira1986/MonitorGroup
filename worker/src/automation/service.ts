@@ -155,6 +155,8 @@ export type AutomationDeps = {
   checkIntervalMs?: number;
   /** por quanto tempo a regra de um grupo fica em memória (padrão: 30 s) */
   ruleCacheMs?: number;
+  /** agenda o acuse com espera (padrão: setTimeout; os testes trocam por um relógio manual) */
+  schedule?: (fn: () => void, ms: number) => void;
 };
 
 /** O banco ainda não tem as tabelas da automação (script 0144 não rodado)? */
@@ -179,6 +181,18 @@ export function createAutomation(deps: AutomationDeps) {
   let firstCheck: ReturnType<typeof setTimeout> | null = null;
   let checking = false;
   let missingSchemaWarned = false;
+  // acuses esperando o tempo da regra (0159); cancelados ao parar o serviço
+  const ackTimers = new Set<ReturnType<typeof setTimeout>>();
+  const schedule =
+    deps.schedule ??
+    ((fn: () => void, ms: number) => {
+      const timer = setTimeout(() => {
+        ackTimers.delete(timer);
+        fn();
+      }, ms);
+      timer.unref?.();
+      ackTimers.add(timer);
+    });
 
   /** Sem o script do banco (0144): avisa uma vez no log e segue sem agir, em vez de errar a cada mensagem. */
   const failed = (err: unknown, context: string, extra: object = {}) => {
@@ -298,8 +312,24 @@ export function createAutomation(deps: AutomationDeps) {
     } catch (err) {
       logger.warn({ err, group: m.group.jid }, '[automation] falha ao criar o alerta em tela');
     }
+    if (rule.ackDelaySec > 0) {
+      // aviso e alerta saem na hora; o acuse espera o tempo da regra e some se a equipe responder antes
+      await notify(m, rule);
+      schedule(() => void delayedAck(m, pending.id, inside).catch((err) => logger.warn({ err, group: m.group.jid }, '[automation] falha no acuse com espera')), rule.ackDelaySec * 1000);
+      return;
+    }
     await ack(m, rule, inside, at);
     await notify(m, rule);
+  };
+
+  /** Acuse depois da espera: só sai se a demanda continua aberta (a equipe não respondeu) e a regra segue ligada. */
+  const delayedAck = async (m: AutomationMessage, pendingId: string, inside: boolean) => {
+    const open = await store.getOpenPending(m.group.id);
+    if (!open || open.id !== pendingId) return;
+    ruleCache.delete(m.group.id);
+    const rule = await getRule(m.group.id);
+    if (!rule || !rule.enabled || !(await isEnabled(m.companyId))) return;
+    await ack(m, rule, inside, now());
   };
 
   /** demanda aberta e nova mensagem do cliente: sem novo acuse nem novo aviso, só atualiza o alerta (alert:update) */
@@ -451,6 +481,8 @@ export function createAutomation(deps: AutomationDeps) {
   const stop = () => {
     if (timer) clearInterval(timer);
     if (firstCheck) clearTimeout(firstCheck);
+    for (const t of ackTimers) clearTimeout(t);
+    ackTimers.clear();
     timer = null;
     firstCheck = null;
   };

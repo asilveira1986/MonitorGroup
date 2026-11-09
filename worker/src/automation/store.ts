@@ -9,6 +9,7 @@ type RuleRow = {
   ack_message: string;
   ack_off_hours: string;
   ack_cooldown_min: number;
+  ack_delay_sec?: number | null;
   last_ack_at: string | null;
   notify_group_jid: string;
   notify_group_name: string;
@@ -61,6 +62,7 @@ const toRule = (r: RuleRow): AutomationRule => ({
   ackMessage: r.ack_message,
   ackOffHours: r.ack_off_hours,
   ackCooldownMin: r.ack_cooldown_min,
+  ackDelaySec: r.ack_delay_sec ?? 0,
   lastAckAt: r.last_ack_at ? new Date(r.last_ack_at) : null,
   notifyGroupJid: r.notify_group_jid,
   notifyGroupName: r.notify_group_name,
