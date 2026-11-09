@@ -11,7 +11,7 @@ import type { Group, Message, OutgoingMessage } from '@/lib/types';
 import { markGroupAnswered } from '../../actions';
 import { LiveMessages, MonitorToggle, ResponsiblesSelect, SectorSelect, SlaForm } from '../group-controls';
 import { GroupMembers, type GroupMember } from './members';
-import { GroupStats } from './group-stats';
+import { GroupTitleRow } from './group-stats';
 import { PAGE_SIZE } from './constants';
 import type { QuickReply } from '@/lib/quick-replies';
 import { Avatar } from '@/components/avatar';
@@ -121,6 +121,14 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
       </Link>
 
       <div className="mb-6 flex flex-col gap-4">
+        <GroupTitleRow
+          stats={[
+            { label: 'Msgs clientes (30d)', title: 'Mensagens de clientes (30 dias)', value: formatNumber(st.received) },
+            { label: 'Msgs equipe (30d)', title: 'Mensagens da equipe (30 dias)', value: formatNumber(st.sent) },
+            { label: 'Resposta média', title: 'Tempo médio de resposta', value: formatDuration(st.avg_response_seconds) },
+            { label: 'Dentro do SLA', value: inSla == null ? '—' : `${inSla.toFixed(0)}%` },
+          ]}
+        >
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <Avatar
             jid={g.jid}
@@ -164,6 +172,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             </div>
           </div>
         </div>
+        </GroupTitleRow>
         {/* perfil "somente ver painéis": sem os controles do grupo */}
         {!g.removed_at && !viewer && (
           <div className="grid gap-4 rounded-2xl border border-line bg-surface p-4 sm:grid-cols-2 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.4fr)_auto] lg:items-end lg:gap-6">
@@ -250,14 +259,6 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
       {/* coluna da esquerda com largura fixa: os nomes e números dos membros cabem inteiros */}
       <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
         <div className="grid gap-4 lg:content-start">
-          <GroupStats
-            stats={[
-              { label: 'Msgs clientes (30d)', title: 'Mensagens de clientes (30 dias)', value: formatNumber(st.received) },
-              { label: 'Msgs equipe (30d)', title: 'Mensagens da equipe (30 dias)', value: formatNumber(st.sent) },
-              { label: 'Resposta média', title: 'Tempo médio de resposta', value: formatDuration(st.avg_response_seconds) },
-              { label: 'Dentro do SLA', value: inSla == null ? '—' : `${inSla.toFixed(0)}%` },
-            ]}
-          />
           <div id="membros" className="scroll-mt-20">
             <GroupMembers members={(groupMembers ?? []) as GroupMember[]} total={g.participants_count} canPrivate={Boolean(canPrivate)} responsibleIds={responsibleIds} />
           </div>
