@@ -447,9 +447,10 @@ export function Conversation({
   }, [messages, people]);
 
   return (
-    <div>
-    {/* flex-col-reverse mantém a rolagem ancorada nas mensagens mais recentes */}
-    <div ref={scrollRef} className="chat-wallpaper flex max-h-[65vh] flex-col-reverse overflow-y-auto p-3 sm:max-h-[640px] sm:p-5">
+    <div className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+    {/* flex-col-reverse mantém a rolagem ancorada nas mensagens mais recentes. No lg a conversa ocupa a altura do card (a
+        mesma da lista de membros) e rola por dentro; abaixo disso, a altura é limitada como antes. */}
+    <div ref={scrollRef} className="chat-wallpaper flex max-h-[65vh] flex-col-reverse overflow-y-auto p-3 sm:max-h-[640px] sm:p-5 lg:min-h-0 lg:max-h-none lg:flex-1">
       <div className="space-y-2">
         <div ref={sentinelRef} className="flex justify-center py-1">
           {hasMore ? (
@@ -695,7 +696,9 @@ export function Conversation({
         ))}
       </div>
     </div>
-      <Composer groupId={groupId} config={reply} replyTo={replyTo} onClearReply={() => setReplyTo(null)} members={mentionMembers} />
+      <div className="lg:shrink-0">
+        <Composer groupId={groupId} config={reply} replyTo={replyTo} onClearReply={() => setReplyTo(null)} members={mentionMembers} />
+      </div>
       {share && (
         <ShareDialog source={share.source} mode={share.mode} canPrivate={canPrivate} canGroup={reply.enabled} onClose={() => setShare(null)} />
       )}

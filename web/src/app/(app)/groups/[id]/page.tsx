@@ -111,16 +111,18 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
   const inSla = st.responses ? ((st.in_sla ?? 0) / st.responses) * 100 : null;
 
   return (
-    <>
+    // a partir do lg a tela do grupo cabe na janela (sem rolar a página): o cabeçalho ocupa o que precisa e as duas
+    // janelas (membros e conversa) dividem o resto, cada uma rolando por dentro. 4rem = o respiro do <main>.
+    <div className="flex flex-col lg:h-[calc(100dvh-4rem)] lg:min-h-[40rem]">
       <LiveMessages groupId={g.id} />
       <Link
         href={viewer || fromPanel ? '/panel' : g.removed_at ? '/groups?filter=removed' : '/groups'}
-        className="mb-4 inline-flex items-center gap-1 text-sm text-ink-2 hover:text-ink"
+        className="mb-2 inline-flex items-center gap-1 text-sm text-ink-2 hover:text-ink"
       >
         <ArrowLeft className="h-4 w-4" /> {viewer || fromPanel ? 'Painel de grupos' : 'Grupos'}
       </Link>
 
-      <div className="mb-6 flex flex-col gap-4">
+      <div className="mb-3 flex flex-col gap-3">
         <GroupTitleRow
           stats={[
             { label: 'Msgs clientes (30d)', title: 'Mensagens de clientes (30 dias)', value: formatNumber(st.received) },
@@ -135,18 +137,19 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             hasPhoto={Boolean((groupPhoto as { path?: string | null } | null)?.path)}
             name={g.name}
             fallback={g.name.slice(0, 2).toUpperCase()}
-            className="h-12 w-12 rounded-2xl bg-brand-soft text-base text-brand-text sm:h-14 sm:w-14 sm:text-lg"
+            className="h-10 w-10 rounded-xl bg-brand-soft text-sm text-brand-text sm:h-11 sm:w-11 sm:text-base"
           />
           <div>
-            <h1 className="text-xl font-semibold tracking-tight break-words sm:text-2xl">{g.name}</h1>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-ink-2">
-              <Users className="h-4 w-4" />{' '}
+            <h1 className="text-lg font-semibold leading-tight tracking-tight break-words sm:text-xl">{g.name}</h1>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-ink-2">
+              <Users className="h-3.5 w-3.5" />{' '}
               <a href="#membros" className="underline-offset-2 hover:text-ink hover:underline" title="Ver os membros do grupo">
                 {g.participants_count} participantes
               </a>{' '}
               · última atividade {timeAgo(g.last_message_at)}
             </p>
-            <div className="mt-1 flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {profile.role !== 'admin' && (
                 <p className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2">
                   <Building2 className="h-3.5 w-3.5" /> Setor: {sectors?.find((s) => s.id === g.sector_id)?.name ?? '—'}
@@ -170,21 +173,22 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
                 canEdit={!viewer && !g.removed_at}
               />
             </div>
+            </div>
           </div>
         </div>
         </GroupTitleRow>
         {/* perfil "somente ver painéis": sem os controles do grupo */}
         {!g.removed_at && !viewer && (
-          <div className="grid gap-4 rounded-2xl border border-line bg-surface p-4 sm:grid-cols-2 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.4fr)_auto] lg:items-end lg:gap-6">
+          <div className="grid gap-3 rounded-2xl border border-line bg-surface px-3 py-2.5 sm:grid-cols-2 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.4fr)_auto] lg:items-end lg:gap-4">
             <div>
-              <p className="mb-1 text-xs font-medium text-ink-2">Monitoramento</p>
+              <p className="mb-0.5 text-[11px] font-medium text-ink-2">Monitoramento</p>
               <div className="flex h-9 items-center">
                 <MonitorToggle groupId={g.id} monitored={g.monitored} label="Monitorar este grupo" />
               </div>
             </div>
             {profile.role === 'admin' && (
               <div>
-                <p className="mb-1 flex items-center gap-1 text-xs font-medium text-ink-2">
+                <p className="mb-0.5 flex items-center gap-1 text-[11px] font-medium text-ink-2">
                   <Building2 className="h-3.5 w-3.5" /> Setor (quem vê e atende o grupo)
                 </p>
                 <SectorSelect groupId={g.id} sectorId={g.sector_id ?? null} sectors={sectors ?? []} />
@@ -192,7 +196,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             )}
             {profile.role === 'admin' && (
               <div>
-                <p className="mb-1 flex items-center gap-1 text-xs font-medium text-ink-2">
+                <p className="mb-0.5 flex items-center gap-1 text-[11px] font-medium text-ink-2">
                   <UserCheck className="h-3.5 w-3.5" /> Responsáveis pelo grupo (da equipe)
                 </p>
                 <ResponsiblesSelect groupId={g.id} memberIds={responsibleIds} members={teamOptions} />
@@ -208,7 +212,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
               </div>
             )}
             <div>
-              <p className="mb-1 text-xs font-medium text-ink-2">SLA de resposta do grupo</p>
+              <p className="mb-0.5 text-[11px] font-medium text-ink-2">SLA de resposta do grupo</p>
               <SlaForm groupId={g.id} sla={g.sla_minutes} defaultSla={settings?.default_sla_minutes ?? 30} />
             </div>
           </div>
@@ -216,7 +220,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
       </div>
 
       {g.removed_at && (
-        <Card className="mb-4 flex flex-col gap-3 border-critical/40 bg-critical/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <Card className="mb-3 flex flex-col gap-2 border-critical/40 bg-critical/5 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-start gap-2 text-sm">
             <Trash2 className="mt-0.5 h-4 w-4 shrink-0 text-critical-ink" />
             <span>
@@ -229,7 +233,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
       )}
 
       {!g.pending_since && g.closed_at && (
-        <Card className="mb-4 flex items-center gap-2 border-good/40 bg-good/5 p-4 text-sm">
+        <Card className="mb-3 flex items-center gap-2 border-good/40 bg-good/5 px-3 py-2 text-sm">
           <Lock className="h-4 w-4 shrink-0 text-good-ink" />
           <span>
             <strong>Conversa encerrada</strong> {timeAgo(g.closed_at)} pela mensagem de fechamento. A próxima mensagem do
@@ -240,7 +244,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
       )}
 
       {g.pending_since && (
-        <Card className="mb-4 flex flex-col gap-3 border-warning/50 bg-warning/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <Card className="mb-3 flex flex-col gap-2 border-warning/50 bg-warning/5 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-center gap-2 text-sm">
             <Hourglass className="h-4 w-4 text-warning-ink" />
             <span>
@@ -256,15 +260,14 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
         </Card>
       )}
 
-      {/* coluna da esquerda com largura fixa: os nomes e números dos membros cabem inteiros */}
-      <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
-        <div className="grid gap-4 lg:content-start">
-          <div id="membros" className="scroll-mt-20">
-            <GroupMembers members={(groupMembers ?? []) as GroupMember[]} total={g.participants_count} canPrivate={Boolean(canPrivate)} responsibleIds={responsibleIds} />
-          </div>
+      {/* coluna da esquerda com largura fixa: os nomes e números dos membros cabem inteiros. A partir do lg as duas
+          janelas têm a mesma altura (o que sobra da tela) e rolam por dentro. */}
+      <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+        <div id="membros" className="scroll-mt-20 lg:h-full lg:min-h-0">
+          <GroupMembers members={(groupMembers ?? []) as GroupMember[]} total={g.participants_count} canPrivate={Boolean(canPrivate)} responsibleIds={responsibleIds} />
         </div>
 
-        <Card className="min-w-0">
+        <Card className="min-w-0 lg:flex lg:h-full lg:min-h-0 lg:flex-col">
           <CardHeader
             title="Conversa"
             description="Role para cima para ver as anteriores · azul = cliente, verde = equipe"
@@ -299,6 +302,6 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
       </div>
 
       <GroupFiles groupId={g.id} timeZone={tz} />
-    </>
+    </div>
   );
 }
