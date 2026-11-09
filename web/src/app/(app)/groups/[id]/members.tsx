@@ -72,7 +72,7 @@ export function GroupMembers({
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Buscar nome ou telefone"
                 aria-label="Buscar membro"
-                className="h-8 w-full rounded-lg border border-line bg-surface pl-8 pr-2 text-xs outline-none focus:border-brand-line"
+                className="h-8 w-full rounded-lg border border-line bg-surface pl-8 pr-2 text-[12px] outline-none focus:border-brand-line"
               />
             </label>
           )}
@@ -95,7 +95,7 @@ export function GroupMembers({
                   />
                   <div className="min-w-0 flex-1">
                     {/* nome e número inteiros (quebram linha em vez de cortar) */}
-                    <p className="flex flex-wrap items-center gap-x-1 text-[13px] font-medium leading-snug">
+                    <p className="flex flex-wrap items-center gap-x-1 text-[12px] font-medium leading-snug">
                       <span className="break-words">{label}</span>
                       {m.role === 'superadmin' && <Crown className="h-3.5 w-3.5 shrink-0 text-warning-ink" aria-label="Criador do grupo" />}
                       {m.role === 'admin' && <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-brand-text" aria-label="Admin do grupo" />}
