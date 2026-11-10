@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, Lock } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DemandStatusBadge } from '@/components/demands/status';
@@ -19,7 +19,9 @@ export const metadata: Metadata = { title: 'Monitor Group · Agenda' };
 
 type Row = Demand & { groups: { name: string } | null; team_members: { name: string } | null };
 /** uma linha da agenda: demanda (a entregar ou entregue) ou compromisso */
-type Entry = { kind: 'demand'; r: Row; done?: boolean } | { kind: 'event'; e: AgendaEvent };
+/** horário "Ocupado": compromisso particular de outra pessoa (só início e de quem é; 0169) */
+type Busy = { starts_at: string; all_day: boolean; user_ids: string[] };
+type Entry = { kind: 'demand'; r: Row; done?: boolean } | { kind: 'event'; e: AgendaEvent } | { kind: 'busy'; b: Busy };
 type View = 'dia' | 'semana' | 'mes';
 
 const VIEWS: { key: View; label: string }[] = [
@@ -45,7 +47,11 @@ const weekday = (key: string) => {
 };
 const ddmm = (key: string) => `${key.slice(8, 10)}/${key.slice(5, 7)}`;
 const entryTime = (x: Entry) =>
-  x.kind === 'event'
+  x.kind === 'busy'
+    ? x.b.all_day
+      ? 0
+      : new Date(x.b.starts_at).getTime()
+    : x.kind === 'event'
     ? x.e.all_day
       ? 0
       : new Date(x.e.starts_at).getTime()
@@ -148,12 +154,13 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   let open: Row[] = [];
   let delivered: Row[] = [];
   let events: AgendaEvent[] = [];
+  let busy: Busy[] = [];
   {
     // o período e hoje (o resumo é sempre de hoje), com folga por causa do fuso
     const from = addDays(range.start < today ? range.start : today, -1);
     const until = addDays(range.end > today ? range.end : today, 2);
     const none = Promise.resolve({ data: [] as unknown[] });
-    const [o, d, ev, evOld] = await Promise.all([
+    const [o, d, ev, evOld, busyRes] = await Promise.all([
       supabase
         .from('demands')
         .select('*, groups(name), team_members(name)')
@@ -190,7 +197,13 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
             .order('starts_at')
             .limit(1000)
         : none,
+      // horários "Ocupado" (compromissos particulares dos outros): só ao olhar a agenda de outras pessoas (0169)
+      viewingOther
+        ? supabase.rpc('agenda_busy', { p_from: `${from}T00:00:00Z`, p_to: `${until}T00:00:00Z`, p_users: userIds })
+        : none,
     ]);
+    // sem o script 0169 no banco a função não existe: sem horários "ocupado"
+    busy = Array.isArray(busyRes.data) ? (busyRes.data as Busy[]) : [];
     open = (o.data ?? []) as Row[];
     delivered = (d.data ?? []) as Row[];
     const byId = new Map<string, AgendaEvent>();
@@ -225,6 +238,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const dueOn = groupByDay(open, (r) => r.promised_at);
   const doneOn = groupByDay(delivered, (r) => r.delivered_at);
   const eventsOn = groupByDay(events, (e) => e.starts_at);
+  const busyOn = groupByDay(busy, (b) => b.starts_at);
   const isLate = (r: Row) => Boolean(r.promised_at && new Date(r.promised_at).getTime() < now);
   const late = open.filter(isLate);
   const noDate = open.filter((r) => !r.promised_at);
@@ -234,6 +248,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     [
       ...(dueOn.get(key) ?? []).map((r): Entry => ({ kind: 'demand', r })),
       ...(eventsOn.get(key) ?? []).map((e): Entry => ({ kind: 'event', e })),
+      ...(busyOn.get(key) ?? []).map((b): Entry => ({ kind: 'busy', b })),
       ...(doneOn.get(key) ?? []).map((r): Entry => ({ kind: 'demand', r, done: true })),
     ].sort((a, b) => entryTime(a) - entryTime(b));
   const demandEntries = (rows: Row[]) => rows.map((r): Entry => ({ kind: 'demand', r }));
@@ -303,18 +318,43 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       <EventActions event={e} timeZone={timeZone} people={pickPeople} teams={agendaTeams} types={types} />
     </li>
   );
+  const busyItem = (b: Busy, i: number) => (
+    <li key={`busy-${b.starts_at}-${i}`} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
+      <span className="tabular w-14 shrink-0 text-xs font-semibold text-muted">{b.all_day ? 'dia todo' : formatTime(b.starts_at, timeZone)}</span>
+      <div className="min-w-0 flex-1 basis-56">
+        <p className="text-sm font-medium text-ink-2">
+          <Lock className="mr-1 inline h-3.5 w-3.5 text-muted" aria-hidden /> Ocupado
+        </p>
+        <p className="truncate text-[9px] text-muted" title="Compromisso particular: só o horário aparece para os outros">
+          {b.user_ids.map((id) => people.find((p) => p.id === id)?.name ?? 'usuário').join(', ')} · particular
+        </p>
+      </div>
+    </li>
+  );
   const section = (key: string, title: React.ReactNode, entries: Entry[], tone?: 'critical') =>
     entries.length > 0 && (
       <Card key={key} className="overflow-hidden">
         <h2 className={cn('flex items-center gap-2 border-b border-line px-4 py-2.5 text-sm font-semibold sm:px-5', tone === 'critical' && 'text-critical-ink')}>
           {title} <span className="tabular rounded-full bg-surface-2 px-2 text-[9px] font-semibold text-ink-2">{entries.length}</span>
         </h2>
-        <ul className="divide-y divide-line">{entries.map((x) => (x.kind === 'event' ? eventItem(x.e) : demandItem(x.r, x.done)))}</ul>
+        <ul className="divide-y divide-line">{entries.map((x, i) => (x.kind === 'busy' ? busyItem(x.b, i) : x.kind === 'event' ? eventItem(x.e) : demandItem(x.r, x.done)))}</ul>
       </Card>
     );
 
   // ---------- itens compactos (semana e mês)
   const chip = (x: Entry) => {
+    if (x.kind === 'busy') {
+      const b = x.b;
+      return (
+        <span
+          key={`busy-${b.starts_at}-${b.user_ids.join()}`}
+          title={`Ocupado · ${b.user_ids.map((id) => people.find((p) => p.id === id)?.name ?? 'usuário').join(', ')} (particular)`}
+          className="block truncate rounded-md border-l-2 border-line bg-surface-2 px-1.5 py-0.5 text-[9px] text-muted"
+        >
+          <span className="tabular font-semibold">{b.all_day ? '' : `${formatTime(b.starts_at, timeZone)} `}</span>🔒 Ocupado
+        </span>
+      );
+    }
     if (x.kind === 'event') {
       const e = x.e;
       return (
