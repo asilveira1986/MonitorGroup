@@ -13,7 +13,7 @@ import { AgendaFilter } from './agenda-filter';
 import { memberIdsOf, parseAgendaFilter } from '@/lib/agenda-filter';
 import { DeliverButton } from './agenda-controls';
 import type { RepeatRule } from './actions';
-import { EventActions, EventDetails, NewEventButton, type AgendaEvent } from './event-controls';
+import { EventActions, EventDetails, NatureBadge, NewEventButton, type AgendaEvent } from './event-controls';
 
 export const metadata: Metadata = { title: 'Monitor Group · Agenda' };
 
@@ -101,7 +101,8 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   void team;
 
   // compromisso aberto (?evento=, da notificação ou de um clique): detalhes e a agenda no dia dele
-  const EVENT_COLS = 'id, member_id, owner_id, created_by, title, notes, starts_at, all_day, done_at, reminders, type_id, series_id';
+  // todas as colunas (inclui a natureza, 0168, sem quebrar a agenda antes do script rodar)
+  const EVENT_COLS = '*';
   let opened: AgendaEvent | null = null;
   if (typeof sp.evento === 'string' && /^[0-9a-f-]{36}$/i.test(sp.evento)) {
     const [{ data: ev }, { data: ppl }] = await Promise.all([
@@ -289,7 +290,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       <Link href={href({ evento: e.id })} scroll={false} className="min-w-0 flex-1 basis-56 hover:underline" title="Ver detalhes">
         <p className={cn('line-clamp-2 text-sm font-medium', e.done_at && 'line-through')}>
           <CalendarClock className="mr-1 inline h-3.5 w-3.5" style={{ color: colorOf(e) }} aria-hidden />
-          {e.title}
+          {e.title} <NatureBadge nature={e.nature} className="ml-1 align-middle" />
         </p>
         <p className="line-clamp-2 text-xs text-ink-2">{e.notes || 'Compromisso'}</p>
         {((e.people?.length ?? 0) > 1 || (multi && (e.people?.length ?? 0) > 0)) && (
@@ -321,13 +322,14 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           key={e.id}
           href={href({ evento: e.id })}
           scroll={false}
-          title={`${e.all_day ? 'Dia todo' : formatTime(e.starts_at, timeZone)} · ${e.title}${e.notes ? ` · ${e.notes}` : ''}`}
+          title={`${e.all_day ? 'Dia todo' : formatTime(e.starts_at, timeZone)} · ${e.title}${e.nature === 'personal' ? ' · particular' : ''}${e.notes ? ` · ${e.notes}` : ''}`}
           className={cn('block truncate rounded-md border-l-2 px-1.5 py-0.5 text-[9px] text-ink hover:brightness-95', e.done_at && 'line-through opacity-60')}
           style={{ borderLeftColor: colorOf(e), backgroundColor: `${colorOf(e)}1f` }}
         >
           <span className="tabular font-semibold" style={{ color: colorOf(e) }}>
             {e.all_day ? '' : `${formatTime(e.starts_at, timeZone)} `}
           </span>
+          {e.nature === 'personal' && <span aria-label="particular">🔒 </span>}
           {e.title}
         </Link>
       );

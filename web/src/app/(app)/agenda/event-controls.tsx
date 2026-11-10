@@ -1,12 +1,13 @@
 'use client';
 
-import { Bell, CalendarClock, Check, Clock, Pencil, Plus, Repeat, RotateCcw, StickyNote, Tag, Trash2, UserRound, Users, X } from 'lucide-react';
+import { Bell, Briefcase, CalendarClock, CalendarDays, Check, Clock, Lock, Pencil, Plus, Repeat, RotateCcw, Search, StickyNote, Tag, Trash2, UserRound, Users, X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
 import { AGENDA_COLORS, agendaColor, type AgendaType } from '@/lib/agenda-colors';
 import { createAgendaEvent, deleteAgendaEvent, setAgendaEventDone, updateAgendaEvent, type RepeatRule } from './actions';
+import { NATURE_REQUIRED, natureLabel, type EventNature } from '@/lib/agenda-nature';
 
 export type AgendaEvent = {
   id: string;
@@ -26,7 +27,67 @@ export type AgendaEvent = {
   type_id?: string | null;
   series_id?: string | null;
   series?: RepeatRule | null;
+  /** particular ou profissional (0168) */
+  nature?: EventNature | null;
 };
+
+/** Selo "Particular" (o profissional é o padrão do dia a dia e não leva selo). */
+export function NatureBadge({ nature, className = '' }: { nature?: EventNature | null; className?: string }) {
+  if (nature !== 'personal') return null;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full bg-series-1/12 px-1.5 py-px text-[9px] font-semibold text-ink-2 ${className}`} title="Compromisso particular">
+      <Lock className="h-3 w-3" aria-hidden /> Particular
+    </span>
+  );
+}
+
+/** Seção do formulário: título pequeno com ícone e o conteúdo num cartão leve. */
+function Section({ icon: Icon, title, hint, children, className = '' }: { icon: typeof Clock; title: string; hint?: React.ReactNode; children: React.ReactNode; className?: string }) {
+  return (
+    <section className={`space-y-2.5 rounded-2xl border border-line bg-surface p-3.5 ${className}`}>
+      <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+        <Icon className="h-3.5 w-3.5" aria-hidden /> {title}
+        {hint && <span className="ml-auto text-[9px] font-normal normal-case tracking-normal text-muted">{hint}</span>}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+/** Escolha obrigatória: particular ou profissional (0168). Sem marca nenhuma até a pessoa escolher. */
+function NaturePicker({ value, onChange, invalid }: { value: EventNature | null; onChange: (v: EventNature) => void; invalid: boolean }) {
+  const options: { key: EventNature; icon: typeof Clock; title: string; text: string }[] = [
+    { key: 'professional', icon: Briefcase, title: 'Profissional', text: 'Trabalho, clientes, processos' },
+    { key: 'personal', icon: Lock, title: 'Particular', text: 'Assunto pessoal' },
+  ];
+  return (
+    <div role="radiogroup" aria-label="Natureza do compromisso" aria-required="true" aria-invalid={invalid} className={`grid grid-cols-2 gap-2 rounded-2xl p-0.5 ${invalid ? 'ring-2 ring-critical/50' : ''}`}>
+      {options.map((o) => {
+        const on = value === o.key;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(o.key)}
+            className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
+              on ? 'border-brand bg-brand-soft text-brand-text shadow-sm' : 'border-line bg-surface text-ink-2 hover:border-ink-2 hover:text-ink'
+            }`}
+          >
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${on ? 'bg-brand text-brand-ink' : 'bg-surface-2'}`}>
+              <o.icon className="h-4 w-4" aria-hidden />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold leading-tight">{o.title}</span>
+              <span className="block truncate text-[9px] font-normal opacity-80">{o.text}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // ---------- tipo e repetição (0102)
 const WEEKDAY_SHORT = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
@@ -266,6 +327,14 @@ function zonedParts(iso: string, timeZone: string) {
 export type Person = { id: string; name: string };
 export type AgendaTeam = { id: string; name: string; userIds: string[] };
 
+const initialsOf = (name: string) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('') || '?';
+
 /**
  * Quem participa: escolher um setor da agenda marca todos dele (e dá para desmarcar um a um);
  * também dá para marcar qualquer pessoa da empresa.
@@ -285,7 +354,7 @@ function PeoplePicker({
   const has = new Set(value);
   const shown = people.filter((p) => !q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase()));
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       <div className="flex flex-wrap items-center gap-1.5">
         {teams.map((t) => {
           const all = t.userIds.length > 0 && t.userIds.every((id) => has.has(id));
@@ -294,35 +363,49 @@ function PeoplePicker({
               key={t.id}
               type="button"
               onClick={() => onChange(all ? value.filter((id) => !t.userIds.includes(id)) : [...new Set([...value, ...t.userIds])])}
-              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${all ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2 hover:border-brand-line'}`}
+              aria-pressed={all}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition ${all ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2 hover:border-brand-line'}`}
               title={all ? 'Tirar todos deste setor' : 'Marcar todos deste setor'}
             >
               <Users className="h-3 w-3" /> {t.name} <span className="text-muted">({t.userIds.length})</span>
             </button>
           );
         })}
-        <button type="button" onClick={() => onChange(people.map((p) => p.id))} className="rounded-full px-2 py-1 text-xs text-brand-text hover:underline">
-          todos
-        </button>
-        <button type="button" onClick={() => onChange([])} className="rounded-full px-2 py-1 text-xs text-ink-2 hover:underline">
-          ninguém
-        </button>
+        <span className="ml-auto flex items-center gap-1">
+          <button type="button" onClick={() => onChange(people.map((p) => p.id))} className="rounded-full px-2 py-1 text-xs font-medium text-brand-text hover:bg-brand-soft">
+            todos
+          </button>
+          <button type="button" onClick={() => onChange([])} className="rounded-full px-2 py-1 text-xs text-ink-2 hover:bg-surface-2">
+            ninguém
+          </button>
+        </span>
       </div>
-      {people.length > 8 && <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar pessoa" className="h-8 text-xs" />}
-      <div className="max-h-36 overflow-y-auto rounded-xl border border-line p-1">
-        {shown.map((p) => (
-          <label key={p.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-surface-2">
-            <input
-              type="checkbox"
-              checked={has.has(p.id)}
-              onChange={(e) => onChange(e.target.checked ? [...value, p.id] : value.filter((id) => id !== p.id))}
-              className="h-4 w-4 accent-[var(--brand)]"
-            />
-            {p.name}
-          </label>
-        ))}
-      </div>
-      <p className="text-[9px] text-muted">{value.length ? `${value.length} pessoa(s) — aparece na agenda de cada uma` : 'Ninguém marcado: fica só na sua agenda.'}</p>
+      {people.length > 6 && (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" aria-hidden />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar pessoa" aria-label="Buscar pessoa" className="h-9 pl-8 text-sm" />
+        </div>
+      )}
+      <ul className="grid max-h-44 gap-1 overflow-y-auto sm:grid-cols-2">
+        {shown.map((p) => {
+          const on = has.has(p.id);
+          return (
+            <li key={p.id}>
+              <button
+                type="button"
+                aria-pressed={on}
+                onClick={() => onChange(on ? value.filter((id) => id !== p.id) : [...value, p.id])}
+                className={`flex w-full items-center gap-2 rounded-xl border px-2 py-1.5 text-left text-sm transition ${on ? 'border-brand-line bg-brand-soft/60' : 'border-transparent hover:bg-surface-2'}`}
+              >
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold ${on ? 'bg-brand text-brand-ink' : 'bg-surface-2 text-ink-2'}`}>{on ? <Check className="h-3.5 w-3.5" aria-hidden /> : initialsOf(p.name)}</span>
+                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+              </button>
+            </li>
+          );
+        })}
+        {!shown.length && <li className="px-2 py-1.5 text-xs text-muted">Ninguém encontrado.</li>}
+      </ul>
+      <p className="text-[9px] text-muted">{value.length ? `${value.length} pessoa(s): o compromisso aparece na agenda de cada uma.` : 'Ninguém marcado: fica só na sua agenda.'}</p>
     </div>
   );
 }
@@ -363,6 +446,9 @@ function EventDialog({
     if (!event && reminders.length === 1 && reminders[0] === (on ? 15 : 0)) setReminders([on ? 0 : 15]);
   };
   const [typeId, setTypeId] = useState<string | null>(event?.type_id ?? null);
+  // particular ou profissional: obrigatório, sem marca até a pessoa escolher (0168)
+  const [nature, setNature] = useState<EventNature | null>(event?.nature ?? null);
+  const [natureError, setNatureError] = useState(false);
   const dowOf = (d: string) => new Date(`${d}T12:00:00Z`).getUTCDay();
   const initialRule = event ? (event.series ?? null) : null;
   const [repeat, setRepeat] = useState<RepeatState>(toState(initialRule, dowOf(initial.date)));
@@ -379,6 +465,12 @@ function EventDialog({
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!nature) {
+      setNatureError(true);
+      document.getElementById('agenda-nature')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return void toast.error(NATURE_REQUIRED);
+    }
+    if (!title.trim()) return void toast.error('Informe o título do compromisso.');
     if (!date) return void toast.error('Informe a data do compromisso.');
     // dia todo: meio-dia no fuso da empresa, para o dia não mudar com o fuso
     const startsAt = zonedIso(date, allDay ? '12:00' : time || '09:00', timeZone);
@@ -392,6 +484,7 @@ function EventDialog({
       allDay,
       reminders,
       typeId,
+      nature,
       // novo: a regra (ou nada); edição: só se mudou ({ freq: 'none' } = deixa de repetir)
       repeat: event ? (ruleChanged ? (rule ?? { freq: 'none' as const }) : null) : rule,
       scope: inSeries && (ruleChanged || scope === 'following') ? ('following' as const) : ('one' as const),
@@ -407,21 +500,39 @@ function EventDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Compromisso">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <form onSubmit={submit} className="relative flex max-h-[92dvh] w-full max-w-md flex-col rounded-t-2xl bg-surface shadow-2xl sm:rounded-2xl lg:max-w-3xl">
-        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
-          <h2 className="text-base font-semibold">
-            {event ? 'Editar compromisso' : 'Novo compromisso'}
-            {personName && <span className="ml-2 text-xs font-normal text-ink-2">na agenda de {personName}</span>}
-          </h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-1 text-ink-2 hover:bg-surface-2" aria-label="Fechar">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={onClose} />
+      <form onSubmit={submit} noValidate className="relative flex max-h-[94dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-surface-2 shadow-2xl sm:rounded-3xl lg:max-w-4xl">
+        <div className="flex items-center justify-between gap-3 bg-surface px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-brand-text">
+              <CalendarDays className="h-5 w-5" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-semibold leading-tight">{event ? 'Editar compromisso' : 'Novo compromisso'}</h2>
+              <p className="truncate text-xs text-ink-2">{personName ? `Na agenda de ${personName}` : 'Escolha o tipo, o dia e quem participa'}</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-xl p-1.5 text-ink-2 hover:bg-surface-2" aria-label="Fechar">
             <X className="h-5 w-5" />
           </button>
         </div>
-        {/* computador: duas colunas (o quê e quando | repetição, lembretes e quem) */}
-        <div className="grid flex-1 gap-x-5 gap-y-3 overflow-y-auto px-4 py-3 lg:grid-cols-2">
+        {/* computador: duas colunas (o quê e quando | quem, repetição e lembretes) */}
+        <div className="grid flex-1 content-start gap-3 overflow-y-auto p-3 sm:p-4 lg:grid-cols-[1.05fr_1fr]">
           <div className="space-y-3">
-            <Field label="Título">
+            <div id="agenda-nature">
+              <Section icon={Lock} title="Este compromisso é" hint={<span className={natureError ? 'font-semibold text-critical-ink' : ''}>obrigatório</span>}>
+                <NaturePicker
+                  value={nature}
+                  onChange={(v) => {
+                    setNature(v);
+                    setNatureError(false);
+                  }}
+                  invalid={natureError}
+                />
+                {natureError && <p className="text-xs font-medium text-critical-ink">{NATURE_REQUIRED}</p>}
+              </Section>
+            </div>
+            <Section icon={StickyNote} title="O que é">
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -429,53 +540,54 @@ function EventDialog({
                 maxLength={200}
                 required
                 autoFocus
+                aria-label="Título"
+                className="h-11 text-base font-medium"
               />
-            </Field>
-            <div className="grid grid-cols-[1fr_auto] items-end gap-3">
-              <Field label="Dia">
-                <Input
-                  type="date"
-                  value={date}
-                  onChange={(e) => {
-                    // semanal no dia padrão: acompanha o dia escolhido
-                    if (e.target.value && repeat.weekdays.length === 1 && repeat.weekdays[0] === dowOf(date)) setRepeat({ ...repeat, weekdays: [dowOf(e.target.value)] });
-                    setDate(e.target.value);
-                  }}
-                  required
-                />
-              </Field>
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-ink-2">Hora</span>
-                  <label className="inline-flex cursor-pointer items-center gap-1 text-[9px] text-ink-2">
-                    <input type="checkbox" checked={allDay} onChange={(e) => changeAllDay(e.target.checked)} className="h-3.5 w-3.5 accent-[var(--brand)]" />
-                    dia todo
-                  </label>
-                </div>
-                <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={allDay} className="w-36 sm:w-32" aria-label="Hora" />
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={2000} placeholder="Observação (opcional): local, link, detalhes..." aria-label="Observação" />
+            </Section>
+            <Section icon={Clock} title="Quando">
+              <div className="grid grid-cols-[1fr_auto] items-end gap-3">
+                <label className="block space-y-1.5">
+                  <span className="block text-xs font-medium text-ink-2">Dia</span>
+                  <Input
+                    type="date"
+                    value={date}
+                    onChange={(e) => {
+                      // semanal no dia padrão: acompanha o dia escolhido
+                      if (e.target.value && repeat.weekdays.length === 1 && repeat.weekdays[0] === dowOf(date)) setRepeat({ ...repeat, weekdays: [dowOf(e.target.value)] });
+                      setDate(e.target.value);
+                    }}
+                    required
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="block text-xs font-medium text-ink-2">Hora</span>
+                  <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={allDay} className="w-36" aria-label="Hora" />
+                </label>
               </div>
-          </div>
+              <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-ink-2">
+                <input type="checkbox" checked={allDay} onChange={(e) => changeAllDay(e.target.checked)} className="h-4 w-4 accent-[var(--brand)]" />
+                Dia todo
+              </label>
+            </Section>
             {types.length > 0 && (
-              <Field label="Tipo">
+              <Section icon={Tag} title="Tipo">
                 <TypePicker types={types} value={typeId} onChange={setTypeId} />
-              </Field>
+              </Section>
             )}
-            <Field label="Observação (opcional)">
-              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={2000} placeholder="Local, link, detalhes..." />
-            </Field>
           </div>
           <div className="space-y-3">
-            <Field label="Repetir">
-              <RepeatPicker value={repeat} onChange={setRepeat} />
-            </Field>
-            <Field label="Lembretes">
-              <RemindersPicker value={reminders} onChange={setReminders} allDay={allDay} />
-            </Field>
-            <Field label="Participantes">
+            <Section icon={Users} title="Participantes" hint={who.length ? `${who.length} marcado(s)` : undefined}>
               <PeoplePicker people={people} teams={teams} value={who} onChange={setWho} />
-            </Field>
+            </Section>
+            <Section icon={Repeat} title="Repetir">
+              <RepeatPicker value={repeat} onChange={setRepeat} />
+            </Section>
+            <Section icon={Bell} title="Lembretes">
+              <RemindersPicker value={reminders} onChange={setReminders} allDay={allDay} />
+            </Section>
             {inSeries && (
-              <div className="space-y-1.5 rounded-xl bg-surface-2 p-3 text-sm">
+              <div className="space-y-1.5 rounded-2xl border border-line bg-surface p-3.5 text-sm">
                 <p className="text-xs font-medium text-ink-2">Este compromisso se repete. Salvar em:</p>
                 {ruleChanged ? (
                   <p className="text-xs text-ink-2">A repetição mudou: vale para <b>este e os próximos</b>.</p>
@@ -498,11 +610,12 @@ function EventDialog({
             )}
           </div>
         </div>
-        <div className="flex gap-2 border-t border-line px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2 bg-surface px-5 py-3">
           <Button disabled={pending}>{pending ? 'Salvando…' : event ? 'Salvar' : 'Registrar compromisso'}</Button>
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancelar
           </Button>
+          {nature && <span className="ml-auto text-xs text-ink-2">{natureLabel(nature)}</span>}
         </div>
       </form>
     </div>
@@ -686,6 +799,7 @@ export function EventDetails({
           <div className="min-w-0">
             <p className="flex flex-wrap items-center gap-1.5 text-xs font-medium" style={{ color }}>
               {type ? <Tag className="h-3.5 w-3.5" /> : <CalendarClock className="h-3.5 w-3.5" />} {type?.name ?? 'Compromisso'}
+              <NatureBadge nature={event.nature} />
               {event.done_at ? (
                 <span className="rounded-full bg-good/15 px-2 py-0.5 text-[9px] text-good-ink">concluído</span>
               ) : (

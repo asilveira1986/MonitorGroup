@@ -216,7 +216,9 @@ CHECKS=$(cat <<'SQL'
       and to_regprocedure('public.sync_all_group_copies(integer)') is not null),
   (158, 'Pendência da conversa por regras: empresa ou cliente (0167)', to_regprocedure('public.dismiss_group_followup(uuid)') is not null
       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'groups' and column_name = 'followup_status')),
-  (159, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (159, 'Agenda: compromisso particular ou profissional, obrigatório (0168)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'agenda_events' and column_name = 'nature')
+      and to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text)') is not null),
+  (160, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)
