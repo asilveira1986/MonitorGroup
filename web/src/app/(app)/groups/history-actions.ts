@@ -4,6 +4,7 @@ import type { ActionResult as Result } from '@/lib/action-result';
 import { requireAdmin, requirePlatformAdmin } from '@/lib/auth';
 import { friendlyDbError } from '@/lib/db-errors';
 import { parseBatchStatus, validDays, type BatchStatus, type RecoveryStatus } from '@/lib/history-recovery';
+import type { ReceiveDiagnosis } from '@/lib/receive-diagnosis';
 import { createClient } from '@/lib/supabase/server';
 
 /** Pedido de recuperação de mensagens antigas (0161). */
@@ -59,6 +60,18 @@ export async function latestHistoryRecovery(groupId: string): Promise<{ ok: true
     .maybeSingle();
   if (error) return { ok: false, error: friendlyDbError(error.message) };
   return { ok: true, request: data ? view(data as Row) : null };
+}
+
+/** Diagnóstico de recebimento do grupo (0165, só administradores); null = script do banco ainda não aplicado. */
+export async function groupReceiveDiagnosis(groupId: string): Promise<{ ok: true; diagnosis: ReceiveDiagnosis | null } | { ok: false; error: string }> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('group_receive_diagnosis', { p_group_id: groupId });
+  if (error) {
+    if (/group_receive_diagnosis/.test(error.message)) return { ok: true, diagnosis: null };
+    return { ok: false, error: friendlyDbError(error.message) };
+  }
+  return { ok: true, diagnosis: (data as ReceiveDiagnosis | null) ?? null };
 }
 
 export async function startHistoryRecovery(groupId: string, days: number): Promise<Result> {

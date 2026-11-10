@@ -51,6 +51,11 @@ const RECOVERY_BETWEEN_GROUPS_MS = 3_000;
 const RECOVERY_REPLY_MS = 45_000;
 /** depois da primeira parte da resposta, espera um instante por partes seguintes */
 const RECOVERY_QUIET_MS = 2_000;
+/** mensagem nova depois de tanto tempo sem nada guardado no grupo: pede o intervalo ao celular sozinho (0165) */
+const GAP_FILL_MIN_MS = 24 * 3600_000;
+/** no máximo um pedido automático por grupo nesse intervalo, e tantos por número por dia */
+const GAP_FILL_GROUP_EVERY_MS = 12 * 3600_000;
+const GAP_FILL_PER_DAY = 40;
 // mensagens sem remetente: pede ao celular o reenvio (sob demanda) de tempos em tempos
 const RECOVER_SENDERS_MS = 6 * 60 * 60_000;
 
@@ -87,6 +92,10 @@ type Session = {
   avatars: AvatarQueue;
   /** recuperação de mensagens antigas em andamento (0161): recebe as respostas do histórico sob demanda */
   recovery?: { groupJid: string; deliver: (messages: WAMessage[]) => void } | null;
+  /** mensagens de grupo que chegaram sem poder ser abertas (id -> jid do grupo), à espera do reenvio do WhatsApp (0165) */
+  undecrypted?: Map<string, string>;
+  /** buraco preenchido sozinho (0165): último pedido automático por grupo e quantos hoje */
+  gapFill?: { last: Map<string, number>; day: string; count: number };
 };
 
 type HistoryImport = {
@@ -757,6 +766,15 @@ export class WhatsAppManager {
       // "notify" = mensagens novas; "append" = enviadas por outro aparelho / sincronização recente
       if (type !== 'notify' && type !== 'append') return;
       for (const msg of messages) {
+        // mensagem de grupo que o aparelho não conseguiu abrir (chave do grupo / sessão): a biblioteca pede o
+        // reenvio sozinha; aqui só registra, para o diagnóstico mostrar e o log explicar (0165)
+        if (!msg.message && msg.messageStubType === proto.WebMessageInfo.StubType.CIPHERTEXT && msg.key.remoteJid && isJidGroup(msg.key.remoteJid)) {
+          const groupJid = msg.key.remoteJid;
+          session.queue = session.queue
+            .then(() => this.noteUndecrypted(session, groupJid, msg.key.id ?? null, 1, msg.messageStubParameters?.[0] ?? null))
+            .catch((err) => log.warn({ err, id: msg.key.id }, 'falha ao registrar mensagem não decifrada'));
+          continue;
+        }
         session.queue = session.queue
           .then(() => this.handleMessage(session, msg, type))
           .catch((err) => log.error({ err, id: msg.key.id }, 'falha ao processar mensagem'));
@@ -1058,6 +1076,10 @@ export class WhatsAppManager {
   private async handleMessage(session: Session, msg: WAMessage, upsertType?: string) {
     const jid = msg.key.remoteJid;
     if (!jid || !msg.message) return;
+    // chegou o reenvio de uma mensagem que antes não pôde ser aberta: tira da conta (0165)
+    if (msg.key.id && session.undecrypted?.has(msg.key.id)) {
+      await this.noteUndecrypted(session, session.undecrypted.get(msg.key.id)!, msg.key.id, -1, null).catch(() => {});
+    }
     // mensagem enviada pela própria automação (acuse, aviso, cobrança): não entra como resposta da equipe
     if (this.automation?.isBotMessage(msg.key.id) || this.closing?.isBotMessage(msg.key.id) || this.broadcast?.isBotMessage(msg.key.id)) return;
     if (msg.message.pollUpdateMessage) {
@@ -1138,6 +1160,12 @@ export class WhatsAppManager {
     ) as { inserted: boolean; message_id?: string; stale?: boolean; ignored?: boolean; untracked?: boolean };
     // o banco também diz se o grupo estava desligado (fonte final: a linha travada no momento da gravação)
     tracked = tracked && !result.untracked;
+    // mensagem nova depois de muito tempo sem nada guardado: pede ao celular o que ficou no meio (0165)
+    if (result.inserted && !result.stale && upsertType === 'notify') {
+      void this.maybeFillGap(session, group.id, group.company_id, msg.key.id!, ts * 1000).catch((err) =>
+        logger.warn({ err, group: jid }, 'falha ao pedir o intervalo sem mensagens'),
+      );
+    }
 
     // imagem/áudio: guarda o arquivo para abrir no painel (em segundo plano, não atrasa a mensagem);
     // grupo desligado guarda só o texto, sem ocupar o armazenamento com arquivos
@@ -1370,6 +1398,9 @@ export class WhatsAppManager {
           if (!data) return null;
           return { id: data.wa_message_id as string, fromMe: Boolean(data.from_me), participant: (data.sender_jid as string | null) ?? null, at: new Date(data.sent_at as string).getTime() };
         },
+        // o celular devolveu vazio para a âncora: a mesma mensagem com o remetente na outra forma (LID/número)
+        // ou sem remetente, e as mensagens guardadas logo antes dela
+        alternatives: () => this.recoveryAlternatives(session, req.group_id, req.groups.jid),
         fetchPage: (cursor) => this.fetchHistoryPage(session, req.group_id, req.groups.jid, cursor),
         progress: async (p) => {
           await touch({ requests_sent: p.requests, messages_found: p.found, messages_added: p.added, oldest_at: p.oldestAt ? new Date(p.oldestAt).toISOString() : null });
@@ -1396,6 +1427,116 @@ export class WhatsAppManager {
       await touch({ status: 'failed', note: 'Erro inesperado no worker. Peça de novo; se repetir, veja o log.', finished_at: new Date().toISOString() });
       return null;
     }
+  }
+
+  /**
+   * Mensagem de grupo que não pôde ser aberta (+1) ou que chegou depois pelo reenvio (-1): mantém a conta do grupo
+   * (0165) e deixa no log o motivo dado pela biblioteca.
+   */
+  private async noteUndecrypted(session: Session, groupJid: string, id: string | null, delta: 1 | -1, reason: string | null) {
+    const pending = (session.undecrypted ??= new Map());
+    if (delta > 0) {
+      if (id) {
+        if (pending.has(id)) return; // o mesmo aviso repetido
+        pending.set(id, groupJid);
+        // só os mais recentes: o reenvio, quando vem, chega em segundos
+        if (pending.size > 2000) pending.delete(pending.keys().next().value!);
+      }
+      logger.warn({ instance: session.instanceId, group: groupJid, id, reason }, 'mensagem de grupo não pôde ser aberta (aguardando reenvio do WhatsApp)');
+    } else {
+      if (!id || !pending.delete(id)) return;
+      logger.info({ instance: session.instanceId, group: groupJid, id }, 'mensagem de grupo recuperada pelo reenvio do WhatsApp');
+    }
+    const group = await this.getGroup(session, groupJid);
+    const { error } = await db.rpc('note_undecrypted_message', { p_group_id: group.id, p_delta: delta, p_reason: delta > 0 ? reason : null });
+    if (error && !/note_undecrypted_message/.test(error.message)) throw error; // sem o script 0165: só o log
+  }
+
+  /**
+   * Mensagem nova num grupo cuja mensagem anterior guardada é antiga (24 h ou mais): o que chegou nesse meio pode não
+   * ter sido guardado (número desconectado, mensagens que não puderam ser abertas). A mensagem nova vira a âncora e a
+   * recuperação pede ao celular o intervalo, como histórico. No máximo um pedido por grupo a cada 12 h e 40 por dia.
+   */
+  private async maybeFillGap(session: Session, groupId: string, companyId: string, waId: string, atMs: number) {
+    const state = (session.gapFill ??= { last: new Map(), day: '', count: 0 });
+    const today = new Date().toISOString().slice(0, 10);
+    if (state.day !== today) Object.assign(state, { day: today, count: 0 });
+    if (state.count >= GAP_FILL_PER_DAY) return;
+    if (Date.now() - (state.last.get(groupId) ?? 0) < GAP_FILL_GROUP_EVERY_MS) return;
+    const { data: prev } = await db
+      .from('messages')
+      .select('sent_at')
+      .eq('group_id', groupId)
+      .lt('sent_at', new Date(atMs).toISOString())
+      .neq('wa_message_id', waId)
+      .order('sent_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!prev) return; // grupo novo: nada guardado antes
+    const prevMs = new Date(prev.sent_at as string).getTime();
+    const gap = atMs - prevMs;
+    if (gap < GAP_FILL_MIN_MS) return;
+    state.last.set(groupId, Date.now());
+    state.count++;
+    const days = Math.min(30, Math.max(1, Math.ceil(gap / 86_400_000)));
+    const since = new Date(Math.max(prevMs - 60_000, atMs - days * 86_400_000)).toISOString();
+    const { error } = await db
+      .from('history_requests')
+      .insert({ company_id: companyId, group_id: groupId, days, since, note: 'Pedido automático: o grupo ficou muito tempo sem mensagens guardadas.' });
+    // já tem uma recuperação aberta no grupo: tudo bem
+    if (error && error.code !== '23505') throw error;
+    if (!error) logger.info({ group: groupId, gapHours: Math.round(gap / 3600_000), days }, 'intervalo sem mensagens: recuperação automática pedida');
+  }
+
+  /** Outras mensagens de partida da recuperação (no máximo 6 pedidos a mais). */
+  private async recoveryAlternatives(session: Session, groupId: string, groupJid: string): Promise<Cursor[]> {
+    const { data } = await db
+      .from('messages')
+      .select('wa_message_id, from_me, sender_jid, sent_at')
+      .eq('group_id', groupId)
+      .order('sent_at', { ascending: false })
+      .limit(4);
+    const out: Cursor[] = [];
+    const seen = new Set<string>();
+    for (const [i, row] of (data ?? []).entries()) {
+      const id = row.wa_message_id as string | null;
+      if (!id) continue;
+      const fromMe = Boolean(row.from_me);
+      const stored = (row.sender_jid as string | null) ?? null;
+      const forms: (string | null)[] = [];
+      if (i > 0) forms.push(stored);
+      if (!fromMe && stored) forms.push(stored.endsWith('@lid') ? await this.phoneJidForLid(session, groupJid, stored) : await this.lidForPhoneJid(session, groupId, stored));
+      forms.push(null);
+      for (const participant of forms) {
+        const key = `${id}|${participant ?? ''}`;
+        if ((i === 0 && participant === stored) || seen.has(key)) continue;
+        seen.add(key);
+        out.push({ id, fromMe, participant, at: new Date(row.sent_at as string).getTime() });
+      }
+    }
+    return out.slice(0, 6);
+  }
+
+  /** LID de quem foi gravado pelo número (o contrário de phoneJidForLid), para a âncora da recuperação. */
+  private async lidForPhoneJid(session: Session, groupId: string, jid: string): Promise<string | null> {
+    if (!jid.endsWith('@s.whatsapp.net')) return null;
+    try {
+      const lid = await (
+        session.sock as unknown as { signalRepository?: { lidMapping?: { getLIDForPN(p: string): Promise<string | null> } } }
+      ).signalRepository?.lidMapping?.getLIDForPN(jid);
+      if (lid) return jidNormalizedUser(lid);
+    } catch {
+      /* sem a relação no aparelho */
+    }
+    const { data } = await db
+      .from('group_participants')
+      .select('lid')
+      .eq('group_id', groupId)
+      .eq('phone', jid.split('@')[0])
+      .not('lid', 'is', null)
+      .limit(1)
+      .maybeSingle();
+    return (data?.lid as string | null) ?? null;
   }
 
   /** Um pedido ao celular: mensagens anteriores à âncora. null = o celular não respondeu a tempo. */

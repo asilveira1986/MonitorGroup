@@ -128,3 +128,33 @@ test('pausa entre pedidos configurável', async () => {
   await runHistoryRecovery(t.deps);
   assert.deepEqual(t.sleeps, [1234]);
 });
+
+test('primeiro pedido vazio: tenta outras mensagens de partida e segue pela que funcionar', async () => {
+  const t = setup([{ found: 0, added: 0, oldest: null }, { found: 0, added: 0, oldest: null }, { found: 40, added: 25, oldest: cur('p1', 8) }], {
+    alternatives: async () => [cur('newest-lid', 0), cur('second', 0.1), cur('third', 0.2)],
+  });
+  const r = await runHistoryRecovery(t.deps);
+  assert.equal(r.status, 'done');
+  assert.deepEqual(t.calls.map((c) => c.id), ['newest', 'newest-lid', 'second']);
+  assert.equal(r.added, 25);
+  assert.match(r.note, /início do período/);
+});
+
+test('nenhuma mensagem de partida funciona: explica o limite (só o que veio antes da última guardada)', async () => {
+  const t = setup([], { alternatives: async () => [cur('a', 0), cur('b', 0)] });
+  const r = await runHistoryRecovery(t.deps);
+  assert.equal(r.status, 'done');
+  assert.equal(r.requests, 3);
+  assert.match(r.note, /3 pontos de partida testados/);
+  assert.match(r.note, /ANTES da última mensagem guardada/);
+});
+
+test('vazio depois de já ter trazido mensagens: não procura outras partidas', async () => {
+  let asked = false;
+  const t = setup([{ found: 12, added: 12, oldest: cur('p1', 1) }, { found: 0, added: 0, oldest: null }], {
+    alternatives: async () => ((asked = true), [cur('a', 0)]),
+  });
+  const r = await runHistoryRecovery(t.deps);
+  assert.equal(asked, false);
+  assert.match(r.note, /não tem mensagens mais antigas/);
+});
