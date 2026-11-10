@@ -1,11 +1,12 @@
 'use client';
 
-import { AlertOctagon, AlertTriangle, Bell, BellOff, BellRing, CalendarDays, Clock, Info, MessageCircle, X } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, Bell, BellOff, BellRing, CalendarClock, CalendarDays, Clock, Info, MessageCircle, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { setMyAlertsOff } from '@/app/(app)/actions';
 import { ALERT_TYPE_LABEL, cn, formatDuration, formatPhone } from '@/lib/format';
+import { reminderKey, reminderSpeech, reminderTone, reminderWhen, unseenReminders, type AgendaReminder } from '@/lib/agenda-alerts';
 import { createClient } from '@/lib/supabase/client';
 import type { Alert, Message } from '@/lib/types';
 import { playAlertSound, type AlertSound } from '@/lib/sounds';
@@ -450,6 +451,57 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
     };
     const first = setTimeout(() => void check(), 3000);
     const timer = setInterval(() => void check(), 10 * 60_000);
+    return () => {
+      stop = true;
+      clearTimeout(first);
+      clearInterval(timer);
+    };
+  }, []);
+
+  // Agenda: alerta na hora de cada lembrete do compromisso (0170), com som e voz, no computador e no celular com o
+  // sistema aberto. O push e o WhatsApp avisam em paralelo (por isso "já enviado por push": sem repetir fora da tela).
+  // Confere a cada 30 s; cada lembrete aparece uma vez neste navegador.
+  useEffect(() => {
+    let stop = false;
+    const seen = (key: string) => {
+      try {
+        return localStorage.getItem(key) !== null;
+      } catch {
+        return false;
+      }
+    };
+    const check = async () => {
+      if (configRef.current.userOff) return;
+      const { data, error } = await createClient().rpc('my_agenda_reminders');
+      if (stop || error || !Array.isArray(data)) return; // sem o script 0170: sem alerta em tela
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
+      for (const r of unseenReminders(data as AgendaReminder[], seen)) {
+        try {
+          localStorage.setItem(reminderKey(r), String(Date.now()));
+          // limpeza: lembretes de dias atrás
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const k = localStorage.key(i);
+            if (k?.startsWith('agenda-alert:') && Date.now() - Number(localStorage.getItem(k)) > 3 * 86_400_000) localStorage.removeItem(k);
+          }
+        } catch {}
+        pushRef.current({
+          key: `agenda-${r.event_id}`,
+          tone: reminderTone(r),
+          heading: r.minutes === 0 && !r.all_day ? 'Compromisso agora' : 'Compromisso',
+          icon: CalendarClock,
+          group: r.title,
+          who: `${reminderWhen(r, timeZone)} · ${r.label}`,
+          text: r.nature === 'personal' ? 'Compromisso particular' : null,
+          href: `/agenda?evento=${r.event_id}`,
+          action: 'Abrir compromisso',
+          at: Date.now(),
+          serverPushed: true,
+          speech: configRef.current.voice !== false ? reminderSpeech(r) : undefined,
+        });
+      }
+    };
+    const first = setTimeout(() => void check(), 4000);
+    const timer = setInterval(() => void check(), 30_000);
     return () => {
       stop = true;
       clearTimeout(first);
