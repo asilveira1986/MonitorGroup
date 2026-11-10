@@ -8,6 +8,13 @@
  *
  * Parte da mensagem MAIS RECENTE já guardada e volta até o início do período pedido: assim cobre o buraco onde ele
  * estiver (as páginas que repetem mensagens já guardadas só custam tempo; a gravação ignora duplicadas).
+ *
+ * Limite do WhatsApp: só existe pedido de mensagens ANTERIORES à âncora. O que chegou depois da última mensagem
+ * guardada não tem como ser pedido; entra quando chegar a próxima mensagem do grupo (que vira a nova âncora).
+ *
+ * Se o celular devolve vazio já no primeiro pedido, em geral ele não reconheceu a âncora (remetente gravado com
+ * LID em vez do número, ou o contrário; mensagem apagada no celular). Então tenta outras mensagens de partida
+ * (`alternatives`) antes de concluir que não há nada.
  */
 
 /** Mensagem de referência para o pedido ao celular. */
@@ -30,6 +37,11 @@ export type RecoveryDeps = {
   sinceMs: number;
   /** a mensagem mais recente guardada (ponto de partida); null = o grupo não tem nenhuma */
   anchor(): Promise<Cursor | null>;
+  /**
+   * outras mensagens de partida, para quando o celular devolve vazio no primeiro pedido (a mesma mensagem com o
+   * remetente na outra forma, LID/número, e as mensagens guardadas logo antes dela)
+   */
+  alternatives?(): Promise<Cursor[]>;
   /** pede uma página ao celular e grava o que veio */
   fetchPage(cursor: Cursor): Promise<Page | null>;
   /** chamada depois de cada página (andamento na tela) */
@@ -56,6 +68,9 @@ export async function runHistoryRecovery(deps: RecoveryDeps): Promise<RecoveryRe
   if (!cursor) return finish('failed', 'O grupo não tem nenhuma mensagem guardada para servir de ponto de partida.');
 
   let noReply = 0;
+  // outras mensagens de partida: só enquanto nada veio (carregadas na primeira resposta vazia)
+  let alternatives: Cursor[] | null = null;
+  let anchorsTried = 1;
   while (total.requests < maxPages) {
     if (await deps.isCancelled()) return finish('cancelled', 'Cancelado por um administrador.');
     total.requests++;
@@ -79,7 +94,25 @@ export async function runHistoryRecovery(deps: RecoveryDeps): Promise<RecoveryRe
     if (page.oldest) total.oldestAt = page.oldest.at;
     await deps.progress({ ...total });
 
-    if (page.found === 0 || !page.oldest) return finish('done', 'O celular não tem mensagens mais antigas.');
+    if ((page.found === 0 || !page.oldest) && total.found === 0 && deps.alternatives) {
+      alternatives ??= await deps.alternatives();
+      const next = alternatives.shift();
+      if (next) {
+        anchorsTried++;
+        cursor = next;
+        await deps.sleep(delayMs);
+        continue;
+      }
+    }
+    if (page.found === 0 || !page.oldest) {
+      return total.found > 0
+        ? finish('done', 'O celular não tem mensagens mais antigas.')
+        : finish(
+            'done',
+            `O celular não devolveu nenhuma mensagem anterior às últimas guardadas${anchorsTried > 1 ? ` (${anchorsTried} pontos de partida testados)` : ''}. ` +
+              'A recuperação só busca o que veio ANTES da última mensagem guardada; o que chegou depois dela não tem como ser pedido ao celular.',
+          );
+    }
     if (page.oldest.at >= cursor.at) return finish('done', 'O celular não devolveu mensagens mais antigas.');
     if (page.oldest.at <= deps.sinceMs) return finish('done', 'Chegou ao início do período pedido.');
 

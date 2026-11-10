@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge, Button } from '@/components/ui';
-import { formatDateTime } from '@/lib/format';
+import { cn, formatDateTime } from '@/lib/format';
 import { DAY_OPTIONS, DEFAULT_DAYS, isOpen, STATUS_LABEL, summary } from '@/lib/history-recovery';
-import { cancelHistoryRecovery, latestHistoryRecovery, startHistoryRecovery, type HistoryRequestView } from '../history-actions';
+import { diagnose, recoveryLimitText, type ReceiveDiagnosis } from '@/lib/receive-diagnosis';
+import { cancelHistoryRecovery, groupReceiveDiagnosis, latestHistoryRecovery, startHistoryRecovery, type HistoryRequestView } from '../history-actions';
 
 /** Janela da recuperação (só apresentação: quem busca e grava é o HistoryRecoveryButton). */
 export function HistoryRecoveryPanel({
@@ -20,8 +21,14 @@ export function HistoryRecoveryPanel({
   onCancel,
   onClose,
   timeZone,
+  diagnosis,
+  diagnosedAt = 0,
 }: {
   request: HistoryRequestView | null;
+  /** diagnóstico do recebimento (0165); undefined = carregando, null = indisponível */
+  diagnosis?: ReceiveDiagnosis | null;
+  /** quando o diagnóstico chegou (ms), base para "há quanto tempo" */
+  diagnosedAt?: number;
   loading: boolean;
   busy: boolean;
   days: number;
@@ -31,6 +38,8 @@ export function HistoryRecoveryPanel({
   onClose: () => void;
   timeZone?: string;
 }) {
+  const fmt = (iso: string) => formatDateTime(iso, timeZone);
+  const findings = diagnosis ? diagnose(diagnosis, diagnosedAt, fmt) : [];
   const open = request ? isOpen(request.status) : false;
   const tone = !request ? 'neutral' : request.status === 'done' ? 'good' : request.status === 'failed' ? 'critical' : request.status === 'cancelled' ? 'neutral' : 'warning';
   return (
@@ -46,6 +55,24 @@ export function HistoryRecoveryPanel({
         Pede ao celular conectado as mensagens do período que não foram guardadas (por exemplo, enquanto o grupo estava sem monitoramento). O celular precisa estar ligado e com internet. As
         mensagens voltam só como histórico: não geram alertas nem respostas automáticas. Arquivos (imagens, áudios) não são recuperados.
       </p>
+      {diagnosis && <p className="mb-3 rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning-ink">{recoveryLimitText(diagnosis.group.last_message_at, fmt)}</p>}
+      {findings.length > 0 && (
+        <div className="mb-3 space-y-1.5 rounded-xl border border-line px-3 py-2 text-xs" aria-label="Recebimento deste grupo">
+          <p className="font-semibold text-ink">Recebimento deste grupo</p>
+          {findings.map((f, i) => (
+            <p key={i} className="flex gap-1.5">
+              <span
+                className={cn(
+                  'mt-1 h-2 w-2 shrink-0 rounded-full',
+                  f.tone === 'good' ? 'bg-good' : f.tone === 'critical' ? 'bg-critical' : f.tone === 'warning' ? 'bg-warning' : 'bg-muted',
+                )}
+                aria-hidden
+              />
+              <span className="text-ink-2">{f.text}</span>
+            </p>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <p className="flex items-center justify-center gap-2 py-4 text-xs text-muted">
@@ -105,6 +132,7 @@ export function HistoryRecoveryButton({ groupId, timeZone }: { groupId: string; 
   const [busy, setBusy] = useState(false);
   const [days, setDays] = useState<number>(DEFAULT_DAYS);
   const [request, setRequest] = useState<HistoryRequestView | null>(null);
+  const [diagnosis, setDiagnosis] = useState<{ data: ReceiveDiagnosis | null; at: number }>({ data: null, at: 0 });
   const box = useRef<HTMLDivElement>(null);
   const lastStatus = useRef<string | null>(null);
 
@@ -126,6 +154,7 @@ export function HistoryRecoveryButton({ groupId, timeZone }: { groupId: string; 
     if (!open) return;
     let alive = true;
     void latestHistoryRecovery(groupId).then((res) => alive && apply(res, false));
+    void groupReceiveDiagnosis(groupId).then((res) => alive && res.ok && setDiagnosis({ data: res.diagnosis, at: Date.now() }));
     const timer = setInterval(() => {
       if (alive && (lastStatus.current === 'pending' || lastStatus.current === 'running')) {
         void latestHistoryRecovery(groupId).then((res) => alive && apply(res, true));
@@ -196,6 +225,8 @@ export function HistoryRecoveryButton({ groupId, timeZone }: { groupId: string; 
             onCancel={() => void cancel()}
             onClose={() => setOpen(false)}
             timeZone={timeZone}
+            diagnosis={diagnosis.data}
+            diagnosedAt={diagnosis.at}
           />
         </div>
       )}

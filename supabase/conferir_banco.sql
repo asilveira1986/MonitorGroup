@@ -209,6 +209,8 @@ from (values
   (154, 'Administradores como responsáveis: chave desligada por padrão (0163)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'admins_responsible_all' and column_default = 'false')),
   (155, 'Liberar conversa privada e histórico do atendimento (0164)', to_regclass('public.private_chat_events') is not null
       and to_regprocedure('public.release_private_chat(uuid,text)') is not null),
-  (156, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (156, 'Diagnóstico de recebimento do grupo e mensagens não abertas (0165)', to_regprocedure('public.group_receive_diagnosis(uuid)') is not null
+      and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'groups' and column_name = 'undecrypted_count')),
+  (157, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
