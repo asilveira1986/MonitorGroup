@@ -1,16 +1,16 @@
 'use client';
 
-import { ArrowRightLeft, CheckCircle2, Loader2, RotateCcw, Search, UserCheck, UserRound, X } from 'lucide-react';
+import { ArrowRightLeft, CheckCircle2, Loader2, LockOpen, RotateCcw, Search, UserCheck, UserRound, X } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { OnlineDot } from '@/components/presence';
 import { Button, Textarea } from '@/components/ui';
 import { cn } from '@/lib/format';
-import { assignPrivateChat, finishPrivateChat, reopenPrivateChat } from './actions';
+import { assignPrivateChat, finishPrivateChat, releasePrivateChat, reopenPrivateChat } from './actions';
 
 export type ChatAgent = { id: string; name: string; email?: string | null };
 
-/** Transferir para outro usuário (com observação opcional) ou devolver para "Aguardando". */
+/** Transferir para outro usuário (com observação opcional). Devolver para "Aguardando" é o "Liberar" (0164). */
 function TransferDialog({
   owner,
   me,
@@ -22,10 +22,10 @@ function TransferDialog({
   me: string;
   agents: ChatAgent[];
   onClose: () => void;
-  onConfirm: (user: string | null, note: string) => Promise<boolean>;
+  onConfirm: (user: string, note: string) => Promise<boolean>;
 }) {
   const [q, setQ] = useState('');
-  const [to, setTo] = useState<string | 'queue' | null>(null);
+  const [to, setTo] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [pending, start] = useTransition();
   useEffect(() => {
@@ -86,24 +86,9 @@ function TransferDialog({
             </li>
           ))}
           {!list.length && <li className="px-3 py-2 text-sm text-muted">Nenhum usuário encontrado.</li>}
-          {owner && (
-            <li className="mt-1 border-t border-line pt-1">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={to === 'queue'}
-                onClick={() => setTo('queue')}
-                className={cn('flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-ink-2 hover:bg-surface-2', to === 'queue' && 'bg-brand-soft/70')}
-              >
-                <RotateCcw className="h-4 w-4 text-muted" />
-                <span className="flex-1">Devolver para “Aguardando” (sem responsável)</span>
-                {to === 'queue' && <CheckCircle2 className="h-4 w-4 text-brand-text" />}
-              </button>
-            </li>
-          )}
         </ul>
         <div className="space-y-3 border-t border-line p-4">
-          {to && to !== 'queue' && (
+          {to && (
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -122,11 +107,65 @@ function TransferDialog({
               disabled={!to || pending}
               onClick={() =>
                 start(async () => {
-                  if (await onConfirm(to === 'queue' ? null : to, note)) onClose();
+                  if (to && (await onConfirm(to, note))) onClose();
                 })
               }
             >
-              {pending && <Loader2 className="h-4 w-4 animate-spin" />} {to === 'queue' ? 'Devolver' : 'Transferir'}
+              {pending && <Loader2 className="h-4 w-4 animate-spin" />} Transferir
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** "Liberar conversa?" (0164): confirmação com motivo opcional; só administradores. */
+function ReleaseDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: (note: string) => Promise<boolean> }) {
+  const [note, setNote] = useState('');
+  const [pending, start] = useTransition();
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-labelledby="release-title">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-md rounded-t-2xl bg-surface shadow-2xl sm:rounded-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-line p-4">
+          <div>
+            <h2 id="release-title" className="text-base font-semibold">Liberar conversa?</h2>
+            <p className="text-xs text-ink-2">A conversa voltará para a fila sem responsável.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-muted hover:text-ink" aria-label="Fechar">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="space-y-3 p-4">
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            maxLength={300}
+            autoFocus
+            placeholder="Motivo (opcional)"
+            aria-label="Motivo"
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                start(async () => {
+                  if (await onConfirm(note)) onClose();
+                })
+              }
+            >
+              {pending && <Loader2 className="h-4 w-4 animate-spin" />} Liberar
             </Button>
           </div>
         </div>
@@ -137,7 +176,7 @@ function TransferDialog({
 
 /**
  * Atendimento da conversa (0114/0119): "Assumir" na que está aguardando; o responsável (ou um
- * administrador) transfere, finaliza ou reabre.
+ * administrador) transfere, finaliza ou reabre; administradores liberam (devolvem para a fila, 0164).
  */
 export function OwnerControl({
   chatId,
@@ -160,9 +199,20 @@ export function OwnerControl({
 }) {
   const [pending, start] = useTransition();
   const [transferring, setTransferring] = useState(false);
+  const [releasing, setReleasing] = useState(false);
   const nameOf = (id: string) => (id === me ? 'Você' : (agents.find((a) => a.id === id)?.name ?? 'outro usuário'));
   const canChange = !owner || owner === me || seesAll;
-  const assign = async (user: string | null, note = '') => {
+  const release = async (note: string) => {
+    const res = await releasePrivateChat(chatId, note);
+    if (!res.ok) {
+      toast.error(res.error);
+      return false;
+    }
+    onChange(null);
+    toast.success('Conversa devolvida para a fila');
+    return true;
+  };
+  const assign = async (user: string, note = '') => {
     const res = await assignPrivateChat(chatId, user, note);
     if (!res.ok) {
       toast.error(res.error);
@@ -170,7 +220,7 @@ export function OwnerControl({
     }
     if (closed) onClosed(false, user);
     else onChange(user);
-    toast.success(user === me ? 'Atendimento assumido' : user ? `Transferido para ${nameOf(user)}` : 'Devolvido para “Aguardando”');
+    toast.success(user === me ? 'Atendimento assumido' : `Transferido para ${nameOf(user)}`);
     return true;
   };
   const btn = 'inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface px-2 text-xs text-ink-2 hover:bg-surface-2 hover:text-ink disabled:opacity-50 sm:h-7';
@@ -194,6 +244,11 @@ export function OwnerControl({
             {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Assumir
           </Button>
         </>
+      )}
+      {seesAll && owner && !closed && (
+        <button type="button" className={btn} disabled={pending} onClick={() => setReleasing(true)} title="Liberar: devolver para a fila, sem responsável">
+          <LockOpen className="h-3.5 w-3.5" /> Liberar
+        </button>
       )}
       {canChange && !closed && (
         <>
@@ -237,6 +292,7 @@ export function OwnerControl({
           <RotateCcw className="h-3.5 w-3.5" /> Reabrir
         </button>
       )}
+      {releasing && <ReleaseDialog onClose={() => setReleasing(false)} onConfirm={release} />}
       {transferring && (
         <TransferDialog owner={owner} me={me} agents={agents} onClose={() => setTransferring(false)} onConfirm={(user, note) => assign(user, note)} />
       )}

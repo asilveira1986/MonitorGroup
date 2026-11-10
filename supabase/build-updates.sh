@@ -208,7 +208,9 @@ CHECKS=$(cat <<'SQL'
   (153, 'Administradores como responsáveis de todos os grupos (0162)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'admins_responsible_all')
       and to_regprocedure('public.admin_team_member_ids()') is not null),
   (154, 'Administradores como responsáveis: chave desligada por padrão (0163)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'admins_responsible_all' and column_default = 'false')),
-  (155, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (155, 'Liberar conversa privada e histórico do atendimento (0164)', to_regclass('public.private_chat_events') is not null
+      and to_regprocedure('public.release_private_chat(uuid,text)') is not null),
+  (156, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

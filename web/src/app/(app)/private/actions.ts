@@ -115,6 +115,21 @@ export async function assignPrivateChat(chatId: string, userId: string | null, n
   return { ok: true };
 }
 
+/**
+ * "Liberar conversa" (0164, só administradores): tira o responsável e devolve para "Aguardando".
+ * O banco confere tudo (administrador, conversa existe, ainda tem responsável) numa só operação.
+ */
+export async function releasePrivateChat(chatId: string, note = ''): Promise<Result<{ assigned_to: null; released_from: string | null }>> {
+  const profile = await requireProfile();
+  if (profile.role !== 'admin' && !profile.platform_admin) return { ok: false, error: 'Só administradores podem liberar conversas.' };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('release_private_chat', { p_chat: chatId, p_note: note.trim() || null });
+  if (error) return fail(error);
+  revalidatePath('/', 'layout');
+  const chat = data as { released_from?: string | null } | null;
+  return { ok: true, data: { assigned_to: null, released_from: chat?.released_from ?? null } };
+}
+
 /** "Marcar como não lida" (0118): a conversa volta a contar como não lida. */
 export async function markPrivateChatUnread(chatId: string): Promise<Result> {
   await requireProfile();
