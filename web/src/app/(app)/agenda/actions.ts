@@ -19,6 +19,8 @@ export type AgendaEventInput = {
   reminders: number[];
   /** tipo do compromisso (0102) */
   typeId: string | null;
+  /** ISO do término (0172); vazio = sem término */
+  endsAt?: string | null;
   /** particular ou profissional (0168): obrigatório ao criar */
   nature?: 'professional' | 'personal' | null;
   /** repetição: null = não mexe (edição) / não repete (novo); { freq: 'none' } = deixa de repetir */
@@ -56,8 +58,14 @@ async function save(id: string | null, v: AgendaEventInput): Promise<Result> {
     p_repeat: v.repeat,
     p_scope: v.scope ?? 'one',
   };
-  let { error } = await supabase.rpc('save_agenda_event', { ...args, p_nature: v.nature ?? null });
-  // sem o script 0168 no banco ainda: salva como antes (sem a natureza)
+  const ends = v.endsAt ? new Date(v.endsAt) : null;
+  if (ends && Number.isNaN(ends.getTime())) return { ok: false, error: 'Informe o término do compromisso.' };
+  let { error } = await supabase.rpc('save_agenda_event', { ...args, p_nature: v.nature ?? null, p_ends_at: ends ? ends.toISOString() : null });
+  // banco sem o script 0172 ainda: salva sem o término
+  if (error && /p_ends_at|save_agenda_event/.test(error.message) && !/término|particular ou profissional/.test(error.message)) {
+    ({ error } = await supabase.rpc('save_agenda_event', { ...args, p_nature: v.nature ?? null }));
+  }
+  // banco sem o script 0168 ainda: salva como antes (sem a natureza)
   if (error && /p_nature|save_agenda_event/.test(error.message) && !/particular ou profissional/.test(error.message)) {
     ({ error } = await supabase.rpc('save_agenda_event', args));
   }
