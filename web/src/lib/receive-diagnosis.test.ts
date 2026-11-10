@@ -50,6 +50,7 @@ test('mensagens chegando pela outra cópia do grupo', () => {
   const copy = f.filter((x) => /cópia/.test(x.text));
   assert.equal(copy.length, 1, 'só a cópia mais nova que este grupo');
   assert.match(copy[0].text, /Trabalhista.*sem monitoramento/);
+  assert.equal(copy[0].action, 'sync');
 });
 
 test('mensagens que não puderam ser abertas e pedido automático', () => {

@@ -19,7 +19,7 @@ const G_OTHER = '00000000-0000-0000-0000-00000000f003';
 async function setup() {
   const db = new PGlite();
   await db.exec(`
-    create role authenticated; create role anon; create schema auth;
+    create role authenticated; create role anon; create role service_role; create schema auth;
     create function auth.uid() returns uuid language sql as $$ select nullif(current_setting('test.uid', true), '')::uuid $$;
     create table public.profiles (id uuid primary key, company_id uuid, role text);
     create function public.current_company_id() returns uuid language sql stable as $$ select company_id from public.profiles where id = auth.uid() $$;

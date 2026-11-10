@@ -30,6 +30,7 @@ returns void language sql security definer set search_path = public as $$
    where id = p_group_id
 $$;
 revoke all on function public.note_undecrypted_message(uuid, int, text) from public, anon, authenticated;
+grant execute on function public.note_undecrypted_message(uuid, int, text) to service_role;
 
 create or replace function public.group_receive_diagnosis(p_group_id uuid)
 returns jsonb language plpgsql stable security definer set search_path = public as $$

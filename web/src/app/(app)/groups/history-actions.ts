@@ -74,6 +74,15 @@ export async function groupReceiveDiagnosis(groupId: string): Promise<{ ok: true
   return { ok: true, diagnosis: (data as ReceiveDiagnosis | null) ?? null };
 }
 
+/** Traz agora, das outras cópias do grupo (outros números), as mensagens que esta não tem (0166). */
+export async function syncGroupCopies(groupId: string): Promise<Result & { added?: number }> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('sync_group_copies', { p_group_id: groupId, p_days: 30 });
+  if (error) return { ok: false, error: friendlyDbError(error.message) };
+  return { ok: true, added: Number((data as { added?: number } | null)?.added ?? 0) };
+}
+
 export async function startHistoryRecovery(groupId: string, days: number): Promise<Result> {
   await requireAdmin();
   if (!validDays(days)) return { ok: false, error: 'Escolha um período de 1 a 30 dias.' };

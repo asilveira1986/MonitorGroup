@@ -44,6 +44,8 @@ const OUTBOX_EXPIRE_MS = 10 * 60_000;
 const POLL_MS = 3_000;
 const HEARTBEAT_MS = 60_000;
 const RECOVERY_POLL_MS = 30_000;
+/** sincronização das cópias do mesmo grupo em números diferentes (0166) */
+const COPY_SYNC_MS = 60_000;
 /** depois de um celular mudo, os demais pedidos dessa conexão são encerrados por este tempo */
 const RECOVERY_MUTE_MS = 10 * 60_000;
 const RECOVERY_BETWEEN_GROUPS_MS = 3_000;
@@ -254,6 +256,28 @@ export class WhatsAppManager {
     }, RECOVER_SENDERS_MS);
     // recuperação de mensagens antigas pedida no painel (0161, experimental)
     setInterval(() => void this.processRecoveries(), RECOVERY_POLL_MS);
+    // cópias do mesmo grupo em números diferentes ficam com a mesma conversa (0166): ao iniciar, os últimos 30 dias;
+    // depois, de minuto em minuto, as últimas 6 horas
+    setTimeout(() => void this.syncGroupCopies(24 * 30), 60_000);
+    setInterval(() => void this.syncGroupCopies(6), COPY_SYNC_MS);
+  }
+
+  private copySyncBusy = false;
+  /** Copia entre as cópias de um grupo as mensagens que só uma delas recebeu (0166; sem o script, não faz nada). */
+  private async syncGroupCopies(hours: number) {
+    if (this.copySyncBusy) return;
+    this.copySyncBusy = true;
+    try {
+      const { data, error } = await db.rpc('sync_all_group_copies', { p_hours: hours });
+      if (error) {
+        if (!/sync_all_group_copies/.test(error.message)) logger.warn({ err: error }, 'falha ao sincronizar as cópias dos grupos');
+        return;
+      }
+      const r = data as { added?: number; groups?: number } | null;
+      if (r?.added) logger.info({ added: r.added, groups: r.groups, hours }, 'mensagens copiadas entre cópias do mesmo grupo');
+    } finally {
+      this.copySyncBusy = false;
+    }
   }
 
   status() {

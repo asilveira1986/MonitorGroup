@@ -1,6 +1,6 @@
 'use client';
 
-import { History, Loader2, X } from 'lucide-react';
+import { History, Loader2, RefreshCw, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -8,7 +8,7 @@ import { Badge, Button } from '@/components/ui';
 import { cn, formatDateTime } from '@/lib/format';
 import { DAY_OPTIONS, DEFAULT_DAYS, isOpen, STATUS_LABEL, summary } from '@/lib/history-recovery';
 import { diagnose, recoveryLimitText, type ReceiveDiagnosis } from '@/lib/receive-diagnosis';
-import { cancelHistoryRecovery, groupReceiveDiagnosis, latestHistoryRecovery, startHistoryRecovery, type HistoryRequestView } from '../history-actions';
+import { cancelHistoryRecovery, groupReceiveDiagnosis, latestHistoryRecovery, startHistoryRecovery, syncGroupCopies, type HistoryRequestView } from '../history-actions';
 
 /** Janela da recuperação (só apresentação: quem busca e grava é o HistoryRecoveryButton). */
 export function HistoryRecoveryPanel({
@@ -23,12 +23,17 @@ export function HistoryRecoveryPanel({
   timeZone,
   diagnosis,
   diagnosedAt = 0,
+  onSync,
+  syncing = false,
 }: {
   request: HistoryRequestView | null;
   /** diagnóstico do recebimento (0165); undefined = carregando, null = indisponível */
   diagnosis?: ReceiveDiagnosis | null;
   /** quando o diagnóstico chegou (ms), base para "há quanto tempo" */
   diagnosedAt?: number;
+  /** "Sincronizar agora" com as outras cópias do grupo (0166) */
+  onSync?: () => void;
+  syncing?: boolean;
   loading: boolean;
   busy: boolean;
   days: number;
@@ -71,6 +76,11 @@ export function HistoryRecoveryPanel({
               <span className="text-ink-2">{f.text}</span>
             </p>
           ))}
+          {onSync && findings.some((f) => f.action === 'sync') && (
+            <Button size="sm" variant="secondary" onClick={onSync} disabled={syncing}>
+              {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Sincronizar agora
+            </Button>
+          )}
         </div>
       )}
 
@@ -187,6 +197,21 @@ export function HistoryRecoveryButton({ groupId, timeZone }: { groupId: string; 
     }
   };
 
+  const [syncing, setSyncing] = useState(false);
+  const sync = async () => {
+    setSyncing(true);
+    try {
+      const res = await syncGroupCopies(groupId);
+      if (!res.ok) return void toast.error(res.error);
+      toast.success(res.added ? `${res.added} mensagem(ns) trazida(s) da outra cópia do grupo` : 'Nada a trazer: as cópias já estão iguais');
+      const d = await groupReceiveDiagnosis(groupId);
+      if (d.ok) setDiagnosis({ data: d.diagnosis, at: Date.now() });
+      if (res.added) router.refresh();
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const cancel = async () => {
     if (!request) return;
     setBusy(true);
@@ -227,6 +252,8 @@ export function HistoryRecoveryButton({ groupId, timeZone }: { groupId: string; 
             timeZone={timeZone}
             diagnosis={diagnosis.data}
             diagnosedAt={diagnosis.at}
+            onSync={() => void sync()}
+            syncing={syncing}
           />
         </div>
       )}
