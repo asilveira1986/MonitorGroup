@@ -57,6 +57,11 @@ export function FollowupBar({ groupId, info, canEdit, timeZone }: { groupId: str
             {info.followup_actor && <> ({info.followup_actor}{info.followup_since ? `, ${fmt(info.followup_since)}` : ''})</>}
           </>
         )}
+        {info.followup_trigger && (
+          <span className="ml-1 whitespace-nowrap text-muted" title="A frase da mensagem que disparou esta pendência. Se estiver errada, use Não está pendente.">
+            · frase detectada: “{info.followup_trigger}”
+          </span>
+        )}
         {info.followup_due_at && (
           <span className={cn('ml-1 whitespace-nowrap', b.overdue && 'font-semibold text-critical-ink')}>
             · prazo {fmt(info.followup_due_at)}
