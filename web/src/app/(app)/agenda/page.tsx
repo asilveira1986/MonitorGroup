@@ -9,7 +9,9 @@ import { agendaColor, type AgendaType } from '@/lib/agenda-colors';
 import { cn, formatTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Demand } from '@/lib/types';
-import { DeliverButton, PersonSelect } from './agenda-controls';
+import { AgendaFilter } from './agenda-filter';
+import { memberIdsOf, parseAgendaFilter } from '@/lib/agenda-filter';
+import { DeliverButton } from './agenda-controls';
 import type { RepeatRule } from './actions';
 import { EventActions, EventDetails, NewEventButton, type AgendaEvent } from './event-controls';
 
@@ -52,11 +54,10 @@ const entryTime = (x: Entry) =>
 /**
  * Agenda: as demandas que a pessoa tem para entregar (pelo prazo prometido) e os compromissos
  * registrados à mão, por dia, semana ou mês. Cada usuário vê a própria (a pessoa da equipe ligada
- * ao e-mail de acesso dele); administradores escolhem qualquer pessoa da equipe.
+ * ao e-mail de acesso dele); qualquer usuário pode filtrar por um ou vários usuários e setores (o banco só mostra o que ele já pode ver).
  */
 export default async function AgendaPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const profile = await requireMenu('/agenda');
-  const isAdmin = profile.role === 'admin' || profile.platform_admin;
   const sp = await searchParams;
   const supabase = await createClient();
 
@@ -92,21 +93,11 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const now = new Date(nowIso).getTime();
   const today = dayKey(nowIso, timeZone);
 
-  // de quem é a agenda: a do próprio usuário; administrador escolhe outro usuário (?quem=) ou um
-  // setor da agenda inteiro (?setor=: os compromissos de todos do setor)
-  const agendaTeam = typeof sp.setor === 'string' && isAdmin ? (agendaTeams.find((t) => t.id === sp.setor) ?? null) : null;
-  const wanted = !agendaTeam && typeof sp.quem === 'string' && isAdmin && people.some((p) => p.id === sp.quem) ? sp.quem : null;
-  const userId = wanted ?? profile.id;
-  const viewingOther = Boolean(agendaTeam) || userId !== profile.id;
-  const person = people.find((p) => p.id === userId);
-  const personName = agendaTeam ? `setor ${agendaTeam.name}` : (person?.name ?? profile.full_name ?? profile.email);
-  const userIds = agendaTeam ? agendaTeam.userIds : [userId];
-  // demandas na agenda: as da pessoa da equipe ligada a esse usuário
-  const ids = agendaTeam
-    ? [...new Set(people.filter((p) => agendaTeam.userIds.includes(p.id)).flatMap((p) => p.member_ids))]
-    : viewingOther
-      ? (person?.member_ids ?? [])
-      : myIds;
+  // de quem é a agenda: a do próprio usuário, ou a de um ou vários usuários (?quem=a,b) e/ou setores (?setor=x,y), para
+  // qualquer usuário (o banco só mostra o que a pessoa já pode ver). Quem é do setor entra junto.
+  const { selectedUsers, selectedTeams, userIds, viewingOther, multi, label: personName, ...filterState } = parseAgendaFilter(sp, people, agendaTeams, profile.id);
+  // demandas na agenda: as das pessoas da equipe ligadas a esses usuários
+  const ids = memberIdsOf({ filtering: filterState.filtering, userIds }, people, profile.id, myIds);
   void team;
 
   // compromisso aberto (?evento=, da notificação ou de um clique): detalhes e a agenda no dia dele
@@ -248,7 +239,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
 
   const href = (changes: Record<string, string | null>) => {
     const p = new URLSearchParams();
-    const cur: Record<string, string | null> = { quem: isAdmin ? wanted : null, setor: agendaTeam?.id ?? null, vista: view, data: ref === today ? null : ref };
+    const cur: Record<string, string | null> = { quem: selectedUsers.join(',') || null, setor: selectedTeams.map((t) => t.id).join(',') || null, vista: view, data: ref === today ? null : ref };
     for (const [k, v] of Object.entries({ ...cur, ...changes })) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/agenda?${s}` : '/agenda';
@@ -301,7 +292,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           {e.title}
         </p>
         <p className="line-clamp-2 text-xs text-ink-2">{e.notes || 'Compromisso'}</p>
-        {((e.people?.length ?? 0) > 1 || (agendaTeam && (e.people?.length ?? 0) > 0)) && (
+        {((e.people?.length ?? 0) > 1 || (multi && (e.people?.length ?? 0) > 0)) && (
           <p className="mt-0.5 truncate text-[9px] text-muted" title="Participantes">
             👥 {(e.people ?? []).map((id) => people.find((p) => p.id === id)?.name ?? 'usuário').join(', ')}
           </p>
@@ -392,12 +383,13 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const pickPeople = people.map((p) => ({ id: p.id, name: p.name }));
   const dayEntries = view === 'dia' ? entriesOf(ref) : [];
 
-  const personSelect = isAdmin && (
-    <PersonSelect
-      value={wanted && wanted !== profile.id ? wanted : ''}
-      team={agendaTeam?.id ?? ''}
-      people={people.map((p) => ({ id: p.id, name: p.name }))}
-      teams={agendaTeams.map((t) => ({ id: t.id, name: t.name }))}
+  const personSelect = (
+    <AgendaFilter
+      meId={profile.id}
+      users={people.map((p) => ({ id: p.id, name: p.name }))}
+      sectors={agendaTeams.map((t) => ({ id: t.id, name: t.name, count: t.userIds.length }))}
+      selectedUsers={selectedUsers}
+      selectedSectors={selectedTeams.map((t) => t.id)}
     />
   );
 
@@ -405,7 +397,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     <div data-wide>
       <PageHeader
         title="Agenda"
-        description="Os seus compromissos (e os marcados para você) e as demandas para entregar, por dia, semana ou mês."
+        description="Os seus compromissos (e os marcados para você) e as demandas para entregar, por dia, semana ou mês. Filtre por um ou mais usuários e setores."
       />
 
       {opened && (
