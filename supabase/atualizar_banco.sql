@@ -272,11 +272,14 @@ begin
   (158, 'Pendência da conversa por regras: empresa ou cliente (0167)', to_regprocedure('public.dismiss_group_followup(uuid)') is not null
       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'groups' and column_name = 'followup_status')),
   (159, 'Agenda: compromisso particular ou profissional, obrigatório (0168)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'agenda_events' and column_name = 'nature')
-      and to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text)') is not null),
+      and (to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text)') is not null
+           or to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)') is not null)),
   (160, 'Agenda: compromisso particular aparece só como Ocupado para os outros (0169)', to_regprocedure('public.agenda_busy(timestamptz,timestamptz,uuid[])') is not null),
   (161, 'Agenda: alerta em tela na hora do lembrete (0170)', to_regprocedure('public.my_agenda_reminders()') is not null),
   (162, 'Agenda: aviso em tela ao ser incluído em um compromisso (0171)', exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'agenda_event_people')),
-  (163, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (163, 'Agenda: hora de término do compromisso (0172)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'agenda_events' and column_name = 'ends_at')
+      and to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)') is not null),
+  (164, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -285,7 +288,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -24624,6 +24627,148 @@ end $$;
 $mig0171$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0172_agenda_event_end.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0172', $mig0172$
+-- =====================================================================
+-- Agenda: hora de término do compromisso.
+--
+--  * agenda_events.ends_at (opcional; "dia todo" não tem). Compromisso sem
+--    término continua como antes (só o início).
+--  * save_agenda_event ganha p_ends_at: vazio = sem término. O término tem
+--    que ser depois do início e no máximo 24 h depois. Em repetição, cada
+--    ocorrência guarda a mesma duração (as geradas depois também).
+--  * Mudar o início de um compromisso (inclusive "este e os próximos") leva
+--    o término junto, mantendo a duração.
+--  * agenda_busy (0169) passa a devolver o término dos "Ocupado".
+-- =====================================================================
+
+alter table public.agenda_events add column if not exists ends_at timestamptz;
+
+-- término de quem nasce sem ele: a duração escolhida no salvamento (variável da transação; 'none' = sem término) ou a da série
+create or replace function public.agenda_events_end_default()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v text := nullif(current_setting('app.agenda_duration_min', true), '');
+begin
+  if new.ends_at is null and not coalesce(new.all_day, false) then
+    if v is null then
+      select new.starts_at + (e.ends_at - e.starts_at) into new.ends_at
+        from public.agenda_events e
+       where e.series_id is not null and e.series_id = new.series_id and e.ends_at is not null
+       order by e.starts_at desc limit 1;
+    elsif v <> 'none' then
+      new.ends_at := new.starts_at + make_interval(mins => v::int);
+    end if;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists agenda_events_end_default on public.agenda_events;
+create trigger agenda_events_end_default before insert on public.agenda_events
+  for each row execute function public.agenda_events_end_default();
+
+-- mudou o início (editar, "este e os próximos"): o término acompanha, com a mesma duração
+create or replace function public.agenda_events_end_follow()
+returns trigger language plpgsql as $$
+begin
+  if new.starts_at is distinct from old.starts_at and new.ends_at is not null and new.ends_at is not distinct from old.ends_at then
+    new.ends_at := new.ends_at + (new.starts_at - old.starts_at);
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists agenda_events_end_follow on public.agenda_events;
+create trigger agenda_events_end_follow before update of starts_at on public.agenda_events
+  for each row execute function public.agenda_events_end_follow();
+
+-- a função de 11 parâmetros (0168) é substituída pela de 12 (mesmos nomes + p_ends_at)
+drop function if exists public.save_agenda_event(uuid, text, text, timestamptz, boolean, uuid[], int[], uuid, jsonb, text, text);
+create or replace function public.save_agenda_event(
+  p_id uuid, p_title text, p_notes text, p_starts_at timestamptz, p_all_day boolean, p_people uuid[],
+  p_reminders int[] default null, p_type uuid default null, p_repeat jsonb default null, p_scope text default 'one',
+  p_nature text default null, p_ends_at timestamptz default null
+)
+returns uuid
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_id uuid;
+  v_series uuid;
+  v_start timestamptz;
+  v_min int;
+begin
+  if p_nature is not null and p_nature not in ('professional', 'personal') then
+    raise exception 'Escolha se o compromisso é particular ou profissional.';
+  end if;
+  if p_id is null and p_nature is null then
+    raise exception 'Escolha se o compromisso é particular ou profissional.';
+  end if;
+  if coalesce(p_all_day, false) then
+    p_ends_at := null;
+  elsif p_ends_at is not null then
+    if p_ends_at <= p_starts_at then
+      raise exception 'O término deve ser depois do início.';
+    end if;
+    if p_ends_at > p_starts_at + interval '24 hours' then
+      raise exception 'O término pode ser até 24 horas depois do início. Para mais tempo, use "dia todo".';
+    end if;
+  end if;
+  v_min := case when p_ends_at is null then null else (extract(epoch from (p_ends_at - p_starts_at)) / 60)::int end;
+  -- as ocorrências criadas dentro desta chamada nascem com a natureza e a duração escolhidas
+  perform set_config('app.agenda_nature', coalesce(p_nature, ''), true);
+  perform set_config('app.agenda_duration_min', coalesce(v_min::text, 'none'), true);
+  v_id := public.save_agenda_event_core(p_id, p_title, p_notes, p_starts_at, p_all_day, p_people, p_reminders, p_type, p_repeat, p_scope);
+  select series_id, starts_at into v_series, v_start from public.agenda_events where id = v_id;
+  if p_nature is not null then
+    if p_id is not null and v_series is not null and p_scope = 'following' then
+      update public.agenda_events set nature = p_nature where series_id = v_series and starts_at >= v_start;
+    else
+      update public.agenda_events set nature = p_nature where id = v_id;
+    end if;
+  end if;
+  -- término: este compromisso (ou este e os próximos) com a duração escolhida; sem término, limpa
+  if p_id is not null and v_series is not null and p_scope = 'following' then
+    update public.agenda_events
+       set ends_at = case when v_min is null then null else starts_at + make_interval(mins => v_min) end
+     where series_id = v_series and starts_at >= v_start;
+  else
+    update public.agenda_events
+       set ends_at = case when v_min is null then null else starts_at + make_interval(mins => v_min) end
+     where id = v_id;
+  end if;
+  perform set_config('app.agenda_nature', '', true);
+  perform set_config('app.agenda_duration_min', '', true);
+  return v_id;
+end;
+$$;
+revoke all on function public.save_agenda_event(uuid, text, text, timestamptz, boolean, uuid[], int[], uuid, jsonb, text, text, timestamptz) from public, anon;
+grant execute on function public.save_agenda_event(uuid, text, text, timestamptz, boolean, uuid[], int[], uuid, jsonb, text, text, timestamptz) to authenticated;
+
+-- "Ocupado" (0169) com o término
+create or replace function public.agenda_busy(p_from timestamptz, p_to timestamptz, p_users uuid[])
+returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object('starts_at', b.starts_at, 'ends_at', b.ends_at, 'all_day', b.all_day, 'user_ids', b.user_ids)
+                            order by b.starts_at), '[]'::jsonb)
+    from (
+      select e.starts_at, e.ends_at, e.all_day, array_agg(distinct x.user_id) as user_ids
+        from public.agenda_events e
+        join public.agenda_event_people x on x.event_id = e.id
+       where public.is_active_user()
+         and e.company_id = public.current_company_id()
+         and e.nature = 'personal'
+         and e.done_at is null
+         and x.user_id = any(coalesce(p_users, '{}'))
+         and e.starts_at >= p_from and e.starts_at < p_to
+         and not public.can_see_agenda_event(e.id)
+       group by e.id, e.starts_at, e.ends_at, e.all_day
+       limit 2000
+    ) b
+$$;
+revoke all on function public.agenda_busy(timestamptz, timestamptz, uuid[]) from public, anon;
+grant execute on function public.agenda_busy(timestamptz, timestamptz, uuid[]) to authenticated;
+$mig0172$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -24848,10 +24993,13 @@ from (values
   (158, 'Pendência da conversa por regras: empresa ou cliente (0167)', to_regprocedure('public.dismiss_group_followup(uuid)') is not null
       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'groups' and column_name = 'followup_status')),
   (159, 'Agenda: compromisso particular ou profissional, obrigatório (0168)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'agenda_events' and column_name = 'nature')
-      and to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text)') is not null),
+      and (to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text)') is not null
+           or to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)') is not null)),
   (160, 'Agenda: compromisso particular aparece só como Ocupado para os outros (0169)', to_regprocedure('public.agenda_busy(timestamptz,timestamptz,uuid[])') is not null),
   (161, 'Agenda: alerta em tela na hora do lembrete (0170)', to_regprocedure('public.my_agenda_reminders()') is not null),
   (162, 'Agenda: aviso em tela ao ser incluído em um compromisso (0171)', exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'agenda_event_people')),
-  (163, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (163, 'Agenda: hora de término do compromisso (0172)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'agenda_events' and column_name = 'ends_at')
+      and to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)') is not null),
+  (164, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

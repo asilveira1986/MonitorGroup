@@ -6,6 +6,7 @@ import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { appSettings } from '@/lib/app-settings';
 import { requireMenu } from '@/lib/auth';
 import { agendaColor, type AgendaType } from '@/lib/agenda-colors';
+import { rangeLabel } from '@/lib/agenda-time';
 import { cn, formatTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Demand } from '@/lib/types';
@@ -20,7 +21,7 @@ export const metadata: Metadata = { title: 'Monitor Group · Agenda' };
 type Row = Demand & { groups: { name: string } | null; team_members: { name: string } | null };
 /** uma linha da agenda: demanda (a entregar ou entregue) ou compromisso */
 /** horário "Ocupado": compromisso particular de outra pessoa (só início e de quem é; 0169) */
-type Busy = { starts_at: string; all_day: boolean; user_ids: string[] };
+type Busy = { starts_at: string; ends_at?: string | null; all_day: boolean; user_ids: string[] };
 type Entry = { kind: 'demand'; r: Row; done?: boolean } | { kind: 'event'; e: AgendaEvent } | { kind: 'busy'; b: Busy };
 type View = 'dia' | 'semana' | 'mes';
 
@@ -299,8 +300,9 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   };
   const eventItem = (e: AgendaEvent) => (
     <li key={e.id} className={cn('flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5', e.done_at && 'opacity-60')}>
-      <span className="tabular w-14 shrink-0 text-xs font-semibold" style={{ color: colorOf(e) }}>
+      <span className="tabular w-14 shrink-0 text-xs font-semibold leading-tight" style={{ color: colorOf(e) }}>
         {e.all_day ? 'dia todo' : formatTime(e.starts_at, timeZone)}
+        {!e.all_day && e.ends_at && <span className="block text-[9px] font-normal text-muted">até {formatTime(e.ends_at, timeZone)}</span>}
       </span>
       <Link href={href({ evento: e.id })} scroll={false} className="min-w-0 flex-1 basis-56 hover:underline" title="Ver detalhes">
         <p className={cn('line-clamp-2 text-sm font-medium', e.done_at && 'line-through')}>
@@ -320,7 +322,10 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   );
   const busyItem = (b: Busy, i: number) => (
     <li key={`busy-${b.starts_at}-${i}`} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
-      <span className="tabular w-14 shrink-0 text-xs font-semibold text-muted">{b.all_day ? 'dia todo' : formatTime(b.starts_at, timeZone)}</span>
+      <span className="tabular w-14 shrink-0 text-xs font-semibold leading-tight text-muted">
+        {b.all_day ? 'dia todo' : formatTime(b.starts_at, timeZone)}
+        {!b.all_day && b.ends_at && <span className="block text-[9px] font-normal">até {formatTime(b.ends_at, timeZone)}</span>}
+      </span>
       <div className="min-w-0 flex-1 basis-56">
         <p className="text-sm font-medium text-ink-2">
           <Lock className="mr-1 inline h-3.5 w-3.5 text-muted" aria-hidden /> Ocupado
@@ -348,7 +353,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       return (
         <span
           key={`busy-${b.starts_at}-${b.user_ids.join()}`}
-          title={`Ocupado · ${b.user_ids.map((id) => people.find((p) => p.id === id)?.name ?? 'usuário').join(', ')} (particular)`}
+          title={`Ocupado ${rangeLabel(b.starts_at, b.ends_at, b.all_day, timeZone)} · ${b.user_ids.map((id) => people.find((p) => p.id === id)?.name ?? 'usuário').join(', ')} (particular)`}
           className="block truncate rounded-md border-l-2 border-line bg-surface-2 px-1.5 py-0.5 text-[9px] text-muted"
         >
           <span className="tabular font-semibold">{b.all_day ? '' : `${formatTime(b.starts_at, timeZone)} `}</span>🔒 Ocupado
@@ -362,7 +367,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           key={e.id}
           href={href({ evento: e.id })}
           scroll={false}
-          title={`${e.all_day ? 'Dia todo' : formatTime(e.starts_at, timeZone)} · ${e.title}${e.nature === 'personal' ? ' · particular' : ''}${e.notes ? ` · ${e.notes}` : ''}`}
+          title={`${rangeLabel(e.starts_at, e.ends_at, e.all_day, timeZone).replace(/^dia todo$/, 'Dia todo')} · ${e.title}${e.nature === 'personal' ? ' · particular' : ''}${e.notes ? ` · ${e.notes}` : ''}`}
           className={cn('block truncate rounded-md border-l-2 px-1.5 py-0.5 text-[9px] text-ink hover:brightness-95', e.done_at && 'line-through opacity-60')}
           style={{ borderLeftColor: colorOf(e), backgroundColor: `${colorOf(e)}1f` }}
         >

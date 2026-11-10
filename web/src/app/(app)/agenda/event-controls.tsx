@@ -8,6 +8,7 @@ import { Button, Input, Select, Textarea } from '@/components/ui';
 import { AGENDA_COLORS, agendaColor, type AgendaType } from '@/lib/agenda-colors';
 import { createAgendaEvent, deleteAgendaEvent, setAgendaEventDone, updateAgendaEvent, type RepeatRule } from './actions';
 import { NATURE_REQUIRED, natureLabel, type EventNature } from '@/lib/agenda-nature';
+import { durationLabel, durationMinutes, endFor, endIsAfterStart, eventMinutes, rangeLabel, shiftEnd } from '@/lib/agenda-time';
 
 export type AgendaEvent = {
   id: string;
@@ -19,6 +20,8 @@ export type AgendaEvent = {
   title: string;
   notes: string | null;
   starts_at: string;
+  /** término (0172); vazio = só o início */
+  ends_at?: string | null;
   all_day: boolean;
   done_at: string | null;
   /** lembretes: minutos antes (0101) */
@@ -437,6 +440,15 @@ function EventDialog({
   const [notes, setNotes] = useState(event?.notes ?? '');
   const [date, setDate] = useState(initial.date);
   const [time, setTime] = useState(event?.all_day ? '09:00' : initial.time);
+  // término (0172): vazio = sem término; só no mesmo dia do início
+  const initialEnd = event?.ends_at && !event.all_day ? zonedParts(event.ends_at, timeZone) : null;
+  const [endTime, setEndTime] = useState(initialEnd && initialEnd.date === initial.date ? initialEnd.time : '');
+  const [endError, setEndError] = useState(false);
+  const changeStart = (next: string) => {
+    setEndTime((end) => shiftEnd(time, next, end));
+    setTime(next);
+    setEndError(false);
+  };
   const [allDay, setAllDay] = useState(event?.all_day ?? false);
   const [who, setWho] = useState<string[]>(event?.people?.length ? event.people : defaultPeople);
   const [reminders, setReminders] = useState<number[]>(event?.reminders ?? [15]);
@@ -472,6 +484,10 @@ function EventDialog({
     }
     if (!title.trim()) return void toast.error('Informe o título do compromisso.');
     if (!date) return void toast.error('Informe a data do compromisso.');
+    if (!allDay && !endIsAfterStart(time || '09:00', endTime)) {
+      setEndError(true);
+      return void toast.error('O término deve ser depois do início.');
+    }
     // dia todo: meio-dia no fuso da empresa, para o dia não mudar com o fuso
     const startsAt = zonedIso(date, allDay ? '12:00' : time || '09:00', timeZone);
     const rule = toRule(repeat);
@@ -481,6 +497,7 @@ function EventDialog({
       title,
       notes,
       startsAt,
+      endsAt: !allDay && endTime ? zonedIso(date, endTime, timeZone) : null,
       allDay,
       reminders,
       typeId,
@@ -546,9 +563,9 @@ function EventDialog({
               />
               <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={2000} placeholder="Observação (opcional): local, link, detalhes..." aria-label="Observação" />
             </Section>
-            <Section icon={Clock} title="Quando">
-              <div className="grid grid-cols-[1fr_auto] items-end gap-3">
-                <label className="block space-y-1.5">
+            <Section icon={Clock} title="Quando" hint={!allDay && endTime && durationMinutes(time, endTime) ? durationLabel(durationMinutes(time, endTime)!) : undefined}>
+              <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(9.5rem,1fr)_8.75rem_8.75rem] sm:gap-3">
+                <label className="col-span-2 block min-w-0 space-y-1.5 sm:col-span-1">
                   <span className="block text-xs font-medium text-ink-2">Dia</span>
                   <Input
                     type="date"
@@ -562,10 +579,55 @@ function EventDialog({
                   />
                 </label>
                 <label className="block space-y-1.5">
-                  <span className="block text-xs font-medium text-ink-2">Hora</span>
-                  <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={allDay} className="w-36" aria-label="Hora" />
+                  <span className="block text-xs font-medium text-ink-2">Início</span>
+                  <Input type="time" value={time} onChange={(e) => changeStart(e.target.value)} disabled={allDay} className="w-full" aria-label="Início" />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className={`block text-xs font-medium ${endError ? 'text-critical-ink' : 'text-ink-2'}`}>Término</span>
+                  <Input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => {
+                      setEndTime(e.target.value);
+                      setEndError(false);
+                    }}
+                    disabled={allDay}
+                    aria-label="Término (opcional)"
+                    aria-invalid={endError}
+                    className={`w-full ${endError ? 'border-critical' : ''}`}
+                  />
                 </label>
               </div>
+              {!allDay && (
+                <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Duração">
+                  <span className="text-[9px] text-muted">Duração:</span>
+                  {[30, 60, 90, 120].map((m) => {
+                    const target = endFor(time, m);
+                    const on = Boolean(target) && endTime === target;
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        disabled={!target}
+                        aria-pressed={on}
+                        onClick={() => {
+                          setEndTime(target);
+                          setEndError(false);
+                        }}
+                        className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition disabled:opacity-40 ${on ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2 hover:border-brand-line'}`}
+                      >
+                        {durationLabel(m)}
+                      </button>
+                    );
+                  })}
+                  {endTime && (
+                    <button type="button" onClick={() => setEndTime('')} className="rounded-full px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-2">
+                      sem término
+                    </button>
+                  )}
+                </div>
+              )}
+              {endError && <p className="text-xs font-medium text-critical-ink">O término deve ser depois do início.</p>}
               <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-ink-2">
                 <input type="checkbox" checked={allDay} onChange={(e) => changeAllDay(e.target.checked)} className="h-4 w-4 accent-[var(--brand)]" />
                 Dia todo
@@ -819,7 +881,8 @@ export function EventDetails({
             <p>
               <span className="first-letter:uppercase">{day}</span>
               <br />
-              <strong>{event.all_day ? 'Dia todo' : `às ${time}`}</strong>
+              <strong>{event.all_day ? 'Dia todo' : event.ends_at ? `das ${rangeLabel(event.starts_at, event.ends_at, false, timeZone).replace('–', ' às ')}` : `às ${time}`}</strong>
+              {eventMinutes(event.starts_at, event.ends_at, event.all_day) && <span className="text-ink-2"> · {durationLabel(eventMinutes(event.starts_at, event.ends_at, event.all_day)!)}</span>}
             </p>
           </div>
           {repeats && (
