@@ -26,7 +26,7 @@ export function FollowupSettings({ settings, disabled }: { settings: AppSettings
     <Card>
       <CardHeader
         title="Pendências da conversa"
-        description='Lê as últimas mensagens de cada grupo e mostra com quem ficou a próxima ação: "Empresa deve" ou "Cliente deve". Aparece no Painel de grupos (etiqueta e filtro) e em cima da conversa do grupo. Por regras, sem IA.'
+        description='Lê as últimas mensagens de cada grupo e mostra com quem ficou a próxima ação: "Pendente empresa" ou "Pendente cliente". Aparece no Painel de grupos (etiqueta e filtro) e em cima da conversa do grupo. Por regras, sem IA.'
       />
       <div className="divide-y divide-line px-4 pb-4 sm:px-5">
         <Row
@@ -34,9 +34,9 @@ export function FollowupSettings({ settings, disabled }: { settings: AppSettings
           title="Mostrar a pendência da conversa"
           text={
             <>
-              <b>Empresa deve</b>: pergunta ou pedido do cliente sem resposta; promessa da equipe sem entrega (os mesmos gatilhos de
+              <b>Pendente empresa</b>: pergunta ou pedido do cliente sem resposta; promessa da equipe sem entrega (os mesmos gatilhos de
               compromisso das Demandas, ex.: <i>vou verificar e te retorno</i>); documento do cliente a conferir.{' '}
-              <b>Cliente deve</b>: a equipe pediu algo ao cliente (frases abaixo ou pergunta da equipe). Prazos citados
+              <b>Pendente cliente</b>: a equipe pediu algo ao cliente (frases abaixo ou pergunta da equipe). Prazos citados
               (<i>até sexta</i>, <i>em 2 dias</i>) viram o prazo da pendência.
             </>
           }

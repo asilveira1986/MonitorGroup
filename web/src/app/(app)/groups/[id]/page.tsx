@@ -321,7 +321,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
               ) : undefined
             }
           />
-          {/* pendência da conversa por regras (0167): empresa deve / cliente deve */}
+          {/* pendência da conversa por regras (0167): pendente empresa / pendente cliente */}
           <FollowupBar groupId={g.id} info={g as unknown as FollowupInfo} canEdit={!viewer} timeZone={tz} />
           <Conversation
             groupId={g.id}

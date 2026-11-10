@@ -17,7 +17,7 @@ export type FollowupInfo = {
 
 export type FollowupBadge = {
   side: 'company' | 'client';
-  /** "Empresa deve" / "Cliente deve" */
+  /** "Pendente empresa" / "Pendente cliente" */
   label: string;
   overdue: boolean;
   /** dica com o motivo, o trecho e o prazo */
@@ -28,12 +28,12 @@ export type FollowupFilter = 'all' | 'company' | 'client' | 'overdue';
 
 export const FOLLOWUP_FILTERS: { value: FollowupFilter; label: string }[] = [
   { value: 'all', label: 'Todas' },
-  { value: 'company', label: 'Empresa deve' },
-  { value: 'client', label: 'Cliente deve' },
+  { value: 'company', label: 'Pendente empresa' },
+  { value: 'client', label: 'Pendente cliente' },
   { value: 'overdue', label: 'Prazo vencido' },
 ];
 
-const SIDE = { company: 'Empresa deve', client: 'Cliente deve' } as const;
+const SIDE = { company: 'Pendente empresa', client: 'Pendente cliente' } as const;
 
 /** Etiqueta do cartão; null quando não há pendência. */
 export function followupBadge(f: FollowupInfo, now: number, fmt: (iso: string) => string = (iso) => iso): FollowupBadge | null {

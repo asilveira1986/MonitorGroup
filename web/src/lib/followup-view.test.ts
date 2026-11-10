@@ -12,16 +12,16 @@ const promise: FollowupInfo = {
   followup_due_at: new Date(NOW - 3600_000).toISOString(),
 };
 
-test('empresa deve, com prazo vencido e o motivo na dica', () => {
+test('pendente empresa, com prazo vencido e o motivo na dica', () => {
   const b = followupBadge(promise, NOW)!;
   assert.equal(b.side, 'company');
-  assert.equal(b.label, 'Empresa deve');
+  assert.equal(b.label, 'Pendente empresa');
   assert.equal(b.overdue, true);
   assert.match(b.title, /Promessa da equipe.*“Vou verificar e te retorno até sexta” \(Julia\).*\(vencido\)/);
 });
 
-test('cliente deve; sem pendência não tem etiqueta', () => {
-  assert.equal(followupBadge({ followup_status: 'client' }, NOW)?.label, 'Cliente deve');
+test('pendente cliente; sem pendência não tem etiqueta', () => {
+  assert.equal(followupBadge({ followup_status: 'client' }, NOW)?.label, 'Pendente cliente');
   assert.equal(followupBadge({ followup_status: 'resolved' }, NOW), null);
   assert.equal(followupBadge({}, NOW), null);
 });
