@@ -131,6 +131,8 @@ const MAX_SIGNED_MESSAGE = 700;
 const MIN_INSTITUTIONAL = 160;
 /** resposta da equipe com este tamanho já traz o resultado do trabalho: o agradecimento do cliente a encerra */
 const LONG_REPORT = 300;
+/** resposta da equipe com este tamanho, depois de uma promessa, já é o retorno prometido (parecer, análise, posição) */
+const SUBSTANTIVE_REPLY = 200;
 
 /** Comunicado ao grupo: abre falando com todos ("Prezados(as), bom dia!") ou anunciando ("Gostaríamos de informar que..."). */
 const ANNOUNCEMENT_OPENING =
@@ -286,6 +288,12 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
       const delivery = hasFile ? 'arquivo' : findPhrase(text, deliveryPhrases);
       if (delivery) {
         set('resolved', 'delivered', m, { trigger: delivery === 'arquivo' ? null : delivery });
+        continue;
+      }
+      // resposta substantiva da equipe depois da promessa ("vou fazer a análise e retorno"): a análise/posição já veio no texto,
+      // mesmo sem "segue" ou arquivo
+      if (s.kind === 'promise' && m.type === 'text' && (m.body?.trim().length ?? 0) >= SUBSTANTIVE_REPLY) {
+        set('resolved', 'answered', m);
         continue;
       }
       // resposta comum: responde o que o cliente perguntou/escreveu; promessa e pedido ao cliente continuam

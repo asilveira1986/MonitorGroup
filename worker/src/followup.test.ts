@@ -204,3 +204,21 @@ test('comunicado da equipe ao grupo (aviso geral) é ignorado por inteiro', () =
   // resposta curta e específica começando com "Prezados" continua valendo como promessa
   assert.equal(run([team('Prezados, bom dia! Vou verificar o FAP da empresa e te retorno amanhã.', 0)]).kind, 'promise');
 });
+
+test('promessa de análise e, depois, resposta longa da equipe com a análise: cumprida', () => {
+  const analysis =
+    '@Eduardo Contel Financeiro, conforme falamos em ligação, do ponto de vista jurídico, não estou de acordo com a inclusão da cláusula sugerida pela MVNO no contrato padrão. ' +
+    'A redação proposta é excessivamente abrangente e vaga, pois estabelece que todas as ofertas, propostas, negociações e compromissos anteriores à assinatura, desde que documentados por qualquer meio, permaneceriam válidos e vinculantes.';
+  const r = run([
+    team('Vou fazer a análise das demais questões pendentes e retorno a vocês.', 0),
+    client('Sobre contrato da VNTFMAIS: segue contrato, valores pendentes e total de linhas ativas', 40),
+    client('', 41, { type: 'document' }),
+    team(analysis, 100),
+  ]);
+  assert.equal(r.status, 'resolved');
+  assert.equal(r.kind, 'answered');
+  // resposta curta depois da promessa continua sem cumprir
+  assert.equal(run([team('Vou fazer a análise e retorno a vocês.', 0), team('Ok, estamos vendo.', 10)]).kind, 'promise');
+  // resposta longa que traz uma nova promessa no fim continua pendente
+  assert.equal(run([team('Vou fazer a análise e retorno.', 0), team(analysis + ' Sobre o prazo, vou verificar com o cliente e te retorno amanhã.', 100)]).kind, 'promise');
+});
