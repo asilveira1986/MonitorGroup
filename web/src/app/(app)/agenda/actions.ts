@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { dbResult as result, type ActionResult as Result } from '@/lib/action-result';
+import { isNature, NATURE_REQUIRED } from '@/lib/agenda-nature';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
@@ -18,6 +19,8 @@ export type AgendaEventInput = {
   reminders: number[];
   /** tipo do compromisso (0102) */
   typeId: string | null;
+  /** particular ou profissional (0168): obrigatório ao criar */
+  nature?: 'professional' | 'personal' | null;
   /** repetição: null = não mexe (edição) / não repete (novo); { freq: 'none' } = deixa de repetir */
   repeat: RepeatRule | { freq: 'none' } | null;
   /** numa repetição: só este ou este e os próximos */
@@ -39,8 +42,9 @@ async function save(id: string | null, v: AgendaEventInput): Promise<Result> {
   const starts = new Date(v.startsAt);
   if (!title) return { ok: false, error: 'Informe o título do compromisso.' };
   if (Number.isNaN(starts.getTime())) return { ok: false, error: 'Informe a data do compromisso.' };
+  if (!id && !isNature(v.nature)) return { ok: false, error: NATURE_REQUIRED };
   const supabase = await createClient();
-  const { error } = await supabase.rpc('save_agenda_event', {
+  const args = {
     p_id: id,
     p_title: title,
     p_notes: v.notes ?? null,
@@ -51,7 +55,12 @@ async function save(id: string | null, v: AgendaEventInput): Promise<Result> {
     p_type: v.typeId,
     p_repeat: v.repeat,
     p_scope: v.scope ?? 'one',
-  });
+  };
+  let { error } = await supabase.rpc('save_agenda_event', { ...args, p_nature: v.nature ?? null });
+  // sem o script 0168 no banco ainda: salva como antes (sem a natureza)
+  if (error && /p_nature|save_agenda_event/.test(error.message) && !/particular ou profissional/.test(error.message)) {
+    ({ error } = await supabase.rpc('save_agenda_event', args));
+  }
   revalidatePath('/agenda');
   revalidatePath('/', 'layout');
   return result(error);
