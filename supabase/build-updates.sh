@@ -220,7 +220,8 @@ CHECKS=$(cat <<'SQL'
       and to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text)') is not null),
   (160, 'Agenda: compromisso particular aparece só como Ocupado para os outros (0169)', to_regprocedure('public.agenda_busy(timestamptz,timestamptz,uuid[])') is not null),
   (161, 'Agenda: alerta em tela na hora do lembrete (0170)', to_regprocedure('public.my_agenda_reminders()') is not null),
-  (162, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (162, 'Agenda: aviso em tela ao ser incluído em um compromisso (0171)', exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'agenda_event_people')),
+  (163, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

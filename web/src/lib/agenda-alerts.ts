@@ -42,3 +42,22 @@ export function reminderSpeech(r: Pick<AgendaReminder, 'label' | 'title'>): stri
   const title = r.title.replace(/\s+/g, ' ').trim().slice(0, 120);
   return `Compromisso ${r.label}: ${title}.`;
 }
+
+/**
+ * Quando é o compromisso novo, para o aviso: "hoje às 14:30", "amanhã às 09:00", "12/11 às 09:00" ou "12/11 · dia todo".
+ * `now` e `timeZone` só existem para o teste; no navegador, o relógio e o fuso do aparelho.
+ */
+export function newEventWhen(startsAt: string, allDay: boolean, timeZone: string, now = Date.now()): string {
+  const ymd = (ms: number) => new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+  const day = ymd(new Date(startsAt).getTime());
+  const dayLabel = day === ymd(now) ? 'hoje' : day === ymd(now + 86_400_000) ? 'amanhã' : `${day.slice(8, 10)}/${day.slice(5, 7)}`;
+  if (allDay) return `${dayLabel} · dia todo`;
+  const time = new Intl.DateTimeFormat('pt-BR', { timeZone, hour: '2-digit', minute: '2-digit' }).format(new Date(startsAt));
+  return `${dayLabel} às ${time}`;
+}
+
+/** Frase falada do compromisso novo. */
+export function newEventSpeech(title: string, when: string, by: string | null): string {
+  const t = title.replace(/\s+/g, ' ').trim().slice(0, 120);
+  return `${by ? `${by} marcou` : 'Novo compromisso na sua agenda'}${by ? ' um compromisso para você' : ''}: ${t}, ${when.replace(/\s*·\s*/, ', ')}.`;
+}

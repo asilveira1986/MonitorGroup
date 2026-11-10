@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { setMyAlertsOff } from '@/app/(app)/actions';
 import { ALERT_TYPE_LABEL, cn, formatDuration, formatPhone } from '@/lib/format';
-import { reminderKey, reminderSpeech, reminderTone, reminderWhen, unseenReminders, type AgendaReminder } from '@/lib/agenda-alerts';
+import { newEventSpeech, newEventWhen, reminderKey, reminderSpeech, reminderTone, reminderWhen, unseenReminders, type AgendaReminder } from '@/lib/agenda-alerts';
 import { createClient } from '@/lib/supabase/client';
 import type { Alert, Message } from '@/lib/types';
 import { playAlertSound, type AlertSound } from '@/lib/sounds';
@@ -297,6 +297,51 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
             at: Date.now(),
           });
         });
+      })
+      // compromisso novo na agenda do usuário (outra pessoa marcou, ou o incluíram nele): avisa na hora (0171)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'agenda_event_people' }, (payload) => {
+        const row = payload.new as { event_id: string; user_id: string };
+        if (!row?.event_id || configRef.current.userOff) return;
+        const supabase = createClient();
+        void (async () => {
+          const { data: auth } = await supabase.auth.getSession();
+          const me = auth.session?.user.id;
+          if (!me || row.user_id !== me) return;
+          const { data: e } = await supabase
+            .from('agenda_events')
+            .select('id, title, starts_at, all_day, owner_id, series_id, nature, done_at')
+            .eq('id', row.event_id)
+            .maybeSingle();
+          if (!e || e.done_at || e.owner_id === me) return; // o próprio compromisso que acabei de criar não avisa
+          if (new Date(e.starts_at).getTime() < Date.now() - 86_400_000) return;
+          // repetição: só o primeiro compromisso avisa (as próximas ocorrências são geradas aos poucos)
+          if (e.series_id) {
+            const { count } = await supabase
+              .from('agenda_events')
+              .select('id', { count: 'exact', head: true })
+              .eq('series_id', e.series_id)
+              .lt('starts_at', e.starts_at);
+            if (count) return;
+          }
+          const { data: ppl } = await supabase.rpc('agenda_people');
+          const by = (Array.isArray(ppl) ? (ppl as { id: string; name: string }[]) : []).find((p) => p.id === e.owner_id)?.name ?? null;
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
+          const when = newEventWhen(e.starts_at, e.all_day, tz);
+          pushRef.current({
+            key: `agenda-new-${e.series_id ?? e.id}`,
+            tone: 'info',
+            heading: 'Novo compromisso',
+            icon: CalendarClock,
+            group: e.title,
+            who: `${by ? `${by} marcou para você` : 'Na sua agenda'} · ${when}`,
+            text: e.nature === 'personal' ? 'Compromisso particular' : null,
+            href: `/agenda?evento=${e.id}`,
+            action: 'Ver compromisso',
+            at: Date.now(),
+            serverPushed: true,
+            speech: configRef.current.voice !== false ? newEventSpeech(e.title, when, by) : undefined,
+          });
+        })();
       })
       // alerta criado pelo sistema
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'alerts' }, (payload) => {
