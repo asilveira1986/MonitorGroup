@@ -145,3 +145,25 @@ test('mensagem institucional da empresa é ignorada por inteiro: não abre pend�
   // resposta curta de verdade continua valendo
   assert.equal(run([client('Qual o valor da causa?', 0), team('O valor é R$ 10 mil.', 5)]).kind, 'answered');
 });
+
+test('equipe entrega a análise (mensagem longa com compromisso) e o cliente agradece depois: encerrado', () => {
+  const analysis =
+    '*Vanessa:* Analisamos a proposta de adesão ao consórcio da HS Administradora de Consórcios. O documento prevê a contratação de três cotas e a taxa de administração. ' +
+    'Quanto à veracidade e à regularidade da empresa, realizamos uma consulta ao CNPJ e verificamos que a empresa está regularmente constituída. Vamos acompanhar eventuais novidades sobre o contrato.';
+  const r = run([
+    client('Podem analisar a proposta?', 0),
+    team(analysis, 10),
+    team('Qualquer dúvida, fico à disposição.', 10),
+    client('Bom obrigado obrigado por analisar o contrato', 75),
+  ]);
+  assert.equal(r.status, 'resolved');
+  assert.equal(r.kind, 'thanked');
+});
+
+test('agradecimento solto depois de promessa curta, sem nada da equipe depois, não encerra', () => {
+  const r = run([team('Vou verificar com o cartório e te retorno.', 0), client('Obrigado, aguardo', 5, { opensPending: false })]);
+  assert.equal(r.kind, 'promise');
+  // cliente que agradece E pede outra coisa continua pendente com a empresa
+  const ask = run([team('Segue a minuta.', 0), client('Obrigado! Pode incluir a cláusula de multa?', 5)]);
+  assert.equal(ask.status, 'company');
+});

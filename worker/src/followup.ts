@@ -14,6 +14,7 @@
  * Arquivo puro (sem banco nem WhatsApp): o worker busca as mensagens, chama `classifyFollowup` e grava o resultado.
  */
 import { findCommitment } from './commitment.js';
+import { isThanksAfterTeam } from './acknowledgement.js';
 import { parsePromise } from './dates.js';
 import { DEFAULT_DELIVERY_PHRASES, DEFAULT_REQUEST_PHRASES } from './followup-phrases.js';
 
@@ -128,6 +129,8 @@ const INSTITUTIONAL_MARKERS = [
 const SIGNATURE = /\b(atenciosamente|cordialmente|abracos|cordiais cumprimentos)\b/;
 const MAX_SIGNED_MESSAGE = 700;
 const MIN_INSTITUTIONAL = 160;
+/** resposta da equipe com este tamanho já traz o resultado do trabalho: o agradecimento do cliente a encerra */
+const LONG_REPORT = 300;
 
 export function isInstitutional(body: string | null | undefined): boolean {
   if (!body || body.length < MIN_INSTITUTIONAL) return false;
@@ -202,7 +205,8 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
     s = { status, kind, msg: m, since: keepSince ? s.since : m.at, trigger: null, dueAt: null, teamAfterPromise: false, ...extra };
   };
 
-  for (const m of [...messages].sort((a, b) => a.at - b.at)) {
+  const ordered = [...messages].sort((a, b) => a.at - b.at);
+  for (const [i, m] of ordered.entries()) {
     const text = ` ${normalize(m.body ?? '')} `;
     const hasFile = FILE_TYPES.has(m.type);
 
@@ -235,10 +239,13 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
       continue;
     }
 
-    // cliente
-    if (!m.opensPending) {
-      // "obrigado"/"ok" depois do retorno da equipe à promessa: encerrado; nos outros casos não muda nada
-      if (s.kind === 'promise' && s.teamAfterPromise) set('resolved', 'thanked', m);
+    // cliente: agradecimento/confirmação (a regra de ignorar do sistema, ou o agradecimento logo depois da equipe:
+    // "Bom obrigado por analisar o contrato") não abre pendência
+    const afterTeam = i > 0 && ordered[i - 1].fromTeam;
+    if (!m.opensPending || (afterTeam && isThanksAfterTeam(m.type, m.body))) {
+      // "obrigado" depois do retorno da equipe à promessa, ou depois de uma resposta longa (a análise entregue na
+      // própria mensagem): encerrado; nos outros casos não muda nada
+      if (s.kind === 'promise' && (s.teamAfterPromise || (s.msg?.body?.length ?? 0) >= LONG_REPORT)) set('resolved', 'thanked', m);
       continue;
     }
     if (s.status === 'client' && (hasFile || findPhrase(text, deliveryPhrases))) {
