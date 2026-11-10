@@ -132,9 +132,22 @@ const MIN_INSTITUTIONAL = 160;
 /** resposta da equipe com este tamanho já traz o resultado do trabalho: o agradecimento do cliente a encerra */
 const LONG_REPORT = 300;
 
+/** Comunicado ao grupo: abre falando com todos ("Prezados(as), bom dia!") ou anunciando ("Gostaríamos de informar que..."). */
+const ANNOUNCEMENT_OPENING =
+  /^(?:ola |oi |bom dia |boa tarde |boa noite )*(?:prezad[oa]s?(?: as| os)?|car[oa]s?(?: as| os)?|senhores|senhoras|pessoal|a todos|a todas|time|equipe)\b/;
+const ANNOUNCEMENT_PHRASES = ['gostariamos de informar', 'gostaria de informar', 'informamos que', 'comunicamos que', 'venho informar', 'viemos informar', 'vimos informar', 'passando para informar', 'passando para avisar', 'temos o prazer de informar', 'divulgamos'];
+const MIN_ANNOUNCEMENT = 300;
+
 export function isInstitutional(body: string | null | undefined): boolean {
   if (!body || body.length < MIN_INSTITUTIONAL) return false;
   const plain = normalize(body);
+  // comunicado ao grupo (texto longo para todos): informa, não combina nada com um cliente específico
+  if (body.length >= MIN_ANNOUNCEMENT) {
+    const opening = plain.slice(0, 90);
+    const head = plain.slice(0, 260);
+    if (ANNOUNCEMENT_OPENING.test(opening) && ANNOUNCEMENT_PHRASES.some((p) => head.includes(p))) return true;
+    if (ANNOUNCEMENT_OPENING.test(opening) && body.length >= 600) return true;
+  }
   if (body.length > MAX_SIGNED_MESSAGE && SIGNATURE.test(plain)) return true;
   const hits = INSTITUTIONAL_MARKERS.filter((m) => plain.includes(normalize(m))).length;
   return hits >= 2 || (hits >= 1 && SIGNATURE.test(plain));
