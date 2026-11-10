@@ -193,3 +193,14 @@ test('encerramento/repasse do assunto pela equipe: sem pendência, mesmo com pro
   // promessa DEPOIS do aviso de encerramento continua valendo
   assert.equal(run([team('O atendimento foi encerrado. Vou enviar a certidão amanhã.', 0)]).kind, 'promise');
 });
+
+test('comunicado da equipe ao grupo (aviso geral) é ignorado por inteiro', () => {
+  const notice =
+    'Prezados(as), bom dia!\nÉ a Sabrina Schutz.\n\nGostaríamos de informar que os índices do Fator Acidentário de Prevenção (FAP), com vigência para o ano de 2027, já foram divulgados e estão disponíveis para consulta!\n\n' +
+    'O Fator Acidentário de Prevenção (FAP) é um multiplicador aplicado às alíquotas de contribuição destinadas ao financiamento dos benefícios decorrentes de acidentes de trabalho. ' +
+    'Seu índice varia de 0,5000 a 2,0000. Vamos acompanhar o prazo de contestação e iremos avisar cada empresa.';
+  assert.equal(run([team(notice, 0)]).status, null);
+  assert.equal(run([client('Qual o valor do FAP?', 0), team(notice, 5)]).kind, 'question', 'não resolve a pergunta do cliente');
+  // resposta curta e específica começando com "Prezados" continua valendo como promessa
+  assert.equal(run([team('Prezados, bom dia! Vou verificar o FAP da empresa e te retorno amanhã.', 0)]).kind, 'promise');
+});
