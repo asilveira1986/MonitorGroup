@@ -1,3 +1,4 @@
+import type { FollowupInfo } from '@/lib/followup-view';
 import { AlertTriangle } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
@@ -40,7 +41,7 @@ export default async function PanelPage() {
     jid?: string;
     monitored?: boolean;
     removed_at?: string | null;
-  };
+  } & FollowupInfo;
   const infoOf = new Map(((groupSectors ?? []) as unknown as GroupInfo[]).map((g) => [g.id, g]));
   const { data: photoRows } = await supabase.from('contact_avatars').select('jid').like('jid', '%@g.us').not('path', 'is', null);
   const withPhoto = new Set((photoRows ?? []).map((r) => r.jid as string));
@@ -53,6 +54,12 @@ export default async function PanelPage() {
     jid: infoOf.get(g.id)?.jid ?? null,
     responsible_ids: responsiblesOf(infoOf.get(g.id)),
     closed_at: infoOf.get(g.id)?.closed_at ?? null,
+    // pendência da conversa por regras (0167): com quem ficou a próxima ação
+    followup_status: infoOf.get(g.id)?.followup_status ?? null,
+    followup_reason: infoOf.get(g.id)?.followup_reason ?? null,
+    followup_excerpt: infoOf.get(g.id)?.followup_excerpt ?? null,
+    followup_actor: infoOf.get(g.id)?.followup_actor ?? null,
+    followup_due_at: infoOf.get(g.id)?.followup_due_at ?? null,
     responsible_names: withAdmins(responsiblesOf(infoOf.get(g.id)).map((id) => teamName.get(id) ?? 'Responsável'), adminsOn),
     photo_jid: withPhoto.has(infoOf.get(g.id)?.jid ?? '') ? (infoOf.get(g.id)?.jid ?? null) : null,
   }));

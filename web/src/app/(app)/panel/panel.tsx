@@ -1,17 +1,18 @@
 'use client';
 
-import { AlertOctagon, Building2, CheckCircle2, Clock, Hourglass, Lock, MinusCircle, Search, UserCheck, X } from 'lucide-react';
+import { AlertOctagon, Building2, CheckCircle2, Clock, Hourglass, ListTodo, Lock, MinusCircle, Search, UserCheck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from '@/components/avatar';
 import { EmptyState } from '@/components/ui';
 import { cn, formatDuration, formatNumber } from '@/lib/format';
+import { FOLLOWUP_FILTERS, followupBadge, matchesFollowup, type FollowupFilter, type FollowupInfo } from '@/lib/followup-view';
 import { matchesResponsible } from '@/lib/responsibles';
 
 export type PanelStatus = 'late' | 'waiting' | 'answered' | 'neutral';
 
-export type PanelGroup = {
+export type PanelGroup = FollowupInfo & {
   id: string;
   name: string;
   sector_id?: string | null;
@@ -140,6 +141,22 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
             <UserCheck className="h-3 w-3 shrink-0" aria-hidden /> <span className="truncate">{g.responsible_names!.join(', ')}</span>
           </p>
         )}
+        {(() => {
+          const f = followupBadge(g, now, (iso) => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }));
+          return f ? (
+            <p
+              className={cn(
+                'mt-1 ml-3.5 inline-flex max-w-full items-center gap-1 truncate rounded-full px-1.5 py-px text-[9px] font-semibold',
+                f.overdue ? 'bg-critical text-white' : f.side === 'company' ? 'bg-warning/20 text-warning-ink' : 'bg-brand-soft text-brand-text',
+              )}
+              title={f.title}
+              suppressHydrationWarning
+            >
+              <ListTodo className="h-3 w-3 shrink-0" aria-hidden /> {f.label}
+              {f.overdue && ' · prazo vencido'}
+            </p>
+          ) : null;
+        })()}
         {time && !quiet && (
           <p
             className={cn(
@@ -258,6 +275,8 @@ export function GroupsPanel({
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<PanelStatus | 'all'>('all');
+  // pendência da conversa por regras (0167): empresa deve, cliente deve, prazo vencido
+  const [followup, setFollowup] = useState<FollowupFilter>('all');
   // setor: 'all' (todos), 'none' (sem setor) ou o id do setor
   const [sector, setSector] = useState(defaultSector);
   // responsável: 'all', 'none' (sem responsável) ou o id da pessoa da equipe
@@ -312,9 +331,11 @@ export function GroupsPanel({
           filter?: PanelStatus | 'all';
           sector?: string;
           query?: string;
+          followup?: FollowupFilter;
         } | null;
         if (saved) {
           if (saved.filter) setFilter(saved.filter);
+          if (saved.followup && FOLLOWUP_FILTERS.some((f) => f.value === saved.followup)) setFollowup(saved.followup);
           if (saved.sector && (saved.sector === 'all' || saved.sector === 'none' || sectors.some((s) => s.id === saved.sector))) {
             setSector(saved.sector);
           }
@@ -332,11 +353,11 @@ export function GroupsPanel({
   useEffect(() => {
     if (!restored.current) return;
     try {
-      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ filter, sector, query }));
+      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ filter, sector, query, followup }));
     } catch {
       /* sem armazenamento da sessão */
     }
-  }, [filter, sector, query]);
+  }, [filter, sector, query, followup]);
 
   // relógio dos tempos dos cartões (espera, última mensagem), atualizado a cada 30 s
   const [now, setNow] = useState(() => Date.now());
@@ -354,20 +375,24 @@ export function GroupsPanel({
     [groups],
   );
   const q = query.trim().toLowerCase();
-  const activeFilters = [filter !== 'all', sector !== 'all', responsible !== 'all', Boolean(q)].filter(Boolean).length;
+  const activeFilters = [filter !== 'all', sector !== 'all', responsible !== 'all', followup !== 'all', Boolean(q)].filter(Boolean).length;
   const clearFilters = () => {
     setFilter('all');
+    setFollowup('all');
     setSector('all');
     setResponsible('all');
     setQuery('');
   };
-  const shown = groups.filter((g) => (filter === 'all' || g.status === filter) && (!q || g.name.toLowerCase().includes(q)));
+  const shown = groups.filter(
+    (g) => (filter === 'all' || g.status === filter) && matchesFollowup(g, followup, now) && (!q || g.name.toLowerCase().includes(q)),
+  );
+  const followupCount = (f: FollowupFilter) => groups.filter((g) => matchesFollowup(g, f, now)).length;
 
   return (
     <div className="space-y-4">
       <div className="space-y-3 rounded-2xl border border-line bg-surface p-3 shadow-sm sm:p-4">
         {/* busca, setor e responsável */}
-        <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:gap-x-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:gap-x-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <FilterField label="Buscar" className="col-span-2 lg:col-span-1">
             <span className="relative block">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
@@ -417,6 +442,22 @@ export function GroupsPanel({
               </select>
             </FilterField>
           )}
+          <FilterField label="Pendência" icon={ListTodo}>
+            <select
+              value={followup}
+              onChange={(e) => setFollowup(e.target.value as FollowupFilter)}
+              aria-label="Filtrar por pendência da conversa"
+              title="Com quem ficou a próxima ação na conversa (pelas regras: promessas, pedidos e entregas)"
+              className={cn(FIELD, followup !== 'all' && ACTIVE_FIELD)}
+            >
+              {FOLLOWUP_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                  {f.value === 'all' ? '' : ` (${followupCount(f.value)})`}
+                </option>
+              ))}
+            </select>
+          </FilterField>
         </div>
 
         {/* situação: um botão por cor do cartão, com a quantidade */}

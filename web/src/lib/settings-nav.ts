@@ -35,7 +35,7 @@ export const SETTINGS_NAV: { group: string; items: SettingsItem[] }[] = [
     group: 'WhatsApp',
     items: [
       { href: '/settings/whatsapp', label: 'Conexão e arquivos', description: 'Conexão, histórico e arquivos recebidos', check: 'whatsapp' },
-      { href: '/settings/atendimento', label: 'Respostas e mensagens', description: 'Responder pelo sistema e o que ignorar' },
+      { href: '/settings/atendimento', label: 'Respostas e mensagens', description: 'Responder pelo sistema, o que ignorar e as pendências da conversa' },
       { href: '/settings/quick-replies', label: 'Mensagens rápidas', description: 'Atalhos com \\ na resposta', check: 'quickReplies' },
       { href: '/settings/notices', label: 'Avisos automáticos', description: 'O que o sistema manda sozinho: ao cliente e à equipe' },
     ],

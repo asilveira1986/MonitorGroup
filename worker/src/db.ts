@@ -67,6 +67,10 @@ export type AppSettings = {
   demand_commitment_enabled?: boolean;
   demand_commitment_keywords?: string[];
   demand_commitment_verbs?: string[];
+  /** pendência da conversa por regras (0167) */
+  followup_enabled?: boolean;
+  followup_request_phrases?: string[] | null;
+  followup_delivery_phrases?: string[] | null;
 };
 
 export type AlertRule = {

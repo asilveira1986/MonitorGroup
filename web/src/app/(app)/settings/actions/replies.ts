@@ -118,3 +118,27 @@ export async function saveReplySettings(values: {
   revalidatePath('/', 'layout');
   return result(error);
 }
+
+/** Pendência da conversa por regras (0167): liga/desliga e as frases de pedido ao cliente e de entrega (vazio = padrão). */
+export async function saveFollowupSettings(values: { enabled: boolean; requestPhrases: string[]; deliveryPhrases: string[] }): Promise<Result> {
+  const profile = await requireAdmin();
+  const clean = (list: string[]) => {
+    const out = [...new Set(list.map((p) => p.trim().replace(/\s+/g, ' ').toLowerCase()).filter(Boolean))].map((p) => p.slice(0, 80)).slice(0, 300);
+    return out.length ? out : null;
+  };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('app_settings')
+    .update({
+      followup_enabled: values.enabled,
+      followup_request_phrases: clean(values.requestPhrases),
+      followup_delivery_phrases: clean(values.deliveryPhrases),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('company_id', profile.company_id);
+  if (error) return result(error);
+  // regras novas: o worker recalcula a pendência dos grupos aos poucos
+  await supabase.rpc('recompute_followups');
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
