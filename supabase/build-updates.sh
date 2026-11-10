@@ -224,7 +224,8 @@ CHECKS=$(cat <<'SQL'
   (162, 'Agenda: aviso em tela ao ser incluído em um compromisso (0171)', exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'agenda_event_people')),
   (163, 'Agenda: hora de término do compromisso (0172)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'agenda_events' and column_name = 'ends_at')
       and to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)') is not null),
-  (164, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (164, 'SLA do grupo só para administradores (0173)', coalesce(pg_get_functiondef('public.guard_group_monitoring()'::regprocedure) like '%SLA dos grupos%', false)),
+  (165, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

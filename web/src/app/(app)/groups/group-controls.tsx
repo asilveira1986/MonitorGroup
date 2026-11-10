@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Check, ChevronDown, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Button, Input, Select, Toggle } from '@/components/ui';
+import { Input, Select, Toggle } from '@/components/ui';
 import { cn } from '@/lib/format';
 import { useRealtime } from '@/lib/use-realtime';
 import { setMessageSender, setGroupMonitored, setGroupResponsibles, setGroupSector, setGroupSla } from '../actions';
@@ -209,34 +209,61 @@ export function MonitorToggle({ groupId, monitored, label }: { groupId: string; 
   );
 }
 
-export function SlaForm({ groupId, sla, defaultSla }: { groupId: string; sla: number | null; defaultSla: number }) {
+/**
+ * SLA do grupo (só administradores, na tela Grupos): minutos para responder. Vazio = o padrão da empresa.
+ * Salva ao apertar Enter ou ao sair do campo, só se mudou.
+ */
+export function SlaField({ groupId, sla, defaultSla, className }: { groupId: string; sla: number | null; defaultSla: number; className?: string }) {
+  const [value, setValue] = useState(sla === null ? '' : String(sla));
+  const [saved, setSaved] = useState(sla === null ? '' : String(sla));
   const [pending, start] = useTransition();
-  return (
-    <form
-      className="flex items-center gap-2"
-      action={(form) =>
-        start(async () => {
-          const raw = String(form.get('sla') ?? '').trim();
-          const res = await setGroupSla(groupId, raw ? Number(raw) : null);
-          if (res.ok) toast.success('SLA atualizado');
-          else toast.error(res.error);
-        })
+  const save = () => {
+    const raw = value.trim();
+    if (raw === saved) return;
+    const minutes = raw ? Math.round(Number(raw)) : null;
+    if (minutes !== null && (!Number.isFinite(minutes) || minutes < 1)) {
+      setValue(saved);
+      return void toast.error('Informe o SLA em minutos (1 ou mais), ou deixe vazio para usar o padrão.');
+    }
+    start(async () => {
+      const res = await setGroupSla(groupId, minutes);
+      if (!res.ok) {
+        setValue(saved);
+        return void toast.error(res.error);
       }
-    >
+      const now = minutes === null ? '' : String(minutes);
+      setValue(now);
+      setSaved(now);
+      toast.success(minutes === null ? `SLA do grupo: padrão (${defaultSla} min)` : `SLA do grupo: ${minutes} min`);
+    });
+  };
+  return (
+    <span className={cn('inline-flex items-center gap-1.5', className)}>
       <Input
-        name="sla"
         type="number"
         min={1}
-        defaultValue={sla ?? ''}
-        placeholder={`${defaultSla} (padrão)`}
-        className="w-32 sm:h-8 sm:text-xs"
-        aria-label="SLA em minutos"
+        max={10080}
+        value={value}
+        disabled={pending}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+          if (e.key === 'Escape') {
+            setValue(saved);
+            e.currentTarget.blur();
+          }
+        }}
+        placeholder={`${defaultSla}`}
+        title={value ? 'SLA deste grupo, em minutos' : `Sem SLA próprio: vale o padrão da empresa (${defaultSla} min)`}
+        aria-label="SLA do grupo em minutos"
+        className="h-8 w-20 px-2 text-center text-xs sm:h-8 sm:text-xs"
       />
-      <span className="text-xs text-muted">min</span>
-      <Button size="sm" variant="secondary" disabled={pending}>
-        Salvar
-      </Button>
-    </form>
+      <span className="text-[9px] text-muted">{value ? 'min' : 'padrão'}</span>
+    </span>
   );
 }
 
