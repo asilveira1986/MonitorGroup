@@ -43,6 +43,7 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
 
   let groups: Group[] = [];
   let removed: RemovedGroup[] = [];
+  let defaultSla = 30;
 
   if (filter === 'removed') {
     let query = supabase
@@ -70,6 +71,7 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
     const [{ data: rows }, { data: team }, { data: settings }] = await Promise.all([query.limit(500), supabase.from('team_members').select('id, name'), appSettings()]);
     const adminsOn = settings?.admins_responsible_all === true;
     const teamName = new Map((team ?? []).map((t) => [t.id as string, t.name as string]));
+    defaultSla = settings?.default_sla_minutes ?? 30;
     groups = ((rows ?? []) as Group[]).map((g) => {
       const ids = g.responsible_member_ids?.length ? g.responsible_member_ids : g.responsible_member_id ? [g.responsible_member_id] : [];
       return { ...g, responsible_names: withAdmins(ids.map((id) => teamName.get(id) ?? 'Responsável'), adminsOn) };
@@ -151,7 +153,14 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
             description="Os grupos aparecem automaticamente depois que o WhatsApp é conectado em Configurações > WhatsApp."
           />
         ) : (
-          <GroupsTable groups={groups} photos={groupPhotos} tags={tags} />
+          <GroupsTable
+            groups={groups}
+            photos={groupPhotos}
+            tags={tags}
+            // SLA por grupo: só administradores (0173)
+            canEditSla={profile.role === 'admin' || Boolean(profile.platform_admin)}
+            defaultSla={defaultSla}
+          />
         )}
       </Card>
     </>

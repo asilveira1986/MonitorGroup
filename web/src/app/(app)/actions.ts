@@ -25,14 +25,18 @@ export async function setGroupMonitored(groupId: string, monitored: boolean): Pr
   return fail(error);
 }
 
+/** SLA (tempo de resposta) do grupo: só do administrador (tela Grupos; o banco também confere, 0173). Vazio = o padrão da empresa. */
 export async function setGroupSla(groupId: string, slaMinutes: number | null): Promise<Result> {
-  await requireProfile();
+  await requireAdmin();
+  if (slaMinutes !== null && (!Number.isFinite(slaMinutes) || slaMinutes < 0 || slaMinutes > 10080)) return { ok: false, error: 'Informe o SLA em minutos (até 10080, que são 7 dias).' };
   const supabase = await createClient();
   const { error } = await supabase
     .from('groups')
     .update({ sla_minutes: slaMinutes && slaMinutes > 0 ? slaMinutes : null })
     .eq('id', groupId);
   revalidatePath(`/groups/${groupId}`);
+  revalidatePath('/groups');
+  revalidatePath('/panel');
   return fail(error);
 }
 

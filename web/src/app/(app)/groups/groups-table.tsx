@@ -4,7 +4,7 @@ import { Avatar } from '@/components/avatar';
 import { Badge } from '@/components/ui';
 import { cn, formatNumber, timeAgo } from '@/lib/format';
 import type { Group } from '@/lib/types';
-import { MonitorToggle } from './group-controls';
+import { MonitorToggle, SlaField } from './group-controls';
 import { TagChips, type CustomerTag } from '@/components/customer-tags';
 
 function Status({ g }: { g: Group }) {
@@ -48,7 +48,20 @@ function ResponsibleTag({ g }: { g: Group }) {
   );
 }
 
-export function GroupsTable({ groups, photos, tags = [] }: { groups: Group[]; photos?: string[]; tags?: CustomerTag[] }) {
+export function GroupsTable({
+  groups,
+  photos,
+  tags = [],
+  defaultSla,
+  canEditSla = false,
+}: {
+  groups: Group[];
+  photos?: string[];
+  tags?: CustomerTag[];
+  /** SLA padrão da empresa (minutos); o do grupo só aparece para administradores */
+  defaultSla?: number;
+  canEditSla?: boolean;
+}) {
   const withPhoto = new Set(photos ?? []);
   return (
     <>
@@ -84,8 +97,13 @@ export function GroupsTable({ groups, photos, tags = [] }: { groups: Group[]; ph
                 </span>
               </span>
             </Link>
-            <div className="pt-2">
+            <div className="flex flex-col items-end gap-2 pt-2">
               <MonitorToggle groupId={g.id} monitored={g.monitored} />
+              {canEditSla && defaultSla !== undefined && (
+                <span className="flex items-center gap-1 text-[9px] text-muted">
+                  SLA <SlaField groupId={g.id} sla={g.sla_minutes} defaultSla={defaultSla} />
+                </span>
+              )}
             </div>
           </li>
         ))}
@@ -100,6 +118,11 @@ export function GroupsTable({ groups, photos, tags = [] }: { groups: Group[]; ph
             <th className="px-3 py-3 font-medium">Última mensagem</th>
             <th className="px-3 py-3 text-right font-medium">Participantes</th>
             <th className="px-3 py-3 font-medium">Situação</th>
+            {canEditSla && defaultSla !== undefined && (
+              <th className="px-3 py-3 font-medium" title="Tempo para responder o cliente neste grupo; vazio usa o padrão da empresa">
+                SLA
+              </th>
+            )}
             <th className="px-5 py-3 font-medium">Monitorar</th>
           </tr>
         </thead>
@@ -137,6 +160,11 @@ export function GroupsTable({ groups, photos, tags = [] }: { groups: Group[]; ph
               <td className="px-3 py-3">
                 <Status g={g} />
               </td>
+              {canEditSla && defaultSla !== undefined && (
+                <td className="px-3 py-3">
+                  <SlaField groupId={g.id} sla={g.sla_minutes} defaultSla={defaultSla} />
+                </td>
+              )}
               <td className="px-5 py-3">
                 <MonitorToggle groupId={g.id} monitored={g.monitored} />
               </td>
