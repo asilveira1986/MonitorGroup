@@ -130,3 +130,18 @@ test('promessa de verdade continua valendo, também em mensagem com várias fras
   assert.equal(run([team('Caso tenha dúvida, avise. Vou verificar a minuta e te retorno amanhã.', 0)]).kind, 'promise');
   assert.equal(run([team('Bom dia! Vou verificar o andamento e retorno até sexta.', 0)]).kind, 'promise');
 });
+
+test('mensagem institucional da empresa é ignorada por inteiro: não abre pendência nem resolve a que existe', () => {
+  const institutional =
+    'Vanessa:\nOlá! Nosso contato é para reforçar nosso compromisso em auxiliá-lo com qualquer questão jurídica de que precise. Seja na negociação de contratos, análise de documentos, ' +
+    'representação em processos judiciais ou resolução de qualquer demanda legal, estamos prontos para atendê-lo.\n\nCaso tenha alguma demanda específica, basta nos informar aqui pelo grupo que em breve lhe retornaremos. ' +
+    'Ademais com relação a processos judiciais, reforçamos que estamos sempre atentos às intimações e prazos, adotando as melhores medidas para garantir a defesa dos seus interesses. ' +
+    'Sempre que necessário, entraremos em contato.\n\nAtenciosamente\nFlores Advogados – Setor Agro.';
+  assert.equal(run([team(institutional, 0)]).status, null, 'sozinha: nada');
+  const open = run([client('Qual o valor da causa?', 0), team(institutional, 5)]);
+  assert.equal(open.kind, 'question', 'a pergunta do cliente continua pendente');
+  const asked = run([team('Favor enviar o RG', 0), team(institutional, 5)]);
+  assert.equal(asked.kind, 'request', 'o pedido da equipe continua pendente');
+  // resposta curta de verdade continua valendo
+  assert.equal(run([client('Qual o valor da causa?', 0), team('O valor é R$ 10 mil.', 5)]).kind, 'answered');
+});
