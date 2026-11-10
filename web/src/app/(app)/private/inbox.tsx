@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Eye, Forward, Loader2, MailOpen, MessageSquarePlus, Mic, Paperclip, Search, Send, UserRound, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Eye, Forward, Loader2, LockOpen, MailOpen, MessageSquarePlus, Mic, Paperclip, Search, Send, UserRound, X } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -12,7 +12,8 @@ import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
 import { Avatar } from '@/components/avatar';
 import { waFormat } from '@/components/wa-text';
 import { ContactCards } from '@/components/contact-cards';
-import { markPrivateChatRead, markPrivateChatUnread, preparePrivateUpload, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
+import { assignPrivateChat, markPrivateChatRead, markPrivateChatUnread, preparePrivateUpload, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
+import { eventFrom, eventText, type PrivateChatEvent } from '@/lib/private-chat-events';
 import {
   PrivateEditor,
   PrivateMedia,
@@ -42,6 +43,8 @@ export type PrivateChat = {
   instance_id?: string;
   /** atendimento finalizado (0119) */
   closed_at?: string | null;
+  /** quem perdeu a conversa no "Liberar" (0164): só responde depois de assumir de novo */
+  released_from?: string | null;
 };
 /** quem usa a tela: para as abas e o responsável (0114) */
 /** seesAll: muda o responsável de qualquer conversa (administradores); seesTeam: vê as de todos (0129). */
@@ -255,6 +258,8 @@ function ChatView({
   // histórico completo da conversa (inclui o que foi atendido por outras pessoas): carrega em lotes de 200
   const [hasOlder, setHasOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  // histórico do atendimento (0164): assumiu, transferiu, liberou, finalizou
+  const [events, setEvents] = useState<PrivateChatEvent[]>([]);
 
   useEffect(() => {
     if (loadedFor.current === chat.id) return;
@@ -269,7 +274,10 @@ function ChatView({
         .in('status', ['pending', 'sending', 'failed'])
         .order('created_at'),
       supabase.from('private_reactions').select('id, message_id, reactor_jid, from_me, emoji').eq('chat_id', chat.id),
-    ]).then(([m, o, r]) => {
+      // sem o script 0164 a tabela não existe: o histórico fica vazio
+      supabase.from('private_chat_events').select('*').eq('chat_id', chat.id).order('created_at', { ascending: false }).limit(200),
+    ]).then(([m, o, r, ev]) => {
+      setEvents(((ev.data ?? []) as PrivateChatEvent[]).reverse());
       setMessages(((m.data ?? []) as PrivateMessage[]).reverse());
       setHasOlder((m.data ?? []).length >= 200);
       setOutgoing((o.data ?? []) as Outgoing[]);
@@ -313,6 +321,10 @@ function ChatView({
           }
           return next;
         });
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'private_chat_events', filter: `chat_id=eq.${chat.id}` }, (payload) => {
+        const e = payload.new as PrivateChatEvent;
+        if (e?.id) setEvents((prev) => (prev.some((x) => x.id === e.id) ? prev : [...prev, e]));
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'private_actions', filter: `chat_id=eq.${chat.id}` }, (payload) => {
         const a = payload.new as { status: string; error: string | null };
@@ -433,6 +445,19 @@ function ChatView({
   const queue = outgoing.filter((o) => !o.wa_message_id || !sentIds.has(o.wa_message_id));
   const dayFormat = useMemo(() => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone }), [timeZone]);
   const title = chatTitle(chat);
+  // mensagens e eventos do atendimento na mesma linha do tempo; com mensagens antigas ainda não
+  // carregadas, eventos anteriores à primeira mensagem esperam o "Carregar mensagens anteriores"
+  const timeline = useMemo(() => {
+    const shown = (messages ?? []).filter((m) => !m.hidden_at);
+    const from = hasOlder ? shown[0]?.sent_at : undefined;
+    return [
+      ...shown.map((m) => ({ kind: 'msg' as const, at: m.sent_at, m })),
+      ...events.filter((e) => !from || e.created_at >= from).map((e) => ({ kind: 'event' as const, at: e.created_at, e })),
+    ].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  }, [messages, events, hasOlder]);
+  // quem perdeu a conversa no "Liberar" só responde depois de assumir de novo (0164)
+  const releasedFromMe = !chat.assigned_to && !chat.closed_at && chat.released_from === viewer.me;
+  const [assuming, startAssume] = useTransition();
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -495,16 +520,31 @@ function ChatView({
           ) : messages.length === 0 && queue.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted">Nenhuma mensagem ainda. Escreva abaixo para iniciar a conversa.</p>
           ) : null}
-          {(messages ?? []).filter((m) => !m.hidden_at).map((m, i, all) => {
-            const day = dayFormat.format(new Date(m.sent_at));
-            const showDay = i === 0 || day !== dayFormat.format(new Date(all[i - 1].sent_at));
+          {timeline.map((item, i, all) => {
+            const day = dayFormat.format(new Date(item.at));
+            const showDay = i === 0 || day !== dayFormat.format(new Date(all[i - 1].at));
+            const dayChip = showDay && (
+              <div className="my-3 flex justify-center">
+                <span className="rounded-full bg-surface px-3 py-1 text-[9px] text-muted shadow-sm">{day}</span>
+              </div>
+            );
+            if (item.kind === 'event') {
+              return (
+                <div key={`e-${item.e.id}`}>
+                  {dayChip}
+                  <div className="my-2 flex justify-center">
+                    <span className="max-w-[85%] rounded-lg bg-surface/90 px-3 py-1 text-center text-[9px] text-ink-2 shadow-sm">
+                      {item.e.type === 'released' && <LockOpen className="mr-1 inline h-3 w-3 align-[-2px]" />}
+                      {eventText(item.e, viewer.me)} · <span className="tabular">{formatTime(item.e.created_at, timeZone)}</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+            const m = item.m;
             return (
               <div key={m.id}>
-                {showDay && (
-                  <div className="my-3 flex justify-center">
-                    <span className="rounded-full bg-surface px-3 py-1 text-[9px] text-muted shadow-sm">{day}</span>
-                  </div>
-                )}
+                {dayChip}
                 <div className={cn('flex', m.from_me ? 'justify-end' : 'justify-start')}>
                   <div
                     className={cn(
@@ -636,6 +676,28 @@ function ChatView({
           {files.length > 1 && <p className="px-1 pb-1 text-[9px] text-muted">Os {files.length} arquivos vão em mensagens separadas, na ordem; o texto é a legenda do primeiro.</p>}
         </div>
       )}
+      {releasedFromMe ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-warning/10 p-3 text-xs text-warning-ink">
+          <span className="flex items-center gap-1.5">
+            <LockOpen className="h-4 w-4 shrink-0" /> Esta conversa foi liberada por um administrador. Para responder, assuma de novo.
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            disabled={assuming}
+            onClick={() =>
+              startAssume(async () => {
+                const res = await assignPrivateChat(chat.id, viewer.me);
+                if (!res.ok) return void toast.error(res.error);
+                onOwner(viewer.me);
+                toast.success('Atendimento assumido');
+              })
+            }
+          >
+            {assuming && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Assumir
+          </Button>
+        </div>
+      ) : (
       <form
         className="flex items-end gap-2 border-t border-line p-3"
         onSubmit={(e) => {
@@ -698,6 +760,7 @@ function ChatView({
           </Button>
         )}
       </form>
+      )}
       {share && <ShareDialog source={share.source} mode={share.mode} canPrivate canGroup onClose={() => setShare(null)} />}
     </div>
   );
@@ -780,6 +843,16 @@ export function PrivateInbox({
       // conversa que outro usuário assumiu: sai da lista de quem não vê todas
       if (!viewer.seesTeam && c.assigned_to && c.assigned_to !== viewer.me) return setChats((prev) => prev.filter((x) => x.id !== c.id));
       setChats((prev) => [c, ...prev.filter((x) => x.id !== c.id)]);
+    })
+    // "Liberar" (0164): quem atendia é avisado na hora
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'private_chat_events', filter: 'type=eq.released' }, (payload) => {
+      const e = payload.new as PrivateChatEvent;
+      if (!e?.id || eventFrom(e) !== viewer.me || e.user_id === viewer.me) return;
+      const m = e.metadata ?? {};
+      const customer = typeof m.customer === 'string' && m.customer ? m.customer : 'o cliente';
+      const admin = typeof m.by_name === 'string' && m.by_name ? m.by_name : 'um administrador';
+      toast.info(`A conversa com ${customer} foi liberada por ${admin}`, { description: e.note ? `Motivo: ${e.note}` : undefined });
+      setChats((prev) => prev.map((x) => (x.id === e.chat_id ? { ...x, assigned_to: null, released_from: viewer.me } : x)));
     }),
   );
   // quem assumiu outra conversa nem sempre chega pelo tempo real: confere a lista de tempos em tempos
