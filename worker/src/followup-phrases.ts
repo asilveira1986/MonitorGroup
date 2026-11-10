@@ -14,6 +14,9 @@ export const DEFAULT_REQUEST_PHRASES = [
   'aguardo seu', 'aguardo sua', 'aguardo retorno', 'fico no aguardo', 'ficamos no aguardo', 'no aguardo do', 'no aguardo da',
   'nos envie', 'me envie', 'encaminhe', 'envie o', 'envie a', 'envie os', 'envie as', 'assine', 'nos retorne', 'me retorne',
   'nos confirme', 'me confirme', 'falta o', 'falta a', 'faltam os', 'faltam as',
+  'pode me passar', 'pode nos passar', 'pode passar', 'me passe', 'nos passe', 'pode me informar', 'pode nos informar', 'pode informar',
+  'me informe', 'nos informe', 'me avise', 'nos avise', 'pode me avisar', 'pode nos avisar', 'quando conseguir', 'assim que tiver',
+  'assim que puder', 'quando tiver',
 ];
 
 /** Entregas da equipe (e do cliente, quando foi pedido algo a ele). */

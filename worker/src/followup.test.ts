@@ -167,3 +167,16 @@ test('agradecimento solto depois de promessa curta, sem nada da equipe depois, n
   const ask = run([team('Segue a minuta.', 0), client('Obrigado! Pode incluir a cláusula de multa?', 5)]);
   assert.equal(ask.status, 'company');
 });
+
+test('promessa e pedido na mesma mensagem: vale o último (a bola fica com quem foi pedido por último)', () => {
+  const both = team('O nosso prazo é hoje, vou solicitar mais alguns dias de prazo. Quando conseguir alguma informação pode me passar.\nObrigada Roberto!', 0);
+  const r = run([both]);
+  assert.equal(r.status, 'client');
+  assert.equal(r.kind, 'request');
+  // o cliente confirma ("Combinado"): continua com o cliente até ele mandar a informação
+  assert.equal(run([both, client('Combinado', 6, { opensPending: false })]).status, 'client');
+  // quem manda a informação devolve a pendência para a empresa conferir
+  assert.equal(run([both, client('Combinado', 6, { opensPending: false }), client('Segue o relatório', 300)]).status, 'company');
+  // ordem inversa: pede primeiro e promete por último = promessa da equipe
+  assert.equal(run([team('Pode nos enviar o contrato? Vou analisar assim que chegar e te retorno.', 0)]).kind, 'promise');
+});
