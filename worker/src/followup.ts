@@ -193,6 +193,25 @@ type State = {
   teamAfterPromise: boolean;
 };
 
+type TeamIntent = { kind: 'promise' | 'request'; trigger: string | null };
+
+/** Frase a frase: a última promessa ou pedido ao cliente da mensagem (na mesma frase, a promessa vale). */
+function teamIntent(body: string | null, opts: FollowupOptions, requestPhrases: string[]): TeamIntent | null {
+  if (!body || isInstitutional(body)) return null;
+  let last: TeamIntent | null = null;
+  for (const sentence of body.split(/(?<=[.!?:])\s+|\n+/)) {
+    const promise = findSpecificPromise(sentence, opts.commitmentVerbs, opts.commitmentPhrases);
+    if (promise) {
+      last = { kind: 'promise', trigger: promise.trigger };
+      continue;
+    }
+    const phrase = findPhrase(` ${normalize(sentence)} `, requestPhrases);
+    if (phrase) last = { kind: 'request', trigger: phrase };
+    else if (asksQuestion(sentence)) last = { kind: 'request', trigger: null };
+  }
+  return last;
+}
+
 export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOptions): FollowupResult {
   const requestPhrases = opts.requestPhrases?.length ? opts.requestPhrases : DEFAULT_REQUEST_PHRASES;
   const deliveryPhrases = opts.deliveryPhrases?.length ? opts.deliveryPhrases : DEFAULT_DELIVERY_PHRASES;
@@ -217,14 +236,20 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
         set('resolved', 'closed', m);
         continue;
       }
-      const promise = m.type === 'text' ? findSpecificPromise(m.body, opts.commitmentVerbs, opts.commitmentPhrases) : null;
-      if (promise) {
-        set('company', 'promise', m, { trigger: promise.trigger, dueAt: due(m) });
+      // promessa da equipe ou pedido ao cliente; com os dois na mesma mensagem, vale o que ela pede por último
+      // ("vou solicitar mais prazo. Quando conseguir a informação, pode me passar": agora a bola está com o cliente)
+      const intent = m.type === 'text' ? teamIntent(m.body, opts, requestPhrases) : null;
+      if (intent?.kind === 'promise') {
+        set('company', 'promise', m, { trigger: intent.trigger, dueAt: due(m) });
         continue;
       }
-      const request = findPhrase(text, requestPhrases) ?? (asksQuestion(m.body) ? '?' : null);
+      if (intent?.kind === 'request') {
+        set('client', 'request', m, { trigger: intent.trigger, dueAt: due(m) });
+        continue;
+      }
+      const request = m.type === 'text' ? null : findPhrase(text, requestPhrases);
       if (request) {
-        set('client', 'request', m, { trigger: request === '?' ? null : request, dueAt: due(m) });
+        set('client', 'request', m, { trigger: request, dueAt: due(m) });
         continue;
       }
       const delivery = hasFile ? 'arquivo' : findPhrase(text, deliveryPhrases);
