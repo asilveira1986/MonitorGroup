@@ -4,7 +4,7 @@ import { Bell, Briefcase, CalendarClock, CalendarDays, Check, Clock, Lock, Penci
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Button, Field, Input, Select, Textarea } from '@/components/ui';
+import { Button, Input, Select, Textarea } from '@/components/ui';
 import { AGENDA_COLORS, agendaColor, type AgendaType } from '@/lib/agenda-colors';
 import { createAgendaEvent, deleteAgendaEvent, setAgendaEventDone, updateAgendaEvent, type RepeatRule } from './actions';
 import { NATURE_REQUIRED, natureLabel, type EventNature } from '@/lib/agenda-nature';
@@ -530,6 +530,7 @@ function EventDialog({
                   invalid={natureError}
                 />
                 {natureError && <p className="text-xs font-medium text-critical-ink">{NATURE_REQUIRED}</p>}
+                <p className="text-[9px] text-muted">{nature === 'personal' ? 'Particular: para quem não participa, aparece só como “Ocupado” no horário, sem título nem observação.' : 'Particular aparece só como “Ocupado” para quem não participa.'}</p>
               </Section>
             </div>
             <Section icon={StickyNote} title="O que é">
