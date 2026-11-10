@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button, Field, Input } from '@/components/ui';
 import { createClient } from '@/lib/supabase/client';
+import { clearPanelFilters } from '@/lib/panel-defaults';
 
 /** Traduz as mensagens do Supabase para algo que diga o que fazer. */
 function explain(message: string): string {
@@ -54,6 +55,8 @@ export function LoginForm({ configProblem }: { configProblem: string | null }) {
       toast.error(explain(message), { duration: 12_000 });
       return;
     }
+    // o painel abre no padrão de quem entrou, sem herdar os filtros de quem usou este navegador antes
+    clearPanelFilters(typeof window === 'undefined' ? null : window.sessionStorage);
     router.replace(next);
     router.refresh();
   }

@@ -206,6 +206,7 @@ from (values
       and to_regprocedure('public.request_history_recovery_all(integer,boolean)') is not null),
   (153, 'Administradores como responsáveis de todos os grupos (0162)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'admins_responsible_all')
       and to_regprocedure('public.admin_team_member_ids()') is not null),
-  (154, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (154, 'Administradores como responsáveis: chave desligada por padrão (0163)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'admins_responsible_all' and column_default = 'false')),
+  (155, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

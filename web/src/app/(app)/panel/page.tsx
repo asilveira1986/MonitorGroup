@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { appSettings } from '@/lib/app-settings';
 import { requireMenu } from '@/lib/auth';
+import { defaultPanelSector } from '@/lib/panel-defaults';
 import { withAdmins } from '@/lib/responsibles';
 import { createClient } from '@/lib/supabase/server';
 import { GroupsPanel, type PanelGroup } from './panel';
@@ -15,7 +16,7 @@ export const metadata: Metadata = { title: 'Monitor Group · Painel de grupos' }
  * resposta e vermelho quando o tempo de resposta (SLA) foi excedido.
  */
 export default async function PanelPage() {
-  await requireMenu('/panel');
+  const profile = await requireMenu('/panel');
   const supabase = await createClient();
   const [{ data, error }, { data: groupSectors }, { data: sectors }, { data: team }, { data: myIds }, { data: settings }, { data: adminRows }] = await Promise.all([
     supabase.rpc('groups_panel'),
@@ -93,7 +94,11 @@ export default async function PanelPage() {
           sectors={sectorOptions}
           hasNoSector={used.has(null)}
           // com os grupos dele filtrados, o setor fica em Todos para não esconder grupo de outro setor
-          defaultSector={mine ? 'all' : (geral?.id ?? 'all')}
+          defaultSector={defaultPanelSector({
+            isAdmin: profile.role === 'admin' || Boolean(profile.platform_admin),
+            hasOwnGroups: Boolean(mine),
+            generalSectorId: geral?.id ?? null,
+          })}
           myMemberId={mine}
           responsibles={responsibles}
           adminResponsibleIds={adminIds}
