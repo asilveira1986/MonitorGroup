@@ -4,6 +4,7 @@ import { Check, ChevronDown, Search, Users, X, Building2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui';
+import { ALL_USERS } from '@/lib/agenda-filter';
 import { cn } from '@/lib/format';
 
 type Option = { id: string; name: string; hint?: string };
@@ -17,6 +18,8 @@ function MultiPick({
   onApply,
   searchable = false,
   emptyText,
+  emptyLabel = 'Todos',
+  allLabel = 'Todos',
 }: {
   label: string;
   icon: typeof Users;
@@ -25,6 +28,10 @@ function MultiPick({
   onApply: (ids: string[]) => void;
   searchable?: boolean;
   emptyText: string;
+  /** o que o botão mostra sem nada marcado */
+  emptyLabel?: string;
+  /** o que o botão mostra com tudo marcado */
+  allLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<string[]>(selected);
@@ -47,7 +54,7 @@ function MultiPick({
   const shown = options.filter((o) => !term || o.name.toLowerCase().includes(term));
   const toggle = (id: string) => setDraft((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const names = selected.map((id) => options.find((o) => o.id === id)?.name).filter(Boolean) as string[];
-  const summary = !names.length ? 'Todos' : names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`;
+  const summary = !names.length ? emptyLabel : options.length > 1 && names.length === options.length ? allLabel : names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`;
 
   return (
     <div ref={box} className="relative">
@@ -112,9 +119,14 @@ function MultiPick({
             {!shown.length && <li className="px-2 py-2 text-xs text-muted">{emptyText}</li>}
           </ul>
           <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-line pt-2">
-            <button type="button" onClick={() => setDraft([])} disabled={!draft.length} className="text-xs text-ink-2 hover:text-ink disabled:opacity-40">
-              Limpar seleção
-            </button>
+            <span className="flex items-center gap-3">
+              <button type="button" onClick={() => setDraft(options.map((o) => o.id))} disabled={draft.length === options.length} className="text-xs font-medium text-brand-text hover:underline disabled:opacity-40">
+                Marcar todos
+              </button>
+              <button type="button" onClick={() => setDraft([])} disabled={!draft.length} className="text-xs text-ink-2 hover:text-ink disabled:opacity-40">
+                Limpar
+              </button>
+            </span>
             <Button
               type="button"
               size="sm"
@@ -157,7 +169,8 @@ export function AgendaFilter({
     next.delete('pessoa');
     next.delete('dia');
     next.delete('evento');
-    next.set(key, ids.join(','));
+    // tudo marcado nos usuários: ?quem=todos (link curto, e vale para quem entrar depois)
+    next.set(key, key === 'quem' && ids.length > 1 && ids.length === users.length ? ALL_USERS : ids.join(','));
     if (!ids.length) next.delete(key);
     router.push(`/agenda${next.size ? `?${next}` : ''}`);
   };
@@ -173,7 +186,17 @@ export function AgendaFilter({
   const active = selectedUsers.length + selectedSectors.length > 0;
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <MultiPick label="Usuários" icon={Users} options={userOptions} selected={selectedUsers} onApply={(ids) => go('quem', ids)} searchable emptyText="Nenhum usuário encontrado." />
+      <MultiPick
+        label="Usuários"
+        icon={Users}
+        options={userOptions}
+        selected={selectedUsers}
+        onApply={(ids) => go('quem', ids)}
+        searchable
+        emptyText="Nenhum usuário encontrado."
+        emptyLabel="Minha agenda"
+        allLabel="Todos"
+      />
       {sectors.length > 0 && (
         <MultiPick
           label="Setores"
@@ -182,6 +205,7 @@ export function AgendaFilter({
           selected={selectedSectors}
           onApply={(ids) => go('setor', ids)}
           emptyText="Nenhum setor."
+          emptyLabel="Nenhum"
         />
       )}
       {active && (

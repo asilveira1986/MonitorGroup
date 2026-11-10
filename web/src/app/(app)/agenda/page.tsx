@@ -10,7 +10,7 @@ import { cn, formatTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Demand } from '@/lib/types';
 import { AgendaFilter } from './agenda-filter';
-import { memberIdsOf, parseAgendaFilter } from '@/lib/agenda-filter';
+import { ALL_USERS, memberIdsOf, parseAgendaFilter } from '@/lib/agenda-filter';
 import { DeliverButton } from './agenda-controls';
 import type { RepeatRule } from './actions';
 import { EventActions, EventDetails, NatureBadge, NewEventButton, type AgendaEvent } from './event-controls';
@@ -255,7 +255,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
 
   const href = (changes: Record<string, string | null>) => {
     const p = new URLSearchParams();
-    const cur: Record<string, string | null> = { quem: selectedUsers.join(',') || null, setor: selectedTeams.map((t) => t.id).join(',') || null, vista: view, data: ref === today ? null : ref };
+    const cur: Record<string, string | null> = { quem: (selectedUsers.length > 1 && selectedUsers.length === people.length ? ALL_USERS : selectedUsers.join(',')) || null, setor: selectedTeams.map((t) => t.id).join(',') || null, vista: view, data: ref === today ? null : ref };
     for (const [k, v] of Object.entries({ ...cur, ...changes })) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/agenda?${s}` : '/agenda';

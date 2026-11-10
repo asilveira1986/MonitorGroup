@@ -21,6 +21,9 @@ export type AgendaFilterState = {
   label: string;
 };
 
+/** valor de ?quem= para "todos os usuários" */
+export const ALL_USERS = 'todos';
+
 const asList = (v: string | string[] | undefined) =>
   (Array.isArray(v) ? v.join(',') : (v ?? '')).split(',').map((x) => x.trim()).filter(Boolean);
 
@@ -30,14 +33,17 @@ export function parseAgendaFilter(
   teams: AgendaTeamRef[],
   meId: string,
 ): AgendaFilterState {
-  const selectedUsers = [...new Set(asList(sp.quem))].filter((id) => people.some((p) => p.id === id));
+  // ?quem=todos: todos os usuários da empresa (o que o banco deixar a pessoa ver)
+  const wanted = asList(sp.quem);
+  const selectedUsers = wanted.includes(ALL_USERS) ? people.map((p) => p.id) : [...new Set(wanted)].filter((id) => people.some((p) => p.id === id));
   const selectedTeams = [...new Set(asList(sp.setor))].flatMap((id) => teams.filter((t) => t.id === id));
   const filtering = selectedUsers.length + selectedTeams.length > 0;
   const userIds = filtering ? [...new Set([...selectedUsers, ...selectedTeams.flatMap((t) => t.userIds)])] : [meId];
   const viewingOther = userIds.length !== 1 || userIds[0] !== meId;
+  const everyone = selectedUsers.length > 1 && selectedUsers.length === people.length;
   const names = [
     ...selectedTeams.map((t) => `setor ${t.name}`),
-    ...selectedUsers.map((id) => (id === meId ? 'minha agenda' : (people.find((p) => p.id === id)?.name ?? 'usuário'))),
+    ...(everyone ? ['todos os usuários'] : selectedUsers).map((id) => (id === 'todos os usuários' ? id : id === meId ? 'minha agenda' : (people.find((p) => p.id === id)?.name ?? 'usuário'))),
   ];
   const label = names.length > 3 ? `${names.slice(0, 3).join(', ')} e mais ${names.length - 3}` : names.join(', ');
   return { selectedUsers, selectedTeams, filtering, userIds, viewingOther, multi: userIds.length > 1, label };

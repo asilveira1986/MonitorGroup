@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { memberIdsOf, parseAgendaFilter, type AgendaPerson, type AgendaTeamRef } from './agenda-filter.ts';
+import { ALL_USERS, memberIdsOf, parseAgendaFilter, type AgendaPerson, type AgendaTeamRef } from './agenda-filter.ts';
 
 const ME = 'u-me';
 const people: AgendaPerson[] = [
@@ -60,4 +60,15 @@ test('aceita parâmetro repetido (array) e valores inválidos', () => {
 test('rótulo longo: três nomes e "mais N"', () => {
   const f = parseAgendaFilter({ quem: 'u-ana,u-bia,u-caio', setor: 's-civel,s-trab' }, people, teams, ME);
   assert.match(f.label, /e mais 2$/);
+});
+
+test('?quem=todos: todos os usuários da empresa, com as demandas de todos', () => {
+  const f = parseAgendaFilter({ quem: ALL_USERS }, people, teams, ME);
+  assert.deepEqual(f.userIds.sort(), people.map((p) => p.id).sort());
+  assert.equal(f.filtering, true);
+  assert.equal(f.viewingOther, true);
+  assert.equal(f.label, 'todos os usuários');
+  assert.deepEqual(memberIdsOf(f, people, ME, ['m-me']).sort(), ['m-ana', 'm-caio', 'm-me']);
+  // "todos" junto com um setor não repete ninguém
+  assert.equal(parseAgendaFilter({ quem: ALL_USERS, setor: 's-civel' }, people, teams, ME).userIds.length, people.length);
 });
