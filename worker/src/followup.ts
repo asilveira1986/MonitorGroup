@@ -114,6 +114,33 @@ const excerptOf = (body: string | null) => {
   return t ? (t.length > 140 ? `${t.slice(0, 139)}…` : t) : null;
 };
 
+/** Texto institucional/de apresentação (mensagem longa assinada), não um retorno combinado sobre um assunto. */
+const MAX_PROMISE_MESSAGE = 700;
+const INSTITUTIONAL = /\b(atenciosamente|cordialmente|reforcar nosso compromisso|estamos a disposicao|estamos prontos para)\b/;
+/** A frase só promete se algo acontecer ("caso tenha...", "sempre que necessário...", "qualquer dúvida..."). */
+const CONDITIONAL = /\b(caso|se|sempre que|quando|qualquer|eventual|eventuais|havendo|na hipotese|se necessario|se precisar)\b/;
+
+/**
+ * Promessa de verdade: um compromisso com algo específico ("vou verificar e te retorno"). Não conta o que é condicional
+ * ("caso tenha alguma demanda, retornaremos") nem aviso institucional longo, assinado ("Atenciosamente, Flores Advogados").
+ * A promessa é procurada frase por frase, para a condição de uma frase não valer para a outra.
+ */
+export function findSpecificPromise(body: string | null | undefined, verbs: string[] | null | undefined, phrases: string[] | null | undefined) {
+  if (!body) return null;
+  const plain = normalize(body);
+  if (body.length > MAX_PROMISE_MESSAGE && INSTITUTIONAL.test(plain)) return null;
+  for (const sentence of body.split(/(?<=[.!?:])\s+|\n+/)) {
+    const found = findCommitment(sentence, verbs, phrases);
+    if (!found) continue;
+    const s = ` ${normalize(sentence)} `;
+    const at = s.indexOf(normalize(found.trigger));
+    // condição antes do gatilho, na mesma frase: promessa condicional, não vale
+    if (at > 0 && CONDITIONAL.test(s.slice(0, at))) continue;
+    return found;
+  }
+  return null;
+}
+
 /** Alguma frase da mensagem é pergunta de verdade (termina em "?") e não só cortesia ("tudo bem?", "algo mais?"). */
 function asksQuestion(body: string | null): boolean {
   if (!body || !body.includes('?')) return false;
@@ -165,7 +192,7 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
         set('resolved', 'closed', m);
         continue;
       }
-      const promise = m.type === 'text' ? findCommitment(m.body, opts.commitmentVerbs, opts.commitmentPhrases) : null;
+      const promise = m.type === 'text' ? findSpecificPromise(m.body, opts.commitmentVerbs, opts.commitmentPhrases) : null;
       if (promise) {
         set('company', 'promise', m, { trigger: promise.trigger, dueAt: due(m) });
         continue;
