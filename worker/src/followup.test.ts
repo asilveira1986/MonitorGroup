@@ -111,3 +111,22 @@ test('listas padrão iguais no worker e no painel', async () => {
   const web = readFileSync(new URL('../../web/src/lib/followup-phrases.ts', import.meta.url), 'utf8');
   assert.equal(web, worker);
 });
+
+test('texto institucional com "caso tenha alguma demanda... retornaremos" não é promessa', () => {
+  const institutional =
+    '*Vanessa:* Olá! Nosso contato é para reforçar nosso compromisso em auxiliá-lo com qualquer questão jurídica de que precise. ' +
+    'Seja na negociação de contratos, acompanhamento de processos judiciais ou resolução de qualquer demanda legal, estamos prontos para atendê-lo.\n\n' +
+    'Caso tenha alguma demanda específica, basta nos informar aqui pelo grupo que em breve lhe retornaremos. Ademais com relação a processos judiciais, ' +
+    'reforçamos que estamos sempre atentos às intimações e prazos. Sempre que necessário, entraremos em contato.\n\n' +
+    'Negociação BANRISUL: Gostaria de verificar e o senhor conseguiu a renegociação do crédito BNDES junto ao Banrisul?\n\nAtenciosamente\nFlores Advogados – Setor Agro.';
+  const r = run([team(institutional, 0)]);
+  assert.notEqual(r.kind, 'promise');
+  // só a frase condicional (sem o texto longo) também não vale
+  assert.notEqual(run([team('Caso tenha alguma demanda, em breve lhe retornaremos.', 0)]).kind, 'promise');
+  assert.notEqual(run([team('Qualquer dúvida, vou verificar com a equipe.', 0)]).kind, 'promise');
+});
+
+test('promessa de verdade continua valendo, também em mensagem com várias frases', () => {
+  assert.equal(run([team('Caso tenha dúvida, avise. Vou verificar a minuta e te retorno amanhã.', 0)]).kind, 'promise');
+  assert.equal(run([team('Bom dia! Vou verificar o andamento e retorno até sexta.', 0)]).kind, 'promise');
+});
