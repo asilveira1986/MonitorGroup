@@ -267,7 +267,11 @@ export class WhatsAppManager {
     setTimeout(() => void this.syncGroupCopies(24 * 30), 60_000);
     setInterval(() => void this.syncGroupCopies(6), COPY_SYNC_MS);
     // pendência da conversa por regras (0167): grupos com mensagem nova desde o último cálculo
-    setTimeout(() => void this.sweepFollowups(), 45_000);
+    // ao iniciar, reavalia as pendências abertas (as regras podem ter mudado desde o último cálculo)
+    setTimeout(async () => {
+      await db.from('groups').update({ followup_updated_at: null }).in('followup_status', ['company', 'client']).then(() => {}, () => {});
+      void this.sweepFollowups();
+    }, 45_000);
     setInterval(() => void this.sweepFollowups(), FOLLOWUP_SWEEP_MS);
   }
 

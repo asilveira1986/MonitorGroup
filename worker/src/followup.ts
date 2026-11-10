@@ -114,9 +114,29 @@ const excerptOf = (body: string | null) => {
   return t ? (t.length > 140 ? `${t.slice(0, 139)}…` : t) : null;
 };
 
-/** Texto institucional/de apresentação (mensagem longa assinada), não um retorno combinado sobre um assunto. */
-const MAX_PROMISE_MESSAGE = 700;
-const INSTITUTIONAL = /\b(atenciosamente|cordialmente|reforcar nosso compromisso|estamos a disposicao|estamos prontos para)\b/;
+/**
+ * Mensagem institucional (apresentação da empresa, aviso geral, plantão): não é conversa sobre um assunto, então o
+ * classificador a ignora por inteiro: não abre pendência, não conta como resposta nem como entrega.
+ * Vale com o texto de apresentação (frases típicas) ou com mensagem longa assinada (mais de 700 caracteres).
+ */
+const INSTITUTIONAL_MARKERS = [
+  'reforcar nosso compromisso', 'nosso contato e para', 'estamos prontos para atende', 'estamos a disposicao para',
+  'caso tenha alguma demanda', 'basta nos informar aqui', 'sempre que necessario, entraremos em contato',
+  'seja bem-vindo', 'seja bem vindo', 'e um prazer atende', 'informo que estarei responsavel pelo plantao',
+  'informamos que o escritorio', 'comunicado', 'aviso importante', 'feliz natal', 'feliz ano novo', 'boas festas',
+];
+const SIGNATURE = /\b(atenciosamente|cordialmente|abracos|cordiais cumprimentos)\b/;
+const MAX_SIGNED_MESSAGE = 700;
+const MIN_INSTITUTIONAL = 160;
+
+export function isInstitutional(body: string | null | undefined): boolean {
+  if (!body || body.length < MIN_INSTITUTIONAL) return false;
+  const plain = normalize(body);
+  if (body.length > MAX_SIGNED_MESSAGE && SIGNATURE.test(plain)) return true;
+  const hits = INSTITUTIONAL_MARKERS.filter((m) => plain.includes(normalize(m))).length;
+  return hits >= 2 || (hits >= 1 && SIGNATURE.test(plain));
+}
+
 /** A frase só promete se algo acontecer ("caso tenha...", "sempre que necessário...", "qualquer dúvida..."). */
 const CONDITIONAL = /\b(caso|se|sempre que|quando|qualquer|eventual|eventuais|havendo|na hipotese|se necessario|se precisar)\b/;
 
@@ -127,8 +147,7 @@ const CONDITIONAL = /\b(caso|se|sempre que|quando|qualquer|eventual|eventuais|ha
  */
 export function findSpecificPromise(body: string | null | undefined, verbs: string[] | null | undefined, phrases: string[] | null | undefined) {
   if (!body) return null;
-  const plain = normalize(body);
-  if (body.length > MAX_PROMISE_MESSAGE && INSTITUTIONAL.test(plain)) return null;
+  if (isInstitutional(body)) return null;
   for (const sentence of body.split(/(?<=[.!?:])\s+|\n+/)) {
     const found = findCommitment(sentence, verbs, phrases);
     if (!found) continue;
@@ -188,6 +207,8 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
     const hasFile = FILE_TYPES.has(m.type);
 
     if (m.fromTeam) {
+      // apresentação/aviso geral da empresa: fora da conta, sem abrir pendência nem resolver nenhuma (0167)
+      if (m.type === 'text' && !m.closes && isInstitutional(m.body)) continue;
       if (m.closes) {
         set('resolved', 'closed', m);
         continue;
