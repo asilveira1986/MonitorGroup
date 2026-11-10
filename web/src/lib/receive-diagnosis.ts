@@ -69,7 +69,7 @@ export function diagnose(d: ReceiveDiagnosis, now: number, fmt: (iso: string) =>
         text:
           `A cópia deste grupo no número ${c.name}${c.phone ? ` (${c.phone})` : ''} recebeu mensagem em ${fmt(c.last_message_at!)}: as mensagens novas estão chegando por lá` +
           (c.monitored ? '. ' : ' (essa cópia está sem monitoramento). ') +
-          'O sistema copia entre as cópias do grupo o que só uma delas recebeu, de minuto em minuto; para trazer agora, use "Sincronizar agora".',
+          'O sistema copia entre as cópias do grupo o que só uma delas recebeu, de minuto em minuto; para trazer agora, use "Sincronizar setores", ao lado de "Recuperar mensagens".',
         action: 'sync',
       });
     }

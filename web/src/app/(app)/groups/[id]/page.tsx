@@ -18,7 +18,7 @@ import { Avatar } from '@/components/avatar';
 import { TagEditor, type CustomerTag } from '@/components/customer-tags';
 import { Conversation } from './conversation';
 import { GroupFiles } from './group-files';
-import { HistoryRecoveryButton } from './history-recovery';
+import { GroupCopiesSyncButton, HistoryRecoveryButton } from './history-recovery';
 import { withAdmins } from '@/lib/responsibles';
 import { DeleteRemovedGroupButton } from '../removed-groups';
 
@@ -101,6 +101,10 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
   const viewer = profile.role === 'viewer';
   // a lista de grupos e o monitoramento são só dos administradores
   const isAdminUser = profile.role === 'admin' || profile.platform_admin;
+  // cópias deste grupo em outros números conectados (outros setores), para o "Sincronizar setores" (0166)
+  const { count: copiesCount } = isAdminUser
+    ? await supabase.from('groups').select('id', { count: 'exact', head: true }).eq('jid', g.jid).neq('id', g.id).is('removed_at', null)
+    : { count: 0 };
   const replyBlocked = viewer
     ? 'Seu perfil é somente para ver os painéis.'
     : !settings?.reply_enabled
@@ -305,7 +309,15 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             title="Conversa"
             description="Role para cima para ver as anteriores · azul = cliente, verde = equipe"
             // recuperar mensagens que não foram guardadas (0161, experimental): só administradores
-            action={isAdminUser && !g.removed_at ? <HistoryRecoveryButton groupId={g.id} timeZone={tz} /> : undefined}
+            // e sincronizar com as cópias do grupo em outros números (0166): os dois só para administradores
+            action={
+              isAdminUser && !g.removed_at ? (
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  <GroupCopiesSyncButton groupId={g.id} copies={copiesCount ?? 0} />
+                  <HistoryRecoveryButton groupId={g.id} timeZone={tz} />
+                </div>
+              ) : undefined
+            }
           />
           <Conversation
             groupId={g.id}
