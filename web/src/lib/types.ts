@@ -262,6 +262,10 @@ export type AppSettings = {
   demand_done_template?: string | null;
   demand_commitment_keywords: string[];
   demand_commitment_verbs?: string[];
+  /** pendência da conversa por regras (0167) */
+  followup_enabled?: boolean;
+  followup_request_phrases?: string[] | null;
+  followup_delivery_phrases?: string[] | null;
   reply_enabled: boolean;
   reply_sign_name: boolean;
   /** assinatura no privado (0116) */

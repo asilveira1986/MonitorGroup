@@ -19,6 +19,8 @@ import { TagEditor, type CustomerTag } from '@/components/customer-tags';
 import { Conversation } from './conversation';
 import { GroupFiles } from './group-files';
 import { GroupCopiesSyncButton, HistoryRecoveryButton } from './history-recovery';
+import { FollowupBar } from './followup';
+import type { FollowupInfo } from '@/lib/followup-view';
 import { withAdmins } from '@/lib/responsibles';
 import { DeleteRemovedGroupButton } from '../removed-groups';
 
@@ -319,6 +321,8 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
               ) : undefined
             }
           />
+          {/* pendência da conversa por regras (0167): empresa deve / cliente deve */}
+          <FollowupBar groupId={g.id} info={g as unknown as FollowupInfo} canEdit={!viewer} timeZone={tz} />
           <Conversation
             groupId={g.id}
             participantsCount={g.participants_count}

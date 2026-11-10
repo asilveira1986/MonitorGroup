@@ -213,6 +213,8 @@ from (values
       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'groups' and column_name = 'undecrypted_count')),
   (157, 'Cópias do mesmo grupo sincronizadas entre os números (0166)', to_regprocedure('public.sync_group_copies(uuid,integer)') is not null
       and to_regprocedure('public.sync_all_group_copies(integer)') is not null),
-  (158, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (158, 'Pendência da conversa por regras: empresa ou cliente (0167)', to_regprocedure('public.dismiss_group_followup(uuid)') is not null
+      and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'groups' and column_name = 'followup_status')),
+  (159, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

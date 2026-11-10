@@ -37,6 +37,8 @@ import { selfReadIds } from './receipts.js';
 import { audioContent } from './audio.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
 import { runHistoryRecovery, type Cursor, type Page, type RecoveryResult } from './history-recovery.js';
+import { classifyFollowup } from './followup.js';
+import { DEFAULT_COMMITMENT_VERBS } from './commitment.js';
 
 const MAX_QR_ATTEMPTS = 6; // ~2 minutos esperando a leitura do QR code
 /** respostas do painel que não saíram neste prazo (WhatsApp desconectado) falham em vez de sair atrasadas */
@@ -46,6 +48,10 @@ const HEARTBEAT_MS = 60_000;
 const RECOVERY_POLL_MS = 30_000;
 /** sincronização das cópias do mesmo grupo em números diferentes (0166) */
 const COPY_SYNC_MS = 60_000;
+/** pendência da conversa por regras (0167) */
+const FOLLOWUP_SWEEP_MS = 2 * 60_000;
+const FOLLOWUP_DEBOUNCE_MS = 5_000;
+const FOLLOWUP_MESSAGES = 60;
 /** depois de um celular mudo, os demais pedidos dessa conexão são encerrados por este tempo */
 const RECOVERY_MUTE_MS = 10 * 60_000;
 const RECOVERY_BETWEEN_GROUPS_MS = 3_000;
@@ -260,6 +266,110 @@ export class WhatsAppManager {
     // depois, de minuto em minuto, as últimas 6 horas
     setTimeout(() => void this.syncGroupCopies(24 * 30), 60_000);
     setInterval(() => void this.syncGroupCopies(6), COPY_SYNC_MS);
+    // pendência da conversa por regras (0167): grupos com mensagem nova desde o último cálculo
+    setTimeout(() => void this.sweepFollowups(), 45_000);
+    setInterval(() => void this.sweepFollowups(), FOLLOWUP_SWEEP_MS);
+  }
+
+  private followupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private followupSweepBusy = false;
+
+  /** Recalcula a pendência do grupo alguns segundos depois da última mensagem (várias seguidas = um cálculo só). */
+  private scheduleFollowup(companyId: string, groupId: string) {
+    const old = this.followupTimers.get(groupId);
+    if (old) clearTimeout(old);
+    this.followupTimers.set(
+      groupId,
+      setTimeout(() => {
+        this.followupTimers.delete(groupId);
+        void this.refreshFollowup(companyId, groupId).catch((err) => logger.warn({ err, groupId }, 'falha ao calcular a pendência da conversa'));
+      }, FOLLOWUP_DEBOUNCE_MS),
+    );
+  }
+
+  /** Grupos com mensagem mais nova que o último cálculo (cópias sincronizadas, histórico, worker reiniciado). */
+  private async sweepFollowups() {
+    if (this.followupSweepBusy) return;
+    this.followupSweepBusy = true;
+    try {
+      const { data, error } = await db
+        .from('groups')
+        .select('id, company_id, last_message_at, followup_updated_at')
+        .is('removed_at', null)
+        .not('last_message_at', 'is', null)
+        .order('last_message_at', { ascending: false })
+        .limit(2000);
+      if (error) {
+        if (!/followup_updated_at/.test(error.message)) logger.warn({ err: error }, 'falha ao listar grupos para a pendência');
+        return; // sem o script 0167
+      }
+      const stale = (data ?? []).filter((g) => !g.followup_updated_at || g.last_message_at > g.followup_updated_at).slice(0, 300);
+      for (const g of stale) {
+        await this.refreshFollowup(g.company_id as string, g.id as string).catch((err) => logger.warn({ err, groupId: g.id }, 'falha ao calcular a pendência da conversa'));
+      }
+      if (stale.length) logger.info({ groups: stale.length }, 'pendência das conversas recalculada');
+    } finally {
+      this.followupSweepBusy = false;
+    }
+  }
+
+  /** Lê as últimas mensagens do grupo (depois do "Não está pendente", se houver) e grava com quem ficou a pendência. */
+  private async refreshFollowup(companyId: string, groupId: string) {
+    const settings = await getSettings(companyId);
+    if (settings.followup_enabled === false) return;
+    const { data: group } = await db.from('groups').select('followup_dismissed_at').eq('id', groupId).maybeSingle();
+    if (!group) return;
+    let query = db
+      .from('messages')
+      .select('id, from_team, message_type, body, sent_at, sender_name, closes_conversation, ignored_as_last, deleted_at, hidden_at')
+      .eq('group_id', groupId)
+      .order('sent_at', { ascending: false })
+      .limit(FOLLOWUP_MESSAGES);
+    if (group.followup_dismissed_at) query = query.gt('sent_at', group.followup_dismissed_at as string);
+    const { data: rows, error } = await query;
+    if (error) throw error;
+    const now = new Date().toISOString();
+    const messages = (rows ?? [])
+      .filter((m) => !m.deleted_at && !m.hidden_at && !m.ignored_as_last)
+      .map((m) => ({
+        id: m.id as string,
+        fromTeam: Boolean(m.from_team),
+        type: m.message_type as string,
+        body: (m.body as string | null) ?? null,
+        at: new Date(m.sent_at as string).getTime(),
+        sender: (m.sender_name as string | null) ?? null,
+        // confirmação/agradecimento do cliente não pede resposta (a mesma regra da pendência)
+        opensPending: Boolean(m.from_team) || !settings.ignore_acknowledgements || !isAcknowledgement(m.message_type as string, m.body as string | null, settings.ignore_phrases),
+        closes: Boolean(m.closes_conversation),
+      }));
+    // marcado à mão e nada novo depois: mantém a marcação
+    if (!messages.length && group.followup_dismissed_at) {
+      await db.from('groups').update({ followup_updated_at: now }).eq('id', groupId);
+      return;
+    }
+    const r = classifyFollowup(messages, {
+      commitmentVerbs: settings.demand_commitment_verbs ?? DEFAULT_COMMITMENT_VERBS,
+      commitmentPhrases: settings.demand_commitment_keywords ?? [],
+      requestPhrases: settings.followup_request_phrases,
+      deliveryPhrases: settings.followup_delivery_phrases,
+      timeZone: settings.timezone,
+      businessEnd: settings.business_end.slice(0, 5),
+    });
+    await db
+      .from('groups')
+      .update({
+        followup_status: r.status,
+        followup_kind: r.kind,
+        followup_reason: r.reason,
+        followup_excerpt: r.excerpt,
+        followup_trigger: r.trigger,
+        followup_message_id: r.messageId,
+        followup_since: r.since ? new Date(r.since).toISOString() : null,
+        followup_due_at: r.dueAt ? new Date(r.dueAt).toISOString() : null,
+        followup_actor: r.actor,
+        followup_updated_at: now,
+      })
+      .eq('id', groupId);
   }
 
   private copySyncBusy = false;
@@ -1184,6 +1294,8 @@ export class WhatsAppManager {
     ) as { inserted: boolean; message_id?: string; stale?: boolean; ignored?: boolean; untracked?: boolean };
     // o banco também diz se o grupo estava desligado (fonte final: a linha travada no momento da gravação)
     tracked = tracked && !result.untracked;
+    // pendência da conversa (empresa ou cliente), por regras (0167)
+    if (result.inserted) this.scheduleFollowup(session.companyId, group.id);
     // mensagem nova depois de muito tempo sem nada guardado: pede ao celular o que ficou no meio (0165)
     if (result.inserted && !result.stale && upsertType === 'notify') {
       void this.maybeFillGap(session, group.id, group.company_id, msg.key.id!, ts * 1000).catch((err) =>
