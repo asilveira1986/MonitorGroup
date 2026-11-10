@@ -193,13 +193,27 @@ type State = {
   teamAfterPromise: boolean;
 };
 
-type TeamIntent = { kind: 'promise' | 'request'; trigger: string | null };
+/** Encerramento ou repasse do assunto pela equipe: "o grupo será encerrado", "substabelecemos o processo", "arquivado". */
+const CLOSING_PHRASES = [
+  'sera encerrado', 'sera encerrada', 'esta encerrado', 'esta encerrada', 'foi encerrado', 'foi encerrada', 'sera arquivado',
+  'sera arquivada', 'foi arquivado', 'foi arquivada', 'encerramos', 'encerraremos', 'vamos encerrar', 'iremos encerrar',
+  'vamos arquivar', 'iremos arquivar', 'atendimento encerrado', 'processo encerrado', 'encerrar o grupo', 'encerrar este grupo',
+  'encerrar esse grupo', 'substabelecemos', 'substabelecido', 'substabelecida', 'acabamos de substabelecer', 'acabei de substabelecer',
+];
+
+type TeamIntent = { kind: 'promise' | 'request' | 'closed'; trigger: string | null };
 
 /** Frase a frase: a última promessa ou pedido ao cliente da mensagem (na mesma frase, a promessa vale). */
 function teamIntent(body: string | null, opts: FollowupOptions, requestPhrases: string[]): TeamIntent | null {
   if (!body || isInstitutional(body)) return null;
   let last: TeamIntent | null = null;
   for (const sentence of body.split(/(?<=[.!?:])\s+|\n+/)) {
+    // encerramento/repasse: a conversa acabou ali; vale sobre o que veio antes na mensagem
+    const closing = findPhrase(` ${normalize(sentence)} `, CLOSING_PHRASES);
+    if (closing) {
+      last = { kind: 'closed', trigger: closing };
+      continue;
+    }
     const promise = findSpecificPromise(sentence, opts.commitmentVerbs, opts.commitmentPhrases);
     if (promise) {
       last = { kind: 'promise', trigger: promise.trigger };
@@ -239,6 +253,10 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
       // promessa da equipe ou pedido ao cliente; com os dois na mesma mensagem, vale o que ela pede por último
       // ("vou solicitar mais prazo. Quando conseguir a informação, pode me passar": agora a bola está com o cliente)
       const intent = m.type === 'text' ? teamIntent(m.body, opts, requestPhrases) : null;
+      if (intent?.kind === 'closed') {
+        set('resolved', 'closed', m, { trigger: intent.trigger });
+        continue;
+      }
       if (intent?.kind === 'promise') {
         set('company', 'promise', m, { trigger: intent.trigger, dueAt: due(m) });
         continue;

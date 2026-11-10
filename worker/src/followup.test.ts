@@ -180,3 +180,16 @@ test('promessa e pedido na mesma mensagem: vale o último (a bola fica com quem 
   // ordem inversa: pede primeiro e promete por último = promessa da equipe
   assert.equal(run([team('Pode nos enviar o contrato? Vou analisar assim que chegar e te retorno.', 0)]).kind, 'promise');
 });
+
+test('encerramento/repasse do assunto pela equipe: sem pendência, mesmo com promessa antes na mensagem', () => {
+  const handoff =
+    'Entendido sr. Leonardo. Dessa forma, acabamos de substabelecer o processo para a nova procuradora para que ela possa dar andamento.\n\n' +
+    'Ressaltamos que o prazo recursal encerra na data de hoje; vamos acompanhar a publicação e avisar a procuradora. Contudo, agora cabe a nova procuradora decidir.\n\n' +
+    'Esse grupo, por fim, será encerrado tendo em vista que era para esse processo, sem demanda em específico.\n\nFicamos à disposição!';
+  const r = run([client('Pode substabelecer para outro escritório?', 0), team(handoff, 10)]);
+  assert.equal(r.status, 'resolved');
+  assert.equal(r.kind, 'closed');
+  assert.equal(run([team('Vou verificar. O atendimento está encerrado.', 0)]).kind, 'closed');
+  // promessa DEPOIS do aviso de encerramento continua valendo
+  assert.equal(run([team('O atendimento foi encerrado. Vou enviar a certidão amanhã.', 0)]).kind, 'promise');
+});
