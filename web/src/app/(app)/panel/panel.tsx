@@ -275,7 +275,7 @@ export function GroupsPanel({
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<PanelStatus | 'all'>('all');
-  // pendência da conversa por regras (0167): empresa deve, cliente deve, prazo vencido
+  // pendência da conversa por regras (0167): pendente empresa, pendente cliente, prazo vencido
   const [followup, setFollowup] = useState<FollowupFilter>('all');
   // setor: 'all' (todos), 'none' (sem setor) ou o id do setor
   const [sector, setSector] = useState(defaultSector);
