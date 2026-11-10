@@ -26,7 +26,8 @@ export type ReceiveDiagnosis = {
   auto_request: { status: string; created_at: string; messages_added: number; note: string | null } | null;
 };
 
-export type Finding = { tone: 'good' | 'warning' | 'critical' | 'neutral'; text: string };
+/** `sync`: a outra cópia tem mensagens que esta não tem; o painel oferece "Sincronizar agora" (0166). */
+export type Finding = { tone: 'good' | 'warning' | 'critical' | 'neutral'; text: string; action?: 'sync' };
 
 const HOUR = 3600_000;
 const STATUS: Record<string, string> = { disconnected: 'desconectado', connecting: 'conectando', qr: 'esperando a leitura do QR Code', connected: 'conectado' };
@@ -67,7 +68,9 @@ export function diagnose(d: ReceiveDiagnosis, now: number, fmt: (iso: string) =>
         tone: 'warning',
         text:
           `A cópia deste grupo no número ${c.name}${c.phone ? ` (${c.phone})` : ''} recebeu mensagem em ${fmt(c.last_message_at!)}: as mensagens novas estão chegando por lá` +
-          (c.monitored ? '.' : ' (essa cópia está sem monitoramento).'),
+          (c.monitored ? '. ' : ' (essa cópia está sem monitoramento). ') +
+          'O sistema copia entre as cópias do grupo o que só uma delas recebeu, de minuto em minuto; para trazer agora, use "Sincronizar agora".',
+        action: 'sync',
       });
     }
   }
