@@ -218,6 +218,7 @@ from (values
   (159, 'Agenda: compromisso particular ou profissional, obrigatório (0168)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'agenda_events' and column_name = 'nature')
       and to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text)') is not null),
   (160, 'Agenda: compromisso particular aparece só como Ocupado para os outros (0169)', to_regprocedure('public.agenda_busy(timestamptz,timestamptz,uuid[])') is not null),
-  (161, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (161, 'Agenda: alerta em tela na hora do lembrete (0170)', to_regprocedure('public.my_agenda_reminders()') is not null),
+  (162, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
