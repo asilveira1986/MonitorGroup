@@ -74,7 +74,7 @@ function NewPersonForm({ onDone, sectors }: { onDone?: () => void; sectors: Sect
                     <option value="admin">Administrador - acesso total</option>
                   </Select>
                 </Field>
-                <Field label="Setores" hint="A pessoa vê e atende os grupos e as conversas privadas dos setores marcados.">
+                <Field label="Setores" hint="A pessoa vê e atende os grupos e as conversas privadas dos setores marcados. Administrador continua vendo tudo; o setor vale, por exemplo, para a agenda.">
                   <SectorPicker sectors={sectors} value={sectorIds} onChange={setSectorIds} />
                 </Field>
                 {sectorIds.map((id) => (
@@ -181,7 +181,7 @@ export function EditPerson({
               </Field>
             )}
             {profileId ? (
-              <Field label="Setores" hint="Vê e atende os grupos e as conversas privadas dos setores marcados.">
+              <Field label="Setores" hint="Vê e atende os grupos e as conversas privadas dos setores marcados. Administrador continua vendo tudo; o setor vale, por exemplo, para a agenda.">
                 <SectorPicker sectors={sectors} value={sectorIds} onChange={setSectorIds} />
               </Field>
             ) : (
