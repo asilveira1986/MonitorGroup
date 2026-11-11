@@ -19,3 +19,18 @@ export function withAdmins(names: string[], adminsOn: boolean): string[] {
 export function matchesResponsible(opts: { selected: string; groupResponsibleIds: string[]; adminIds: string[] }): boolean {
   return opts.groupResponsibleIds.includes(opts.selected) || opts.adminIds.includes(opts.selected);
 }
+
+/**
+ * Um grupo do WhatsApp que existe em vários setores/números (cópias) conta uma só vez:
+ * mesmo jid ou mesmo nome (sem diferenciar maiúsculas nem espaços repetidos).
+ * Mantém a primeira ocorrência e a ordem.
+ */
+export function dedupeGroups<T extends { name: string; jid?: string | null }>(list: T[]): T[] {
+  const seen = new Set<string>();
+  return list.filter((g) => {
+    const keys = [g.jid ? `jid:${g.jid}` : null, `name:${g.name.trim().replace(/\s+/g, ' ').toLowerCase()}`].filter(Boolean) as string[];
+    if (keys.some((k) => seen.has(k))) return false;
+    keys.forEach((k) => seen.add(k));
+    return true;
+  });
+}

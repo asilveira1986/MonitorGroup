@@ -5,7 +5,7 @@ import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { appSettings } from '@/lib/app-settings';
 import { requireMenu } from '@/lib/auth';
 import { defaultPanelSector } from '@/lib/panel-defaults';
-import { withAdmins } from '@/lib/responsibles';
+import { dedupeGroups, withAdmins } from '@/lib/responsibles';
 import { createClient } from '@/lib/supabase/server';
 import { GroupsPanel, type PanelGroup } from './panel';
 
@@ -71,7 +71,10 @@ export default async function PanelPage() {
       id: t.id as string,
       name: t.name as string,
       // administrador responde por todos os grupos do painel (0162)
-      groups: adminIds.includes(t.id as string) ? groups.length : groups.filter((g) => g.responsible_ids.includes(t.id as string)).length,
+      // (cópias do mesmo grupo em vários setores/números contam uma vez, como na lista)
+      groups: adminIds.includes(t.id as string)
+        ? dedupeGroups(groups).length
+        : dedupeGroups(groups.filter((g) => g.responsible_ids.includes(t.id as string))).length,
       // grupos da pessoa que não entram no painel (monitoramento desligado ou o número saiu do grupo)
       hidden: ((groupSectors ?? []) as unknown as GroupInfo[]).filter(
         (g) => (!g.monitored || g.removed_at) && responsiblesOf(g).includes(t.id as string),
