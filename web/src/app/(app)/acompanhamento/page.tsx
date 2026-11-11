@@ -1,7 +1,7 @@
 import { Activity, AlertTriangle } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
-import { requirePlatformAdmin } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth';
 import { cn, formatNumber, formatPhone, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import { AutoRefresh } from './auto-refresh';
@@ -44,10 +44,12 @@ const sum = (list: Company[], k: keyof Company) => list.reduce((n, c) => n + Num
 
 /**
  * Acompanhamento da plataforma (0135): por empresa, quem está online, quem acessa e quem não acessa,
- * os números de WhatsApp e o movimento. Só quem administra a plataforma.
+ * os números de WhatsApp e o movimento. Administrador da plataforma: todas as empresas; administrador da empresa: só a
+ * própria (0174). Os demais não abrem.
  */
 export default async function MonitorPage() {
-  await requirePlatformAdmin();
+  const profile = await requireAdmin();
+  const platform = Boolean(profile.platform_admin);
   const supabase = await createClient();
   // quem está vendo a tela também está online
   await supabase.rpc('touch_last_seen');
@@ -69,14 +71,18 @@ export default async function MonitorPage() {
       <AutoRefresh seconds={60} />
       <PageHeader
         title="Acompanhamento"
-        description="Uso da plataforma por empresa: quem está online (sistema aberto nos últimos 3 minutos), quem acessa e quem não acessa, números de WhatsApp e movimento. Atualiza a cada minuto."
+        description={
+          platform
+            ? 'Uso da plataforma por empresa: quem está online (sistema aberto nos últimos 3 minutos), quem acessa e quem não acessa, números de WhatsApp e movimento. Atualiza a cada minuto.'
+            : 'Uso do sistema na sua empresa: quem está online (sistema aberto nos últimos 3 minutos), quem acessa e quem não acessa, números de WhatsApp e movimento. Atualiza a cada minuto.'
+        }
       />
       {error ? (
         <Card>
           <EmptyState
             icon={<AlertTriangle />}
             title="Não foi possível carregar"
-            description={/platform_monitor/.test(error.message) ? 'Rode o atualizar_banco no Supabase (script 0135).' : error.message}
+            description={/platform_monitor/.test(error.message) ? 'Rode o atualizar_banco no Supabase (scripts 0135 e 0174).' : error.message}
           />
         </Card>
       ) : (
@@ -102,13 +108,13 @@ export default async function MonitorPage() {
 
           {companies.length === 0 && (
             <Card>
-              <EmptyState icon={<Activity />} title="Nenhuma empresa" description="Cadastre empresas em Empresas." />
+              <EmptyState icon={<Activity />} title="Nenhuma empresa" description={platform ? 'Cadastre empresas em Empresas.' : 'Sem dados da sua empresa.'} />
             </Card>
           )}
           <div className="space-y-3">
             {companies.map((c) => (
               <Card key={c.id} className={cn('overflow-hidden', !c.active && 'opacity-70')}>
-                <details>
+                <details open={companies.length === 1}>
                   <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 hover:bg-surface-2/60 sm:px-5">
                     <div className="min-w-48 flex-1">
                       <p className="flex items-center gap-2 font-semibold">

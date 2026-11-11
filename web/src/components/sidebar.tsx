@@ -34,6 +34,7 @@ export function Sidebar({
   counts,
   user,
   platformAdmin = false,
+  admin = false,
   company = null,
   alertsOff,
   companyLogo = false,
@@ -55,6 +56,7 @@ export function Sidebar({
   user: { name: string; role: string; initials?: string; avatarUrl?: string | null };
   /** administra a plataforma: mostra o item Empresas */
   platformAdmin?: boolean;
+  admin?: boolean;
   /** empresa atual (no rodapé do menu) */
   company?: string | null;
   /** Meus alertas (quem administra a plataforma): undefined = sem o botão */
@@ -132,7 +134,7 @@ export function Sidebar({
     </div>
   );
 
-  const nav = <SidebarNav pathname={pathname} counts={counts} hidden={hidden} platformAdmin={platformAdmin} onNavigate={() => setOpen(false)} />;
+  const nav = <SidebarNav pathname={pathname} counts={counts} hidden={hidden} platformAdmin={platformAdmin} admin={admin} onNavigate={() => setOpen(false)} />;
 
   return (
     <>

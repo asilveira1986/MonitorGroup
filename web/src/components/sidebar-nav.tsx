@@ -114,6 +114,7 @@ export function SidebarNav({
   counts,
   hidden = [],
   platformAdmin = false,
+  admin = false,
   onNavigate,
 }: {
   pathname: string;
@@ -121,9 +122,11 @@ export function SidebarNav({
   /** itens escondidos (funções desligadas, Configurações › Menus) */
   hidden?: string[];
   platformAdmin?: boolean;
+  /** administrador da empresa (vê o Acompanhamento da própria empresa) */
+  admin?: boolean;
   onNavigate?: () => void;
 }) {
-  const tree = visibleNav(NAV_TREE, { hidden, platformAdmin });
+  const tree = visibleNav(NAV_TREE, { hidden, platformAdmin, admin });
   const activeId = activeGroupId(tree, pathname);
   const prefs = parseGroupPrefs(useSyncExternalStore(subscribePrefs, readPrefs, () => ''));
   const [closedHere, setClosedHere] = useState<{ id: string; path: string } | null>(null);

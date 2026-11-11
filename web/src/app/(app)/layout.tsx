@@ -73,6 +73,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         ]}
         user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role, initials, avatarUrl: profile.avatar_url }}
         platformAdmin={profile.platform_admin}
+        admin={profile.role === 'admin'}
         alertsOff={profile.platform_admin ? Boolean(profile.alerts_off) : undefined}
         company={company?.name ?? null}
         companyLogo={companyLogo}

@@ -33,7 +33,7 @@ test('itens escondidos somem, e o grupo vazio some junto', () => {
   ]);
 });
 
-test('quem não administra a plataforma não vê Empresas, Acompanhamento nem Log', () => {
+test('quem não é administrador não vê Empresas, Acompanhamento nem Log', () => {
   const t = visibleNav(NAV_TREE, { hidden: ['/broadcasts'], platformAdmin: false });
   assert.deepEqual(names(t).filter((n) => n.startsWith('Gestão')), ['Gestão: Relatórios, Alertas']);
   // sem nenhum item visível, o grupo Gestão some inteiro
@@ -88,4 +88,9 @@ test('grupo aberto: o da página abre sozinho; os outros seguem a escolha ou o p
   const closed = { id: 'gestao', path: '/reports' };
   assert.equal(isGroupOpen({ ...base, group: g, activeId: 'gestao', closedHere: closed }), false);
   assert.equal(isGroupOpen({ ...base, group: g, activeId: 'gestao', closedHere: closed, pathname: '/alerts' }), true);
+});
+
+test('administrador da empresa vê o Acompanhamento (da própria empresa), mas não Empresas nem Log', () => {
+  const t = visibleNav(NAV_TREE, { hidden: ['/broadcasts'], platformAdmin: false, admin: true });
+  assert.deepEqual(names(t).filter((n) => n.startsWith('Gestão')), ['Gestão: Relatórios, Alertas, Acompanhamento']);
 });

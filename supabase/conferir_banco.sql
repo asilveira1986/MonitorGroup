@@ -224,6 +224,7 @@ from (values
   (163, 'Agenda: hora de término do compromisso (0172)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'agenda_events' and column_name = 'ends_at')
       and to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)') is not null),
   (164, 'SLA do grupo só para administradores (0173)', coalesce(pg_get_functiondef('public.guard_group_monitoring()'::regprocedure) like '%SLA dos grupos%', false)),
-  (165, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (165, 'Acompanhamento liberado para os administradores da empresa (0174)', coalesce(pg_get_functiondef('public.platform_monitor()'::regprocedure) like '%Somente administradores veem o acompanhamento%', false)),
+  (166, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
