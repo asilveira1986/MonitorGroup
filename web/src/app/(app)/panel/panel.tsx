@@ -8,7 +8,7 @@ import { Avatar } from '@/components/avatar';
 import { EmptyState } from '@/components/ui';
 import { cn, formatDuration, formatNumber } from '@/lib/format';
 import { FOLLOWUP_FILTERS, followupBadge, matchesFollowup, type FollowupFilter, type FollowupInfo } from '@/lib/followup-view';
-import { matchesResponsible } from '@/lib/responsibles';
+import { dedupeGroups, matchesResponsible } from '@/lib/responsibles';
 
 export type PanelStatus = 'late' | 'waiting' | 'answered' | 'neutral';
 
@@ -312,13 +312,7 @@ export function GroupsPanel({
     );
     if (sector !== 'all') return filtered;
     // em "Todos" o mesmo grupo do WhatsApp (mesmo jid ou mesmo nome) aparece uma só vez, mesmo que esteja em vários setores/números
-    const seen = new Set<string>();
-    return filtered.filter((g) => {
-      const keys = [g.jid ? `jid:${g.jid}` : null, `name:${g.name.trim().replace(/\s+/g, ' ').toLowerCase()}`].filter(Boolean) as string[];
-      if (keys.some((k) => seen.has(k))) return false;
-      keys.forEach((k) => seen.add(k));
-      return true;
-    });
+    return dedupeGroups(filtered);
   }, [allGroups, sector, responsible, adminResponsibleIds]);
   const [query, setQuery] = useState('');
 
@@ -438,7 +432,7 @@ export function GroupsPanel({
                     {r.name} ({r.groups}{r.hidden ? ` · ${r.hidden} não monitorado${r.hidden > 1 ? 's' : ''}` : ''})
                   </option>
                 ))}
-                <option value="none">Sem responsável ({allGroups.filter((g) => !g.responsible_ids?.length).length})</option>
+                <option value="none">Sem responsável ({dedupeGroups(allGroups.filter((g) => !g.responsible_ids?.length)).length})</option>
               </select>
             </FilterField>
           )}

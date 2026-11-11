@@ -19,3 +19,14 @@ test('responsáveis: filtrar por um administrador mostra todos os grupos; por ou
   assert.equal(matchesResponsible({ selected: 'ana', groupResponsibleIds: ['bia'], adminIds }), false);
   assert.equal(matchesResponsible({ selected: 'ana', groupResponsibleIds: [], adminIds: [] }), false);
 });
+
+test('cópias do mesmo grupo (mesmo jid ou nome) contam uma vez', async () => {
+  const { dedupeGroups } = await import('./responsibles.ts');
+  const list = [
+    { name: 'Flores x Cotrijal', jid: 'a@g.us' },
+    { name: 'flores  x cotrijal', jid: 'b@g.us' },
+    { name: 'Outro nome', jid: 'a@g.us' },
+    { name: 'Jurídico', jid: null },
+  ];
+  assert.deepEqual(dedupeGroups(list).map((g) => g.name), ['Flores x Cotrijal', 'Jurídico']);
+});
