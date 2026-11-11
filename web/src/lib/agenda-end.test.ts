@@ -46,6 +46,8 @@ async function setup() {
   await db.exec(read('0168_agenda_event_nature.sql'));
   await db.exec(read('0172_agenda_event_end.sql'));
   await db.exec(read('0172_agenda_event_end.sql'));
+  await db.exec(read('0175_agenda_multi_day.sql'));
+  await db.exec(read('0175_agenda_multi_day.sql'));
   const at = (h: number, m = 0) => `2026-11-12T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00Z`;
   const save = async (a: { id?: string | null; start?: string; end?: string | null; allDay?: boolean; repeat?: boolean; scope?: string }) => {
     try {
@@ -75,18 +77,42 @@ test('com término: grava; sem término: continua sem (compromissos de antes nã
   ]);
 });
 
-test('término inválido: antes/igual ao início ou mais de 24 h depois; dia todo ignora o término', async () => {
+test('término inválido: antes/igual ao início ou mais de 31 dias depois', async () => {
   const t = await setup();
   for (const end of [t.at(13), t.at(14)]) {
     const r = await t.save({ start: t.at(14), end });
     assert.equal(r.ok, false);
     assert.match(r.ok ? '' : r.message, /depois do início/);
   }
-  const long = await t.save({ start: t.at(14), end: '2026-11-13T15:00:00Z' });
+  const long = await t.save({ start: t.at(14), end: '2026-12-20T15:00:00Z' });
   assert.equal(long.ok, false);
-  assert.match(long.ok ? '' : long.message, /24 horas/);
-  assert.ok((await t.save({ start: t.at(12), end: t.at(13), allDay: true })).ok);
+  assert.match(long.ok ? '' : long.message, /até 31 dias/);
+  assert.deepEqual(await t.rows(), []);
+});
+
+test('compromisso de vários dias: termina em outro dia, também em "dia todo"', async () => {
+  const t = await setup();
+  assert.ok((await t.save({ start: t.at(22), end: '2026-11-13T09:30:00Z' })).ok, 'vira a noite');
+  assert.ok((await t.save({ start: t.at(12), end: '2026-11-15T12:00:00Z', allDay: true })).ok, 'dia todo de 12 a 15');
+  assert.ok((await t.save({ start: t.at(8), end: '2026-12-10T08:00:00Z' })).ok, 'até 31 dias');
+  const rows = (await t.rows()).map((r) => `${r.s}>${r.e}`);
+  assert.deepEqual(rows.sort(), ['12 08:00>10 08:00', '12 12:00>15 12:00', '12 22:00>13 09:30']);
+});
+
+test('dia todo sem término continua de um dia só', async () => {
+  const t = await setup();
+  assert.ok((await t.save({ start: t.at(12), allDay: true })).ok);
   assert.deepEqual(await t.rows(), [{ s: '12 12:00', e: null }]);
+});
+
+test('repetição de compromisso de vários dias: cada ocorrência guarda a mesma duração', async () => {
+  const t = await setup();
+  assert.ok((await t.save({ start: t.at(12), end: '2026-11-14T12:00:00Z', allDay: true, repeat: true })).ok);
+  assert.deepEqual(await t.rows(), [
+    { s: '12 12:00', e: '14 12:00' },
+    { s: '13 12:00', e: '15 12:00' },
+    { s: '14 12:00', e: '16 12:00' },
+  ]);
 });
 
 test('repetição: todas as ocorrências ficam com a mesma duração', async () => {

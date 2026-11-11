@@ -281,7 +281,8 @@ begin
       and to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)') is not null),
   (164, 'SLA do grupo só para administradores (0173)', coalesce(pg_get_functiondef('public.guard_group_monitoring()'::regprocedure) like '%SLA dos grupos%', false)),
   (165, 'Acompanhamento liberado para os administradores da empresa (0174)', coalesce(pg_get_functiondef('public.platform_monitor()'::regprocedure) like '%Somente administradores veem o acompanhamento%', false)),
-  (166, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (166, 'Agenda: compromisso de vários dias, término em outro dia (0175)', coalesce(pg_get_functiondef('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)'::regprocedure) like '%até 31 dias%', false)),
+  (167, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -290,7 +291,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -24890,6 +24891,100 @@ grant execute on function public.platform_monitor() to authenticated;
 $mig0174$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0175_agenda_multi_day.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0175', $mig0175$
+-- =====================================================================
+-- Agenda: compromisso de vários dias (começa num dia e termina em outro).
+--
+--  * O término pode cair em outro dia (até 31 dias depois do início), também
+--    em "dia todo" (de um dia ao outro). Antes só valia até 24 h e não valia
+--    em "dia todo".
+--  * Em repetição, cada ocorrência guarda a mesma duração (a regra de
+--    herdar a duração, 0172, passa a valer também para "dia todo").
+-- =====================================================================
+
+-- a duração herdada vale também para "dia todo" com término em outro dia
+create or replace function public.agenda_events_end_default()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v text := nullif(current_setting('app.agenda_duration_min', true), '');
+begin
+  if new.ends_at is null then
+    if v is null then
+      select new.starts_at + (e.ends_at - e.starts_at) into new.ends_at
+        from public.agenda_events e
+       where e.series_id is not null and e.series_id = new.series_id and e.ends_at is not null
+       order by e.starts_at desc limit 1;
+    elsif v <> 'none' then
+      new.ends_at := new.starts_at + make_interval(mins => v::int);
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.save_agenda_event(
+  p_id uuid, p_title text, p_notes text, p_starts_at timestamptz, p_all_day boolean, p_people uuid[],
+  p_reminders int[] default null, p_type uuid default null, p_repeat jsonb default null, p_scope text default 'one',
+  p_nature text default null, p_ends_at timestamptz default null
+)
+returns uuid
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_id uuid;
+  v_series uuid;
+  v_start timestamptz;
+  v_min int;
+begin
+  if p_nature is not null and p_nature not in ('professional', 'personal') then
+    raise exception 'Escolha se o compromisso é particular ou profissional.';
+  end if;
+  if p_id is null and p_nature is null then
+    raise exception 'Escolha se o compromisso é particular ou profissional.';
+  end if;
+  -- término em outro dia (0175): compromisso de vários dias, até 31 dias; "dia todo" vale só de um dia ao outro
+  if p_ends_at is not null then
+    if p_ends_at <= p_starts_at then
+      raise exception 'O término deve ser depois do início.';
+    end if;
+    if p_ends_at > p_starts_at + interval '31 days' then
+      raise exception 'O compromisso pode durar até 31 dias. Para períodos maiores, use a repetição.';
+    end if;
+  end if;
+  v_min := case when p_ends_at is null then null else (extract(epoch from (p_ends_at - p_starts_at)) / 60)::int end;
+  -- as ocorrências criadas dentro desta chamada nascem com a natureza e a duração escolhidas
+  perform set_config('app.agenda_nature', coalesce(p_nature, ''), true);
+  perform set_config('app.agenda_duration_min', coalesce(v_min::text, 'none'), true);
+  v_id := public.save_agenda_event_core(p_id, p_title, p_notes, p_starts_at, p_all_day, p_people, p_reminders, p_type, p_repeat, p_scope);
+  select series_id, starts_at into v_series, v_start from public.agenda_events where id = v_id;
+  if p_nature is not null then
+    if p_id is not null and v_series is not null and p_scope = 'following' then
+      update public.agenda_events set nature = p_nature where series_id = v_series and starts_at >= v_start;
+    else
+      update public.agenda_events set nature = p_nature where id = v_id;
+    end if;
+  end if;
+  -- término: este compromisso (ou este e os próximos) com a duração escolhida; sem término, limpa
+  if p_id is not null and v_series is not null and p_scope = 'following' then
+    update public.agenda_events
+       set ends_at = case when v_min is null then null else starts_at + make_interval(mins => v_min) end
+     where series_id = v_series and starts_at >= v_start;
+  else
+    update public.agenda_events
+       set ends_at = case when v_min is null then null else starts_at + make_interval(mins => v_min) end
+     where id = v_id;
+  end if;
+  perform set_config('app.agenda_nature', '', true);
+  perform set_config('app.agenda_duration_min', '', true);
+  return v_id;
+end;
+$$;
+revoke all on function public.save_agenda_event(uuid, text, text, timestamptz, boolean, uuid[], int[], uuid, jsonb, text, text, timestamptz) from public, anon;
+grant execute on function public.save_agenda_event(uuid, text, text, timestamptz, boolean, uuid[], int[], uuid, jsonb, text, text, timestamptz) to authenticated;
+$mig0175$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -25123,6 +25218,7 @@ from (values
       and to_regprocedure('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)') is not null),
   (164, 'SLA do grupo só para administradores (0173)', coalesce(pg_get_functiondef('public.guard_group_monitoring()'::regprocedure) like '%SLA dos grupos%', false)),
   (165, 'Acompanhamento liberado para os administradores da empresa (0174)', coalesce(pg_get_functiondef('public.platform_monitor()'::regprocedure) like '%Somente administradores veem o acompanhamento%', false)),
-  (166, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (166, 'Agenda: compromisso de vários dias, término em outro dia (0175)', coalesce(pg_get_functiondef('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)'::regprocedure) like '%até 31 dias%', false)),
+  (167, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

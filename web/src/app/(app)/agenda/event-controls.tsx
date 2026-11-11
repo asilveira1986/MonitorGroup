@@ -8,7 +8,7 @@ import { Button, Input, Select, Textarea } from '@/components/ui';
 import { AGENDA_COLORS, agendaColor, type AgendaType } from '@/lib/agenda-colors';
 import { createAgendaEvent, deleteAgendaEvent, setAgendaEventDone, updateAgendaEvent, type RepeatRule } from './actions';
 import { NATURE_REQUIRED, natureLabel, type EventNature } from '@/lib/agenda-nature';
-import { durationLabel, durationMinutes, endFor, endIsAfterStart, eventMinutes, rangeLabel, shiftEnd } from '@/lib/agenda-time';
+import { addDaysYmd, diffDays, durationLabel, endAfterStart, endFor, eventMinutes, shiftEnd, spanLabel, whenLabel } from '@/lib/agenda-time';
 
 export type AgendaEvent = {
   id: string;
@@ -214,7 +214,7 @@ function RepeatPicker({ value, onChange }: { value: RepeatState; onChange: (v: R
             <Select value={value.end} onChange={(e) => set({ end: e.target.value as RepeatState['end'] })} className="h-9 w-auto" aria-label="Termina">
               <option value="never">Nunca</option>
               <option value="until">Em uma data</option>
-              <option value="count">Depois de</option>
+              <option value="count">{value.freq === 'daily' && value.every === 1 ? 'Por' : 'Depois de'}</option>
             </Select>
             {value.end === 'until' && <Input type="date" value={value.until} onChange={(e) => set({ until: e.target.value })} className="h-9 w-auto" required />}
             {value.end === 'count' && (
@@ -228,7 +228,8 @@ function RepeatPicker({ value, onChange }: { value: RepeatState; onChange: (v: R
                   className="h-9 w-20 text-center"
                   aria-label="Quantas vezes"
                 />
-                <span className="text-ink-2">vezes</span>
+                {/* "Por 5 dias", "Por 3 semanas"...: a repetição diária por X dias */}
+                <span className="text-ink-2">{value.every === 1 && unit ? unit[1] : 'vezes'}</span>
               </>
             )}
           </div>
@@ -440,15 +441,31 @@ function EventDialog({
   const [notes, setNotes] = useState(event?.notes ?? '');
   const [date, setDate] = useState(initial.date);
   const [time, setTime] = useState(event?.all_day ? '09:00' : initial.time);
-  // término (0172): vazio = sem término; só no mesmo dia do início
-  const initialEnd = event?.ends_at && !event.all_day ? zonedParts(event.ends_at, timeZone) : null;
-  const [endTime, setEndTime] = useState(initialEnd && initialEnd.date === initial.date ? initialEnd.time : '');
-  const [endError, setEndError] = useState(false);
+  // término (0172/0175): dia e hora; compromisso de vários dias termina em outro dia. Sem término: dia igual ao do início e hora vazia
+  const initialEnd = event?.ends_at ? zonedParts(event.ends_at, timeZone) : null;
+  const [endDate, setEndDate] = useState(initialEnd?.date ?? initial.date);
+  const [endTime, setEndTime] = useState(event?.all_day || !initialEnd ? '' : initialEnd.time);
+  const [endError, setEndError] = useState<string | null>(null);
   const changeStart = (next: string) => {
-    setEndTime((end) => shiftEnd(time, next, end));
+    // término no mesmo dia: acompanha o início, mantendo a duração
+    if (endDate === date) setEndTime((end) => shiftEnd(time, next, end));
     setTime(next);
-    setEndError(false);
+    setEndError(null);
   };
+  /** mudou o dia do início: o término anda junto, mantendo quantos dias o compromisso dura */
+  const changeDate = (next: string) => {
+    if (next && endDate >= date) setEndDate(addDaysYmd(next, diffDays(date, endDate)));
+    else if (next) setEndDate(next);
+    setDate(next);
+    setEndError(null);
+  };
+  const pickEndDate = (next: string) => {
+    setEndDate(next || date);
+    // outro dia sem hora de término: começa com a mesma hora do início
+    if (next && next > date && !allDay && !endTime) setEndTime(time);
+    setEndError(null);
+  };
+  const addDays = (n: number) => pickEndDate(addDaysYmd(date, n));
   const [allDay, setAllDay] = useState(event?.all_day ?? false);
   const [who, setWho] = useState<string[]>(event?.people?.length ? event.people : defaultPeople);
   const [reminders, setReminders] = useState<number[]>(event?.reminders ?? [15]);
@@ -484,9 +501,15 @@ function EventDialog({
     }
     if (!title.trim()) return void toast.error('Informe o título do compromisso.');
     if (!date) return void toast.error('Informe a data do compromisso.');
-    if (!allDay && !endIsAfterStart(time || '09:00', endTime)) {
-      setEndError(true);
+    const multi = endDate > date;
+    const effEnd = allDay ? '12:00' : endTime || (multi ? time || '09:00' : '');
+    if (!endAfterStart(date, allDay ? '12:00' : time || '09:00', endDate, effEnd)) {
+      setEndError('O término deve ser depois do início.');
       return void toast.error('O término deve ser depois do início.');
+    }
+    if (diffDays(date, endDate) > 31) {
+      setEndError('O compromisso pode durar até 31 dias. Para períodos maiores, use a repetição.');
+      return void toast.error('O compromisso pode durar até 31 dias.');
     }
     // dia todo: meio-dia no fuso da empresa, para o dia não mudar com o fuso
     const startsAt = zonedIso(date, allDay ? '12:00' : time || '09:00', timeZone);
@@ -497,7 +520,7 @@ function EventDialog({
       title,
       notes,
       startsAt,
-      endsAt: !allDay && endTime ? zonedIso(date, endTime, timeZone) : null,
+      endsAt: allDay ? (multi ? zonedIso(endDate, '12:00', timeZone) : null) : effEnd ? zonedIso(endDate, effEnd, timeZone) : null,
       allDay,
       reminders,
       typeId,
@@ -563,47 +586,76 @@ function EventDialog({
               />
               <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={2000} placeholder="Observação (opcional): local, link, detalhes..." aria-label="Observação" />
             </Section>
-            <Section icon={Clock} title="Quando" hint={!allDay && endTime && durationMinutes(time, endTime) ? durationLabel(durationMinutes(time, endTime)!) : undefined}>
-              <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(9.5rem,1fr)_8.75rem_8.75rem] sm:gap-3">
-                <label className="col-span-2 block min-w-0 space-y-1.5 sm:col-span-1">
-                  <span className="block text-xs font-medium text-ink-2">Dia</span>
-                  <Input
-                    type="date"
-                    value={date}
-                    onChange={(e) => {
-                      // semanal no dia padrão: acompanha o dia escolhido
-                      if (e.target.value && repeat.weekdays.length === 1 && repeat.weekdays[0] === dowOf(date)) setRepeat({ ...repeat, weekdays: [dowOf(e.target.value)] });
-                      setDate(e.target.value);
-                    }}
-                    required
-                  />
-                </label>
-                <label className="block space-y-1.5">
-                  <span className="block text-xs font-medium text-ink-2">Início</span>
-                  <Input type="time" value={time} onChange={(e) => changeStart(e.target.value)} disabled={allDay} className="w-full" aria-label="Início" />
-                </label>
-                <label className="block space-y-1.5">
-                  <span className={`block text-xs font-medium ${endError ? 'text-critical-ink' : 'text-ink-2'}`}>Término</span>
-                  <Input
-                    type="time"
-                    value={endTime}
-                    onChange={(e) => {
-                      setEndTime(e.target.value);
-                      setEndError(false);
-                    }}
-                    disabled={allDay}
-                    aria-label="Término (opcional)"
-                    aria-invalid={endError}
-                    className={`w-full ${endError ? 'border-critical' : ''}`}
-                  />
-                </label>
+            <Section
+              icon={Clock}
+              title="Quando"
+              hint={(() => {
+                const m = !allDay && endTime ? eventMinutes(zonedIso(date, time || '09:00', timeZone), zonedIso(endDate, endTime, timeZone), false) : null;
+                const days = endDate > date ? diffDays(date, endDate) : 0;
+                return allDay ? (days ? `${days + 1} dias` : undefined) : m ? spanLabel(m) : undefined;
+              })()}
+            >
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(9.5rem,1fr)_8.75rem] sm:gap-3">
+                  <label className="block min-w-0 space-y-1.5">
+                    <span className="block text-xs font-medium text-ink-2">Início</span>
+                    <Input
+                      type="date"
+                      value={date}
+                      onChange={(e) => {
+                        // semanal no dia padrão: acompanha o dia escolhido
+                        if (e.target.value && repeat.weekdays.length === 1 && repeat.weekdays[0] === dowOf(date)) setRepeat({ ...repeat, weekdays: [dowOf(e.target.value)] });
+                        changeDate(e.target.value);
+                      }}
+                      required
+                      aria-label="Dia do início"
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="block text-xs font-medium text-transparent" aria-hidden>
+                      Hora
+                    </span>
+                    <Input type="time" value={time} onChange={(e) => changeStart(e.target.value)} disabled={allDay} className="w-full" aria-label="Hora do início" />
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(9.5rem,1fr)_8.75rem] sm:gap-3">
+                  <label className="block min-w-0 space-y-1.5">
+                    <span className={`block text-xs font-medium ${endError ? 'text-critical-ink' : 'text-ink-2'}`}>Término</span>
+                    <Input
+                      type="date"
+                      value={endDate}
+                      min={date}
+                      onChange={(e) => pickEndDate(e.target.value)}
+                      aria-label="Dia do término"
+                      aria-invalid={Boolean(endError)}
+                      className={endError ? 'border-critical' : ''}
+                    />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="block text-xs font-medium text-transparent" aria-hidden>
+                      Hora
+                    </span>
+                    <Input
+                      type="time"
+                      value={endTime}
+                      onChange={(e) => {
+                        setEndTime(e.target.value);
+                        setEndError(null);
+                      }}
+                      disabled={allDay}
+                      aria-label="Hora do término (opcional)"
+                      aria-invalid={Boolean(endError)}
+                      className={`w-full ${endError ? 'border-critical' : ''}`}
+                    />
+                  </label>
+                </div>
               </div>
               {!allDay && (
                 <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Duração">
                   <span className="text-[9px] text-muted">Duração:</span>
                   {[30, 60, 90, 120].map((m) => {
                     const target = endFor(time, m);
-                    const on = Boolean(target) && endTime === target;
+                    const on = Boolean(target) && endDate === date && endTime === target;
                     return (
                       <button
                         key={m}
@@ -611,8 +663,9 @@ function EventDialog({
                         disabled={!target}
                         aria-pressed={on}
                         onClick={() => {
+                          setEndDate(date);
                           setEndTime(target);
-                          setEndError(false);
+                          setEndError(null);
                         }}
                         className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition disabled:opacity-40 ${on ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2 hover:border-brand-line'}`}
                       >
@@ -620,14 +673,40 @@ function EventDialog({
                       </button>
                     );
                   })}
-                  {endTime && (
-                    <button type="button" onClick={() => setEndTime('')} className="rounded-full px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-2">
-                      sem término
-                    </button>
-                  )}
                 </div>
               )}
-              {endError && <p className="text-xs font-medium text-critical-ink">O término deve ser depois do início.</p>}
+              <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Vários dias">
+                <span className="text-[9px] text-muted">Vários dias:</span>
+                {[1, 2, 6].map((n) => {
+                  const on = diffDays(date, endDate) === n;
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => addDays(n)}
+                      title={`Termina ${n === 1 ? 'no dia seguinte' : `${n} dias depois`}`}
+                      className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${on ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2 hover:border-brand-line'}`}
+                    >
+                      {n === 6 ? 'até 1 semana' : `+${n} dia${n > 1 ? 's' : ''}`}
+                    </button>
+                  );
+                })}
+                {(endTime || endDate > date) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEndDate(date);
+                      setEndTime('');
+                      setEndError(null);
+                    }}
+                    className="rounded-full px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-2"
+                  >
+                    sem término
+                  </button>
+                )}
+              </div>
+              {endError && <p className="text-xs font-medium text-critical-ink">{endError}</p>}
               <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-ink-2">
                 <input type="checkbox" checked={allDay} onChange={(e) => changeAllDay(e.target.checked)} className="h-4 w-4 accent-[var(--brand)]" />
                 Dia todo
@@ -881,8 +960,14 @@ export function EventDetails({
             <p>
               <span className="first-letter:uppercase">{day}</span>
               <br />
-              <strong>{event.all_day ? 'Dia todo' : event.ends_at ? `das ${rangeLabel(event.starts_at, event.ends_at, false, timeZone).replace('–', ' às ')}` : `às ${time}`}</strong>
-              {eventMinutes(event.starts_at, event.ends_at, event.all_day) && <span className="text-ink-2"> · {durationLabel(eventMinutes(event.starts_at, event.ends_at, event.all_day)!)}</span>}
+              <strong>
+                {event.all_day
+                  ? whenLabel(event.starts_at, event.ends_at, true, timeZone).replace(/^dia todo/, 'Dia todo')
+                  : event.ends_at
+                    ? whenLabel(event.starts_at, event.ends_at, false, timeZone).replace('–', ' às ').replace(/^(\d)/, 'das $1').replace(' → ', ' até ')
+                    : `às ${time}`}
+              </strong>
+              {eventMinutes(event.starts_at, event.ends_at, event.all_day) && <span className="text-ink-2"> · {spanLabel(eventMinutes(event.starts_at, event.ends_at, event.all_day)!)}</span>}
             </p>
           </div>
           {repeats && (
