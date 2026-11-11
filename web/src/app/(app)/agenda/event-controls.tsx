@@ -47,7 +47,7 @@ export function NatureBadge({ nature, className = '' }: { nature?: EventNature |
 /** Seção do formulário: título pequeno com ícone e o conteúdo num cartão leve. */
 function Section({ icon: Icon, title, hint, children, className = '' }: { icon: typeof Clock; title: string; hint?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
-    <section className={`space-y-2 rounded-2xl border border-line bg-surface p-3 ${className}`}>
+    <section className={`space-y-2.5 rounded-2xl border border-line bg-surface p-3.5 ${className}`}>
       <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
         <Icon className="h-3.5 w-3.5" aria-hidden /> {title}
         {hint && <span className="ml-auto text-[9px] font-normal normal-case tracking-normal text-muted">{hint}</span>}
@@ -60,7 +60,7 @@ function Section({ icon: Icon, title, hint, children, className = '' }: { icon: 
 /** Escolha obrigatória: particular ou profissional (0168). Sem marca nenhuma até a pessoa escolher. */
 function NaturePicker({ value, onChange, invalid }: { value: EventNature | null; onChange: (v: EventNature) => void; invalid: boolean }) {
   const options: { key: EventNature; icon: typeof Clock; title: string; text: string }[] = [
-    { key: 'professional', icon: Briefcase, title: 'Profissional', text: 'Trabalho e clientes' },
+    { key: 'professional', icon: Briefcase, title: 'Profissional', text: 'Trabalho, clientes, processos' },
     { key: 'personal', icon: Lock, title: 'Particular', text: 'Assunto pessoal' },
   ];
   return (
@@ -162,16 +162,9 @@ function TypePicker({ types, value, onChange }: { types: AgendaType[]; value: st
 function RepeatPicker({ value, onChange }: { value: RepeatState; onChange: (v: RepeatState) => void }) {
   const set = (p: Partial<RepeatState>) => onChange({ ...value, ...p });
   const unit = FREQ.find((f) => f.key === value.freq)?.unit;
-  const repeating = value.freq !== 'none' && Boolean(unit);
   return (
-    // com a repetição ligada, o seletor e as opções ficam lado a lado (a seção tem duas colunas no computador)
-    <div className="space-y-2 md:flex md:items-start md:gap-3 md:space-y-0">
-      <Select
-        value={value.freq}
-        onChange={(e) => set({ freq: e.target.value as RepeatState['freq'] })}
-        aria-label="Repetir"
-        className={repeating ? 'md:w-48 md:shrink-0' : undefined}
-      >
+    <div className="space-y-2">
+      <Select value={value.freq} onChange={(e) => set({ freq: e.target.value as RepeatState['freq'] })} aria-label="Repetir">
         <option value="none">Não repete</option>
         {FREQ.map((f) => (
           <option key={f.key} value={f.key}>
@@ -180,9 +173,7 @@ function RepeatPicker({ value, onChange }: { value: RepeatState; onChange: (v: R
         ))}
       </Select>
       {value.freq !== 'none' && unit && (
-        <div className="space-y-1.5 rounded-xl border border-line p-2.5 md:min-w-0 md:flex-1">
-          {/* "A cada" e "Termina" lado a lado (quebra se faltar espaço) */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        <div className="space-y-2 rounded-xl border border-line p-3">
           <div className="flex items-center gap-2 text-sm">
             <span className="text-ink-2">A cada</span>
             <Input
@@ -196,6 +187,28 @@ function RepeatPicker({ value, onChange }: { value: RepeatState; onChange: (v: R
             />
             <span className="text-ink-2">{value.every > 1 ? unit[1] : unit[0]}</span>
           </div>
+          {value.freq === 'weekly' && (
+            <div className="flex gap-1" role="group" aria-label="Dias da semana">
+              {WEEKDAY_SHORT.map((d, i) => {
+                const on = value.weekdays.includes(i);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    aria-pressed={on}
+                    aria-label={WEEKDAY_NAMES[i]}
+                    onClick={() => {
+                      const next = on ? value.weekdays.filter((x) => x !== i) : [...value.weekdays, i];
+                      if (next.length) set({ weekdays: next });
+                    }}
+                    className={`h-8 w-8 rounded-full text-xs font-semibold ${on ? 'bg-brand text-brand-ink' : 'bg-surface-2 text-ink-2 hover:text-ink'}`}
+                  >
+                    {d}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-ink-2">Termina</span>
             <Select value={value.end} onChange={(e) => set({ end: e.target.value as RepeatState['end'] })} className="h-9 w-auto" aria-label="Termina">
@@ -220,29 +233,6 @@ function RepeatPicker({ value, onChange }: { value: RepeatState; onChange: (v: R
               </>
             )}
           </div>
-          </div>
-          {value.freq === 'weekly' && (
-            <div className="flex gap-1" role="group" aria-label="Dias da semana">
-              {WEEKDAY_SHORT.map((d, i) => {
-                const on = value.weekdays.includes(i);
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    aria-pressed={on}
-                    aria-label={WEEKDAY_NAMES[i]}
-                    onClick={() => {
-                      const next = on ? value.weekdays.filter((x) => x !== i) : [...value.weekdays, i];
-                      if (next.length) set({ weekdays: next });
-                    }}
-                    className={`h-8 w-8 rounded-full text-xs font-semibold ${on ? 'bg-brand text-brand-ink' : 'bg-surface-2 text-ink-2 hover:text-ink'}`}
-                  >
-                    {d}
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -368,8 +358,7 @@ function PeoplePicker({
   const has = new Set(value);
   const shown = people.filter((p) => !q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase()));
   return (
-    <div className="space-y-2">
-      {/* setores, busca, "todos" e "ninguém" numa linha só (quebra no celular) */}
+    <div className="space-y-2.5">
       <div className="flex flex-wrap items-center gap-1.5">
         {teams.map((t) => {
           const all = t.userIds.length > 0 && t.userIds.every((id) => has.has(id));
@@ -386,13 +375,7 @@ function PeoplePicker({
             </button>
           );
         })}
-        <span className="flex w-full items-center gap-1.5 sm:ml-auto sm:w-auto">
-          {people.length > 6 && (
-            <span className="relative min-w-0 flex-1 sm:w-48 sm:flex-none">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" aria-hidden />
-              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar pessoa" aria-label="Buscar pessoa" className="h-8 pl-8 text-xs sm:h-8 sm:text-xs" />
-            </span>
-          )}
+        <span className="ml-auto flex items-center gap-1">
           <button type="button" onClick={() => onChange(people.map((p) => p.id))} className="rounded-full px-2 py-1 text-xs font-medium text-brand-text hover:bg-brand-soft">
             todos
           </button>
@@ -401,7 +384,13 @@ function PeoplePicker({
           </button>
         </span>
       </div>
-      <ul className="grid max-h-32 content-start gap-1 overflow-y-auto sm:grid-cols-2 lg:max-h-[6.75rem] lg:grid-cols-4">
+      {people.length > 6 && (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" aria-hidden />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar pessoa" aria-label="Buscar pessoa" className="h-9 pl-8 text-sm" />
+        </div>
+      )}
+      <ul className="grid max-h-44 content-start gap-1 overflow-y-auto sm:grid-cols-2 lg:grid-cols-4">
         {shown.map((p) => {
           const on = has.has(p.id);
           return (
@@ -410,7 +399,7 @@ function PeoplePicker({
                 type="button"
                 aria-pressed={on}
                 onClick={() => onChange(on ? value.filter((id) => id !== p.id) : [...value, p.id])}
-                className={`flex w-full items-center gap-2 rounded-xl border px-2 py-1 text-left text-sm transition ${on ? 'border-brand-line bg-brand-soft/60' : 'border-transparent hover:bg-surface-2'}`}
+                className={`flex w-full items-center gap-2 rounded-xl border px-2 py-1.5 text-left text-sm transition ${on ? 'border-brand-line bg-brand-soft/60' : 'border-transparent hover:bg-surface-2'}`}
               >
                 <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold ${on ? 'bg-brand text-brand-ink' : 'bg-surface-2 text-ink-2'}`}>{on ? <Check className="h-3.5 w-3.5" aria-hidden /> : initialsOf(p.name)}</span>
                 <span className="min-w-0 flex-1 truncate">{p.name}</span>
@@ -420,7 +409,7 @@ function PeoplePicker({
         })}
         {!shown.length && <li className="px-2 py-1.5 text-xs text-muted">Ninguém encontrado.</li>}
       </ul>
-      {!value.length && <p className="text-[9px] text-muted">Ninguém marcado: fica só na sua agenda.</p>}
+      <p className="text-[9px] text-muted">{value.length ? `${value.length} pessoa(s): o compromisso aparece na agenda de cada uma.` : 'Ninguém marcado: fica só na sua agenda.'}</p>
     </div>
   );
 }
@@ -552,8 +541,8 @@ function EventDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Compromisso">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={onClose} />
-      <form onSubmit={submit} noValidate className="relative flex max-h-[97dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-surface-2 shadow-2xl sm:rounded-3xl lg:max-w-5xl">
-        <div className="flex items-center justify-between gap-3 bg-surface px-5 py-2.5">
+      <form onSubmit={submit} noValidate className="relative flex max-h-[94dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-surface-2 shadow-2xl sm:rounded-3xl lg:max-w-5xl">
+        <div className="flex items-center justify-between gap-3 bg-surface px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-brand-text">
               <CalendarDays className="h-5 w-5" aria-hidden />
@@ -568,8 +557,8 @@ function EventDialog({
           </button>
         </div>
         {/* celular: uma coluna, nesta ordem. Computador: duas colunas, com o "Quando" ocupando a largura toda */}
-        <div className="grid flex-1 content-start gap-2.5 overflow-y-auto p-3 sm:p-3 lg:grid-cols-3">
-            <div id="agenda-nature" className={`lg:col-start-2 lg:row-start-1 [&>section]:h-full ${types.length > 0 ? '' : 'lg:col-span-2'}`}>
+        <div className="grid flex-1 content-start gap-3 overflow-y-auto p-3 sm:p-4 lg:grid-cols-2">
+            <div id="agenda-nature" className="lg:col-start-2 lg:row-start-1 [&>section]:h-full">
               <Section icon={Lock} title="Este compromisso é" hint={<span className={natureError ? 'font-semibold text-critical-ink' : ''}>obrigatório</span>}>
                 <NaturePicker
                   value={nature}
@@ -580,26 +569,26 @@ function EventDialog({
                   invalid={natureError}
                 />
                 {natureError && <p className="text-xs font-medium text-critical-ink">{NATURE_REQUIRED}</p>}
-                <p className="text-[9px] text-muted">Particular: quem não participa vê só “Ocupado”.</p>
+                <p className="text-[9px] text-muted">{nature === 'personal' ? 'Particular: para quem não participa, aparece só como “Ocupado” no horário, sem título nem observação.' : 'Particular aparece só como “Ocupado” para quem não participa.'}</p>
               </Section>
             </div>
-            <Section icon={StickyNote} title="O que é" className="lg:col-start-1 lg:row-start-1">
+            <Section icon={StickyNote} title="O que é" className="lg:col-start-1 lg:row-span-2 lg:row-start-1 lg:flex lg:flex-col">
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ex.: Reunião com o cliente, audiência..."
+                placeholder="Ex.: Reunião com o cliente, audiência, ligar para..."
                 maxLength={200}
                 required
                 autoFocus
                 aria-label="Título"
                 className="h-11 text-base font-medium"
               />
-              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={2000} placeholder="Observação (opcional): local, link, detalhes..." aria-label="Observação" className="resize-none" />
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} placeholder="Observação (opcional): local, link, detalhes..." aria-label="Observação" className="lg:min-h-24 lg:flex-1" />
             </Section>
             <Section
               icon={Clock}
               title="Quando"
-              className="lg:col-span-3 lg:row-start-2"
+              className="lg:col-span-2 lg:row-start-3"
               hint={(() => {
                 const m = !allDay && endTime ? eventMinutes(zonedIso(date, time || '09:00', timeZone), zonedIso(endDate, endTime, timeZone), false) : null;
                 const days = endDate > date ? diffDays(date, endDate) : 0;
@@ -718,21 +707,21 @@ function EventDialog({
               </div>
             </Section>
             {types.length > 0 && (
-              <Section icon={Tag} title="Tipo" className="lg:col-start-3 lg:row-start-1">
+              <Section icon={Tag} title="Tipo" className="lg:col-start-2 lg:row-start-2">
                 <TypePicker types={types} value={typeId} onChange={setTypeId} />
               </Section>
             )}
-            <Section icon={Repeat} title="Repetir" className="lg:col-span-2 lg:col-start-1 lg:row-start-3">
-              <RepeatPicker value={repeat} onChange={setRepeat} />
-            </Section>
-            <Section icon={Bell} title="Lembretes" className="lg:col-start-3 lg:row-start-3">
-              <RemindersPicker value={reminders} onChange={setReminders} allDay={allDay} />
-            </Section>
-            <Section icon={Users} title="Participantes" hint={who.length ? `${who.length} marcado(s)` : undefined} className="lg:col-span-3 lg:row-start-4">
+            <Section icon={Users} title="Participantes" hint={who.length ? `${who.length} marcado(s)` : undefined} className="lg:col-span-2 lg:row-start-4">
               <PeoplePicker people={people} teams={teams} value={who} onChange={setWho} />
             </Section>
+            <Section icon={Repeat} title="Repetir" className="lg:col-start-1 lg:row-start-5">
+              <RepeatPicker value={repeat} onChange={setRepeat} />
+            </Section>
+            <Section icon={Bell} title="Lembretes" className="lg:col-start-2 lg:row-start-5">
+              <RemindersPicker value={reminders} onChange={setReminders} allDay={allDay} />
+            </Section>
             {inSeries && (
-              <div className="space-y-1.5 rounded-2xl border border-line bg-surface p-3.5 text-sm lg:col-span-3">
+              <div className="space-y-1.5 rounded-2xl border border-line bg-surface p-3.5 text-sm lg:col-span-2">
                 <p className="text-xs font-medium text-ink-2">Este compromisso se repete. Salvar em:</p>
                 {ruleChanged ? (
                   <p className="text-xs text-ink-2">A repetição mudou: vale para <b>este e os próximos</b>.</p>
@@ -754,7 +743,7 @@ function EventDialog({
               </div>
             )}
         </div>
-        <div className="flex flex-wrap items-center gap-2 bg-surface px-5 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 bg-surface px-5 py-3">
           <Button disabled={pending}>{pending ? 'Salvando…' : event ? 'Salvar' : 'Registrar compromisso'}</Button>
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancelar
