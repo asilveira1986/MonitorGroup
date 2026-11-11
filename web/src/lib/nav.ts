@@ -33,6 +33,8 @@ export type NavItem = {
   badgeKey?: BadgeKey;
   /** só quem administra a plataforma vê */
   platformOnly?: boolean;
+  /** só administradores (da empresa ou da plataforma) veem */
+  adminOnly?: boolean;
 };
 
 export type NavGroup = {
@@ -94,8 +96,8 @@ export const NAV_TREE: NavEntry[] = [
       { href: '/platform', label: 'Empresas', icon: 'platform', platformOnly: true },
       { href: '/reports', label: 'Relatórios', icon: 'reports' },
       { href: '/alerts', label: 'Alertas', icon: 'alerts', badgeKey: 'alerts' },
-      // uso da plataforma por empresa (0135)
-      { href: '/acompanhamento', label: 'Acompanhamento', icon: 'tracking', platformOnly: true },
+      // uso do sistema: o administrador da plataforma vê todas as empresas; o da empresa, só a própria (0135, 0174)
+      { href: '/acompanhamento', label: 'Acompanhamento', icon: 'tracking', adminOnly: true },
       // log de atividades dos usuários: só quem administra a plataforma
       { href: '/logs', label: 'Log', icon: 'logs', platformOnly: true },
     ],
@@ -107,8 +109,9 @@ export const NAV_TREE: NavEntry[] = [
  * O que a pessoa vê: sem os itens escondidos (funções desligadas, Configurações › Menus) e sem os exclusivos da
  * plataforma para quem não a administra. Grupo sem nenhum item visível some.
  */
-export function visibleNav(tree: NavEntry[], opts: { hidden: string[]; platformAdmin: boolean }): NavEntry[] {
-  const show = (i: NavItem) => !opts.hidden.includes(i.href) && (!i.platformOnly || opts.platformAdmin);
+export function visibleNav(tree: NavEntry[], opts: { hidden: string[]; platformAdmin: boolean; admin?: boolean }): NavEntry[] {
+  const show = (i: NavItem) =>
+    !opts.hidden.includes(i.href) && (!i.platformOnly || opts.platformAdmin) && (!i.adminOnly || opts.admin || opts.platformAdmin);
   const out: NavEntry[] = [];
   for (const e of tree) {
     if (e.kind === 'item') {
