@@ -1,6 +1,7 @@
 'use client';
 
 import { Bell, Briefcase, CalendarClock, CalendarDays, Check, Clock, Lock, Pencil, Plus, Repeat, RotateCcw, Search, StickyNote, Tag, Trash2, UserRound, Users, X } from 'lucide-react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -783,6 +784,7 @@ export function EventActions({
   people,
   teams,
   types,
+  meId,
   labels = false,
 }: {
   event: AgendaEvent;
@@ -790,9 +792,12 @@ export function EventActions({
   people: Person[];
   teams: AgendaTeam[];
   types: AgendaType[];
+  /** usuário logado: só quem criou o compromisso vê o botão de excluir (0176) */
+  meId: string;
   /** com o nome em cada botão (detalhes do compromisso) */
   labels?: boolean;
 }) {
+  const canDelete = Boolean(meId) && (event.owner_id ?? event.created_by) === meId;
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [askDelete, setAskDelete] = useState(false);
@@ -819,19 +824,21 @@ export function EventActions({
       <button type="button" disabled={pending} className={`${btn} text-ink-2`} onClick={() => setEditing(true)} aria-label="Editar compromisso">
         <Pencil className="h-3.5 w-3.5" /> {labels && 'Editar'}
       </button>
-      <button
-        type="button"
-        disabled={pending}
-        className={`${btn} text-critical-ink`}
-        aria-label="Excluir compromisso"
-        onClick={() =>
-          event.series_id
-            ? setAskDelete(true)
-            : confirm(`Excluir o compromisso "${event.title}"?`) && run(() => deleteAgendaEvent(event.id), 'Compromisso excluído')
-        }
-      >
-        <Trash2 className="h-3.5 w-3.5" /> {labels && 'Excluir'}
-      </button>
+      {canDelete && (
+        <button
+          type="button"
+          disabled={pending}
+          className={`${btn} text-critical-ink`}
+          aria-label="Excluir compromisso"
+          onClick={() =>
+            event.series_id
+              ? setAskDelete(true)
+              : confirm(`Excluir o compromisso "${event.title}"?`) && run(() => deleteAgendaEvent(event.id), 'Compromisso excluído')
+          }
+        >
+          <Trash2 className="h-3.5 w-3.5" /> {labels && 'Excluir'}
+        </button>
+      )}
       {askDelete && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Excluir compromisso que se repete">
           <div className="absolute inset-0 bg-black/40" onClick={() => setAskDelete(false)} />
@@ -881,6 +888,8 @@ export function EventDetails({
   ownerName,
   past,
   types,
+  meId,
+  onClose: close,
 }: {
   event: AgendaEvent;
   timeZone: string;
@@ -890,21 +899,9 @@ export function EventDetails({
   ownerName: string | null;
   /** o horário já passou */
   past: boolean;
+  meId: string;
+  onClose: () => void;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const search = useSearchParams();
-  const close = () => {
-    const p = new URLSearchParams(search.toString());
-    p.delete('evento');
-    // veio da notificação (só ?evento=): continua no dia do compromisso
-    if (!p.has('data') && !p.has('vista')) {
-      p.set('vista', 'dia');
-      p.set('data', zonedParts(event.starts_at, timeZone).date);
-    }
-    const q = p.toString();
-    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
-  };
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && close();
     window.addEventListener('keydown', esc);
@@ -991,9 +988,89 @@ export function EventDetails({
           )}
         </div>
         <div className="border-t border-line pt-3">
-          <EventActions event={event} timeZone={timeZone} people={people} teams={teams} types={types} labels />
+          <EventActions event={event} timeZone={timeZone} people={people} teams={teams} types={types} meId={meId} labels />
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Link de um compromisso que abre os detalhes na hora: só troca o endereço no navegador (?evento=),
+ * sem esperar o servidor remontar a agenda. Com Ctrl/Cmd/Shift ou botão do meio segue como link normal.
+ */
+export function EventLink({ href, onClick, ...rest }: React.ComponentProps<typeof Link>) {
+  return (
+    <Link
+      {...rest}
+      href={href}
+      prefetch={false}
+      onClick={(e) => {
+        onClick?.(e);
+        if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        window.history.pushState(null, '', typeof href === 'string' ? href : String(href));
+      }}
+    />
+  );
+}
+
+/**
+ * Mostra os detalhes do compromisso do endereço (?evento=). Usa os compromissos que a agenda já
+ * carregou (abre e fecha na hora, sem ir ao servidor); se o compromisso não está no período
+ * carregado (ex.: veio de uma notificação), usa o que o servidor buscou.
+ */
+export function EventDetailsHost({
+  events,
+  serverOpened,
+  owners,
+  timeZone,
+  people,
+  teams,
+  types,
+  meId,
+}: {
+  events: AgendaEvent[];
+  serverOpened: AgendaEvent | null;
+  owners: Person[];
+  timeZone: string;
+  people: Person[];
+  teams: AgendaTeam[];
+  types: AgendaType[];
+  meId: string;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const search = useSearchParams();
+  const [now] = useState(() => Date.now());
+  const id = search.get('evento');
+  const event = id ? (events.find((e) => e.id === id) ?? (serverOpened?.id === id ? serverOpened : null)) : null;
+  if (!event) return null;
+  const close = () => {
+    const p = new URLSearchParams(search.toString());
+    p.delete('evento');
+    // veio da notificação (só ?evento=): continua no dia do compromisso (precisa do servidor)
+    if (!p.has('data') && !p.has('vista')) {
+      p.set('vista', 'dia');
+      p.set('data', zonedParts(event.starts_at, timeZone).date);
+      router.replace(`${pathname}?${p.toString()}`, { scroll: false });
+      return;
+    }
+    const q = p.toString();
+    window.history.replaceState(null, '', q ? `${pathname}?${q}` : pathname);
+  };
+  return (
+    <EventDetails
+      key={event.id}
+      event={event}
+      timeZone={timeZone}
+      people={people}
+      teams={teams}
+      types={types}
+      meId={meId}
+      ownerName={owners.find((p) => p.id === (event.owner_id ?? event.created_by))?.name ?? null}
+      past={!event.all_day && new Date(event.starts_at).getTime() < now}
+      onClose={close}
+    />
   );
 }

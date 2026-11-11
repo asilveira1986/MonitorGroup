@@ -226,6 +226,7 @@ from (values
   (164, 'SLA do grupo só para administradores (0173)', coalesce(pg_get_functiondef('public.guard_group_monitoring()'::regprocedure) like '%SLA dos grupos%', false)),
   (165, 'Acompanhamento liberado para os administradores da empresa (0174)', coalesce(pg_get_functiondef('public.platform_monitor()'::regprocedure) like '%Somente administradores veem o acompanhamento%', false)),
   (166, 'Agenda: compromisso de vários dias, término em outro dia (0175)', coalesce(pg_get_functiondef('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)'::regprocedure) like '%até 31 dias%', false)),
-  (167, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (167, 'Agenda: só quem criou o compromisso pode excluí-lo (0176)', to_regprocedure('public.can_delete_agenda_event(uuid)') is not null),
+  (168, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
