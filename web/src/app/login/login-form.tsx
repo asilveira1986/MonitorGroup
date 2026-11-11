@@ -1,33 +1,15 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
+import { Loader2, MailCheck } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button, Field, Input } from '@/components/ui';
 import { createClient } from '@/lib/supabase/client';
 import { clearPanelFilters } from '@/lib/panel-defaults';
+import { explainAuthError } from '@/lib/auth-errors';
 
-/** Traduz as mensagens do Supabase para algo que diga o que fazer. */
-function explain(message: string): string {
-  const m = message.toLowerCase();
-  if (m.includes('invalid login credentials')) return 'E-mail ou senha incorretos.';
-  if (m.includes('email not confirmed'))
-    return 'E-mail ainda não confirmado. No Supabase, abra Authentication › Users, clique no usuário e confirme o e-mail (ou recrie com "Auto confirm user").';
-  if (m.includes('invalid api key') || m.includes('no api key'))
-    return 'Chave do Supabase inválida. Confira NEXT_PUBLIC_SUPABASE_ANON_KEY na Vercel e faça um novo deploy.';
-  if (m.includes('failed to fetch') || m.includes('network') || m.includes('load failed'))
-    return 'Não foi possível conectar ao Supabase. Confira NEXT_PUBLIC_SUPABASE_URL na Vercel e se o projeto do Supabase está ativo (projetos gratuitos pausam após 7 dias sem uso).';
-  if (m.includes('signups not allowed') || m.includes('signup is disabled'))
-    return 'Cadastro de novos usuários desativado no Supabase. Ative "Allow new users to sign up" em Authentication › Sign In / Providers.';
-  if (m.includes('database error saving new user'))
-    return 'Erro no banco ao criar o usuário. Verifique se os scripts SQL (0001 a 0004) foram executados no Supabase.';
-  if (m.includes('rate limit') || m.includes('too many requests') || m.includes('security purposes'))
-    return 'Muitos e-mails enviados em pouco tempo. Aguarde cerca de 1 hora e tente de novo, ou peça a um administrador para gerar uma nova senha em Configurações › Usuários.';
-  if (m.includes('redirect') || m.includes('code verifier') || m.includes('pkce'))
-    return 'Falha no retorno do login. No Supabase, em Authentication › URL Configuration, coloque o endereço do painel em Site URL e em Redirect URLs (com /** no final). Abra o login sempre pelo mesmo endereço.';
-  return message;
-}
+const explain = explainAuthError;
 
 export function LoginForm({ configProblem }: { configProblem: string | null }) {
   const router = useRouter();
@@ -35,6 +17,23 @@ export function LoginForm({ configProblem }: { configProblem: string | null }) {
   const next = params.get('next') ?? '/panel';
   const [loading, setLoading] = useState<'password' | 'reset' | null>(null);
   const [email, setEmail] = useState('');
+  const emailInput = useRef<HTMLInputElement>(null);
+  // link de redefinição enviado: aviso fixo na tela e espera de 60 s para pedir outro (o Supabase limita os envios)
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [wait, setWait] = useState(0);
+  // o Supabase também devolve o erro do link (vencido, já usado) no "#" do endereço, que só o navegador enxerga
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const reason = hash.get('error_description') ?? hash.get('error_code') ?? hash.get('error');
+    if (!reason) return;
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    toast.error(explain(reason.replace(/\+/g, ' ')), { duration: 15_000 });
+  }, []);
+  useEffect(() => {
+    if (wait <= 0) return;
+    const t = setTimeout(() => setWait((w) => w - 1), 1000);
+    return () => clearTimeout(t);
+  }, [wait]);
 
   async function signInWithPassword(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -62,19 +61,24 @@ export function LoginForm({ configProblem }: { configProblem: string | null }) {
   }
 
   async function resetPassword() {
-    if (!email) {
-      toast.info('Digite seu e-mail para receber o link de redefinição.');
+    if (!email.trim()) {
+      toast.info('Digite seu e-mail no campo acima e clique em "Esqueci minha senha" de novo.');
+      emailInput.current?.focus();
       return;
     }
+    if (wait > 0) return;
     setLoading('reset');
     try {
       const { error } = await createClient().auth.resetPasswordForEmail(email.trim().toLowerCase(), {
         redirectTo: `${window.location.origin}/auth/callback?next=/auth/update-password`,
       });
       if (error) throw error;
+      setSentTo(email.trim().toLowerCase());
+      setWait(60);
       toast.success('Enviamos um link para redefinir sua senha.');
     } catch (err) {
-      toast.error(explain(err instanceof Error ? err.message : String(err)));
+      setSentTo(null);
+      toast.error(explain(err instanceof Error ? err.message : String(err)), { duration: 15_000 });
     } finally {
       setLoading(null);
     }
@@ -105,6 +109,7 @@ export function LoginForm({ configProblem }: { configProblem: string | null }) {
             placeholder="voce@empresa.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            ref={emailInput}
           />
         </Field>
         <Field label="Senha">
@@ -116,13 +121,25 @@ export function LoginForm({ configProblem }: { configProblem: string | null }) {
         </Button>
       </form>
 
+      {sentTo && (
+        <div className="rounded-xl border border-good/30 bg-good/10 px-3 py-2.5 text-sm text-good-ink" role="status">
+          <p className="flex items-center gap-1.5 font-semibold">
+            <MailCheck className="h-4 w-4" aria-hidden /> Link enviado para {sentTo}
+          </p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">
+            <li>Abra o link neste mesmo navegador e aparelho em que você pediu.</li>
+            <li>Ele vale por 1 hora e funciona uma vez só.</li>
+            <li>Não chegou? Veja o spam. Só e-mails cadastrados no sistema recebem o link.</li>
+          </ul>
+        </div>
+      )}
       <button
         type="button"
         onClick={resetPassword}
-        disabled={loading !== null}
-        className="w-full text-center text-sm text-ink-2 underline-offset-4 hover:text-ink hover:underline"
+        disabled={loading !== null || wait > 0}
+        className="w-full text-center text-sm text-ink-2 underline-offset-4 hover:text-ink hover:underline disabled:opacity-60"
       >
-        Esqueci minha senha
+        {loading === 'reset' ? 'Enviando…' : wait > 0 ? `Esqueci minha senha (novo link em ${wait} s)` : sentTo ? 'Enviar outro link' : 'Esqueci minha senha'}
       </button>
     </div>
   );

@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { strayAuthRedirect } from '@/lib/auth-errors';
 import { getSupabaseConfig } from '@/lib/supabase/config';
 
 const PUBLIC_PATHS = ['/login', '/auth'];
@@ -9,6 +10,11 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
+
+  // link de "Esqueci minha senha" que caiu na página inicial ou no login (endereço fora de Redirect URLs no Supabase):
+  // leva para o retorno certo em vez de perder o código
+  const stray = strayAuthRedirect(request.nextUrl);
+  if (stray) return NextResponse.redirect(new URL(stray, request.url));
 
   // Sem configuração do Supabase: deixa a tela de login abrir e explicar o problema.
   const config = getSupabaseConfig();
