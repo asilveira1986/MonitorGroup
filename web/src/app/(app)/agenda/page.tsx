@@ -14,7 +14,7 @@ import { AgendaFilter } from './agenda-filter';
 import { ALL_USERS, memberIdsOf, parseAgendaFilter } from '@/lib/agenda-filter';
 import { DeliverButton } from './agenda-controls';
 import type { RepeatRule } from './actions';
-import { EventActions, EventDetails, NatureBadge, NewEventButton, type AgendaEvent } from './event-controls';
+import { EventActions, EventDetailsHost, EventLink, NatureBadge, NewEventButton, type AgendaEvent } from './event-controls';
 
 export const metadata: Metadata = { title: 'Monitor Group · Agenda' };
 
@@ -342,7 +342,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           </>
         )}
       </span>
-      <Link href={href({ evento: e.id })} scroll={false} className="min-w-0 flex-1 basis-56 hover:underline" title="Ver detalhes">
+      <EventLink href={href({ evento: e.id })} scroll={false} className="min-w-0 flex-1 basis-56 hover:underline" title="Ver detalhes">
         <p className={cn('line-clamp-2 text-sm font-medium', e.done_at && 'line-through')}>
           <CalendarClock className="mr-1 inline h-3.5 w-3.5" style={{ color: colorOf(e) }} aria-hidden />
           {e.title} <NatureBadge nature={e.nature} className="ml-1 align-middle" />
@@ -358,9 +358,9 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
             👥 {(e.people ?? []).map((id) => people.find((p) => p.id === id)?.name ?? 'usuário').join(', ')}
           </p>
         )}
-      </Link>
+      </EventLink>
       {e.done_at && <span className="text-[9px] font-medium text-good-ink">concluído</span>}
-      <EventActions event={e} timeZone={timeZone} people={pickPeople} teams={agendaTeams} types={types} />
+      <EventActions event={e} timeZone={timeZone} people={pickPeople} teams={agendaTeams} types={types} meId={profile.id} />
     </li>
   );
   const busyItem = (b: Busy, i: number) => (
@@ -409,7 +409,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       const e = x.e;
       const cont = x.part?.kind === 'middle' || x.part?.kind === 'end';
       return (
-        <Link
+        <EventLink
           key={`${e.id}${x.part ? `-${x.part.index}` : ''}`}
           href={href({ evento: e.id })}
           scroll={false}
@@ -423,7 +423,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           </span>
           {e.nature === 'personal' && <span aria-label="particular">🔒 </span>}
           {e.title}
-        </Link>
+        </EventLink>
       );
     }
     const r = x.r;
@@ -494,18 +494,16 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         description="Os seus compromissos (e os marcados para você) e as demandas para entregar, por dia, semana ou mês. Filtre por um ou mais usuários e setores."
       />
 
-      {opened && (
-        <EventDetails
-          types={types}
-          key={opened.id}
-          event={opened}
-          timeZone={timeZone}
-          people={pickPeople}
-          teams={agendaTeams}
-          ownerName={people.find((p) => p.id === (opened.owner_id ?? opened.created_by))?.name ?? null}
-          past={!opened.all_day && new Date(opened.starts_at).getTime() < now}
-        />
-      )}
+      <EventDetailsHost
+        events={events}
+        serverOpened={opened}
+        owners={people.map((p) => ({ id: p.id, name: p.name }))}
+        timeZone={timeZone}
+        people={pickPeople}
+        teams={agendaTeams}
+        types={types}
+        meId={profile.id}
+      />
       {
         <div className="space-y-4">
           {/* visão e período */}
