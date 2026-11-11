@@ -4,6 +4,7 @@ import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { CLOSED_DEFAULT_DAYS, closedSince } from '@/lib/private-closed';
 import { PrivateInbox, type PrivateChat } from './inbox';
 import type { ChatAgent } from './owner-control';
 import type { CustomerTag } from '@/components/customer-tags';
@@ -18,14 +19,18 @@ export const metadata: Metadata = { title: 'Monitor Group · Conversas privadas'
 export default async function PrivatePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const profile = await requireProfile();
   const supabase = await createClient();
-  const [{ data: allowed }, { data: chats }, { data: settings }, { data: instance }, { data: tagRows }] = await Promise.all([
+  const closedFrom = closedSince(CLOSED_DEFAULT_DAYS);
+  const [{ data: allowed }, { data: openChats }, { data: closedChats }, { data: settings }, { data: instance }, { data: tagRows }] = await Promise.all([
     supabase.rpc('can_use_private_chats'),
-    supabase.from('private_chats').select('*').order('last_message_at', { ascending: false, nullsFirst: false }).limit(300),
+    // em aberto: as 300 mais recentes; finalizadas: as dos últimos 90 dias (a tela busca as mais antigas ao escolher outro período)
+    supabase.from('private_chats').select('*').is('closed_at', null).order('last_message_at', { ascending: false, nullsFirst: false }).limit(300),
+    supabase.from('private_chats').select('*').gte('closed_at', closedFrom).order('closed_at', { ascending: false }).limit(1000),
     appSettings(),
     supabase.from('whatsapp_instances').select('status').eq('status', 'connected').limit(1).maybeSingle(),
     // etiquetas de clientes (0103)
     supabase.from('customer_tags').select('id, name, color').order('name'),
   ]);
+  const chats = [...(openChats ?? []), ...(closedChats ?? [])];
   // foto de cada conversa (guardada pelo worker): pelo identificador da conversa ou, sem foto nele, pelo número
   const chatRows = (chats ?? []) as PrivateChat[];
   const phoneJid = (c: PrivateChat) => (c.phone ? `${c.phone}@s.whatsapp.net` : null);
