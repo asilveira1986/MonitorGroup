@@ -240,8 +240,8 @@ function SectorDialog({
   }, [onClose]);
 
   const q = query.trim().toLowerCase();
-  const agents = users.filter((u) => !u.admin);
-  const shownPeople = agents.filter((u) => !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+  // administradores também podem entrar no setor (agenda, avisos); continuam vendo tudo
+  const shownPeople = users.filter((u) => !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
   const shownTeam = team.filter((t) => (t.active || responsible.has(t.id)) && (!q || t.name.toLowerCase().includes(q)));
   const shownGroups = useMemo(
     () =>
@@ -336,6 +336,7 @@ function SectorDialog({
                   <label className={item}>
                     <input type="checkbox" className="h-4 w-4 accent-[var(--brand)]" checked={members.has(u.id)} onChange={() => toggle(members, u.id, setMembers)} />
                     <span className="min-w-0 flex-1 truncate">{u.name}</span>
+                    {u.admin && <Badge tone="neutral">administrador</Badge>}
                     {!u.active && <Badge tone="critical">sem acesso</Badge>}
                     <span className="hidden truncate text-xs text-muted sm:inline">{u.email}</span>
                   </label>
@@ -361,7 +362,7 @@ function SectorDialog({
               })}
           {(tab === 'resp' ? shownTeam : tab === 'people' ? shownPeople : shownGroups).length === 0 && (
             <li className="px-2 py-3 text-center text-xs text-muted">
-              {tab === 'resp' ? 'Nenhuma pessoa na equipe (cadastre em Configurações › Pessoas).' : tab === 'people' ? 'Nenhuma pessoa (administradores já veem tudo).' : 'Nenhum grupo encontrado.'}
+              {tab === 'resp' ? 'Nenhuma pessoa na equipe (cadastre em Configurações › Pessoas).' : tab === 'people' ? 'Nenhuma pessoa.' : 'Nenhum grupo encontrado.'}
             </li>
           )}
         </ul>
@@ -369,7 +370,7 @@ function SectorDialog({
           {tab === 'resp'
             ? 'Responsável pelo setor: a automação de atendimento pode marcá-lo na cobrança (Configurações › Automação). Pode ser mais de uma pessoa.'
             : tab === 'people'
-              ? 'Administradores não aparecem: já veem todos os grupos.'
+              ? 'Administradores podem ser marcados (por exemplo, para aparecerem na agenda do setor), mas continuam vendo todos os grupos e conversas.'
               : 'Cada grupo fica num setor só: marcar aqui tira o grupo do setor anterior.'}
         </p>
         <details className="mx-4 mt-2 rounded-xl border border-line px-3 py-2 text-sm">
