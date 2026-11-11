@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Button, Card, Field, Input, Textarea } from '@/components/ui';
 import { CONTACT_INITIALS, cn, formatPhone, formatTime, initials, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
+import { CLOSED_DEFAULT_DAYS, CLOSED_MAX, CLOSED_PERIODS, closedSince } from '@/lib/private-closed';
 import { useRealtime } from '@/lib/use-realtime';
 import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
 import { Avatar } from '@/components/avatar';
@@ -801,6 +802,35 @@ export function PrivateInbox({
   const sectorOf = (c: PrivateChat) => (c.instance_id ? (sectors?.byInstance[c.instance_id] ?? null) : null);
   const sectorName = (id: string | null) => (id ? sectors?.options.find((s) => s.id === id)?.name : undefined);
   const [tab, setTab] = useState<Tab>('queue');
+  // finalizadas: período (por padrão os últimos 90 dias, que já vêm com a página); mais antigas são buscadas ao escolher
+  const [period, setPeriod] = useState(() => ({ days: CLOSED_DEFAULT_DAYS, since: closedSince(CLOSED_DEFAULT_DAYS) }));
+  const [older, setOlder] = useState<PrivateChat[]>([]);
+  const [olderState, setOlderState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const needsOlder = tab === 'closed' && (period.days === 0 || period.days > CLOSED_DEFAULT_DAYS);
+  useEffect(() => {
+    if (!needsOlder) return;
+    let alive = true;
+    const run = async () => {
+      setOlderState('loading');
+      let qy = createClient()
+        .from('private_chats')
+        .select('*')
+        .not('closed_at', 'is', null)
+        .lt('closed_at', closedSince(CLOSED_DEFAULT_DAYS))
+        .order('closed_at', { ascending: false })
+        .limit(CLOSED_MAX);
+      if (period.days > 0) qy = qy.gte('closed_at', period.since);
+      const { data, error } = await qy;
+      if (!alive) return;
+      if (error) return setOlderState('error');
+      setOlder((data ?? []) as PrivateChat[]);
+      setOlderState('idle');
+    };
+    void run();
+    return () => {
+      alive = false;
+    };
+  }, [needsOlder, period]);
   // modo supervisão (só administradores): ver as conversas sem marcá-las como lidas para a equipe
   const [supervise, setSupervise] = useState(false);
   useEffect(() => {
@@ -877,13 +907,16 @@ export function PrivateInbox({
       : !c.closed_at && (t === 'team' || (t === 'mine' ? c.assigned_to === viewer.me : !c.assigned_to));
   const term = q.trim().toLowerCase();
   const digits = term.replace(/\D/g, '');
-  const list = [...chats]
+  // abertas + finalizadas carregadas (as mais antigas só depois de escolher um período maior)
+  const all = needsOlder ? [...chats, ...older.filter((o) => !chats.some((c) => c.id === o.id))] : chats;
+  const list = [...all]
+    .filter((c) => tab !== 'closed' || period.days === 0 || (c.closed_at ?? '') >= period.since)
     .filter((c) => !term || chatTitle(c).toLowerCase().includes(term) || (digits.length >= 3 && (c.phone ?? '').includes(digits)))
     .filter((c) => !tagFilter || (c.tags ?? []).includes(tagFilter))
     .filter((c) => !sectorFilter || (sectorFilter === 'none' ? !sectorOf(c) : sectorOf(c) === sectorFilter))
     .filter((c) => inTab(c, tab))
     .sort((a, b) => ((b.last_message_at ?? '') > (a.last_message_at ?? '') ? 1 : -1));
-  const current = chats.find((c) => c.id === selected) ?? null;
+  const current = all.find((c) => c.id === selected) ?? null;
   const unreadOf = (f: (c: PrivateChat) => boolean) => chats.filter((c) => f(c) && c.unread_count > 0).length;
   // aguardando (sem responsável), meus atendimentos, finalizados e, para administradores, todos em
   // atendimento (0119)
@@ -982,10 +1015,37 @@ export function PrivateInbox({
             )}
           </div>
         )}
+        {tab === 'closed' && (
+          <div className="flex items-center gap-2 border-b border-line px-3 py-2 text-xs text-ink-2">
+            <label htmlFor="closed-period" className="shrink-0">
+              Finalizadas
+            </label>
+            <select
+              id="closed-period"
+              value={period.days}
+              onChange={(e) => {
+                const days = Number(e.target.value);
+                setPeriod({ days, since: closedSince(days) });
+              }}
+              className="h-8 min-w-0 flex-1 rounded-lg border border-line bg-surface px-2 text-base text-ink outline-none focus:border-brand-line sm:text-xs"
+            >
+              {CLOSED_PERIODS.map((p) => (
+                <option key={p.days} value={p.days}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            {olderState === 'loading' && <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-label="Carregando" />}
+          </div>
+        )}
+        {tab === 'closed' && olderState === 'error' && <p className="border-b border-line px-3 py-2 text-xs text-critical-ink">Não foi possível carregar as finalizadas mais antigas.</p>}
+        {tab === 'closed' && needsOlder && olderState === 'idle' && older.length >= CLOSED_MAX && (
+          <p className="border-b border-line px-3 py-2 text-xs text-ink-2">Mostrando as {CLOSED_MAX} mais recentes além dos últimos {CLOSED_DEFAULT_DAYS} dias. Reduza o período para ver as demais.</p>
+        )}
         <ul className="min-h-0 flex-1 overflow-y-auto">
           {list.length === 0 && (
             <li className="p-6 text-center text-sm text-muted">
-              {term || tagFilter || sectorFilter ? 'Nenhuma conversa encontrada.' : tab === 'queue' ? 'Nenhum atendimento aguardando.' : tab === 'mine' ? 'Você não está com nenhum atendimento em andamento.' : tab === 'closed' ? 'Nenhum atendimento finalizado.' : 'Nenhuma conversa ainda. As mensagens no privado aparecem aqui; use o botão + para iniciar uma.'}
+              {term || tagFilter || sectorFilter ? 'Nenhuma conversa encontrada.' : tab === 'queue' ? 'Nenhum atendimento aguardando.' : tab === 'mine' ? 'Você não está com nenhum atendimento em andamento.' : tab === 'closed' ? (period.days === 0 ? 'Nenhum atendimento finalizado.' : `Nenhum atendimento finalizado nos últimos ${period.days} dias.`) : 'Nenhuma conversa ainda. As mensagens no privado aparecem aqui; use o botão + para iniciar uma.'}
             </li>
           )}
           {list.map((c) => {
@@ -1064,11 +1124,11 @@ export function PrivateInbox({
             tags={tags}
             viewer={viewer}
             onClosed={(closed, owner) =>
-              setChats((prev) =>
-                prev.map((c) =>
-                  c.id === current.id ? { ...c, closed_at: closed ? new Date().toISOString() : null, assigned_to: owner, unread_count: closed ? 0 : c.unread_count } : c,
-                ),
-              )
+              setChats((prev) => {
+                const patch = { closed_at: closed ? new Date().toISOString() : null, assigned_to: owner, unread_count: closed ? 0 : current.unread_count };
+                // conversa finalizada antiga (carregada à parte) que foi reaberta: passa para a lista principal
+                return prev.some((c) => c.id === current.id) ? prev.map((c) => (c.id === current.id ? { ...c, ...patch } : c)) : [{ ...current, ...patch }, ...prev];
+              })
             }
             onOwner={(owner) => {
               // passou para outra pessoa (sem ver todas): a conversa sai da lista
