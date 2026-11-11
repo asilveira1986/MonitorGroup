@@ -390,7 +390,7 @@ function PeoplePicker({
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar pessoa" aria-label="Buscar pessoa" className="h-9 pl-8 text-sm" />
         </div>
       )}
-      <ul className="grid max-h-44 gap-1 overflow-y-auto sm:grid-cols-2">
+      <ul className="grid max-h-44 content-start gap-1 overflow-y-auto sm:grid-cols-2 lg:grid-cols-4">
         {shown.map((p) => {
           const on = has.has(p.id);
           return (
@@ -541,7 +541,7 @@ function EventDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Compromisso">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={onClose} />
-      <form onSubmit={submit} noValidate className="relative flex max-h-[94dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-surface-2 shadow-2xl sm:rounded-3xl lg:max-w-4xl">
+      <form onSubmit={submit} noValidate className="relative flex max-h-[94dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-surface-2 shadow-2xl sm:rounded-3xl lg:max-w-5xl">
         <div className="flex items-center justify-between gap-3 bg-surface px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-brand-text">
@@ -556,10 +556,9 @@ function EventDialog({
             <X className="h-5 w-5" />
           </button>
         </div>
-        {/* computador: duas colunas (o quê e quando | quem, repetição e lembretes) */}
-        <div className="grid flex-1 content-start gap-3 overflow-y-auto p-3 sm:p-4 lg:grid-cols-[1.05fr_1fr]">
-          <div className="space-y-3">
-            <div id="agenda-nature">
+        {/* celular: uma coluna, nesta ordem. Computador: duas colunas, com o "Quando" ocupando a largura toda */}
+        <div className="grid flex-1 content-start gap-3 overflow-y-auto p-3 sm:p-4 lg:grid-cols-2">
+            <div id="agenda-nature" className="lg:col-start-2 lg:row-start-1 [&>section]:h-full">
               <Section icon={Lock} title="Este compromisso é" hint={<span className={natureError ? 'font-semibold text-critical-ink' : ''}>obrigatório</span>}>
                 <NaturePicker
                   value={nature}
@@ -573,7 +572,7 @@ function EventDialog({
                 <p className="text-[9px] text-muted">{nature === 'personal' ? 'Particular: para quem não participa, aparece só como “Ocupado” no horário, sem título nem observação.' : 'Particular aparece só como “Ocupado” para quem não participa.'}</p>
               </Section>
             </div>
-            <Section icon={StickyNote} title="O que é">
+            <Section icon={StickyNote} title="O que é" className="lg:col-start-1 lg:row-span-2 lg:row-start-1 lg:flex lg:flex-col">
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -584,21 +583,23 @@ function EventDialog({
                 aria-label="Título"
                 className="h-11 text-base font-medium"
               />
-              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={2000} placeholder="Observação (opcional): local, link, detalhes..." aria-label="Observação" />
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} placeholder="Observação (opcional): local, link, detalhes..." aria-label="Observação" className="lg:min-h-24 lg:flex-1" />
             </Section>
             <Section
               icon={Clock}
               title="Quando"
+              className="lg:col-span-2 lg:row-start-3"
               hint={(() => {
                 const m = !allDay && endTime ? eventMinutes(zonedIso(date, time || '09:00', timeZone), zonedIso(endDate, endTime, timeZone), false) : null;
                 const days = endDate > date ? diffDays(date, endDate) : 0;
                 return allDay ? (days ? `${days + 1} dias` : undefined) : m ? spanLabel(m) : undefined;
               })()}
             >
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(9.5rem,1fr)_8.75rem] sm:gap-3">
-                  <label className="block min-w-0 space-y-1.5">
-                    <span className="block text-xs font-medium text-ink-2">Início</span>
+              {/* início e término lado a lado (uma coluna no celular) */}
+              <div className="grid gap-3 md:grid-cols-2 md:gap-5">
+                <div className="space-y-1.5">
+                  <span className="block text-xs font-medium text-ink-2">Início</span>
+                  <div className="grid grid-cols-[minmax(0,1fr)_8.75rem] gap-2">
                     <Input
                       type="date"
                       value={date}
@@ -610,17 +611,12 @@ function EventDialog({
                       required
                       aria-label="Dia do início"
                     />
-                  </label>
-                  <label className="block space-y-1.5">
-                    <span className="block text-xs font-medium text-transparent" aria-hidden>
-                      Hora
-                    </span>
-                    <Input type="time" value={time} onChange={(e) => changeStart(e.target.value)} disabled={allDay} className="w-full" aria-label="Hora do início" />
-                  </label>
+                    <Input type="time" value={time} onChange={(e) => changeStart(e.target.value)} disabled={allDay} aria-label="Hora do início" />
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(9.5rem,1fr)_8.75rem] sm:gap-3">
-                  <label className="block min-w-0 space-y-1.5">
-                    <span className={`block text-xs font-medium ${endError ? 'text-critical-ink' : 'text-ink-2'}`}>Término</span>
+                <div className="space-y-1.5">
+                  <span className={`block text-xs font-medium ${endError ? 'text-critical-ink' : 'text-ink-2'}`}>Término</span>
+                  <div className="grid grid-cols-[minmax(0,1fr)_8.75rem] gap-2">
                     <Input
                       type="date"
                       value={endDate}
@@ -630,11 +626,6 @@ function EventDialog({
                       aria-invalid={Boolean(endError)}
                       className={endError ? 'border-critical' : ''}
                     />
-                  </label>
-                  <label className="block space-y-1.5">
-                    <span className="block text-xs font-medium text-transparent" aria-hidden>
-                      Hora
-                    </span>
                     <Input
                       type="time"
                       value={endTime}
@@ -645,91 +636,92 @@ function EventDialog({
                       disabled={allDay}
                       aria-label="Hora do término (opcional)"
                       aria-invalid={Boolean(endError)}
-                      className={`w-full ${endError ? 'border-critical' : ''}`}
+                      className={endError ? 'border-critical' : ''}
                     />
-                  </label>
+                  </div>
                 </div>
               </div>
-              {!allDay && (
-                <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Duração">
-                  <span className="text-[9px] text-muted">Duração:</span>
-                  {[30, 60, 90, 120].map((m) => {
-                    const target = endFor(time, m);
-                    const on = Boolean(target) && endDate === date && endTime === target;
+              {endError && <p className="text-xs font-medium text-critical-ink">{endError}</p>}
+              {/* atalhos e "dia todo" na mesma faixa */}
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-2.5">
+                {!allDay && (
+                  <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Duração">
+                    <span className="text-[9px] text-muted">Duração:</span>
+                    {[30, 60, 90, 120].map((m) => {
+                      const target = endFor(time, m);
+                      const on = Boolean(target) && endDate === date && endTime === target;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          disabled={!target}
+                          aria-pressed={on}
+                          onClick={() => {
+                            setEndDate(date);
+                            setEndTime(target);
+                            setEndError(null);
+                          }}
+                          className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition disabled:opacity-40 ${on ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2 hover:border-brand-line'}`}
+                        >
+                          {durationLabel(m)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Vários dias">
+                  <span className="text-[9px] text-muted">Vários dias:</span>
+                  {[1, 2, 6].map((n) => {
+                    const on = diffDays(date, endDate) === n;
                     return (
                       <button
-                        key={m}
+                        key={n}
                         type="button"
-                        disabled={!target}
                         aria-pressed={on}
-                        onClick={() => {
-                          setEndDate(date);
-                          setEndTime(target);
-                          setEndError(null);
-                        }}
-                        className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition disabled:opacity-40 ${on ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2 hover:border-brand-line'}`}
+                        onClick={() => addDays(n)}
+                        title={`Termina ${n === 1 ? 'no dia seguinte' : `${n} dias depois`}`}
+                        className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${on ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2 hover:border-brand-line'}`}
                       >
-                        {durationLabel(m)}
+                        {n === 6 ? 'até 1 semana' : `+${n} dia${n > 1 ? 's' : ''}`}
                       </button>
                     );
                   })}
-                </div>
-              )}
-              <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Vários dias">
-                <span className="text-[9px] text-muted">Vários dias:</span>
-                {[1, 2, 6].map((n) => {
-                  const on = diffDays(date, endDate) === n;
-                  return (
+                  {(endTime || endDate > date) && (
                     <button
-                      key={n}
                       type="button"
-                      aria-pressed={on}
-                      onClick={() => addDays(n)}
-                      title={`Termina ${n === 1 ? 'no dia seguinte' : `${n} dias depois`}`}
-                      className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${on ? 'border-brand-line bg-brand-soft text-brand-text' : 'border-line text-ink-2 hover:border-brand-line'}`}
+                      onClick={() => {
+                        setEndDate(date);
+                        setEndTime('');
+                        setEndError(null);
+                      }}
+                      className="rounded-full px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-2"
                     >
-                      {n === 6 ? 'até 1 semana' : `+${n} dia${n > 1 ? 's' : ''}`}
+                      sem término
                     </button>
-                  );
-                })}
-                {(endTime || endDate > date) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEndDate(date);
-                      setEndTime('');
-                      setEndError(null);
-                    }}
-                    className="rounded-full px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-2"
-                  >
-                    sem término
-                  </button>
-                )}
+                  )}
+                </div>
+                <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-sm text-ink-2">
+                  <input type="checkbox" checked={allDay} onChange={(e) => changeAllDay(e.target.checked)} className="h-4 w-4 accent-[var(--brand)]" />
+                  Dia todo
+                </label>
               </div>
-              {endError && <p className="text-xs font-medium text-critical-ink">{endError}</p>}
-              <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-ink-2">
-                <input type="checkbox" checked={allDay} onChange={(e) => changeAllDay(e.target.checked)} className="h-4 w-4 accent-[var(--brand)]" />
-                Dia todo
-              </label>
             </Section>
             {types.length > 0 && (
-              <Section icon={Tag} title="Tipo">
+              <Section icon={Tag} title="Tipo" className="lg:col-start-2 lg:row-start-2">
                 <TypePicker types={types} value={typeId} onChange={setTypeId} />
               </Section>
             )}
-          </div>
-          <div className="space-y-3">
-            <Section icon={Users} title="Participantes" hint={who.length ? `${who.length} marcado(s)` : undefined}>
+            <Section icon={Users} title="Participantes" hint={who.length ? `${who.length} marcado(s)` : undefined} className="lg:col-span-2 lg:row-start-4">
               <PeoplePicker people={people} teams={teams} value={who} onChange={setWho} />
             </Section>
-            <Section icon={Repeat} title="Repetir">
+            <Section icon={Repeat} title="Repetir" className="lg:col-start-1 lg:row-start-5">
               <RepeatPicker value={repeat} onChange={setRepeat} />
             </Section>
-            <Section icon={Bell} title="Lembretes">
+            <Section icon={Bell} title="Lembretes" className="lg:col-start-2 lg:row-start-5">
               <RemindersPicker value={reminders} onChange={setReminders} allDay={allDay} />
             </Section>
             {inSeries && (
-              <div className="space-y-1.5 rounded-2xl border border-line bg-surface p-3.5 text-sm">
+              <div className="space-y-1.5 rounded-2xl border border-line bg-surface p-3.5 text-sm lg:col-span-2">
                 <p className="text-xs font-medium text-ink-2">Este compromisso se repete. Salvar em:</p>
                 {ruleChanged ? (
                   <p className="text-xs text-ink-2">A repetição mudou: vale para <b>este e os próximos</b>.</p>
@@ -750,7 +742,6 @@ function EventDialog({
                 )}
               </div>
             )}
-          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 bg-surface px-5 py-3">
           <Button disabled={pending}>{pending ? 'Salvando…' : event ? 'Salvar' : 'Registrar compromisso'}</Button>
