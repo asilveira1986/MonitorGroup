@@ -6,7 +6,7 @@ import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { appSettings } from '@/lib/app-settings';
 import { requireMenu } from '@/lib/auth';
 import { agendaColor, type AgendaType } from '@/lib/agenda-colors';
-import { rangeLabel } from '@/lib/agenda-time';
+import { dayOf, eventDays, isMultiDay, rangeLabel, whenLabel } from '@/lib/agenda-time';
 import { cn, formatTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import type { Demand } from '@/lib/types';
@@ -22,7 +22,9 @@ type Row = Demand & { groups: { name: string } | null; team_members: { name: str
 /** uma linha da agenda: demanda (a entregar ou entregue) ou compromisso */
 /** horário "Ocupado": compromisso particular de outra pessoa (só início e de quem é; 0169) */
 type Busy = { starts_at: string; ends_at?: string | null; all_day: boolean; user_ids: string[] };
-type Entry = { kind: 'demand'; r: Row; done?: boolean } | { kind: 'event'; e: AgendaEvent } | { kind: 'busy'; b: Busy };
+/** parte do compromisso de vários dias que cai neste dia: o começo, o meio (continua) ou o fim (0175) */
+type Part = { kind: 'only' | 'start' | 'middle' | 'end'; index: number; total: number; first: string; last: string };
+type Entry = { kind: 'demand'; r: Row; done?: boolean } | { kind: 'event'; e: AgendaEvent; part?: Part } | { kind: 'busy'; b: Busy };
 type View = 'dia' | 'semana' | 'mes';
 
 const VIEWS: { key: View; label: string }[] = [
@@ -52,6 +54,10 @@ const entryTime = (x: Entry) =>
     ? x.b.all_day
       ? 0
       : new Date(x.b.starts_at).getTime()
+    : x.kind === 'event' && x.part && (x.part.kind === 'middle' || x.part.kind === 'end')
+    ? x.part.kind === 'middle' || x.e.all_day
+      ? 0
+      : new Date(x.e.ends_at ?? x.e.starts_at).getTime() - 1
     : x.kind === 'event'
     ? x.e.all_day
       ? 0
@@ -161,6 +167,24 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     const from = addDays(range.start < today ? range.start : today, -1);
     const until = addDays(range.end > today ? range.end : today, 2);
     const none = Promise.resolve({ data: [] as unknown[] });
+    const winFrom = (f: string) => `${f}T00:00:00Z`;
+    // sem a coluna de término (script 0172 ainda não aplicado) a consulta falha: refaz só pelo início
+    const loadEvents = async (withEnd: boolean, f: string, u: string): Promise<{ data: unknown[] | null }> => {
+      let q = supabase
+        .from('agenda_events')
+        .select(`${EVENT_COLS}, agenda_event_people!inner(user_id)`)
+        .in('agenda_event_people.user_id', userIds.length ? userIds : ['00000000-0000-0000-0000-000000000000'])
+        .lt('starts_at', winFrom(u));
+      q = withEnd ? q.or(`starts_at.gte.${winFrom(f)},ends_at.gte.${winFrom(f)}`) : q.gte('starts_at', winFrom(f));
+      const r = await q.order('starts_at').limit(1000);
+      return r.error && withEnd ? loadEvents(false, f, u) : r;
+    };
+    const loadOldEvents = async (withEnd: boolean, f: string, u: string): Promise<{ data: unknown[] | null }> => {
+      let q = supabase.from('agenda_events').select(EVENT_COLS).in('member_id', ids).lt('starts_at', winFrom(u));
+      q = withEnd ? q.or(`starts_at.gte.${winFrom(f)},ends_at.gte.${winFrom(f)}`) : q.gte('starts_at', winFrom(f));
+      const r = await q.order('starts_at').limit(1000);
+      return r.error && withEnd ? loadOldEvents(false, f, u) : r;
+    };
     const [o, d, ev, evOld, busyRes] = await Promise.all([
       supabase
         .from('demands')
@@ -178,26 +202,10 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         .lt('delivered_at', `${until}T00:00:00Z`)
         .order('delivered_at', { ascending: false })
         .limit(1000),
-      // compromissos do período em que o usuário participa (0097)
-      supabase
-        .from('agenda_events')
-        .select(`${EVENT_COLS}, agenda_event_people!inner(user_id)`)
-        .in('agenda_event_people.user_id', userIds.length ? userIds : ['00000000-0000-0000-0000-000000000000'])
-        .gte('starts_at', `${from}T00:00:00Z`)
-        .lt('starts_at', `${until}T00:00:00Z`)
-        .order('starts_at')
-        .limit(1000),
+      // compromissos do período em que o usuário participa (0097), inclusive os de vários dias que começaram antes (0175)
+      loadEvents(true, from, until),
       // compromissos antigos, da pessoa da equipe ligada
-      ids.length
-        ? supabase
-            .from('agenda_events')
-            .select(EVENT_COLS)
-            .in('member_id', ids)
-            .gte('starts_at', `${from}T00:00:00Z`)
-            .lt('starts_at', `${until}T00:00:00Z`)
-            .order('starts_at')
-            .limit(1000)
-        : none,
+      ids.length ? loadOldEvents(true, from, until) : none,
       // horários "Ocupado" (compromissos particulares dos outros): só ao olhar a agenda de outras pessoas (0169)
       viewingOther
         ? supabase.rpc('agenda_busy', { p_from: `${from}T00:00:00Z`, p_to: `${until}T00:00:00Z`, p_users: userIds })
@@ -238,7 +246,15 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   };
   const dueOn = groupByDay(open, (r) => r.promised_at);
   const doneOn = groupByDay(delivered, (r) => r.delivered_at);
-  const eventsOn = groupByDay(events, (e) => e.starts_at);
+  // compromisso de vários dias aparece em cada dia que cobre (0175)
+  const eventsOn = new Map<string, { e: AgendaEvent; part: Part }[]>();
+  for (const e of events) {
+    const days = eventDays(e.starts_at, e.ends_at, timeZone);
+    days.forEach((d, i) => {
+      const kind: Part['kind'] = days.length === 1 ? 'only' : i === 0 ? 'start' : i === days.length - 1 ? 'end' : 'middle';
+      eventsOn.set(d, [...(eventsOn.get(d) ?? []), { e, part: { kind, index: i + 1, total: days.length, first: days[0], last: days[days.length - 1] } }]);
+    });
+  }
   const busyOn = groupByDay(busy, (b) => b.starts_at);
   const isLate = (r: Row) => Boolean(r.promised_at && new Date(r.promised_at).getTime() < now);
   const late = open.filter(isLate);
@@ -248,7 +264,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const entriesOf = (key: string): Entry[] =>
     [
       ...(dueOn.get(key) ?? []).map((r): Entry => ({ kind: 'demand', r })),
-      ...(eventsOn.get(key) ?? []).map((e): Entry => ({ kind: 'event', e })),
+      ...(eventsOn.get(key) ?? []).map(({ e, part }): Entry => ({ kind: 'event', e, part })),
       ...(busyOn.get(key) ?? []).map((b): Entry => ({ kind: 'busy', b })),
       ...(doneOn.get(key) ?? []).map((r): Entry => ({ kind: 'demand', r, done: true })),
     ].sort((a, b) => entryTime(a) - entryTime(b));
@@ -298,11 +314,33 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       </li>
     );
   };
-  const eventItem = (e: AgendaEvent) => (
-    <li key={e.id} className={cn('flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5', e.done_at && 'opacity-60')}>
+  const eventItem = (e: AgendaEvent, part?: Part) => (
+    <li key={`${e.id}${part ? `-${part.index}` : ''}`} className={cn('flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5', e.done_at && 'opacity-60')}>
       <span className="tabular w-14 shrink-0 text-xs font-semibold leading-tight" style={{ color: colorOf(e) }}>
-        {e.all_day ? 'dia todo' : formatTime(e.starts_at, timeZone)}
-        {!e.all_day && e.ends_at && <span className="block text-[9px] font-normal text-muted">até {formatTime(e.ends_at, timeZone)}</span>}
+        {part?.kind === 'middle' ? (
+          <>
+            continua
+            <span className="block text-[9px] font-normal text-muted">dia todo</span>
+          </>
+        ) : part?.kind === 'end' ? (
+          e.all_day ? (
+            <>dia todo</>
+          ) : (
+            <>
+              até
+              <span className="block">{formatTime(e.ends_at ?? e.starts_at, timeZone)}</span>
+            </>
+          )
+        ) : (
+          <>
+            {e.all_day ? 'dia todo' : formatTime(e.starts_at, timeZone)}
+            {part?.kind === 'start' ? (
+              <span className="block text-[9px] font-normal text-muted">até {ddmm(part.last)}</span>
+            ) : (
+              !e.all_day && e.ends_at && <span className="block text-[9px] font-normal text-muted">até {formatTime(e.ends_at, timeZone)}</span>
+            )}
+          </>
+        )}
       </span>
       <Link href={href({ evento: e.id })} scroll={false} className="min-w-0 flex-1 basis-56 hover:underline" title="Ver detalhes">
         <p className={cn('line-clamp-2 text-sm font-medium', e.done_at && 'line-through')}>
@@ -310,6 +348,11 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           {e.title} <NatureBadge nature={e.nature} className="ml-1 align-middle" />
         </p>
         <p className="line-clamp-2 text-xs text-ink-2">{e.notes || 'Compromisso'}</p>
+        {part && part.total > 1 && (
+          <p className="mt-0.5 text-[9px] font-medium text-muted" title={whenLabel(e.starts_at, e.ends_at, e.all_day, timeZone)}>
+            dia {part.index} de {part.total} · {ddmm(part.first)} a {ddmm(part.last)}
+          </p>
+        )}
         {((e.people?.length ?? 0) > 1 || (multi && (e.people?.length ?? 0) > 0)) && (
           <p className="mt-0.5 truncate text-[9px] text-muted" title="Participantes">
             👥 {(e.people ?? []).map((id) => people.find((p) => p.id === id)?.name ?? 'usuário').join(', ')}
@@ -324,7 +367,9 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     <li key={`busy-${b.starts_at}-${i}`} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
       <span className="tabular w-14 shrink-0 text-xs font-semibold leading-tight text-muted">
         {b.all_day ? 'dia todo' : formatTime(b.starts_at, timeZone)}
-        {!b.all_day && b.ends_at && <span className="block text-[9px] font-normal">até {formatTime(b.ends_at, timeZone)}</span>}
+        {!b.all_day && b.ends_at && (
+          <span className="block text-[9px] font-normal">até {isMultiDay(b.starts_at, b.ends_at, timeZone) ? ddmm(dayOf(b.ends_at, timeZone)) : formatTime(b.ends_at, timeZone)}</span>
+        )}
       </span>
       <div className="min-w-0 flex-1 basis-56">
         <p className="text-sm font-medium text-ink-2">
@@ -342,7 +387,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         <h2 className={cn('flex items-center gap-2 border-b border-line px-4 py-2.5 text-sm font-semibold sm:px-5', tone === 'critical' && 'text-critical-ink')}>
           {title} <span className="tabular rounded-full bg-surface-2 px-2 text-[9px] font-semibold text-ink-2">{entries.length}</span>
         </h2>
-        <ul className="divide-y divide-line">{entries.map((x, i) => (x.kind === 'busy' ? busyItem(x.b, i) : x.kind === 'event' ? eventItem(x.e) : demandItem(x.r, x.done)))}</ul>
+        <ul className="divide-y divide-line">{entries.map((x, i) => (x.kind === 'busy' ? busyItem(x.b, i) : x.kind === 'event' ? eventItem(x.e, x.part) : demandItem(x.r, x.done)))}</ul>
       </Card>
     );
 
@@ -362,17 +407,19 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     }
     if (x.kind === 'event') {
       const e = x.e;
+      const cont = x.part?.kind === 'middle' || x.part?.kind === 'end';
       return (
         <Link
-          key={e.id}
+          key={`${e.id}${x.part ? `-${x.part.index}` : ''}`}
           href={href({ evento: e.id })}
           scroll={false}
-          title={`${rangeLabel(e.starts_at, e.ends_at, e.all_day, timeZone).replace(/^dia todo$/, 'Dia todo')} · ${e.title}${e.nature === 'personal' ? ' · particular' : ''}${e.notes ? ` · ${e.notes}` : ''}`}
-          className={cn('block truncate rounded-md border-l-2 px-1.5 py-0.5 text-[9px] text-ink hover:brightness-95', e.done_at && 'line-through opacity-60')}
+          title={`${whenLabel(e.starts_at, e.ends_at, e.all_day, timeZone).replace(/^dia todo/, 'Dia todo')} · ${e.title}${e.nature === 'personal' ? ' · particular' : ''}${e.notes ? ` · ${e.notes}` : ''}`}
+          className={cn('block truncate rounded-md border-l-2 px-1.5 py-0.5 text-[9px] text-ink hover:brightness-95', e.done_at && 'line-through opacity-60', cont && 'opacity-80')}
           style={{ borderLeftColor: colorOf(e), backgroundColor: `${colorOf(e)}1f` }}
         >
           <span className="tabular font-semibold" style={{ color: colorOf(e) }}>
-            {e.all_day ? '' : `${formatTime(e.starts_at, timeZone)} `}
+            {/* vários dias: o começo traz a hora e "→"; os dias seguintes, "↳" (continua) */}
+            {cont ? '↳ ' : e.all_day ? (x.part?.kind === 'start' ? '→ ' : '') : `${formatTime(e.starts_at, timeZone)}${x.part?.kind === 'start' ? ' → ' : ' '}`}
           </span>
           {e.nature === 'personal' && <span aria-label="particular">🔒 </span>}
           {e.title}
