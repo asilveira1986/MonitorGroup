@@ -1,5 +1,5 @@
 import { AlertOctagon, AlertTriangle, Info } from 'lucide-react';
-import type { ButtonHTMLAttributes, ComponentProps, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, ComponentProps, ReactNode, SelectHTMLAttributes } from 'react';
 import { cn, SEVERITY_LABEL } from '@/lib/format';
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
@@ -93,7 +93,7 @@ export function Button({
 const fieldClass =
   'w-full rounded-xl border border-line bg-surface px-3 text-base sm:text-sm text-ink placeholder:text-muted outline-none transition focus:border-brand-line focus:ring-2 focus:ring-brand-soft';
 
-export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className, ...props }: ComponentProps<'input'>) {
   return <input className={cn(fieldClass, 'h-11 sm:h-10', className)} {...props} />;
 }
 
