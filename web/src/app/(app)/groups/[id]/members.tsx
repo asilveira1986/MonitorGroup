@@ -1,8 +1,8 @@
 'use client';
 
-import { Crown, Headset, Search, ShieldCheck, Smartphone, UserCheck, Users } from 'lucide-react';
+import { ChevronDown, Crown, Headset, Search, ShieldCheck, Smartphone, UserCheck, Users } from 'lucide-react';
 import { CallPrivateButton } from '../../private/call-private';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardHeader } from '@/components/ui';
 import { Avatar } from '@/components/avatar';
 import { cn, formatPhone, initials, timeAgo } from '@/lib/format';
@@ -42,6 +42,24 @@ export function GroupMembers({
   const isResponsible = (m: GroupMember) => Boolean(m.team_member_id && responsibleIds.includes(m.team_member_id));
   const members = [...list].sort((a, b) => Number(isResponsible(b)) - Number(isResponsible(a)));
   const [query, setQuery] = useState('');
+  // no celular a lista começa recolhida (ocupava a tela antes da conversa); no computador fica sempre aberta
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    // o link "N participantes" do cabeçalho (#membros) abre a lista
+    const sync = () => {
+      if (window.location.hash === '#membros') setOpen(true);
+    };
+    const click = (e: MouseEvent) => {
+      if ((e.target as Element | null)?.closest?.('a[href="#membros"]')) setOpen(true);
+    };
+    sync();
+    window.addEventListener('hashchange', sync);
+    document.addEventListener('click', click);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      document.removeEventListener('click', click);
+    };
+  }, []);
   const q = query.trim().toLowerCase();
   const digits = q.replace(/\D/g, '');
   const shown = members.filter(
@@ -52,7 +70,7 @@ export function GroupMembers({
   const silent = members.filter((m) => !m.messages_30d && !m.is_me).length;
 
   return (
-    <Card className="lg:flex lg:h-full lg:flex-col">
+    <Card className={cn('lg:flex lg:h-full lg:flex-col', !open && 'pb-4 lg:pb-0')}>
       <CardHeader
         title={`Membros (${members.length || total})`}
         description={
@@ -60,9 +78,23 @@ export function GroupMembers({
             ? `${team} da equipe · ${others} clientes e outros · ${silent} sem mensagens em 30 dias`
             : 'A lista aparece depois que o WhatsApp conectado sincronizar o grupo.'
         }
+        action={
+          members.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              aria-controls="membros-lista"
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface px-2.5 text-xs font-medium text-ink-2 hover:bg-surface-2 hover:text-ink lg:hidden"
+            >
+              {open ? 'Recolher' : 'Expandir'}
+              <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')} aria-hidden />
+            </button>
+          ) : undefined
+        }
       />
       {members.length > 0 && (
-        <div className="px-3 pb-3 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+        <div id="membros-lista" className={cn('px-3 pb-3 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col', !open && 'hidden lg:flex')}>
           {members.length > 6 && (
             <label className="relative mb-2 block lg:shrink-0">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" aria-hidden />
