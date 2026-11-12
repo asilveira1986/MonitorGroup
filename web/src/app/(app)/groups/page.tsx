@@ -90,7 +90,7 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
   type MsgHit = { id: string; group_id: string; group_name: string; sender_name: string | null; from_me: boolean; body: string; sent_at: string };
   const messageHits: MsgHit[] =
     q.trim().length >= 3 && filter !== 'removed'
-      ? (((await supabase.rpc('search_group_messages', { p_term: q.trim(), p_group: null, p_limit: 30 })).data ?? []) as MsgHit[])
+      ? (((await supabase.rpc('search_group_messages', { p_term: q.trim(), p_group: null, p_limit: 100 })).data ?? []) as MsgHit[])
       : [];
   return (
     <>
@@ -175,8 +175,14 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
       </Card>
       {messageHits.length > 0 && (
         <Card className="mt-4 overflow-hidden">
-          <p className="border-b border-line bg-surface-2 px-4 py-2 text-xs font-semibold text-ink-2">Mensagens com “{q.trim()}”</p>
-          <ul className="divide-y divide-line">
+          <p className="border-b border-line bg-surface-2 px-4 py-2 text-xs font-semibold text-ink-2">
+            Mensagens com “{q.trim()}” ·{' '}
+            <span className="tabular font-normal">
+              {messageHits.length}
+              {messageHits.length >= 100 ? '+' : ''} encontrada{messageHits.length > 1 ? 's' : ''}, da mais recente para a mais antiga
+            </span>
+          </p>
+          <ul className="max-h-[32rem] divide-y divide-line overflow-y-auto">
             {messageHits.map((h) => {
               const sn = snippet(h.body, q.trim());
               return (

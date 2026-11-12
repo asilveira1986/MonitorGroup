@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client';
 import { findMatches, MIN_SEARCH_CHARS } from '@/lib/message-search';
 
 export type SearchHit = { id: string; sent_at: string };
+/** uma ocorrência do texto: a mensagem e qual das ocorrências dentro dela (0 = a primeira da mensagem) */
+type Occurrence = SearchHit & { k: number };
 
 /**
  * Pesquisa dentro de uma conversa (grupo ou privado), como no WhatsApp: digita, vê "3 de 12", sobe/desce entre as
@@ -33,7 +35,8 @@ export function ChatSearch({
   onClose: () => void;
 }) {
   const [term, setTerm] = useState(initial?.term ?? '');
-  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [hits, setHits] = useState<Occurrence[]>([]);
+  const [messageCount, setMessageCount] = useState(0);
   const [idx, setIdx] = useState(0);
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,7 +59,14 @@ export function ChatSearch({
             : await supabase.rpc('search_private_messages', { p_term: term.trim(), p_chat: chatId, p_limit: 500 });
         if (!alive) return;
         if (error) return setState('error');
-        const list = ((data ?? []) as SearchHit[]).map((r) => ({ id: r.id, sent_at: r.sent_at }));
+        // uma entrada por ocorrência (a mesma palavra várias vezes na mesma mensagem conta várias vezes); da mais nova para a
+        // mais antiga e, dentro da mensagem, de baixo para cima
+        const rows = (data ?? []) as (SearchHit & { body?: string | null })[];
+        const list: Occurrence[] = rows.flatMap((r) => {
+          const n = Math.max(1, findMatches(r.body ?? '', term).length);
+          return Array.from({ length: n }, (_, i) => ({ id: r.id, sent_at: r.sent_at, k: n - 1 - i }));
+        });
+        setMessageCount(rows.length);
         setHits(list);
         const want = wantId.current ? list.findIndex((h) => h.id === wantId.current) : -1;
         wantId.current = null;
@@ -92,7 +102,7 @@ export function ChatSearch({
     };
     // só quando a ocorrência atual muda
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.id]);
+  }, [current?.id, current?.k]);
 
   // marca o texto achado nas mensagens da tela (Custom Highlight API; sem suporte, fica só o anel na mensagem atual)
   const mark = useCallback(() => {
@@ -109,6 +119,7 @@ export function ChatSearch({
     for (const el of root.querySelectorAll<HTMLElement>('[id^="msg-"]')) {
       const isCurrent = current ? el.id === `msg-${current.id}` : false;
       if (isCurrent) el.setAttribute('data-search-current', '');
+      const ranges: Range[] = [];
       const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         const text = n.nodeValue ?? '';
@@ -116,8 +127,14 @@ export function ChatSearch({
           const r = document.createRange();
           r.setStart(n, m.start);
           r.setEnd(n, m.end);
-          (isCurrent ? cur : all).push(r);
+          ranges.push(r);
         }
+      }
+      if (!isCurrent) all.push(...ranges);
+      else {
+        // na mensagem atual só a ocorrência escolhida fica forte; as outras da mesma mensagem ficam como as demais
+        const at = Math.min(current!.k, ranges.length - 1);
+        ranges.forEach((r, i) => (i === at ? cur : all).push(r));
       }
     }
     reg.set('chat-search', new HL(...all));
@@ -163,7 +180,11 @@ export function ChatSearch({
         aria-label="Pesquisar nesta conversa"
         className="h-8 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted sm:text-sm"
       />
-      <span className="tabular shrink-0 text-xs text-muted" aria-live="polite">
+      <span
+        className="tabular shrink-0 text-xs text-muted"
+        aria-live="polite"
+        title={shownHits.length ? `${shownHits.length} ocorrência${shownHits.length > 1 ? 's' : ''} em ${messageCount} mensagem${messageCount > 1 ? 'ns' : ''}` : undefined}
+      >
         {!active
           ? ''
           : state === 'loading'
@@ -171,7 +192,7 @@ export function ChatSearch({
             : state === 'error'
               ? 'Pesquisa indisponível'
               : shownHits.length
-                ? `${idx + 1} de ${shownHits.length}${shownHits.length >= 500 ? '+' : ''}`
+                ? `${idx + 1} de ${shownHits.length}${messageCount >= 500 ? '+' : ''}${shownHits.length !== messageCount ? ` · ${messageCount} msg` : ''}`
                 : 'Nada encontrado'}
       </span>
       {state === 'loading' && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted" aria-label="Pesquisando" />}

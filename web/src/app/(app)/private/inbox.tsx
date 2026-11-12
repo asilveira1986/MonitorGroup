@@ -58,6 +58,9 @@ type Outgoing = { id: string; chat_id: string; body: string | null; media_name?:
 /** contato da lista (0109): agenda do WhatsApp + conversas + equipe, uma linha por pessoa */
 type Contact = { jid: string; phone: string | null; name: string | null; notify: string | null; saved?: boolean; chat?: boolean; team?: boolean; photo?: string | null };
 const SHOW_STEP = 200;
+/** pesquisa geral de mensagens: de quantas em quantas aparecem e o máximo */
+const MSG_PAGE = 40;
+const MSG_MAX = 500;
 
 const TYPE_LABEL: Record<string, string> = {
   image: '📷 Imagem',
@@ -860,6 +863,7 @@ export function PrivateInbox({
   const [msgState, setMsgState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [pinned, setPinned] = useState<PrivateChat[]>([]);
   const [seed, setSeed] = useState<{ chatId: string; term: string; messageId: string; n: number } | null>(null);
+  const [msgLimit, setMsgLimit] = useState(MSG_PAGE);
   const globalTerm = q.trim();
   const globalOn = globalTerm.length >= 3;
   useEffect(() => {
@@ -867,7 +871,7 @@ export function PrivateInbox({
     let alive = true;
     const t = setTimeout(async () => {
       setMsgState('loading');
-      const { data, error } = await createClient().rpc('search_private_messages', { p_term: globalTerm, p_chat: null, p_limit: 40 });
+      const { data, error } = await createClient().rpc('search_private_messages', { p_term: globalTerm, p_chat: null, p_limit: msgLimit });
       if (!alive) return;
       if (error) return setMsgState('error');
       setMsgHits((data ?? []) as MsgHit[]);
@@ -877,7 +881,7 @@ export function PrivateInbox({
       alive = false;
       clearTimeout(t);
     };
-  }, [globalOn, globalTerm]);
+  }, [globalOn, globalTerm, msgLimit]);
   // finalizadas: período (por padrão os últimos 90 dias, que já vêm com a página); mais antigas são buscadas ao escolher
   const [period, setPeriod] = useState(() => ({ days: CLOSED_DEFAULT_DAYS, since: closedSince(CLOSED_DEFAULT_DAYS) }));
   const [older, setOlder] = useState<PrivateChat[]>([]);
@@ -1023,7 +1027,7 @@ export function PrivateInbox({
         <div className="flex items-center gap-2 border-b border-line p-3">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar conversa" className="pl-9" aria-label="Buscar conversa" />
+            <Input value={q} onChange={(e) => { setQ(e.target.value); setMsgLimit(MSG_PAGE); }} placeholder="Buscar conversa" className="pl-9" aria-label="Buscar conversa" />
           </div>
           {viewer.seesAll && (
             <Button
@@ -1191,7 +1195,14 @@ export function PrivateInbox({
           {globalOn && (
             <li className="border-t border-line">
               <p className="flex items-center gap-2 bg-surface-2 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">
-                Mensagens {msgState === 'loading' && <Loader2 className="h-3 w-3 animate-spin" aria-label="Pesquisando" />}
+                Mensagens
+                {msgHits.length > 0 && (
+                  <span className="tabular rounded-full bg-surface px-1.5 normal-case" title="Mensagens que contêm o texto (a mais recente primeiro)">
+                    {msgHits.length}
+                    {msgHits.length >= msgLimit ? '+' : ''} encontrada{msgHits.length > 1 ? 's' : ''}
+                  </span>
+                )}
+                {msgState === 'loading' && <Loader2 className="h-3 w-3 animate-spin" aria-label="Pesquisando" />}
               </p>
               {msgState === 'error' && <p className="px-3 py-3 text-xs text-critical-ink">Pesquisa de mensagens indisponível (falta aplicar o script do banco, item 0177).</p>}
               {msgState === 'idle' && msgHits.length === 0 && <p className="px-3 py-3 text-xs text-muted">Nenhuma mensagem com “{globalTerm}”.</p>}
@@ -1217,6 +1228,11 @@ export function PrivateInbox({
                   );
                 })}
               </ul>
+              {msgHits.length >= msgLimit && msgLimit < MSG_MAX && (
+                <button type="button" onClick={() => setMsgLimit((n) => Math.min(n + MSG_PAGE, MSG_MAX))} className="w-full border-t border-line px-3 py-2 text-xs font-medium text-brand-text hover:bg-surface-2">
+                  Ver mais resultados
+                </button>
+              )}
             </li>
           )}
         </ul>
