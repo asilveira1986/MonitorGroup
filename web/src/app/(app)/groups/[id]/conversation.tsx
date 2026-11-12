@@ -1,13 +1,14 @@
 'use client';
 
-import { Check, CheckCheck, Clock, Forward, Loader2, Lock, MessageCircle, MessageSquareReply, Reply, UserCheck } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Check, CheckCheck, Clock, Forward, Loader2, Lock, MessageCircle, MessageSquareReply, Reply, Search, UserCheck } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { markMediaSeen, markSenderAsTeam } from '../../actions';
 import { Badge, EmptyState } from '@/components/ui';
 import { cn, formatDateTime, formatDuration, formatPhone, formatTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
+import { ChatSearch, type SearchHit } from '@/components/chat-search';
 import type { Message, OutgoingMessage } from '@/lib/types';
 import { Composer, OutgoingBubble, type ReplyConfig } from './composer';
 import Link from 'next/link';
@@ -237,6 +238,11 @@ export function Conversation({
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  // pesquisa dentro da conversa (como no WhatsApp); a pesquisa geral abre já com ?busca= e ?msg=
+  const params = useSearchParams();
+  const seedTerm = params.get('busca');
+  const seedMsg = params.get('msg');
+  const [searching, setSearching] = useState(Boolean(seedTerm));
 
   // junta as mensagens recentes (atualizadas em tempo real) com as antigas já carregadas
   const messages = useMemo(() => {
@@ -385,6 +391,24 @@ export function Conversation({
     if (page.length < PAGE_SIZE) setHasMore(false);
   }, [groupId, hasMore, loading, messages]);
 
+  // pesquisa: traz as mensagens entre a ocorrência e o que já está na tela
+  const ensureLoaded = useCallback(
+    async (hit: SearchHit) => {
+      const oldest = messages[messages.length - 1];
+      if (!oldest || messages.some((m) => m.id === hit.id) || hit.sent_at > oldest.sent_at) return;
+      const { data } = await createClient()
+        .from('messages')
+        .select('*')
+        .eq('group_id', groupId)
+        .gte('sent_at', hit.sent_at)
+        .lte('sent_at', oldest.sent_at)
+        .order('sent_at', { ascending: false })
+        .limit(2000);
+      setOlder((prev) => [...prev, ...((data ?? []) as Message[])]);
+    },
+    [groupId, messages],
+  );
+
   // carrega automaticamente quando o topo da conversa aparece na tela
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -448,6 +472,29 @@ export function Conversation({
 
   return (
     <div className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+    {searching ? (
+      <ChatSearch
+        scope="group"
+        chatId={groupId}
+        containerRef={scrollRef}
+        ensureLoaded={ensureLoaded}
+        version={messages.length}
+        initial={seedTerm ? { term: seedTerm, messageId: seedMsg } : undefined}
+        onClose={() => setSearching(false)}
+      />
+    ) : (
+      <div className="flex justify-end border-b border-line px-3 py-1">
+        <button
+          type="button"
+          onClick={() => setSearching(true)}
+          className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-ink-2 hover:bg-surface-2 hover:text-ink"
+          title="Pesquisar nesta conversa"
+          aria-label="Pesquisar nesta conversa"
+        >
+          <Search className="h-3.5 w-3.5" /> Pesquisar
+        </button>
+      </div>
+    )}
     {/* flex-col-reverse mantém a rolagem ancorada nas mensagens mais recentes. No lg a conversa ocupa a altura do card (a
         mesma da lista de membros) e rola por dentro; abaixo disso, a altura é limitada como antes. */}
     <div ref={scrollRef} className="chat-wallpaper flex max-h-[65vh] flex-col-reverse overflow-y-auto p-3 sm:max-h-[640px] sm:p-5 lg:min-h-0 lg:max-h-none lg:flex-1">

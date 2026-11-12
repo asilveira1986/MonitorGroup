@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { GroupSearch } from './group-search';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { requireMenu } from '@/lib/auth';
-import { cn } from '@/lib/format';
+import { cn, formatDateTime } from '@/lib/format';
+import { snippet } from '@/lib/message-search';
 import { createClient } from '@/lib/supabase/server';
 import type { Group } from '@/lib/types';
 import { TagChips, type CustomerTag } from '@/components/customer-tags';
@@ -82,6 +83,15 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
   const { data: photoRows } = await supabase.from('contact_avatars').select('jid').like('jid', '%@g.us').not('path', 'is', null);
   const groupPhotos = (photoRows ?? []).map((r) => r.jid as string);
 
+  const { data: tzSettings } = await appSettings();
+  const timeZone = tzSettings?.timezone ?? 'America/Sao_Paulo';
+  // pesquisa nas mensagens dos grupos (como no WhatsApp): com 3 letras ou mais, lista as mensagens que contêm o texto
+  // (sem o script 0177 no banco a função não existe: a lista simplesmente não aparece)
+  type MsgHit = { id: string; group_id: string; group_name: string; sender_name: string | null; from_me: boolean; body: string; sent_at: string };
+  const messageHits: MsgHit[] =
+    q.trim().length >= 3 && filter !== 'removed'
+      ? (((await supabase.rpc('search_group_messages', { p_term: q.trim(), p_group: null, p_limit: 30 })).data ?? []) as MsgHit[])
+      : [];
   return (
     <>
       <PageHeader title="Grupos" description="Todos os grupos do WhatsApp conectado. Escolha quais devem ser monitorados." />
@@ -163,6 +173,35 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
           />
         )}
       </Card>
+      {messageHits.length > 0 && (
+        <Card className="mt-4 overflow-hidden">
+          <p className="border-b border-line bg-surface-2 px-4 py-2 text-xs font-semibold text-ink-2">Mensagens com “{q.trim()}”</p>
+          <ul className="divide-y divide-line">
+            {messageHits.map((h) => {
+              const sn = snippet(h.body, q.trim());
+              return (
+                <li key={h.id}>
+                  <Link
+                    href={`/groups/${h.group_id}?busca=${encodeURIComponent(q.trim())}&msg=${h.id}`}
+                    className="flex flex-col gap-0.5 px-4 py-2.5 hover:bg-surface-2"
+                  >
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="min-w-0 truncate text-sm font-medium">{h.group_name}</span>
+                      <span className="tabular shrink-0 text-[9px] text-muted">{formatDateTime(h.sent_at, timeZone)}</span>
+                    </span>
+                    <span className="line-clamp-2 break-words text-xs text-ink-2">
+                      <span className="text-muted">{h.from_me ? 'Você' : (h.sender_name ?? 'Cliente')}: </span>
+                      {sn.before}
+                      <mark className="rounded bg-warning/40 px-0.5 text-inherit">{sn.match}</mark>
+                      {sn.after}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
     </>
   );
 }

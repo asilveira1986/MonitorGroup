@@ -451,3 +451,17 @@ h2,
   background-size: 180px 180px;
   background-attachment: local;
 }
+
+/* pesquisa dentro da conversa (components/chat-search.tsx): trechos achados e o da ocorrência atual */
+::highlight(chat-search) {
+  background-color: rgb(250 204 21 / 0.45);
+  color: inherit;
+}
+::highlight(chat-search-current) {
+  background-color: rgb(249 115 22 / 0.6);
+  color: inherit;
+}
+[data-search-current] {
+  outline: 2px solid rgb(249 115 22 / 0.7);
+  outline-offset: 2px;
+}
