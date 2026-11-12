@@ -361,7 +361,8 @@ export function GroupsPanel({
   }, []);
 
   useEffect(() => {
-    const refresh = setInterval(() => router.refresh(), 60_000);
+    // só com a aba visível: aba esquecida aberta não gera atualização (cada uma é uma função na Vercel)
+    const refresh = setInterval(() => document.visibilityState === 'visible' && router.refresh(), 60_000);
     return () => clearInterval(refresh);
   }, [router]);
   const counts = useMemo(

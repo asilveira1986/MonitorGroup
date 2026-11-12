@@ -1,15 +1,12 @@
 'use client';
 
 import { AlertOctagon, AlertTriangle, Bell, CheckCircle2, Maximize, Minimize, Smartphone, WifiOff } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { Logo } from '@/components/logo';
 import { IndicatorView } from '@/components/indicators/views';
 import { cn } from '@/lib/format';
 import { formatValue, type IndicatorValue, type KpiData, type Tone } from '@/lib/indicators';
-import { useRealtime } from '@/lib/use-realtime';
-
-const REFRESH_MS = 60_000;
+import { useScheduledRefresh } from '@/lib/use-scheduled-refresh';
 
 const TONE: Record<Exclude<Tone, null>, { bar: string; icon: typeof CheckCircle2; text: string; label: string }> = {
   good: { bar: 'bg-good', icon: CheckCircle2, text: 'text-good-ink', label: 'Dentro do esperado' },
@@ -229,12 +226,10 @@ export function TvBoard({
   /** segundos entre as páginas de painéis; 0 = tudo numa página só */
   rotateSeconds: number;
 }) {
-  const router = useRouter();
   const [fullscreen, setFullscreen] = useState(false);
   const [idle, setIdle] = useState(false);
   const [page, setPage] = useState(0);
   const pageCount = useRef(1);
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // tela de parede: tema escuro (ou claro com ?tema=claro) e tudo em escala pelo tamanho da tela
   useEffect(() => {
@@ -251,31 +246,8 @@ export function TvBoard({
     };
   }, [light]);
 
-  // atualiza sozinho: a cada minuto e logo após mensagens, grupos ou alertas novos
-  useEffect(() => {
-    const id = setInterval(() => router.refresh(), REFRESH_MS);
-    return () => clearInterval(id);
-  }, [router]);
-  // mensagens chegando o tempo todo: no máximo uma atualização a cada 30 s (cada uma recalcula os
-  // indicadores no banco)
-  const lastRefresh = useRef(0);
-  const refreshSoon = () => {
-    if (refreshTimer.current) return;
-    const wait = Math.max(4000, 30_000 - (Date.now() - lastRefresh.current));
-    refreshTimer.current = setTimeout(() => {
-      refreshTimer.current = null;
-      lastRefresh.current = Date.now();
-      router.refresh();
-    }, wait);
-  };
-  useRealtime('tv-board', (channel) =>
-    channel
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, refreshSoon)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, refreshSoon)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'whatsapp_instances' }, refreshSoon)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'demands' }, refreshSoon)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_indicators' }, refreshSoon),
-  );
+  // atualiza sozinho só nas horas pares entre 06h e 22h (cada atualização é uma função na Vercel)
+  useScheduledRefresh();
 
   // troca de página dos painéis
   useEffect(() => {
