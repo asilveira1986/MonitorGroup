@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_COMMITMENT_VERBS } from './commitment.js';
-import { classifyFollowup, type FollowupMessage } from './followup.js';
+import { buildResolver, classifyFollowup, markAddressedElsewhere, mentionKeys, type FollowupMessage } from './followup.js';
 
 const T0 = Date.UTC(2026, 10, 3, 13, 0, 0); // terça, 10h em Brasília
 let n = 0;
@@ -221,4 +221,57 @@ test('promessa de análise e, depois, resposta longa da equipe com a análise: c
   assert.equal(run([team('Vou fazer a análise e retorno a vocês.', 0), team('Ok, estamos vendo.', 10)]).kind, 'promise');
   // resposta longa que traz uma nova promessa no fim continua pendente
   assert.equal(run([team('Vou fazer a análise e retorno.', 0), team(analysis + ' Sobre o prazo, vou verificar com o cliente e te retorno amanhã.', 100)]).kind, 'promise');
+});
+
+// conversa entre clientes: "@fulano preciso do extrato" e a resposta do fulano não chamam a equipe
+const AMANA = '5551943135880';
+const FZP = '5551993264490';
+const LID_FZP = '121839833624806';
+const EQUIPE = '5551900000001';
+const participants = [
+  { jid: `${AMANA}@s.whatsapp.net`, lid: null, phone: AMANA },
+  { jid: `${FZP}@s.whatsapp.net`, lid: `${LID_FZP}@lid`, phone: FZP },
+  { jid: `${EQUIPE}@s.whatsapp.net`, lid: null, phone: EQUIPE },
+];
+const resolve = buildResolver(participants, [EQUIPE]);
+const from = (key: string) => ({ senderKeys: [key] });
+const markedRun = (msgs: FollowupMessage[]) => run(markAddressedElsewhere(msgs, resolve));
+
+test('mentionKeys: pega o telefone ou o LID marcado, sem repetir', () => {
+  assert.deepEqual(mentionKeys(`Bom dia, @${FZP} e @${LID_FZP} e @${FZP}`), [FZP, LID_FZP]);
+  assert.deepEqual(mentionKeys('sem marcação @pessoa 123'), []);
+});
+
+test('cliente marca outro cliente e ele responde: não é pendência da empresa', () => {
+  const r = markedRun([
+    client(`Bom dia, @${FZP} preciso do extrato da C-`, 0, from(AMANA)),
+    client('Bom dia, vou providenciar', 3, from(FZP)),
+  ]);
+  assert.equal(r.status, null);
+});
+
+test('marcação por LID também vale (o WhatsApp marca por LID)', () => {
+  const r = markedRun([client(`@${LID_FZP} preciso do extrato?`, 0, from(AMANA)), client('envio já', 2, from(FZP))]);
+  assert.equal(r.status, null);
+});
+
+test('marcou a equipe, ou alguém não reconhecido: continua pendente (nunca esconde pedido à equipe)', () => {
+  assert.equal(markedRun([client(`@${EQUIPE} preciso do extrato`, 0, from(AMANA))]).status, 'company');
+  assert.equal(markedRun([client('@999999999999 preciso do extrato', 0, from(AMANA))]).status, 'company');
+  assert.equal(markedRun([client(`@${FZP} @${EQUIPE} preciso do extrato`, 0, from(AMANA))]).status, 'company');
+});
+
+test('a equipe no meio, ou resposta tardia: a resposta do marcado volta a contar', () => {
+  assert.equal(
+    markedRun([client(`@${FZP} preciso do extrato`, 0, from(AMANA)), team('Já estou vendo', 1), client('Preciso disso hoje', 2, from(FZP))]).status,
+    'company',
+  );
+  assert.equal(
+    markedRun([client(`@${FZP} preciso do extrato`, 0, from(AMANA)), client('Preciso disso hoje, urgente?', 60, from(FZP))]).status,
+    'company',
+  );
+});
+
+test('cliente que não marcou ninguém continua pedindo à equipe', () => {
+  assert.equal(markedRun([client('Preciso do extrato da C-', 0, from(AMANA))]).status, 'company');
 });
