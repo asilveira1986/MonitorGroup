@@ -227,6 +227,7 @@ from (values
   (165, 'Acompanhamento liberado para os administradores da empresa (0174)', coalesce(pg_get_functiondef('public.platform_monitor()'::regprocedure) like '%Somente administradores veem o acompanhamento%', false)),
   (166, 'Agenda: compromisso de vários dias, término em outro dia (0175)', coalesce(pg_get_functiondef('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)'::regprocedure) like '%até 31 dias%', false)),
   (167, 'Agenda: só quem criou o compromisso pode excluí-lo (0176)', to_regprocedure('public.can_delete_agenda_event(uuid)') is not null),
-  (168, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (168, 'Pesquisa de mensagens nos grupos e conversas privadas (0177)', to_regprocedure('public.search_group_messages(text,uuid,integer)') is not null and to_regprocedure('public.search_private_messages(text,uuid,integer)') is not null),
+  (169, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

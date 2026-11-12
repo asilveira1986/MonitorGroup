@@ -5,8 +5,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, Card, Field, Input, Textarea } from '@/components/ui';
-import { CONTACT_INITIALS, cn, formatPhone, formatTime, initials, timeAgo } from '@/lib/format';
+import { CONTACT_INITIALS, cn, formatDateTime, formatPhone, formatTime, initials, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/client';
+import { ChatSearch, type SearchHit } from '@/components/chat-search';
+import { snippet } from '@/lib/message-search';
 import { CLOSED_DEFAULT_DAYS, CLOSED_MAX, CLOSED_PERIODS, closedSince } from '@/lib/private-closed';
 import { useRealtime } from '@/lib/use-realtime';
 import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
@@ -233,8 +235,11 @@ function ChatView({
   onUnread,
   silent,
   photo,
+  seed,
 }: {
   chat: PrivateChat;
+  /** vindo da pesquisa geral: abre a pesquisa da conversa já nesse texto e mensagem */
+  seed?: { term: string; messageId: string } | null;
   /** foto do contato (jid com foto guardada) */
   photo?: string | null;
   timeZone: string;
@@ -250,6 +255,9 @@ function ChatView({
   silent?: boolean;
 }) {
   const [messages, setMessages] = useState<PrivateMessage[] | null>(null);
+  // pesquisa dentro da conversa (como no WhatsApp)
+  const [searching, setSearching] = useState(Boolean(seed));
+  const listRef = useRef<HTMLDivElement>(null);
   const [outgoing, setOutgoing] = useState<Outgoing[]>([]);
   const [text, setText] = useState('');
   const [pending, start] = useTransition();
@@ -441,6 +449,25 @@ function ChatView({
     setLoadingOlder(false);
   };
 
+  // pesquisa: traz as mensagens entre a ocorrência e o que já está na tela
+  const ensureLoaded = async (hit: SearchHit) => {
+    const first = messages?.[0];
+    if (!first || messages?.some((m) => m.id === hit.id) || hit.sent_at >= first.sent_at) return;
+    const { data } = await createClient()
+      .from('private_messages')
+      .select('*')
+      .eq('chat_id', chat.id)
+      .gte('sent_at', hit.sent_at)
+      .lte('sent_at', first.sent_at)
+      .order('sent_at', { ascending: false })
+      .limit(2000);
+    const older = ((data ?? []) as PrivateMessage[]).reverse();
+    setMessages((prev) => {
+      const ids = new Set((prev ?? []).map((x) => x.id));
+      return [...older.filter((x) => !ids.has(x.id)), ...(prev ?? [])];
+    });
+  };
+
   const byId = useMemo(() => new Map((messages ?? []).map((m) => [m.id, m])), [messages]);
   const sentIds = useMemo(() => new Set((messages ?? []).map((m) => m.wa_message_id)), [messages]);
   const queue = outgoing.filter((o) => !o.wa_message_id || !sentIds.has(o.wa_message_id));
@@ -480,6 +507,19 @@ function ChatView({
         <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={() => setSearching((v) => !v)}
+            aria-pressed={searching}
+            className={cn(
+              'inline-flex h-8 items-center gap-1 rounded-lg border border-line px-2 text-xs hover:bg-surface-2 hover:text-ink sm:h-7',
+              searching ? 'bg-brand-soft text-brand-text' : 'bg-surface text-ink-2',
+            )}
+            title="Pesquisar nesta conversa"
+            aria-label="Pesquisar nesta conversa"
+          >
+            <Search className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
             onClick={onUnread}
             className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface px-2 text-xs text-ink-2 hover:bg-surface-2 hover:text-ink sm:h-7"
             title="Marcar como não lida"
@@ -500,7 +540,18 @@ function ChatView({
         </div>
       </div>
 
-      <div className="chat-wallpaper flex min-h-0 flex-1 flex-col-reverse overflow-y-auto p-3 sm:p-5">
+      {searching && (
+        <ChatSearch
+          scope="private"
+          chatId={chat.id}
+          containerRef={listRef}
+          ensureLoaded={ensureLoaded}
+          version={messages?.length ?? 0}
+          initial={seed ? { term: seed.term, messageId: seed.messageId } : undefined}
+          onClose={() => setSearching(false)}
+        />
+      )}
+      <div ref={listRef} className="chat-wallpaper flex min-h-0 flex-1 flex-col-reverse overflow-y-auto p-3 sm:p-5">
         <div className="space-y-2">
           {hasOlder && (
             <div className="flex justify-center">
@@ -548,6 +599,7 @@ function ChatView({
                 {dayChip}
                 <div className={cn('flex', m.from_me ? 'justify-end' : 'justify-start')}>
                   <div
+                    id={`msg-${m.id}`}
                     className={cn(
                       'relative max-w-[85%] rounded-2xl py-2 pl-3.5 pr-7 text-sm shadow-sm sm:max-w-[75%]',
                       m.from_me ? 'rounded-br-md bg-brand-soft' : 'rounded-bl-md border border-line bg-surface',
@@ -802,6 +854,30 @@ export function PrivateInbox({
   const sectorOf = (c: PrivateChat) => (c.instance_id ? (sectors?.byInstance[c.instance_id] ?? null) : null);
   const sectorName = (id: string | null) => (id ? sectors?.options.find((s) => s.id === id)?.name : undefined);
   const [tab, setTab] = useState<Tab>('queue');
+  // pesquisa geral nas mensagens (como no WhatsApp): aparece abaixo das conversas quando o texto tem 3 letras ou mais
+  type MsgHit = { id: string; chat_id: string; chat_name: string | null; chat_phone: string | null; from_me: boolean; body: string; sent_at: string };
+  const [msgHits, setMsgHits] = useState<MsgHit[]>([]);
+  const [msgState, setMsgState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [pinned, setPinned] = useState<PrivateChat[]>([]);
+  const [seed, setSeed] = useState<{ chatId: string; term: string; messageId: string; n: number } | null>(null);
+  const globalTerm = q.trim();
+  const globalOn = globalTerm.length >= 3;
+  useEffect(() => {
+    if (!globalOn) return;
+    let alive = true;
+    const t = setTimeout(async () => {
+      setMsgState('loading');
+      const { data, error } = await createClient().rpc('search_private_messages', { p_term: globalTerm, p_chat: null, p_limit: 40 });
+      if (!alive) return;
+      if (error) return setMsgState('error');
+      setMsgHits((data ?? []) as MsgHit[]);
+      setMsgState('idle');
+    }, 400);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [globalOn, globalTerm]);
   // finalizadas: período (por padrão os últimos 90 dias, que já vêm com a página); mais antigas são buscadas ao escolher
   const [period, setPeriod] = useState(() => ({ days: CLOSED_DEFAULT_DAYS, since: closedSince(CLOSED_DEFAULT_DAYS) }));
   const [older, setOlder] = useState<PrivateChat[]>([]);
@@ -900,6 +976,16 @@ export function PrivateInbox({
     },
     [pathname, router, silent],
   );
+  // abre a conversa do resultado (buscando-a se ela não está na lista carregada) com a pesquisa já posicionada
+  const openHit = async (h: { id: string; chat_id: string }) => {
+    if (!all.some((c) => c.id === h.chat_id)) {
+      const { data } = await createClient().from('private_chats').select('*').eq('id', h.chat_id).maybeSingle();
+      if (!data) return void toast.error('Não foi possível abrir essa conversa.');
+      setPinned((prev) => [data as PrivateChat, ...prev]);
+    }
+    setSeed((prev) => ({ chatId: h.chat_id, term: globalTerm, messageId: h.id, n: (prev?.n ?? 0) + 1 }));
+    choose(h.chat_id);
+  };
 
   const inTab = (c: PrivateChat, t: Tab) =>
     t === 'closed'
@@ -908,7 +994,9 @@ export function PrivateInbox({
   const term = q.trim().toLowerCase();
   const digits = term.replace(/\D/g, '');
   // abertas + finalizadas carregadas (as mais antigas só depois de escolher um período maior)
-  const all = needsOlder ? [...chats, ...older.filter((o) => !chats.some((c) => c.id === o.id))] : chats;
+  const base = needsOlder ? [...chats, ...older.filter((o) => !chats.some((c) => c.id === o.id))] : chats;
+  // conversas abertas pela pesquisa que não estavam na lista carregada
+  const all = pinned.length ? [...base, ...pinned.filter((p) => !base.some((c) => c.id === p.id))] : base;
   const list = [...all]
     .filter((c) => tab !== 'closed' || period.days === 0 || (c.closed_at ?? '') >= period.since)
     .filter((c) => !term || chatTitle(c).toLowerCase().includes(term) || (digits.length >= 3 && (c.phone ?? '').includes(digits)))
@@ -1100,12 +1188,44 @@ export function PrivateInbox({
               </li>
             );
           })}
+          {globalOn && (
+            <li className="border-t border-line">
+              <p className="flex items-center gap-2 bg-surface-2 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted">
+                Mensagens {msgState === 'loading' && <Loader2 className="h-3 w-3 animate-spin" aria-label="Pesquisando" />}
+              </p>
+              {msgState === 'error' && <p className="px-3 py-3 text-xs text-critical-ink">Pesquisa de mensagens indisponível (falta aplicar o script do banco, item 0177).</p>}
+              {msgState === 'idle' && msgHits.length === 0 && <p className="px-3 py-3 text-xs text-muted">Nenhuma mensagem com “{globalTerm}”.</p>}
+              <ul>
+                {msgHits.map((h) => {
+                  const sn = snippet(h.body, globalTerm);
+                  const who = h.chat_name || (h.chat_phone ? formatPhone(h.chat_phone) : 'Conversa');
+                  return (
+                    <li key={h.id}>
+                      <button type="button" onClick={() => openHit(h)} className="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-surface-2">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="min-w-0 truncate text-sm font-medium">{who}</span>
+                          <span className="tabular shrink-0 text-[9px] text-muted">{formatDateTime(h.sent_at, timeZone)}</span>
+                        </span>
+                        <span className="line-clamp-2 break-words text-xs text-ink-2">
+                          {h.from_me && <span className="text-muted">Você: </span>}
+                          {sn.before}
+                          <mark className="rounded bg-warning/40 px-0.5 text-inherit">{sn.match}</mark>
+                          {sn.after}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          )}
         </ul>
       </div>
       <div className={cn('min-h-0', !current && 'hidden md:block')}>
         {current ? (
           <ChatView
-            key={current.id}
+            key={seed && seed.chatId === current.id ? `${current.id}-${seed.n}` : current.id}
+            seed={seed && seed.chatId === current.id ? seed : null}
             chat={current}
             photo={photos[current.id]}
             timeZone={timeZone}
