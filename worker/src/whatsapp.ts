@@ -37,6 +37,7 @@ import { selfReadIds } from './receipts.js';
 import { audioContent } from './audio.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
 import { runHistoryRecovery, type Cursor, type Page, type RecoveryResult } from './history-recovery.js';
+import { isInformational } from './informational.js';
 import { buildResolver, classifyFollowup, markAddressedElsewhere, mentionKeys, personKey, type FollowupMessage } from './followup.js';
 import { DEFAULT_COMMITMENT_VERBS } from './commitment.js';
 
@@ -270,9 +271,40 @@ export class WhatsAppManager {
     // ao iniciar, reavalia as pendências abertas (as regras podem ter mudado desde o último cálculo)
     setTimeout(async () => {
       await db.from('groups').update({ followup_updated_at: null }).in('followup_status', ['company', 'client']).then(() => {}, () => {});
+      await this.reviewInformationalPendings().catch((err) => logger.warn({ err }, 'falha ao revisar as pendências que eram só informe'));
       void this.sweepFollowups();
     }, 45_000);
     setInterval(() => void this.sweepFollowups(), FOLLOWUP_SWEEP_MS);
+  }
+
+  /**
+   * Ao iniciar: grupos "aguardando resposta" cuja mensagem é só um informe do cliente ("sem movimentação, escritório
+   * acompanhando") deixam de pedir resposta, como as novas mensagens já fazem (informational.ts). Recalcula o grupo depois.
+   */
+  private async reviewInformationalPendings() {
+    const { data } = await db.from('groups').select('id, company_id, pending_since').not('pending_since', 'is', null).is('removed_at', null).limit(2000);
+    let fixed = 0;
+    for (const g of data ?? []) {
+      const settings = await getSettings(g.company_id as string);
+      if (settings.ignore_acknowledgements === false) continue;
+      const { data: msgs } = await db
+        .from('messages')
+        .select('id, message_type, body')
+        .eq('group_id', g.id as string)
+        .eq('from_team', false)
+        .eq('opens_pending', true)
+        .gte('sent_at', g.pending_since as string)
+        .limit(200);
+      const ids = (msgs ?? []).filter((m) => isInformational(m.message_type as string, m.body as string | null)).map((m) => m.id as string);
+      if (!ids.length) continue;
+      const { error: upError } = await db.from('messages').update({ opens_pending: false }).in('id', ids);
+      if (upError) continue;
+      // sem data de corte: não descarta as pendências antigas que continuam valendo
+      const { error } = await db.rpc('rebuild_group_state', { p_group_id: g.id as string, p_live_since: '1970-01-01T00:00:00Z' });
+      if (error) logger.warn({ err: error.message, groupId: g.id }, 'falha ao recalcular o grupo');
+      else fixed++;
+    }
+    if (fixed) logger.info({ groups: fixed }, 'grupos que aguardavam resposta por mensagem só de informe foram atualizados');
   }
 
   private followupTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -344,7 +376,10 @@ export class WhatsAppManager {
         sender: (m.sender_name as string | null) ?? null,
         senderKeys: [personKey(m.sender_jid as string | null), personKey(m.sender_phone as string | null)].filter(Boolean),
         // confirmação/agradecimento do cliente não pede resposta (a mesma regra da pendência)
-        opensPending: Boolean(m.from_team) || !settings.ignore_acknowledgements || !isAcknowledgement(m.message_type as string, m.body as string | null, settings.ignore_phrases),
+        opensPending:
+          Boolean(m.from_team) ||
+          !settings.ignore_acknowledgements ||
+          !(isAcknowledgement(m.message_type as string, m.body as string | null, settings.ignore_phrases) || isInformational(m.message_type as string, m.body as string | null)),
         closes: Boolean(m.closes_conversation),
       }));
     // conversa entre clientes ("@fulano preciso do extrato" e a resposta do fulano): a equipe não foi chamada.
@@ -2495,6 +2530,8 @@ export class WhatsAppManager {
       opensPending: !(
         settings.ignore_acknowledgements &&
         (isAcknowledgement(content.type, content.body, settings.ignore_phrases) ||
+          // o cliente só informa ("sem movimentação, escritório acompanhando"): não pede resposta
+          (!team && isInformational(content.type, content.body)) ||
           // agradecimento/confirmação logo depois da equipe: encerra o assunto (só volta a pedir
           // resposta se vier pergunta, pedido ou dúvida)
           (!team &&
