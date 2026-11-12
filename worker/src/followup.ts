@@ -32,6 +32,10 @@ export type FollowupMessage = {
   opensPending: boolean;
   /** mensagem de fechamento da conversa */
   closes: boolean;
+  /** identificadores (só dígitos: telefone ou LID) de quem enviou, para reconhecer a resposta de quem foi marcado */
+  senderKeys?: string[];
+  /** conversa entre clientes: marca outra pessoa do grupo (que não é da equipe) ou é a resposta dela; fora da conta (markAddressedElsewhere) */
+  elsewhere?: boolean;
 };
 
 export type FollowupStatus = 'company' | 'client' | 'resolved';
@@ -303,6 +307,9 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
       continue;
     }
 
+    // conversa entre clientes ("@fulano preciso do extrato" e a resposta do fulano): a equipe não foi chamada
+    if (m.elsewhere) continue;
+
     // cliente: agradecimento/confirmação (a regra de ignorar do sistema, ou o agradecimento logo depois da equipe:
     // "Bom obrigado por analisar o contrato") não abre pendência
     const afterTeam = i > 0 && ordered[i - 1].fromTeam;
@@ -336,6 +343,79 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
     dueAt: s.dueAt,
     actor: s.msg.sender,
   };
+}
+
+/**
+ * Menções (@pessoa) no texto: o WhatsApp manda o telefone ou o identificador interno (LID) de quem foi marcado,
+ * ex.: "@121839833624806". Só os dígitos, sem repetir.
+ */
+export function mentionKeys(body: string | null | undefined): string[] {
+  if (!body) return [];
+  return [...new Set([...body.matchAll(/@(\d{8,20})\b/g)].map((m) => m[1]))];
+}
+
+/** Só os dígitos de um jid/telefone/LID ("5551999999999:12@s.whatsapp.net" vira "5551999999999"). */
+export const personKey = (v: string | null | undefined): string => (v ?? '').split('@')[0].split(':')[0].replace(/\D/g, '');
+
+/** Quem é a pessoa por trás de um identificador do grupo (telefone ou LID) e se é da equipe; null = não reconhecida. */
+export type PersonResolver = (key: string) => { person: string; team: boolean } | null;
+
+/**
+ * Monta o reconhecimento de pessoas a partir dos participantes do grupo (cada um com jid, LID e telefone) e dos
+ * identificadores da equipe (cadastro de atendentes e quem já respondeu como equipe neste grupo).
+ */
+export function buildResolver(
+  participants: { jid?: string | null; lid?: string | null; phone?: string | null }[],
+  teamKeys: Iterable<string>,
+): PersonResolver {
+  const team = new Set([...teamKeys].map(personKey).filter(Boolean));
+  const byKey = new Map<string, { person: string; team: boolean }>();
+  participants.forEach((p, i) => {
+    const keys = [p.jid, p.lid, p.phone].map(personKey).filter(Boolean);
+    const isTeam = keys.some((k) => team.has(k));
+    for (const k of keys) byKey.set(k, { person: `p${i}`, team: isTeam });
+  });
+  return (key) => byKey.get(personKey(key)) ?? null;
+}
+
+/**
+ * Conversa entre clientes: a mensagem do cliente que marca (@) só gente do grupo que NÃO é da equipe não chama a equipe,
+ * e a resposta de quem foi marcado (logo em seguida, sem a equipe no meio) também não. Na dúvida (alguém marcado que
+ * não foi reconhecido, ou que é da equipe) a mensagem continua valendo como antes: nunca esconde um pedido à equipe.
+ */
+export function markAddressedElsewhere(messages: FollowupMessage[], resolve: PersonResolver, opts: { windowMs?: number; windowMessages?: number } = {}): FollowupMessage[] {
+  const windowMs = opts.windowMs ?? 30 * 60_000;
+  const windowMessages = opts.windowMessages ?? 3;
+  const ordered = [...messages].sort((a, b) => a.at - b.at);
+  const hidden = new Set<string>();
+  const marks: { index: number; at: number; persons: Set<string> }[] = [];
+  const personOf = (m: FollowupMessage) => {
+    for (const k of m.senderKeys ?? []) {
+      const r = resolve(k);
+      if (r) return r.person;
+    }
+    return null;
+  };
+  ordered.forEach((m, i) => {
+    if (m.fromTeam) return;
+    const keys = m.type === 'text' ? mentionKeys(m.body) : [];
+    if (keys.length) {
+      const people = keys.map(resolve);
+      const self = personOf(m);
+      if (people.every((r) => r && !r.team && r.person !== self)) {
+        hidden.add(m.id);
+        marks.push({ index: i, at: m.at, persons: new Set(people.map((r) => r!.person)) });
+        return;
+      }
+    }
+    const me = personOf(m);
+    if (!me) return;
+    const answered = marks.some(
+      (k) => i - k.index <= windowMessages && m.at - k.at <= windowMs && k.persons.has(me) && ordered.slice(k.index + 1, i).every((x) => !x.fromTeam),
+    );
+    if (answered) hidden.add(m.id);
+  });
+  return hidden.size ? messages.map((m) => (hidden.has(m.id) ? { ...m, elsewhere: true } : m)) : messages;
 }
 
 export const REASON: Record<FollowupKind, string> = {

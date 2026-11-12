@@ -37,7 +37,7 @@ import { selfReadIds } from './receipts.js';
 import { audioContent } from './audio.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
 import { runHistoryRecovery, type Cursor, type Page, type RecoveryResult } from './history-recovery.js';
-import { classifyFollowup } from './followup.js';
+import { buildResolver, classifyFollowup, markAddressedElsewhere, mentionKeys, personKey, type FollowupMessage } from './followup.js';
 import { DEFAULT_COMMITMENT_VERBS } from './commitment.js';
 
 const MAX_QR_ATTEMPTS = 6; // ~2 minutos esperando a leitura do QR code
@@ -325,7 +325,7 @@ export class WhatsAppManager {
     if (!group) return;
     let query = db
       .from('messages')
-      .select('id, from_team, message_type, body, sent_at, sender_name, closes_conversation, ignored_as_last, deleted_at, hidden_at')
+      .select('id, from_team, message_type, body, sent_at, sender_name, sender_jid, sender_phone, closes_conversation, ignored_as_last, deleted_at, hidden_at')
       .eq('group_id', groupId)
       .order('sent_at', { ascending: false })
       .limit(FOLLOWUP_MESSAGES);
@@ -342,16 +342,32 @@ export class WhatsAppManager {
         body: (m.body as string | null) ?? null,
         at: new Date(m.sent_at as string).getTime(),
         sender: (m.sender_name as string | null) ?? null,
+        senderKeys: [personKey(m.sender_jid as string | null), personKey(m.sender_phone as string | null)].filter(Boolean),
         // confirmação/agradecimento do cliente não pede resposta (a mesma regra da pendência)
         opensPending: Boolean(m.from_team) || !settings.ignore_acknowledgements || !isAcknowledgement(m.message_type as string, m.body as string | null, settings.ignore_phrases),
         closes: Boolean(m.closes_conversation),
       }));
+    // conversa entre clientes ("@fulano preciso do extrato" e a resposta do fulano): a equipe não foi chamada.
+    // Só consulta os participantes quando há marcação (@) em mensagem de cliente
+    let considered: FollowupMessage[] = messages;
+    if (messages.some((m) => !m.fromTeam && mentionKeys(m.body).length)) {
+      const [{ data: people }, { data: team }] = await Promise.all([
+        db.from('group_participants').select('jid, lid, phone').eq('group_id', groupId).is('left_at', null).limit(1000),
+        db.from('team_members').select('jid, phone').eq('company_id', companyId),
+      ]);
+      // equipe: o cadastro de atendentes e quem já respondeu como equipe neste grupo
+      const teamKeys = [
+        ...((team ?? []) as { jid: string | null; phone: string | null }[]).flatMap((t) => [t.jid, t.phone]),
+        ...messages.filter((m) => m.fromTeam).flatMap((m) => m.senderKeys ?? []),
+      ].filter((k): k is string => Boolean(k));
+      if (people?.length) considered = markAddressedElsewhere(messages, buildResolver(people as { jid: string | null; lid: string | null; phone: string | null }[], teamKeys));
+    }
     // marcado à mão e nada novo depois: mantém a marcação
     if (!messages.length && group.followup_dismissed_at) {
       await db.from('groups').update({ followup_updated_at: now }).eq('id', groupId);
       return;
     }
-    const r = classifyFollowup(messages, {
+    const r = classifyFollowup(considered, {
       commitmentVerbs: settings.demand_commitment_verbs ?? DEFAULT_COMMITMENT_VERBS,
       commitmentPhrases: settings.demand_commitment_keywords ?? [],
       requestPhrases: settings.followup_request_phrases,
