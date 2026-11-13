@@ -2365,6 +2365,19 @@ export class WhatsAppManager {
     }
   }
 
+  /**
+   * Como ownMessageId, mas espera a mensagem ser gravada: o aviso de "enviada"/"entregue" do WhatsApp pode chegar antes
+   * de a própria mensagem entrar no banco (mensagem enviada pelo painel), e o tique se perdia.
+   */
+  private async ownMessageIdWaiting(session: Session, groupJid: string, waId: string): Promise<{ id: string; groupId: string } | null> {
+    for (const wait of [0, 1500, 5000, 15000]) {
+      if (wait) await new Promise((r) => setTimeout(r, wait));
+      const found = await this.ownMessageId(session, groupJid, waId);
+      if (found) return found;
+    }
+    return null;
+  }
+
   /** Mensagem do número conectado neste grupo, pelo id do WhatsApp. */
   private async ownMessageId(session: Session, groupJid: string, waId: string): Promise<{ id: string; groupId: string } | null> {
     const group = await this.getGroup(session, groupJid);
@@ -2374,7 +2387,7 @@ export class WhatsAppManager {
 
   /** Status geral da mensagem (2 enviada, 3 entregue, 4 lida, 5 reproduzida): só avança. */
   private async saveWaStatus(session: Session, groupJid: string, waId: string, status: number) {
-    const target = await this.ownMessageId(session, groupJid, waId);
+    const target = await this.ownMessageIdWaiting(session, groupJid, waId);
     if (!target) return;
     await db.from('messages').update({ wa_status: status }).eq('id', target.id).or(`wa_status.is.null,wa_status.lt.${status}`);
   }
@@ -2386,7 +2399,7 @@ export class WhatsAppManager {
     waId: string,
     receipt: { userJid?: string | null; receiptTimestamp?: unknown; readTimestamp?: unknown; playedTimestamp?: unknown },
   ) {
-    const target = await this.ownMessageId(session, groupJid, waId);
+    const target = await this.ownMessageIdWaiting(session, groupJid, waId);
     if (!target || !receipt.userJid || this.isMe(session, receipt.userJid)) return;
     const iso = (t: unknown) => (toSeconds(t) > 0 ? new Date(toSeconds(t) * 1000).toISOString() : null);
     const read = iso(receipt.readTimestamp) ?? iso(receipt.playedTimestamp);

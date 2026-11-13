@@ -89,8 +89,8 @@ function Ticks({ status, receipts, recipients, nameOf }: { status: number | null
   const total = Math.max(1, recipients);
   const allRead = read.length >= total || (status ?? 0) >= 4;
   const allDelivered = allRead || delivered.length >= total || (status ?? 0) >= 3;
-  const sent = allDelivered || (status ?? 0) >= 2 || receipts.length > 0;
-  if (!sent) return null;
+  // a mensagem do número conectado só está aqui porque o WhatsApp a devolveu: no mínimo foi enviada (✓), mesmo que o aviso de
+  // "enviada" não tenha chegado ao sistema
   const names = read.slice(0, 12).map((r) => nameOf(r.user_jid));
   const title = [
     allRead ? 'Lida por todos' : allDelivered ? 'Entregue a todos' : 'Enviada',
