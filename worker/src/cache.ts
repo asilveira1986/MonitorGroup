@@ -1,5 +1,6 @@
 import { check, db, type AppSettings, type TeamMemberRow } from './db.js';
 import { logger } from './logger.js';
+import { signatureKey, signedName } from './signature.js';
 import { phoneFromJid, samePhone } from './text.js';
 
 const REFRESH_MS = 60_000;
@@ -15,6 +16,8 @@ let companies = new Map<string, { name: string; active: boolean }>();
 let quickReplies = new Map<string, Map<string, string>>();
 /** números de WhatsApp conectados de cada empresa (telefone e nome no WhatsApp) */
 let companyNumbers = new Map<string, { phone: string; name: string }[]>();
+/** nomes que assinam as mensagens ("*Nome:*"), por empresa: equipe e usuários ligados a ela pelo e-mail -> atendente */
+let signers = new Map<string, Map<string, TeamMemberRow>>();
 let loadedAt = 0;
 
 export async function refreshCache(force = false) {
@@ -32,6 +35,25 @@ export async function refreshCache(force = false) {
     team = new Map();
     for (const m of members) team.set(m.company_id, [...(team.get(m.company_id) ?? []), m]);
     companies = new Map(list.map((c) => [c.id, { name: c.name, active: c.active }]));
+    // quem assina as mensagens: o nome do atendente e o nome do usuário do painel ligado a ele pelo e-mail
+    signers = new Map();
+    const { data: profs } = await db.from('profiles').select('company_id, email, full_name');
+    const byEmail = new Map<string, TeamMemberRow>();
+    for (const m of members) {
+      const email = (m as TeamMemberRow & { user_email?: string | null }).user_email;
+      if (email) byEmail.set(`${m.company_id}|${email.toLowerCase()}`, m);
+    }
+    const put = (companyId: string, name: string | null | undefined, m: TeamMemberRow) => {
+      const k = signatureKey(name);
+      if (!k) return;
+      if (!signers.has(companyId)) signers.set(companyId, new Map());
+      signers.get(companyId)!.set(k, m);
+    };
+    for (const m of members) put(m.company_id, m.name, m);
+    for (const p of (profs ?? []) as { company_id: string | null; email: string | null; full_name: string | null }[]) {
+      const m = p.company_id && p.email ? byEmail.get(`${p.company_id}|${p.email.toLowerCase()}`) : undefined;
+      if (m) put(m.company_id, p.full_name, m);
+    }
     // sem o script 0042 a tabela não existe: segue sem fechamento
     const { data: qr } = await db.from('quick_replies').select('company_id, shortcut, body');
     quickReplies = new Map();
@@ -111,4 +133,16 @@ export async function findCompanyNumber(
 export async function closingTemplate(companyId: string): Promise<string | null> {
   const s = await getSettings(companyId);
   return quickReplies.get(companyId)?.get(s.closing_shortcut || 'fechamento') ?? null;
+}
+
+/**
+ * Mensagem assinada com o nome de alguém da equipe ("*Nome:*"): é da equipe mesmo que o número de onde veio não esteja
+ * cadastrado (a pessoa escreve de outro telefone ou de outro número conectado da empresa). Só vale quando o nome é
+ * de um atendente cadastrado (ou do usuário ligado a ele), nunca por um nome qualquer.
+ */
+export async function findSignedMember(companyId: string, body: string | null | undefined): Promise<TeamMemberRow | null> {
+  const name = signedName(body);
+  if (!name) return null;
+  await refreshCache();
+  return signers.get(companyId)?.get(signatureKey(name)) ?? null;
 }

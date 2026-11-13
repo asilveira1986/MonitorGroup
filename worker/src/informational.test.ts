@@ -24,3 +24,17 @@ test('sem marcador de informe, arquivo ou texto muito longo: não vale', () => {
   assert.equal(isInformational('text', null), false);
   assert.equal(isInformational('text', `sem movimentação ${'x '.repeat(400)}`), false);
 });
+
+test('o próprio cliente avisa que vai retornar: a bola está com ele', () => {
+  assert.equal(
+    isInformational(
+      'text',
+      '*Nicholas Matos:*\nBom dia pessoal!\nTivemos uma pendência no protocolo do Livro, eles solicitaram para que fosse alterada a centralização do documento, acabei de abrir um chamada na Junta Comercial questionando. Logo dou retorno sobre a resolução do protocolo!',
+    ),
+    true,
+  );
+  assert.equal(isInformational('text', 'Estou vendo isso com o setor, te retorno em breve'), true);
+  // pedido junto: continua pedindo resposta
+  assert.equal(isInformational('text', 'Logo dou retorno, mas preciso do contrato'), false);
+  assert.equal(isInformational('text', 'Dou retorno amanhã. Pode confirmar o prazo?'), false);
+});
