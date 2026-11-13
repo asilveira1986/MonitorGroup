@@ -2,7 +2,7 @@
 
 Ideias combinadas e ainda não feitas. Cada item diz o que é, por que e o que já se sabe.
 
-## Tique de mensagens enviadas por outros números (registrada em 13/11/2026)
+## Tique de mensagens enviadas por outros números (registrada em 13/11/2026; item 1 feito: indicador "sem confirmação")
 
 **Situação hoje.** No grupo, só as mensagens do número conectado mostram tique (✓ enviada, ✓✓ entregue, azul lida; ao passar o mouse, quantos receberam e quem leu). Mensagens da equipe enviadas do celular pessoal de outra pessoa não mostram nada, e isso parece falha para quem usa o painel.
 
