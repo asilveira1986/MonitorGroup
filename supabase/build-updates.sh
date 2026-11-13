@@ -229,7 +229,8 @@ CHECKS=$(cat <<'SQL'
   (166, 'Agenda: compromisso de vários dias, término em outro dia (0175)', coalesce(pg_get_functiondef('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)'::regprocedure) like '%até 31 dias%', false)),
   (167, 'Agenda: só quem criou o compromisso pode excluí-lo (0176)', to_regprocedure('public.can_delete_agenda_event(uuid)') is not null),
   (168, 'Pesquisa de mensagens nos grupos e conversas privadas (0177)', to_regprocedure('public.search_group_messages(text,uuid,integer)') is not null and to_regprocedure('public.search_private_messages(text,uuid,integer)') is not null),
-  (169, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (169, 'Recuperar mensagens das conversas privadas, só administrador geral (0178)', to_regclass('public.private_history_requests') is not null and to_regprocedure('public.request_private_history_recovery(uuid,integer)') is not null),
+  (170, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

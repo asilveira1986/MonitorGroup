@@ -49,7 +49,7 @@ const view = (r: Row): HistoryRequestView => ({
 
 /** O pedido mais recente do grupo (só administradores). */
 export async function latestHistoryRecovery(groupId: string): Promise<{ ok: true; request: HistoryRequestView | null } | { ok: false; error: string }> {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('history_requests')
@@ -64,7 +64,7 @@ export async function latestHistoryRecovery(groupId: string): Promise<{ ok: true
 
 /** Diagnóstico de recebimento do grupo (0165, só administradores); null = script do banco ainda não aplicado. */
 export async function groupReceiveDiagnosis(groupId: string): Promise<{ ok: true; diagnosis: ReceiveDiagnosis | null } | { ok: false; error: string }> {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('group_receive_diagnosis', { p_group_id: groupId });
   if (error) {
@@ -84,7 +84,7 @@ export async function syncGroupCopies(groupId: string): Promise<Result & { added
 }
 
 export async function startHistoryRecovery(groupId: string, days: number): Promise<Result> {
-  await requireAdmin();
+  await requirePlatformAdmin();
   if (!validDays(days)) return { ok: false, error: 'Escolha um período de 1 a 30 dias.' };
   const supabase = await createClient();
   const { error } = await supabase.rpc('request_history_recovery', { p_group_id: groupId, p_days: days });
@@ -92,7 +92,7 @@ export async function startHistoryRecovery(groupId: string, days: number): Promi
 }
 
 export async function cancelHistoryRecovery(id: string): Promise<Result> {
-  await requireAdmin();
+  await requirePlatformAdmin();
   const supabase = await createClient();
   const { error } = await supabase.rpc('cancel_history_recovery', { p_id: id });
   return error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };

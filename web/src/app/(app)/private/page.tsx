@@ -94,6 +94,7 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
               seesAll: Boolean(seesAll),
               seesTeam: Boolean(seesTeamError ? seesAll : seesTeam),
               agents: (agents ?? []) as ChatAgent[],
+              platformAdmin: Boolean(profile.platform_admin),
             }}
             sectors={sectorFilter}
             photos={photos}

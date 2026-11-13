@@ -317,7 +317,8 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
               isAdminUser && !g.removed_at ? (
                 <div className="flex flex-wrap items-center justify-end gap-1">
                   <GroupCopiesSyncButton groupId={g.id} copies={copiesCount ?? 0} />
-                  <HistoryRecoveryButton groupId={g.id} timeZone={tz} />
+                  {/* recuperar mensagens antigas (experimental): só o administrador geral da plataforma */}
+                  {profile.platform_admin && <HistoryRecoveryButton groupId={g.id} timeZone={tz} />}
                 </div>
               ) : undefined
             }
