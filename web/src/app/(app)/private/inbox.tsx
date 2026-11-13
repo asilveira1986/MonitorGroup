@@ -29,6 +29,7 @@ import { TagChips, TagEditor, type CustomerTag } from '@/components/customer-tag
 import { ShareDialog, type ShareMode, type ShareSource } from '@/components/share-dialog';
 import { OwnerControl, type ChatAgent } from './owner-control';
 import { SaveContactButton } from './save-contact';
+import { PrivateHistoryRecoveryButton } from './history-recovery';
 
 export type PrivateChat = {
   id: string;
@@ -51,7 +52,7 @@ export type PrivateChat = {
 };
 /** quem usa a tela: para as abas e o responsável (0114) */
 /** seesAll: muda o responsável de qualquer conversa (administradores); seesTeam: vê as de todos (0129). */
-type Viewer = { me: string; seesAll: boolean; seesTeam: boolean; agents: ChatAgent[] };
+type Viewer = { me: string; seesAll: boolean; seesTeam: boolean; agents: ChatAgent[]; /** administrador geral da plataforma (0178): recuperar mensagens antigas */ platformAdmin?: boolean };
 type Tab = 'queue' | 'mine' | 'closed' | 'team';
 type PrivateMessage = PrivateMessageRow;
 type Outgoing = { id: string; chat_id: string; body: string | null; media_name?: string | null; message_type?: string; status: string; error: string | null; created_at: string; wa_message_id: string | null };
@@ -508,6 +509,7 @@ function ChatView({
           </div>
         </div>
         <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+          {viewer.platformAdmin && <PrivateHistoryRecoveryButton chatId={chat.id} timeZone={timeZone} />}
           <button
             type="button"
             onClick={() => setSearching((v) => !v)}

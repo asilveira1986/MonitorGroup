@@ -23,7 +23,10 @@ export function HistoryRecoveryPanel({
   timeZone,
   diagnosis,
   diagnosedAt = 0,
+  kind = 'group',
 }: {
+  /** onde se recupera: o texto muda (grupo ou conversa privada) */
+  kind?: 'group' | 'private';
   request: HistoryRequestView | null;
   /** diagnóstico do recebimento (0165); undefined = carregando, null = indisponível */
   diagnosis?: ReceiveDiagnosis | null;
@@ -53,7 +56,7 @@ export function HistoryRecoveryPanel({
         </button>
       </div>
       <p className="mb-3 text-xs text-ink-2">
-        Pede ao celular conectado as mensagens do período que não foram guardadas (por exemplo, enquanto o grupo estava sem monitoramento). O celular precisa estar ligado e com internet. As
+        Pede ao celular conectado as mensagens do período que não foram guardadas (por exemplo, enquanto {kind === 'private' ? 'a conversa estava sem monitoramento' : 'o grupo estava sem monitoramento'}). O celular precisa estar ligado e com internet. As
         mensagens voltam só como histórico: não geram alertas nem respostas automáticas. Arquivos (imagens, áudios) não são recuperados.
       </p>
       {diagnosis && <p className="mb-3 rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning-ink">{recoveryLimitText(diagnosis.group.last_message_at, fmt)}</p>}
@@ -126,7 +129,7 @@ export function HistoryRecoveryPanel({
   );
 }
 
-/** Botão "Recuperar mensagens" da conversa do grupo (só administradores): abre a janela e acompanha o pedido. */
+/** Botão "Recuperar mensagens" da conversa do grupo (só o administrador geral da plataforma): abre a janela e acompanha o pedido. */
 export function HistoryRecoveryButton({ groupId, timeZone }: { groupId: string; timeZone?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);

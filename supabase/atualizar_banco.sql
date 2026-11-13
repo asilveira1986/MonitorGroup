@@ -284,7 +284,8 @@ begin
   (166, 'Agenda: compromisso de vários dias, término em outro dia (0175)', coalesce(pg_get_functiondef('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)'::regprocedure) like '%até 31 dias%', false)),
   (167, 'Agenda: só quem criou o compromisso pode excluí-lo (0176)', to_regprocedure('public.can_delete_agenda_event(uuid)') is not null),
   (168, 'Pesquisa de mensagens nos grupos e conversas privadas (0177)', to_regprocedure('public.search_group_messages(text,uuid,integer)') is not null and to_regprocedure('public.search_private_messages(text,uuid,integer)') is not null),
-  (169, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (169, 'Recuperar mensagens das conversas privadas, só administrador geral (0178)', to_regclass('public.private_history_requests') is not null and to_regprocedure('public.request_private_history_recovery(uuid,integer)') is not null),
+  (170, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -293,7 +294,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -25155,6 +25156,151 @@ grant execute on function public.search_private_messages(text, uuid, int) to aut
 $mig0177$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0178_private_history_recovery.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0178', $mig0178$
+-- =====================================================================
+-- Recuperar mensagens antigas das CONVERSAS PRIVADAS, só para o administrador
+-- geral da plataforma (recurso experimental, como o dos grupos, 0161).
+--
+--  * private_history_requests: um pedido por vez em cada conversa, com o
+--    andamento (pedidos feitos, mensagens vistas e novas, até onde chegou).
+--  * request_private_history_recovery / cancel_private_history_recovery: só
+--    quem administra a plataforma. O worker (chave de serviço) faz o pedido
+--    ao celular conectado e grava o andamento.
+--  * A recuperação dos GRUPOS (0161) também passa a ser só do administrador
+--    geral: o pedido, o cancelamento e a leitura do andamento.
+-- =====================================================================
+
+create table if not exists public.private_history_requests (
+  id             uuid primary key default gen_random_uuid(),
+  company_id     uuid not null references public.companies(id) on delete cascade,
+  chat_id        uuid not null references public.private_chats(id) on delete cascade,
+  requested_by   uuid default auth.uid(),
+  days           int not null check (days between 1 and 30),
+  since          timestamptz not null,
+  status         text not null default 'pending' check (status in ('pending', 'running', 'done', 'failed', 'cancelled')),
+  requests_sent  int not null default 0,
+  messages_found int not null default 0,
+  messages_added int not null default 0,
+  oldest_at      timestamptz,
+  note           text,
+  created_at     timestamptz not null default now(),
+  started_at     timestamptz,
+  finished_at    timestamptz,
+  updated_at     timestamptz not null default now()
+);
+create unique index if not exists private_history_requests_open_idx on public.private_history_requests (chat_id) where status in ('pending', 'running');
+create index if not exists private_history_requests_chat_idx on public.private_history_requests (chat_id, created_at desc);
+
+alter table public.private_history_requests enable row level security;
+drop policy if exists private_history_requests_read on public.private_history_requests;
+create policy private_history_requests_read on public.private_history_requests for select
+  using ((select public.is_platform_admin()) and company_id = (select public.current_company_id()));
+grant select on public.private_history_requests to authenticated;
+
+create or replace function public.request_private_history_recovery(p_chat_id uuid, p_days int)
+returns public.private_history_requests
+language plpgsql security definer set search_path = public as $$
+declare
+  v_chat public.private_chats%rowtype;
+  v_row  public.private_history_requests;
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Só quem administra a plataforma recupera mensagens antigas.' using errcode = '42501';
+  end if;
+  if p_days is null or p_days < 1 or p_days > 30 then
+    raise exception 'Escolha um período de 1 a 30 dias.';
+  end if;
+  select * into v_chat from public.private_chats where id = p_chat_id and company_id = public.current_company_id();
+  if not found then
+    raise exception 'Conversa não encontrada.';
+  end if;
+  begin
+    insert into public.private_history_requests (company_id, chat_id, days, since)
+    values (v_chat.company_id, v_chat.id, p_days, now() - make_interval(days => p_days))
+    returning * into v_row;
+  exception when unique_violation then
+    raise exception 'Já existe uma recuperação em andamento nesta conversa.';
+  end;
+  return v_row;
+end;
+$$;
+revoke all on function public.request_private_history_recovery(uuid, int) from public, anon;
+grant execute on function public.request_private_history_recovery(uuid, int) to authenticated;
+
+create or replace function public.cancel_private_history_recovery(p_id uuid)
+returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Só quem administra a plataforma cancela a recuperação.' using errcode = '42501';
+  end if;
+  update public.private_history_requests
+     set status = 'cancelled', finished_at = now(), updated_at = now(), note = coalesce(note, 'Cancelado pelo administrador geral.')
+   where id = p_id and company_id = public.current_company_id() and status in ('pending', 'running');
+end;
+$$;
+revoke all on function public.cancel_private_history_recovery(uuid) from public, anon;
+grant execute on function public.cancel_private_history_recovery(uuid) to authenticated;
+
+-- ------------------------------------------------ grupos (0161): também só o administrador geral
+do $$
+begin
+  if to_regprocedure('public.request_history_recovery(uuid,integer)') is not null then
+    execute $f$
+      create or replace function public.request_history_recovery(p_group_id uuid, p_days int)
+      returns public.history_requests
+      language plpgsql security definer set search_path = public as $b$
+      declare
+        v_group public.groups%rowtype;
+        v_row   public.history_requests;
+      begin
+        if not public.is_platform_admin() then
+          raise exception 'Só quem administra a plataforma recupera mensagens antigas.' using errcode = '42501';
+        end if;
+        if p_days is null or p_days < 1 or p_days > 30 then
+          raise exception 'Escolha um período de 1 a 30 dias.';
+        end if;
+        select * into v_group from public.groups where id = p_group_id and company_id = public.current_company_id();
+        if not found then
+          raise exception 'Grupo não encontrado.';
+        end if;
+        if v_group.removed_at is not null then
+          raise exception 'O número conectado não participa mais deste grupo.';
+        end if;
+        begin
+          insert into public.history_requests (company_id, group_id, days, since)
+          values (v_group.company_id, v_group.id, p_days, now() - make_interval(days => p_days))
+          returning * into v_row;
+        exception when unique_violation then
+          raise exception 'Já existe uma recuperação em andamento neste grupo.';
+        end;
+        return v_row;
+      end;
+      $b$
+    $f$;
+    execute $f$
+      create or replace function public.cancel_history_recovery(p_id uuid)
+      returns void
+      language plpgsql security definer set search_path = public as $b$
+      begin
+        if not public.is_platform_admin() then
+          raise exception 'Só quem administra a plataforma cancela a recuperação.' using errcode = '42501';
+        end if;
+        update public.history_requests
+           set status = 'cancelled', finished_at = now(), updated_at = now(), note = coalesce(note, 'Cancelado pelo administrador geral.')
+         where id = p_id and company_id = public.current_company_id() and status in ('pending', 'running');
+      end;
+      $b$
+    $f$;
+    drop policy if exists history_requests_read on public.history_requests;
+    create policy history_requests_read on public.history_requests for select
+      using ((select public.is_platform_admin()) and company_id = (select public.current_company_id()));
+  end if;
+end $$;
+$mig0178$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -25391,6 +25537,7 @@ from (values
   (166, 'Agenda: compromisso de vários dias, término em outro dia (0175)', coalesce(pg_get_functiondef('public.save_agenda_event(uuid,text,text,timestamptz,boolean,uuid[],integer[],uuid,jsonb,text,text,timestamptz)'::regprocedure) like '%até 31 dias%', false)),
   (167, 'Agenda: só quem criou o compromisso pode excluí-lo (0176)', to_regprocedure('public.can_delete_agenda_event(uuid)') is not null),
   (168, 'Pesquisa de mensagens nos grupos e conversas privadas (0177)', to_regprocedure('public.search_group_messages(text,uuid,integer)') is not null and to_regprocedure('public.search_private_messages(text,uuid,integer)') is not null),
-  (169, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (169, 'Recuperar mensagens das conversas privadas, só administrador geral (0178)', to_regclass('public.private_history_requests') is not null and to_regprocedure('public.request_private_history_recovery(uuid,integer)') is not null),
+  (170, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
