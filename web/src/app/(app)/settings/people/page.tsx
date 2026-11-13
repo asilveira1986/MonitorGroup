@@ -17,6 +17,7 @@ import { RecalcButton } from '../team/recalc-button';
 import { RoleSelect } from '../users/role-select';
 import { OnlineDot } from '@/components/presence';
 import { EditPerson, GeneratePasswordButton, MakeAttendantButton, NewPersonDialog } from './person-forms';
+import { PeopleSearch } from './people-search';
 
 type Person = { key: string; name: string; email: string | null; phone: string | null; profile?: Profile; member?: TeamMember };
 
@@ -25,7 +26,9 @@ type Person = { key: string; name: string; email: string | null; phone: string |
  * no painel (acesso). A mesma pessoa aparece uma vez, ligada pelo e-mail, com nome e telefone iguais
  * nos dois.
  */
-export default async function PeoplePage() {
+export default async function PeoplePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const sp = await searchParams;
+  const q = typeof sp.q === 'string' ? sp.q.trim() : '';
   const me = await requireProfile();
   const isAdmin = me.role === 'admin' || me.platform_admin;
   const supabase = await createClient();
@@ -104,6 +107,20 @@ export default async function PeoplePage() {
     ];
   };
 
+  // busca (sem diferenciar acento nem maiúsculas): nome, e-mail, telefone, setor, perfil e situação
+  const fold = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const term = fold(q);
+  const digits = q.replace(/\D/g, '');
+  const matches = (p: Person) => {
+    if (!term) return true;
+    const u = p.profile;
+    const sectorNames = u ? (sectorsOf.get(u.id) ?? []).map((id) => sectors.find((s) => s.id === id)?.name ?? '') : [];
+    const text = fold(
+      [p.name, p.email, p.phone, ...sectorNames, u ? ROLE_LABEL[u.role] : 'sem acesso ao painel', u && !u.active ? 'sem acesso' : '', p.member ? 'atende nos grupos' : ''].filter(Boolean).join(' '),
+    );
+    return text.includes(term) || (digits.length >= 3 && (p.phone ?? '').replace(/\D/g, '').includes(digits));
+  };
+  const shown = people.filter(matches);
   const withAccess = people.filter((p) => p.profile).length;
   const attending = people.filter((p) => p.member).length;
 
@@ -121,8 +138,16 @@ export default async function PeoplePage() {
             </div>
           }
         />
+        <div className="border-t border-line">
+          <PeopleSearch q={q} />
+          {q && (
+            <p className="px-4 pb-2 text-xs text-muted sm:px-5">
+              {shown.length} de {people.length} pessoa(s) com “{q}”
+            </p>
+          )}
+        </div>
         <ul className="divide-y divide-line border-t border-line">
-          {people.map((p) => {
+          {shown.map((p) => {
             const u = p.profile;
             const m = p.member;
             const menu = isAdmin ? actionsFor(p) : [];
@@ -214,6 +239,11 @@ export default async function PeoplePage() {
               </li>
             );
           })}
+          {people.length > 0 && shown.length === 0 && (
+            <li>
+              <EmptyState icon={<UserRound />} title="Ninguém encontrado" description={`Nenhuma pessoa com “${q}”. Confira o nome, o e-mail ou o telefone.`} />
+            </li>
+          )}
           {people.length === 0 && (
             <li>
               <EmptyState icon={<UserRound />} title="Ninguém cadastrado ainda" description="Use “Nova pessoa” para cadastrar quem atende nos grupos e quem entra no painel." />
