@@ -2202,13 +2202,13 @@ export class WhatsAppManager {
   }
 
   /** Mensagem privada desta conexão pelo id do WhatsApp (com a conversa). */
-  private async privateTarget(session: Session, jid: string, waId: string) {
+  // (sem filtrar pelo jid: a conversa pode ter sido unida a outra do mesmo número, 0179, e ter o jid na outra forma)
+  private async privateTarget(session: Session, _jid: string, waId: string) {
     const { data } = await db
       .from('private_messages')
       .select('id, chat_id, body, original_body, private_chats!inner(instance_id, jid)')
       .eq('wa_message_id', waId)
       .eq('private_chats.instance_id', session.instanceId)
-      .eq('private_chats.jid', jid)
       .maybeSingle();
     return data as { id: string; chat_id: string; body: string | null; original_body: string | null } | null;
   }

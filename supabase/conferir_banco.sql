@@ -229,6 +229,7 @@ from (values
   (167, 'Agenda: só quem criou o compromisso pode excluí-lo (0176)', to_regprocedure('public.can_delete_agenda_event(uuid)') is not null),
   (168, 'Pesquisa de mensagens nos grupos e conversas privadas (0177)', to_regprocedure('public.search_group_messages(text,uuid,integer)') is not null and to_regprocedure('public.search_private_messages(text,uuid,integer)') is not null),
   (169, 'Recuperar mensagens das conversas privadas, só administrador geral (0178)', to_regclass('public.private_history_requests') is not null and to_regprocedure('public.request_private_history_recovery(uuid,integer)') is not null),
-  (170, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (170, 'Conversas privadas unidas por telefone (0179)', to_regprocedure('public.private_phone_key(text)') is not null and to_regprocedure('public.merge_duplicate_private_chats()') is not null),
+  (171, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
