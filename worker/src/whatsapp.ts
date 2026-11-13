@@ -19,7 +19,7 @@ import makeWASocket, {
 } from 'baileys';
 import { onClientMessage, resolveDisconnectAlerts } from './alerts.js';
 import { clearAuthState, hasAuthState, usePostgresAuthState } from './auth-state.js';
-import { closingTemplate, findCompanyNumber, findTeamMember, getSettings, isCompanyActive } from './cache.js';
+import { closingTemplate, findCompanyNumber, findSignedMember, findTeamMember, getSettings, isCompanyActive } from './cache.js';
 import { isClosingMessage } from './closing.js';
 import { check, db, type GroupRow, type InstanceRow } from './db.js';
 import { logger } from './logger.js';
@@ -274,6 +274,7 @@ export class WhatsAppManager {
     setTimeout(async () => {
       await db.from('groups').update({ followup_updated_at: null }).in('followup_status', ['company', 'client']).then(() => {}, () => {});
       await this.reviewInformationalPendings().catch((err) => logger.warn({ err }, 'falha ao revisar as pendências que eram só informe'));
+      await this.reclassifySignedMessages().catch((err) => logger.warn({ err }, 'falha ao revisar as mensagens assinadas pela equipe'));
       void this.sweepFollowups();
     }, 45_000);
     setInterval(() => void this.sweepFollowups(), FOLLOWUP_SWEEP_MS);
@@ -307,6 +308,46 @@ export class WhatsAppManager {
       else fixed++;
     }
     if (fixed) logger.info({ groups: fixed }, 'grupos que aguardavam resposta por mensagem só de informe foram atualizados');
+  }
+
+  /**
+   * Ao iniciar: mensagens dos últimos 45 dias assinadas com o nome de alguém da equipe ("*Nome:*") que ficaram como de
+   * cliente (vieram de um número não cadastrado) passam a ser da equipe, como as novas já fazem. Recalcula os grupos
+   * afetados (sem descartar pendências antigas) e marca a pendência da conversa para ser refeita.
+   */
+  private async reclassifySignedMessages() {
+    const since = new Date(Date.now() - 45 * 86_400_000).toISOString();
+    const { data, error } = await db
+      .from('messages')
+      .select('id, group_id, body, groups!messages_group_id_fkey!inner(company_id)')
+      .eq('from_team', false)
+      .eq('from_me', false)
+      .like('body', '*%:*%')
+      .gte('sent_at', since)
+      .limit(5000);
+    if (error || !data?.length) return;
+    const byMember = new Map<string, { ids: string[] }>();
+    const groups = new Set<string>();
+    for (const m of data as unknown as { id: string; group_id: string; body: string | null; groups: { company_id: string } }[]) {
+      const member = await findSignedMember(m.groups.company_id, m.body);
+      if (!member) continue;
+      if (!byMember.has(member.id)) byMember.set(member.id, { ids: [] });
+      byMember.get(member.id)!.ids.push(m.id);
+      groups.add(m.group_id);
+    }
+    if (!groups.size) return;
+    for (const [memberId, { ids }] of byMember) {
+      for (let i = 0; i < ids.length; i += 200) {
+        await db.from('messages').update({ from_team: true, team_member_id: memberId }).in('id', ids.slice(i, i + 200));
+      }
+    }
+    for (const groupId of groups) {
+      // sem data de corte: não descarta as pendências antigas que continuam valendo
+      const { error: e } = await db.rpc('rebuild_group_state', { p_group_id: groupId, p_live_since: '1970-01-01T00:00:00Z' });
+      if (e) logger.warn({ err: e.message, groupId }, 'falha ao recalcular o grupo');
+    }
+    await db.from('groups').update({ followup_updated_at: null }).in('id', [...groups]).then(() => {}, () => {});
+    logger.info({ messages: [...byMember.values()].reduce((n, x) => n + x.ids.length, 0), groups: groups.size }, 'mensagens assinadas pela equipe reclassificadas');
   }
 
   private followupTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -2682,7 +2723,9 @@ export class WhatsAppManager {
       (fromMe ? null : await this.phoneJidForLid(session, msg.key.remoteJid, participant));
     // outro número conectado da empresa no mesmo grupo: é a empresa, mesmo sem cadastro em Pessoas
     const company = fromMe ? null : await findCompanyNumber(session.companyId, participant, participantAlt);
-    const member = fromMe || company ? null : await findTeamMember(session.companyId, participant, participantAlt);
+    const registered = fromMe || company ? null : await findTeamMember(session.companyId, participant, participantAlt);
+    // assinada com o nome de alguém da equipe ("*Nome:*"): é da equipe, mesmo vindo de um número não cadastrado
+    const member = registered ?? (fromMe || company ? null : await findSignedMember(session.companyId, content.body));
     const team = fromMe || Boolean(company) || Boolean(member);
     const settings = await getSettings(session.companyId);
     return {
