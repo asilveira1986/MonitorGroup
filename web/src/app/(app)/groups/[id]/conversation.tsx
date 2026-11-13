@@ -715,6 +715,17 @@ export function Conversation({
                       </span>
                     )}
                     <span className="tabular">{formatTime(m.sent_at, timeZone)}</span>
+                    {/* da equipe, mas enviada de outro número (celular pessoal): o WhatsApp só avisa entrega e leitura ao aparelho de
+                        quem enviou, então o sistema não tem como mostrar o tique */}
+                    {m.from_team && !m.from_me && !m.deleted_at && (
+                      <span
+                        className="inline-flex items-center text-muted/60"
+                        title="Enviada de outro número (não o conectado ao sistema): o WhatsApp não informa se foi entregue ou lida"
+                        aria-label="Enviada de outro número, sem confirmação de entrega"
+                      >
+                        <Check className="h-3.5 w-3.5 opacity-50" strokeDasharray="2 2" />
+                      </span>
+                    )}
                     {m.from_me && !m.deleted_at && (
                       <Ticks
                         status={m.wa_status}
