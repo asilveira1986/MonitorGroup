@@ -1,5 +1,6 @@
 import { check, db, type AppSettings, type TeamMemberRow } from './db.js';
 import { logger } from './logger.js';
+import { signatureKey, signedName } from './signature.js';
 import { phoneFromJid, samePhone } from './text.js';
 
 const REFRESH_MS = 60_000;
@@ -132,17 +133,6 @@ export async function findCompanyNumber(
 export async function closingTemplate(companyId: string): Promise<string | null> {
   const s = await getSettings(companyId);
   return quickReplies.get(companyId)?.get(s.closing_shortcut || 'fechamento') ?? null;
-}
-
-/** Nome sem acento, em minúsculas e com um espaço só (para comparar assinaturas). */
-export function signatureKey(name: string | null | undefined): string {
-  return (name ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-/** Quem assinou a mensagem ("*Nome:*" na primeira linha), se for o nome de alguém da equipe. */
-export function signedName(body: string | null | undefined): string | null {
-  const m = /^\*([^*\n]{2,80}):\*\s*\n/.exec(body ?? '');
-  return m ? m[1].trim() : null;
 }
 
 /**

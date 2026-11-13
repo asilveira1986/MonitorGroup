@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { signatureKey, signedName } from './cache.js';
+import { signatureKey, signedName } from './signature.js';
 
 test('assinatura "*Nome:*" na primeira linha', () => {
   assert.equal(signedName('*Nicholas Matos:*\nBom dia pessoal!'), 'Nicholas Matos');
