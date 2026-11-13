@@ -888,7 +888,8 @@ export function PrivateInbox({
   const [period, setPeriod] = useState(() => ({ days: CLOSED_DEFAULT_DAYS, since: closedSince(CLOSED_DEFAULT_DAYS) }));
   const [older, setOlder] = useState<PrivateChat[]>([]);
   const [olderState, setOlderState] = useState<'idle' | 'loading' | 'error'>('idle');
-  const needsOlder = tab === 'closed' && (period.days === 0 || period.days > CLOSED_DEFAULT_DAYS);
+  // as finalizadas (qualquer período) são buscadas pelo navegador ao abrir a aba: a página não as carrega mais
+  const needsOlder = tab === 'closed';
   useEffect(() => {
     if (!needsOlder) return;
     let alive = true;
@@ -898,7 +899,6 @@ export function PrivateInbox({
         .from('private_chats')
         .select('*')
         .not('closed_at', 'is', null)
-        .lt('closed_at', closedSince(CLOSED_DEFAULT_DAYS))
         .order('closed_at', { ascending: false })
         .limit(CLOSED_MAX);
       if (period.days > 0) qy = qy.gte('closed_at', period.since);
@@ -970,7 +970,7 @@ export function PrivateInbox({
   // quem assumiu outra conversa nem sempre chega pelo tempo real: confere a lista de tempos em tempos
   useEffect(() => {
     // só com a aba visível: em segundo plano não refaz as consultas à toa
-    const t = setInterval(() => document.visibilityState === 'visible' && router.refresh(), 60_000);
+    const t = setInterval(() => document.visibilityState === 'visible' && router.refresh(), 120_000);
     return () => clearInterval(t);
   }, [router]);
 
@@ -1134,7 +1134,7 @@ export function PrivateInbox({
         )}
         {tab === 'closed' && olderState === 'error' && <p className="border-b border-line px-3 py-2 text-xs text-critical-ink">Não foi possível carregar as finalizadas mais antigas.</p>}
         {tab === 'closed' && needsOlder && olderState === 'idle' && older.length >= CLOSED_MAX && (
-          <p className="border-b border-line px-3 py-2 text-xs text-ink-2">Mostrando as {CLOSED_MAX} mais recentes além dos últimos {CLOSED_DEFAULT_DAYS} dias. Reduza o período para ver as demais.</p>
+          <p className="border-b border-line px-3 py-2 text-xs text-ink-2">Mostrando as {CLOSED_MAX} mais recentes do período. Reduza o período para ver as demais.</p>
         )}
         <ul className="min-h-0 flex-1 overflow-y-auto">
           {list.length === 0 && (

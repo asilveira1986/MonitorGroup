@@ -69,7 +69,7 @@ export function GroupsTable({
       <ul className="divide-y divide-line sm:hidden">
         {groups.map((g) => (
           <li key={g.id} className={cn('flex items-start gap-3 px-4 py-3', !g.monitored && 'opacity-60')}>
-            <Link href={`/groups/${g.id}`} className="flex min-w-0 flex-1 items-start gap-3">
+            <Link href={`/groups/${g.id}`} prefetch={false} className="flex min-w-0 flex-1 items-start gap-3">
               <Avatar
                 jid={g.jid}
                 hasPhoto={withPhoto.has(g.jid)}
@@ -130,7 +130,7 @@ export function GroupsTable({
           {groups.map((g) => (
             <tr key={g.id} className={cn('border-t border-line', !g.monitored && 'opacity-60')}>
               <td className="px-5 py-3">
-                <Link href={`/groups/${g.id}`} className="flex items-center gap-3 hover:text-brand-text">
+                <Link href={`/groups/${g.id}`} prefetch={false} className="flex items-center gap-3 hover:text-brand-text">
                   <Avatar
                     jid={g.jid}
                     hasPhoto={withPhoto.has(g.jid)}

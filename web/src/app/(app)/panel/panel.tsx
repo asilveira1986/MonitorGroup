@@ -110,6 +110,8 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
   return (
     <Link
       href={`/groups/${g.id}?de=painel`}
+      // sem pré-carregar: são dezenas de cartões e cada pré-carregamento é uma chamada ao servidor (refeita a cada atualização)
+      prefetch={false}
       title={`${g.name} · ${s.label}`}
       className={cn(
         'flex min-h-[5.5rem] flex-col justify-between rounded-xl border p-3 shadow-sm transition hover:-translate-y-px hover:shadow-md',
@@ -361,8 +363,14 @@ export function GroupsPanel({
   }, []);
 
   useEffect(() => {
-    const refresh = setInterval(() => router.refresh(), 60_000);
-    return () => clearInterval(refresh);
+    // só com a aba visível (abas esquecidas abertas refaziam a página o dia todo); ao voltar para a aba, atualiza na hora
+    const refresh = setInterval(() => document.visibilityState === 'visible' && router.refresh(), 60_000);
+    const back = () => document.visibilityState === 'visible' && router.refresh();
+    document.addEventListener('visibilitychange', back);
+    return () => {
+      clearInterval(refresh);
+      document.removeEventListener('visibilitychange', back);
+    };
   }, [router]);
   const counts = useMemo(
     () => Object.fromEntries(ORDER.map((k) => [k, groups.filter((g) => g.status === k).length])) as Record<PanelStatus, number>,
