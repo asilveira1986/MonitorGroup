@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, CheckCheck, Clock, Forward, Loader2, Lock, MessageCircle, MessageSquareReply, Reply, Search, UserCheck } from 'lucide-react';
+import { Check, CheckCheck, Clock, Forward, Headset, Loader2, Lock, MessageCircle, MessageSquareReply, Reply, Search, UserCheck, UserRound } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -559,6 +559,24 @@ export function Conversation({
                     <span className={cn('text-[9px] font-semibold', m.from_team ? 'text-brand-text' : 'text-series-1')}>
                       {sender}
                     </span>
+                    {/* quem é equipe e quem é cliente, escrito: sem cadastro em Pessoas (ou "É da equipe" no menu ⋮), é cliente */}
+                    {m.from_team ? (
+                      <span
+                        className="inline-flex items-center gap-0.5 rounded-full bg-brand-soft px-1.5 py-px text-[9px] font-semibold text-brand-text"
+                        title={m.team_member_id ? 'Da equipe (cadastro em Pessoas)' : 'Da equipe (número conectado)'}
+                      >
+                        <Headset className="h-2.5 w-2.5" aria-hidden /> Equipe
+                      </span>
+                    ) : (
+                      !removed && (
+                        <span
+                          className="inline-flex items-center gap-0.5 rounded-full bg-series-1/12 px-1.5 py-px text-[9px] font-medium text-series-1"
+                          title="Cliente: este número não está cadastrado na equipe. Para marcar como equipe, use o menu ⋮ › É da equipe"
+                        >
+                          <UserRound className="h-2.5 w-2.5" aria-hidden /> Cliente
+                        </span>
+                      )
+                    )}
                     {showPhone && (
                       <button
                         type="button"
