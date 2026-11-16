@@ -38,3 +38,12 @@ test('o próprio cliente avisa que vai retornar: a bola está com ele', () => {
   assert.equal(isInformational('text', 'Logo dou retorno, mas preciso do contrato'), false);
   assert.equal(isInformational('text', 'Dou retorno amanhã. Pode confirmar o prazo?'), false);
 });
+
+test('cliente avisa que informa depois, ainda sem novidade: não pede resposta', () => {
+  assert.equal(isInformational('text', '*Nicholas Matos:*\nBom dia!\nAinda não, assim que tivermos algum retorno informo no grupo.'), true);
+  assert.equal(isInformational('text', 'Ainda não temos novidades, assim que houver aviso aqui'), true);
+  // "ainda não" sozinho (sem aviso de que vai informar) ou com pedido/pergunta: continua valendo
+  assert.equal(isInformational('text', 'Ainda não recebi o contrato'), false);
+  assert.equal(isInformational('text', 'Ainda não, assim que tivermos retorno informo. Pode me mandar o contrato?'), false);
+  assert.equal(isInformational('text', 'Ainda não, mas preciso do contrato assim que tiver'), false);
+});

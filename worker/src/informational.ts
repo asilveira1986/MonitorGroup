@@ -16,7 +16,14 @@ const MARKERS = [
   'dou retorno', 'darei retorno', 'dou um retorno', 'te dou retorno', 'logo retorno', 'retorno em breve', 'em breve retorno',
   'te retorno', 'retornarei', 'retornamos assim que', 'volto a falar', 'volto com', 'dou noticias', 'te aviso', 'aviso assim que',
   'aviso quando',
+  // "assim que tivermos retorno, informo no grupo": avisa que vai informar, não pede nada
+  'assim que tivermos algum retorno', 'assim que tivermos retorno', 'assim que tiver algum retorno', 'assim que tiver retorno',
+  'assim que tivermos', 'assim que tiver', 'assim que houver', 'assim que souber', 'assim que soubermos', 'informo no grupo',
+  'informo aqui', 'informo voces', 'informo vcs', 'informamos no grupo', 'aviso no grupo', 'aviso aqui', 'comunico no grupo',
 ];
+
+/** Trechos que dizem "ainda sem resposta/novidade" (o "não" daqui não é pedido nem problema). */
+const NEUTRAL = ['ainda nao ha', 'ainda nao tivemos', 'ainda nao temos', 'ainda nao tive', 'ainda nao tenho', 'ainda nao', 'nao ha novidade', 'nao ha novidades', 'nao tivemos retorno', 'nao temos retorno'];
 
 /** Palavras que mostram pedido, dúvida, prazo ou problema: a mensagem pede resposta. */
 const ASK_WORDS = new Set([
@@ -46,7 +53,9 @@ export function isInformational(type: string, body: string | null | undefined): 
   if (!found.length) return false;
   // as palavras do próprio marcador não contam como pedido ("dou retorno": "retorno" é parte do aviso)
   let rest = text;
-  for (const m of found) rest = rest.split(` ${m} `).join(' ');
+  // os mais longos primeiro (um marcador pode conter o outro: "assim que tivermos algum retorno" x "assim que tivermos")
+  for (const m of [...MARKERS].sort((x, y) => y.length - x.length)) rest = rest.split(` ${m} `).join(' ');
+  for (const n of [...NEUTRAL].sort((x, y) => y.length - x.length)) rest = rest.split(` ${n} `).join(' ');
   return !rest
     .trim()
     .split(' ')
