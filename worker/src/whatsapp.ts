@@ -439,6 +439,13 @@ export class WhatsAppManager {
         ...messages.filter((m) => m.fromTeam).flatMap((m) => m.senderKeys ?? []),
       ].filter((k): k is string => Boolean(k));
       if (people?.length) considered = markAddressedElsewhere(messages, buildResolver(people as { jid: string | null; lid: string | null; phone: string | null }[], teamKeys));
+      // o "aguardando resposta" (SLA) segue o mesmo critério: conversa entre clientes não pede resposta da equipe
+      const sideTalk = considered.filter((m) => m.elsewhere).map((m) => m.id);
+      if (sideTalk.length) {
+        const { data: changed } = await db.from('messages').update({ opens_pending: false }).in('id', sideTalk).eq('opens_pending', true).select('id');
+        // sem data de corte: não descarta as pendências antigas que continuam valendo
+        if (changed?.length) await db.rpc('rebuild_group_state', { p_group_id: groupId, p_live_since: '1970-01-01T00:00:00Z' });
+      }
     }
     // marcado à mão e nada novo depois: mantém a marcação
     if (!messages.length && group.followup_dismissed_at) {

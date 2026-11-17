@@ -233,6 +233,8 @@ const participants = [
   { jid: `${FZP}@s.whatsapp.net`, lid: `${LID_FZP}@lid`, phone: FZP },
   { jid: `${EQUIPE}@s.whatsapp.net`, lid: null, phone: EQUIPE },
 ];
+const EQUIPE_CLIENTE = '5551988887777';
+participants.push({ jid: `${EQUIPE_CLIENTE}@s.whatsapp.net`, lid: null, phone: EQUIPE_CLIENTE });
 const resolve = buildResolver(participants, [EQUIPE]);
 const from = (key: string) => ({ senderKeys: [key] });
 const markedRun = (msgs: FollowupMessage[]) => run(markAddressedElsewhere(msgs, resolve));
@@ -261,15 +263,33 @@ test('marcou a equipe, ou alguém não reconhecido: continua pendente (nunca esc
   assert.equal(markedRun([client(`@${FZP} @${EQUIPE} preciso do extrato`, 0, from(AMANA))]).status, 'company');
 });
 
-test('a equipe no meio, ou resposta tardia: a resposta do marcado volta a contar', () => {
+test('a equipe no meio, ou resposta muito tardia: a resposta do marcado volta a contar', () => {
   assert.equal(
     markedRun([client(`@${FZP} preciso do extrato`, 0, from(AMANA)), team('Já estou vendo', 1), client('Preciso disso hoje', 2, from(FZP))]).status,
     'company',
   );
+  // a conversa lateral só vale por 3 horas
   assert.equal(
-    markedRun([client(`@${FZP} preciso do extrato`, 0, from(AMANA)), client('Preciso disso hoje, urgente?', 60, from(FZP))]).status,
+    markedRun([client(`@${FZP} preciso do extrato`, 0, from(AMANA)), client('Preciso disso hoje, urgente?', 4 * 60, from(FZP))]).status,
     'company',
   );
+});
+
+test('conversa lateral: quem foi marcado responde (inclusive com arquivo, mais tarde) e quem marcou continua sem pedir nada', () => {
+  const r = markedRun([
+    client(`@${FZP} preciso do extrato da C-`, 0, from(AMANA)),
+    client('Mas ela pediu extrato', 1, from(AMANA)),
+    client('Segue o extrato', 31, from(FZP)),
+    client('VALORES CASA A-19.pdf', 31, { ...from(FZP), type: 'document' }),
+  ]);
+  assert.equal(r.status, null, 'nada pende para a empresa');
+});
+
+test('conversa lateral: quem marcou volta a pedir (pergunta, "preciso") e isso conta; a equipe responde e a lateral acaba', () => {
+  assert.equal(markedRun([client(`@${FZP} extrato?`, 0, from(AMANA)), client('Vocês conseguem enviar até sexta?', 2, from(AMANA))]).status, 'company');
+  assert.equal(markedRun([client(`@${FZP} extrato`, 0, from(AMANA)), client('Preciso disso hoje', 2, from(AMANA))]).status, 'company');
+  // outra pessoa que nada tem com a conversa lateral
+  assert.equal(markedRun([client(`@${FZP} extrato`, 0, from(AMANA)), client('Bom dia, alguém da equipe?', 2, from(EQUIPE_CLIENTE))]).status, 'company');
 });
 
 test('cliente que não marcou ninguém continua pedindo à equipe', () => {
