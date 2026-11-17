@@ -22,7 +22,8 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
     supabase.rpc('can_use_private_chats'),
     // em aberto: as 300 mais recentes. As finalizadas NÃO vêm daqui: o navegador as busca direto no banco ao abrir a aba
     // "Finalizado" (esta página é refeita a cada minuto; carregar mil finalizadas toda vez encarecia a hospedagem)
-    supabase.from('private_chats').select('*').is('closed_at', null).order('last_message_at', { ascending: false, nullsFirst: false }).limit(300),
+    // conversas novas, ainda sem mensagem, vêm primeiro (antes ficavam no fim e fora das 300)
+    supabase.from('private_chats').select('*').is('closed_at', null).order('last_message_at', { ascending: false, nullsFirst: true }).limit(300),
     appSettings(),
     supabase.from('whatsapp_instances').select('status').eq('status', 'connected').limit(1).maybeSingle(),
     // etiquetas de clientes (0103)

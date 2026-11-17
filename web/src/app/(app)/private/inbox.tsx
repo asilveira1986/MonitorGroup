@@ -1011,6 +1011,23 @@ export function PrivateInbox({
     .filter((c) => inTab(c, tab))
     .sort((a, b) => ((b.last_message_at ?? '') > (a.last_message_at ?? '') ? 1 : -1));
   const current = all.find((c) => c.id === selected) ?? null;
+  // conversa aberta que não está na lista carregada (recém-criada em "Nova conversa", link de aviso, conversa antiga):
+  // busca direto no banco e a mantém na tela, para a conversa abrir sempre
+  const [missingTried, setMissingTried] = useState<string | null>(null);
+  useEffect(() => {
+    if (!selected || current || missingTried === selected) return;
+    let alive = true;
+    const load = async () => {
+      const { data } = await createClient().from('private_chats').select('*').eq('id', selected).maybeSingle();
+      if (!alive) return;
+      setMissingTried(selected);
+      if (data) setPinned((prev) => (prev.some((p) => p.id === (data as PrivateChat).id) ? prev : [data as PrivateChat, ...prev]));
+    };
+    void load();
+    return () => {
+      alive = false;
+    };
+  }, [selected, current, missingTried]);
   const unreadOf = (f: (c: PrivateChat) => boolean) => chats.filter((c) => f(c) && c.unread_count > 0).length;
   // aguardando (sem responsável), meus atendimentos, finalizados e, para administradores, todos em
   // atendimento (0119)
