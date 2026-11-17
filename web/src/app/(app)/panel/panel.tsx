@@ -40,7 +40,7 @@ export type PanelGroup = FollowupInfo & {
   last_reply: { who: string; at: string; response_seconds: number | null } | null;
 };
 
-const STATUS: Record<
+export const STATUS: Record<
   PanelStatus,
   { label: string; filter: string; icon: typeof AlertOctagon; card: string; badge: string; dot: string }
 > = {
@@ -77,7 +77,7 @@ const STATUS: Record<
     dot: 'bg-muted/50',
   },
 };
-const ORDER: PanelStatus[] = ['late', 'waiting', 'answered', 'neutral'];
+export const ORDER: PanelStatus[] = ['late', 'waiting', 'answered', 'neutral'];
 /** a partir de quantos dias sem mensagens o cartão destaca o silêncio (mesmo padrão do indicador Grupos silenciosos) */
 const SILENT_DAYS = 3;
 
@@ -222,15 +222,15 @@ function GroupCard({ g, now }: { g: PanelGroup; now: number }) {
 const RESPONSIBLE_KEY = 'panel-responsible';
 const FILTERS_KEY = 'panel-filters';
 
-const FIELD =
+export const FIELD =
   'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none transition focus:border-brand-line focus:ring-2 focus:ring-brand/20';
 /** campo com filtro aplicado: destacado para ver de relance o que está filtrando */
-const ACTIVE_FIELD = 'border-brand-line bg-brand-soft/40 font-medium';
-const CHIP = 'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition';
-const COUNT = 'tabular min-w-[1.375rem] rounded-full px-1.5 py-px text-center text-[9px] font-semibold';
+export const ACTIVE_FIELD = 'border-brand-line bg-brand-soft/40 font-medium';
+export const CHIP = 'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition';
+export const COUNT = 'tabular min-w-[1.375rem] rounded-full px-1.5 py-px text-center text-[9px] font-semibold';
 
 /** Campo do filtro com o nome em cima. */
-function FilterField({
+export function FilterField({
   label,
   icon: Icon,
   className,
