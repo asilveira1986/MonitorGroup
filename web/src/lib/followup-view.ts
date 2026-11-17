@@ -10,6 +10,8 @@ export type FollowupInfo = {
   followup_excerpt?: string | null;
   followup_trigger?: string | null;
   followup_since?: string | null;
+  /** a mensagem que sustenta a pendência (a mais recente do cliente sem resposta) */
+  followup_message_id?: string | null;
   followup_due_at?: string | null;
   followup_actor?: string | null;
   followup_dismissed_by?: string | null;
