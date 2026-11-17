@@ -178,6 +178,20 @@ export async function getIndicatorDetails(
 // ---------------------------------------------------------------------
 export type GroupAudio = { path: string; mime: string; size: number; voice: boolean };
 /** Arquivo anexado numa resposta de grupo (0136): imagem, vídeo, áudio ou documento, com legenda opcional. */
+/** Envia um contato (cartão do WhatsApp) no grupo (0182). */
+export async function sendGroupContact(groupId: string, contact: { name: string; phone: string }, quotedMessageId: string | null = null): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('send_group_contact', {
+    p_group_id: groupId,
+    p_name: contact.name,
+    p_phone: contact.phone,
+    p_quoted_message_id: quotedMessageId,
+  });
+  if (error && /send_group_contact/.test(error.message)) return { ok: false, error: 'Falta aplicar o script do banco (item 0182).' };
+  return fail(error);
+}
+
 export type GroupFile = { path: string; type: 'image' | 'video' | 'audio' | 'document'; mime: string; name: string; size: number };
 
 export async function sendGroupMessage(

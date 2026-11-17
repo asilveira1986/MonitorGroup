@@ -233,7 +233,8 @@ CHECKS=$(cat <<'SQL'
   (170, 'Conversas privadas unidas por telefone (0179)', to_regprocedure('public.private_phone_key(text)') is not null and to_regprocedure('public.merge_duplicate_private_chats()') is not null),
   (171, 'Acompanhamento: últimas atividades de um usuário (0180)', to_regprocedure('public.user_recent_activity(text,integer)') is not null),
   (172, 'Excluir conversa privada, só administrador geral (0181)', to_regprocedure('public.delete_private_chat(uuid)') is not null),
-  (173, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (173, 'Enviar contato pela conversa (0182)', to_regprocedure('public.send_group_contact(uuid,text,text,uuid)') is not null and to_regprocedure('public.send_private_contact(uuid,text,text)') is not null),
+  (174, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

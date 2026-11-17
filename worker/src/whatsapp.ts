@@ -775,7 +775,15 @@ export class WhatsAppManager {
       // registrado antes do envio: a mensagem volta pelo messages.upsert com o nome de quem respondeu
       session.outbox.set(waId, row.sender_name);
       if (row.closes_conversation) session.closingOutbox.add(waId);
-      if (row.media_path) {
+      if (row.message_type === 'contact') {
+        // contato enviado pelo painel (0182): o cartão (vCard) vem pronto em text_to_send
+        const name = (row.media_name || row.text_to_send.match(/^FN:(.*)$/m)?.[1] || 'Contato').trim();
+        await session.sock.sendMessage(
+          group.jid,
+          { contacts: { displayName: name, contacts: [{ displayName: name, vcard: row.text_to_send }] } } as AnyMessageContent,
+          { messageId: waId, quoted },
+        );
+      } else if (row.media_path) {
         // áudio gravado no painel (0074) ou arquivo encaminhado (0105): está no Storage
         const file = await db.storage.from('media').download(row.media_path);
         if (file.error || !file.data) throw new Error('Arquivo não encontrado no Storage.');
@@ -2434,7 +2442,12 @@ export class WhatsAppManager {
         // com a assinatura do usuário (0116), quando houver; sem o script, o texto como foi escrito
         const outText = (row.text_to_send as string | null) ?? (row.body as string | null);
         const caption = outText ?? undefined;
-        if (row.media_path) {
+        if (type === 'contact') {
+          // contato enviado pelo painel (0182): o cartão (vCard) vem pronto em text_to_send
+          const vcard = (row.text_to_send as string | null) ?? '';
+          const name = ((row.media_name as string | null) || vcard.match(/^FN:(.*)$/m)?.[1] || 'Contato').trim();
+          await session.sock.sendMessage(to, { contacts: { displayName: name, contacts: [{ displayName: name, vcard }] } } as AnyMessageContent, { messageId: waId, quoted });
+        } else if (row.media_path) {
           // arquivo enviado pelo painel: está no Storage
           const file = await db.storage.from('media').download(row.media_path as string);
           if (file.error || !file.data) throw new Error('Arquivo não encontrado no Storage.');
@@ -2464,6 +2477,12 @@ export class WhatsAppManager {
         });
         // o arquivo enviado e a citação já ficam na mensagem gravada
         const sentId = (ing as { message_id?: string } | null)?.message_id;
+        // contato enviado (0182): o cartão aparece na conversa como o de um contato recebido
+        if (sentId && type === 'contact') {
+          const vcard = (row.text_to_send as string | null) ?? '';
+          const phone = vcard.match(/waid=(\d+)/)?.[1] ?? vcard.match(/TEL[^:]*:\+?([\d ]+)/)?.[1]?.replace(/\D/g, '') ?? '';
+          await db.from('private_messages').update({ contact_cards: [{ name: (row.media_name as string | null) ?? null, phone }] }).eq('id', sentId);
+        }
         // encaminhada e citação de um grupo (0105), à parte (sem o script, a mensagem fica sem isso)
         if (sentId && (row.forwarded || quotedFrom)) {
           await db
