@@ -409,6 +409,26 @@ export function Conversation({
     [groupId, messages],
   );
 
+  // "Ver mensagem" da pendência (e outros atalhos): rola até a mensagem, carregando o histórico que falta
+  useEffect(() => {
+    const jump = (e: Event) => {
+      const hit = (e as CustomEvent<{ id: string; sent_at: string }>).detail;
+      if (!hit?.id) return;
+      void (async () => {
+        await ensureLoaded(hit);
+        requestAnimationFrame(() => {
+          const el = document.getElementById(`msg-${hit.id}`);
+          if (!el) return void toast.info('Não foi possível localizar a mensagem na conversa.');
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.setAttribute('data-search-current', '');
+          setTimeout(() => el.removeAttribute('data-search-current'), 3500);
+        });
+      })();
+    };
+    window.addEventListener('group:jump', jump);
+    return () => window.removeEventListener('group:jump', jump);
+  }, [ensureLoaded]);
+
   // carrega automaticamente quando o topo da conversa aparece na tela
   useEffect(() => {
     const sentinel = sentinelRef.current;

@@ -12,7 +12,20 @@ import { dismissGroupFollowup } from '../followup-actions';
  * Pendência da conversa por regras (0167), em cima da conversa do grupo: com quem ficou a próxima ação, o porquê (o
  * trecho da mensagem) e o prazo citado. "Não está pendente" corrige à mão quando a regra errou.
  */
-export function FollowupBar({ groupId, info, canEdit, timeZone }: { groupId: string; info: FollowupInfo; canEdit: boolean; timeZone?: string }) {
+export function FollowupBar({
+  groupId,
+  info,
+  canEdit,
+  timeZone,
+  messageAt,
+}: {
+  groupId: string;
+  info: FollowupInfo;
+  canEdit: boolean;
+  timeZone?: string;
+  /** quando a mensagem do trecho foi enviada (a pendência pode ter começado antes, numa mensagem mais antiga) */
+  messageAt?: string | null;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   // hora de referência para o "prazo vencido" (a página recarrega sozinha a cada mensagem nova)
@@ -54,7 +67,28 @@ export function FollowupBar({ groupId, info, canEdit, timeZone }: { groupId: str
           <>
             {' · '}
             <span className="italic">“{info.followup_excerpt}”</span>
-            {info.followup_actor && <> ({info.followup_actor}{info.followup_since ? `, ${fmt(info.followup_since)}` : ''})</>}
+            {(info.followup_actor || messageAt) && (
+              <>
+                {' '}
+                ({[info.followup_actor, messageAt ? fmt(messageAt) : info.followup_since ? fmt(info.followup_since) : null].filter(Boolean).join(', ')})
+              </>
+            )}
+            {/* a pendência pode ter começado numa mensagem anterior sem resposta: a data do começo fica à parte */}
+            {info.followup_since && messageAt && Math.abs(new Date(messageAt).getTime() - new Date(info.followup_since).getTime()) > 5 * 60_000 && (
+              <span className="ml-1 whitespace-nowrap text-muted" title="A primeira mensagem do cliente que ficou sem resposta, antes desta">
+                · sem resposta desde {fmt(info.followup_since)}
+              </span>
+            )}
+            {info.followup_message_id && messageAt && (
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('group:jump', { detail: { id: info.followup_message_id, sent_at: messageAt } }))}
+                className="ml-1.5 whitespace-nowrap font-medium text-brand-text underline-offset-2 hover:underline"
+                title="Rolar a conversa até esta mensagem"
+              >
+                Ver mensagem
+              </button>
+            )}
           </>
         )}
         {info.followup_trigger && (

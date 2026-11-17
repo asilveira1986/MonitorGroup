@@ -48,6 +48,13 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
     supabase.rpc('group_stats', { p_group_id: id, p_days: 30 }),
   ]);
   const recentlySent = minutesAgo(5);
+  // quando foi enviada a mensagem do trecho da pendência (pode estar além das mensagens carregadas)
+  const followupMessageId = (group as { followup_message_id?: string | null } | null)?.followup_message_id ?? null;
+  const followupMessageAt: string | null = followupMessageId
+    ? ((msgs ?? []).find((m) => m.id === followupMessageId)?.sent_at ??
+      (await supabase.from('messages').select('sent_at').eq('id', followupMessageId).maybeSingle()).data?.sent_at ??
+      null)
+    : null;
   const [{ data: members }, { data: typeInd }, { data: outgoing }, { data: canReplyHere }, { data: canDemandsHere }, { data: canAlertsHere }, { data: sectors }, { data: groupMembers }, { data: quickReplies }, { data: closingCfg }, { data: groupPhoto }, { data: canPrivate }, { data: tagRows }] = await Promise.all([
     supabase.from('team_members').select('id, name, active').order('name'),
     supabase.from('my_indicators').select('params').eq('key', 'tipo_demanda').maybeSingle(),
@@ -324,7 +331,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             }
           />
           {/* pendência da conversa por regras (0167): pendente empresa / pendente cliente */}
-          <FollowupBar groupId={g.id} info={g as unknown as FollowupInfo} canEdit={!viewer} timeZone={tz} />
+          <FollowupBar groupId={g.id} info={g as unknown as FollowupInfo} canEdit={!viewer} timeZone={tz} messageAt={followupMessageAt} />
           <Conversation
             groupId={g.id}
             participantsCount={g.participants_count}
