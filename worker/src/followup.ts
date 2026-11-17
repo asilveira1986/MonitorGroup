@@ -48,7 +48,8 @@ export type FollowupKind =
   | 'answered'
   | 'delivered'
   | 'closed'
-  | 'thanked';
+  | 'thanked'
+  | 'confirmed'; // cliente confirmou que viu/recebeu o que a equipe prometeu
 
 export type FollowupResult = {
   status: FollowupStatus | null;
@@ -245,6 +246,28 @@ function teamIntent(body: string | null, opts: FollowupOptions, requestPhrases: 
   return last;
 }
 
+/** Verbos de "já foi enviado/recebido" ditos pelo cliente (sem acento). */
+const DELIVERED_WORDS = [
+  'enviou', 'enviaste', 'enviado', 'enviada', 'enviados', 'enviadas', 'mandou', 'mandaste', 'mandado', 'recebi', 'recebemos',
+  'recebido', 'recebida', 'recebidos', 'recebidas', 'chegou', 'chegaram', 'li', 'vi',
+];
+/** Palavras de pedido, dúvida ou problema: o cliente não está confirmando, está cobrando ou reclamando. */
+const NOT_CONFIRMING = new Set([
+  'nao', 'mas', 'porem', 'entretanto', 'contudo', 'ainda', 'falta', 'faltou', 'faltando', 'erro', 'problema', 'duvida', 'quando',
+  'como', 'qual', 'quais', 'onde', 'preciso', 'precisamos', 'favor', 'urgente', 'poderia', 'pode', 'podem', 'reenviar', 'reenvia',
+  'incompleto', 'incompleta', 'errado', 'errada', 'faltam',
+]);
+/**
+ * Mensagem do cliente que confirma ter visto ou recebido o que a equipe prometeu: um verbo de "enviou/recebi/chegou/vi"
+ * sem pergunta, pedido, "não", "mas" ou problema. Só vale com uma promessa da equipe em aberto.
+ */
+export function confirmsDelivery(type: string, body: string | null | undefined): boolean {
+  if (type !== 'text' || !body || body.includes('?') || body.length > 400) return false;
+  const words = normalize(body).split(' ').filter(Boolean);
+  if (words.some((w) => NOT_CONFIRMING.has(w))) return false;
+  return words.some((w) => DELIVERED_WORDS.includes(w));
+}
+
 export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOptions): FollowupResult {
   const requestPhrases = opts.requestPhrases?.length ? opts.requestPhrases : DEFAULT_REQUEST_PHRASES;
   const deliveryPhrases = opts.deliveryPhrases?.length ? opts.deliveryPhrases : DEFAULT_DELIVERY_PHRASES;
@@ -309,6 +332,13 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
 
     // conversa entre clientes ("@fulano preciso do extrato" e a resposta do fulano): a equipe não foi chamada
     if (m.elsewhere) continue;
+
+    // o cliente confirma que viu/recebeu o que a equipe prometeu ("vi que enviaste o e-mail, obrigado"): promessa cumprida,
+    // mesmo que a entrega tenha sido fora do grupo
+    if (s.kind === 'promise' && confirmsDelivery(m.type, m.body)) {
+      set('resolved', 'confirmed', m);
+      continue;
+    }
 
     // cliente: agradecimento/confirmação (a regra de ignorar do sistema, ou o agradecimento logo depois da equipe:
     // "Bom obrigado por analisar o contrato") não abre pendência
@@ -443,4 +473,5 @@ export const REASON: Record<FollowupKind, string> = {
   delivered: 'Equipe entregou o que foi pedido',
   closed: 'Conversa encerrada pela equipe',
   thanked: 'Cliente agradeceu depois do retorno',
+  confirmed: 'Cliente confirmou que recebeu o que foi prometido',
 };
