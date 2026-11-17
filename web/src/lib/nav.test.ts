@@ -15,7 +15,7 @@ test('estrutura pedida: Dashboard, grupos e itens soltos nas posições certas',
     'Dashboard',
     'Agenda',
     'Grupos: Painel de grupos, Grupos, Aguardando resposta, Demandas',
-    'Conversas: Conversas privadas, Contatos',
+    'Conversas: Conversas privadas, Painel de privadas, Contatos',
     'Automações: Disparos',
     'Gestão: Empresas, Relatórios, Alertas, Acompanhamento, Log',
     'Configurações',
@@ -23,7 +23,7 @@ test('estrutura pedida: Dashboard, grupos e itens soltos nas posições certas',
 });
 
 test('itens escondidos somem, e o grupo vazio some junto', () => {
-  const t = visibleNav(NAV_TREE, { hidden: ['/demands', '/broadcasts', '/private', '/contacts'], platformAdmin: true });
+  const t = visibleNav(NAV_TREE, { hidden: ['/demands', '/broadcasts', '/private', '/private-panel', '/contacts'], platformAdmin: true });
   assert.deepEqual(names(t), [
     'Dashboard',
     'Agenda',

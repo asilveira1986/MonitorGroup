@@ -76,6 +76,8 @@ export const NAV_TREE: NavEntry[] = [
     items: [
       // conversas privadas (0069) e contatos (0112): mesmo acesso, na empresa com o módulo ligado
       { href: '/private', label: 'Conversas privadas', icon: 'private', badgeKey: 'private' },
+      // painel das conversas privadas (cartões): por enquanto só o administrador geral da plataforma
+      { href: '/private-panel', label: 'Painel de privadas', icon: 'panel', platformOnly: true },
       { href: '/contacts', label: 'Contatos', icon: 'contacts' },
     ],
   },
