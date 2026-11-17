@@ -1,10 +1,12 @@
 import { Activity, AlertTriangle } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
+import { appSettings } from '@/lib/app-settings';
 import { requireAdmin } from '@/lib/auth';
 import { cn, formatNumber, formatPhone, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import { AutoRefresh } from './auto-refresh';
+import { UserRow } from './user-row';
 
 export const metadata: Metadata = { title: 'Monitor Group · Acompanhamento' };
 
@@ -55,6 +57,8 @@ export default async function MonitorPage() {
   await supabase.rpc('touch_last_seen');
   const { data, error } = await supabase.rpc('platform_monitor');
   const companies = (data ?? []) as Company[];
+  const { data: appCfg } = await appSettings();
+  const timeZone = appCfg?.timezone ?? 'America/Sao_Paulo';
   const active = companies.filter((c) => c.active);
 
   const totals = [
@@ -143,29 +147,15 @@ export default async function MonitorPage() {
                       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Usuários</p>
                       <ul className="divide-y divide-line rounded-xl border border-line">
                         {c.people.map((p) => (
-                          <li key={p.email} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
-                            <span
-                              className={cn('h-2.5 w-2.5 shrink-0 rounded-full', p.online ? 'bg-good' : 'bg-line')}
-                              title={p.online ? 'Online agora' : 'Offline'}
-                            />
-                            <span className="min-w-0 flex-1">
-                              <span className="font-medium">{p.name}</span> <span className="text-xs text-muted">{p.email}</span>
-                            </span>
-                            <span className="text-xs text-ink-2">{p.platform_admin ? 'Plataforma' : (ROLE[p.role] ?? p.role)}</span>
-                            <span
-                              className={cn(
-                                'w-36 text-right text-xs',
-                                p.online
-                                  ? 'font-medium text-good-ink'
-                                  : !p.last_access || Date.parse(p.last_access) < Date.now() - 7 * 86_400_000
-                                    ? 'text-warning-ink'
-                                    : 'text-muted',
-                              )}
-                              suppressHydrationWarning
-                            >
-                              {p.online ? 'online agora' : p.last_access ? `acessou ${timeAgo(p.last_access)}` : 'nunca acessou'}
-                            </span>
-                          </li>
+                          <UserRow
+                            key={p.email}
+                            name={p.name}
+                            email={p.email}
+                            roleLabel={p.platform_admin ? 'Plataforma' : (ROLE[p.role] ?? p.role)}
+                            online={p.online}
+                            lastAccess={p.last_access}
+                            timeZone={timeZone}
+                          />
                         ))}
                         {c.people.length === 0 && <li className="px-3 py-2 text-sm text-muted">Nenhum usuário ativo.</li>}
                       </ul>

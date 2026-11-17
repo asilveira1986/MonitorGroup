@@ -2,6 +2,7 @@ import { ScrollText } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
+import { ACTIVITY_CATEGORIES } from '@/lib/activity-categories';
 import { requirePlatformAdmin } from '@/lib/auth';
 import { cn, formatDateTime } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
@@ -20,17 +21,7 @@ const PERIODS = [
   { value: '180d', label: '180 dias', days: 180 },
 ];
 
-const CATEGORIES: Record<string, { label: string; tone: 'neutral' | 'brand' | 'good' | 'warning' | 'critical' }> = {
-  acesso: { label: 'Acesso', tone: 'neutral' },
-  usuarios: { label: 'Usuários', tone: 'warning' },
-  equipe: { label: 'Equipe', tone: 'warning' },
-  configuracoes: { label: 'Configurações', tone: 'brand' },
-  grupos: { label: 'Grupos', tone: 'brand' },
-  atendimento: { label: 'Atendimento', tone: 'good' },
-  demandas: { label: 'Demandas', tone: 'good' },
-  alertas: { label: 'Alertas', tone: 'good' },
-  empresas: { label: 'Empresas', tone: 'critical' },
-};
+const CATEGORIES = ACTIVITY_CATEGORIES;
 
 type LogRow = {
   created_at: string;

@@ -231,7 +231,8 @@ CHECKS=$(cat <<'SQL'
   (168, 'Pesquisa de mensagens nos grupos e conversas privadas (0177)', to_regprocedure('public.search_group_messages(text,uuid,integer)') is not null and to_regprocedure('public.search_private_messages(text,uuid,integer)') is not null),
   (169, 'Recuperar mensagens das conversas privadas, só administrador geral (0178)', to_regclass('public.private_history_requests') is not null and to_regprocedure('public.request_private_history_recovery(uuid,integer)') is not null),
   (170, 'Conversas privadas unidas por telefone (0179)', to_regprocedure('public.private_phone_key(text)') is not null and to_regprocedure('public.merge_duplicate_private_chats()') is not null),
-  (171, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (171, 'Acompanhamento: últimas atividades de um usuário (0180)', to_regprocedure('public.user_recent_activity(text,integer)') is not null),
+  (172, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)
