@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Eye, Forward, Loader2, LockOpen, MailOpen, MessageSquarePlus, Mic, Paperclip, Search, Send, UserRound, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, Eye, Trash2, Forward, Loader2, LockOpen, MailOpen, MessageSquarePlus, Mic, Paperclip, Search, Send, UserRound, X } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -15,7 +15,7 @@ import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
 import { Avatar } from '@/components/avatar';
 import { waFormat } from '@/components/wa-text';
 import { ContactCards } from '@/components/contact-cards';
-import { assignPrivateChat, markPrivateChatRead, markPrivateChatUnread, preparePrivateUpload, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
+import { assignPrivateChat, deletePrivateChat, markPrivateChatRead, markPrivateChatUnread, preparePrivateUpload, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
 import { eventFrom, eventText, type PrivateChatEvent } from '@/lib/private-chat-events';
 import {
   PrivateEditor,
@@ -240,8 +240,11 @@ function ChatView({
   silent,
   photo,
   seed,
+  onDeleted,
 }: {
   chat: PrivateChat;
+  /** a conversa foi excluída (administrador geral): sai da lista */
+  onDeleted: () => void;
   /** vindo da pesquisa geral: abre a pesquisa da conversa já nesse texto e mensagem */
   seed?: { term: string; messageId: string } | null;
   /** foto do contato (jid com foto guardada) */
@@ -510,6 +513,24 @@ function ChatView({
         </div>
         <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
           {viewer.platformAdmin && <PrivateHistoryRecoveryButton chatId={chat.id} timeZone={timeZone} />}
+          {viewer.platformAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!window.confirm(`Excluir a conversa com ${title} do sistema?\n\nTodas as mensagens dela são apagadas e não dá para desfazer. Se o contato escrever de novo, uma conversa nova começa.`)) return;
+                void deletePrivateChat(chat.id).then((res) => {
+                  if (!res.ok) return void toast.error(res.error);
+                  toast.success('Conversa excluída');
+                  onDeleted();
+                });
+              }}
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface px-2 text-xs text-critical-ink hover:bg-critical/10 sm:h-7"
+              title="Excluir esta conversa do sistema (só administrador geral)"
+              aria-label="Excluir conversa"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setSearching((v) => !v)}
@@ -1261,6 +1282,14 @@ export function PrivateInbox({
           <ChatView
             key={seed && seed.chatId === current.id ? `${current.id}-${seed.n}` : current.id}
             seed={seed && seed.chatId === current.id ? seed : null}
+            onDeleted={() => {
+              const id = current.id;
+              setChats((prev) => prev.filter((c) => c.id !== id));
+              setPinned((prev) => prev.filter((c) => c.id !== id));
+              setOlder((prev) => prev.filter((c) => c.id !== id));
+              choose(null);
+              router.refresh();
+            }}
             chat={current}
             photo={photos[current.id]}
             timeZone={timeZone}
