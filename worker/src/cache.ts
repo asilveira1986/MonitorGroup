@@ -20,8 +20,28 @@ let companyNumbers = new Map<string, { phone: string; name: string }[]>();
 let signers = new Map<string, Map<string, TeamMemberRow>>();
 let loadedAt = 0;
 
+let refreshing: Promise<void> | null = null;
+
+/**
+ * Recarrega configurações, equipe e números. Com dados já carregados a atualização roda em segundo plano: a mensagem
+ * que chega logo depois do prazo não espera as consultas ao banco (antes, a primeira de cada minuto parava nelas).
+ */
 export async function refreshCache(force = false) {
   if (!force && Date.now() - loadedAt < REFRESH_MS && settings.size) return;
+  if (!force && settings.size) {
+    refreshing ??= loadCache().finally(() => {
+      refreshing = null;
+    });
+    return;
+  }
+  // primeira carga (ou forçada): espera terminar
+  refreshing ??= loadCache().finally(() => {
+    refreshing = null;
+  });
+  await refreshing;
+}
+
+async function loadCache() {
   try {
     const rows = (check(await db.from('app_settings').select('*'), 'load settings') ?? []) as AppSettings[];
     const members = (check(await db.from('team_members').select('*').eq('active', true), 'load team') ??

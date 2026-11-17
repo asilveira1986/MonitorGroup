@@ -351,7 +351,7 @@ export function LiveMessages({ groupId }: { groupId: string }) {
   useRealtime(`group-${groupId}`, (channel) =>
     channel
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId}` }, () =>
-        schedule(4000),
+        schedule(1500),
       )
       // respostas do painel: na fila, enviando, enviada ou com falha
       .on('postgres_changes', { event: '*', schema: 'public', table: 'outgoing_messages', filter: `group_id=eq.${groupId}` }, () =>

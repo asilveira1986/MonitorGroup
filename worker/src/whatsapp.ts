@@ -817,7 +817,13 @@ export class WhatsAppManager {
 
   private async heartbeat() {
     for (const s of this.sessions.values()) {
-      s.groupCache.clear(); // recarrega alterações feitas no painel (ex.: monitorar/ignorar grupo)
+      // recarrega alterações feitas no painel (ex.: monitorar/ignorar grupo) de uma vez, sem esvaziar o cache: a primeira
+      // mensagem de cada minuto não precisa ir ao banco buscar o grupo
+      const { data: rows } = await db.from('groups').select('*').eq('instance_id', s.instanceId);
+      if (rows) {
+        s.groupCache.clear();
+        for (const g of rows as GroupRow[]) s.groupCache.set(g.jid, g);
+      } else s.groupCache.clear();
       if (s.sock.user) {
         await this.updateInstance(s.instanceId, { last_seen_at: new Date().toISOString() }).catch(() => {});
       }
@@ -1010,6 +1016,7 @@ export class WhatsAppManager {
     });
 
     sock.ev.on('messages.upsert', ({ messages, type }) => {
+      const receivedAt = Date.now();
       // "notify" = mensagens novas; "append" = enviadas por outro aparelho / sincronização recente
       if (type !== 'notify' && type !== 'append') return;
       for (const msg of messages) {
@@ -1023,7 +1030,7 @@ export class WhatsAppManager {
           continue;
         }
         session.queue = session.queue
-          .then(() => this.handleMessage(session, msg, type))
+          .then(() => this.handleMessage(session, msg, type, receivedAt))
           .catch((err) => log.error({ err, id: msg.key.id }, 'falha ao processar mensagem'));
       }
     });
@@ -1335,7 +1342,8 @@ export class WhatsAppManager {
     return this.upsertGroup(session, meta);
   }
 
-  private async handleMessage(session: Session, msg: WAMessage, upsertType?: string) {
+  private async handleMessage(session: Session, msg: WAMessage, upsertType?: string, receivedAt = Date.now()) {
+    const startedAt = Date.now();
     const jid = msg.key.remoteJid;
     if (!jid || !msg.message) return;
     // chegou o reenvio de uma mensagem que antes não pôde ser aberta: tira da conta (0165)
@@ -1422,6 +1430,17 @@ export class WhatsAppManager {
     ) as { inserted: boolean; message_id?: string; stale?: boolean; ignored?: boolean; untracked?: boolean };
     // o banco também diz se o grupo estava desligado (fonte final: a linha travada no momento da gravação)
     tracked = tracked && !result.untracked;
+    // quanto a mensagem demorou do envio no WhatsApp até ficar gravada (só as ao vivo): acima de 5 s vai para o log, com a
+    // espera na fila da conexão e o que fez a gravação demorar
+    if (result.inserted && upsertType === 'notify') {
+      const late = Date.now() - ts * 1000;
+      if (late > 5000) {
+        logger.warn(
+          { group: jid, id: msg.key.id, atrasoSeg: Math.round(late / 1000), filaMs: startedAt - receivedAt, gravacaoMs: Date.now() - startedAt },
+          'mensagem gravada com atraso',
+        );
+      }
+    }
     // pendência da conversa (empresa ou cliente), por regras (0167)
     if (result.inserted) this.scheduleFollowup(session.companyId, group.id);
     // mensagem nova depois de muito tempo sem nada guardado: pede ao celular o que ficou no meio (0165)
