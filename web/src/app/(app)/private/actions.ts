@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireProfile } from '@/lib/auth';
+import { requirePlatformAdmin, requireProfile } from '@/lib/auth';
 import { friendlyDbError } from '@/lib/db-errors';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 
@@ -20,6 +20,16 @@ export async function startPrivateChat(input: { jid?: string; phone?: string; na
   if (error) return fail(error);
   revalidatePath('/private');
   return { ok: true, data: { id: (data as { id: string }).id } };
+}
+
+/** Exclui a conversa privada com todas as mensagens: só o administrador geral da plataforma (0181). */
+export async function deletePrivateChat(chatId: string): Promise<Result> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('delete_private_chat', { p_chat: chatId });
+  if (error) return /delete_private_chat/.test(error.message) ? { ok: false, error: 'Falta aplicar o script do banco (item 0181).' } : fail(error);
+  revalidatePath('/private');
+  return { ok: true };
 }
 
 export type PrivateMedia = {
