@@ -1,4 +1,4 @@
-// Excluir grupos e conversas privadas, só o administrador geral (0181). Roda a migração num Postgres em memória (PGlite).
+// Excluir conversa privada, só o administrador geral (0181). Roda a migração num Postgres em memória (PGlite).
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
@@ -38,17 +38,6 @@ async function setup() {
   const as = (uid: string) => db.exec(`select set_config('test.uid', '${uid}', false)`);
   return { db, as };
 }
-
-test('grupos: só o administrador geral exclui (em atividade ou já excluídos), e só da própria empresa', async () => {
-  const { db, as } = await setup();
-  await as(ADMIN);
-  await assert.rejects(db.query(`select public.delete_groups_platform(array['${G1}']::uuid[])`), /Só quem administra a plataforma/);
-  await as(PLATFORM);
-  const r = await db.query<{ n: number }>(`select public.delete_groups_platform(array['${G1}', '${G2}', '${GOUT}']::uuid[]) n`);
-  assert.equal(r.rows[0].n, 2, 'a de outra empresa fica');
-  assert.equal((await db.query(`select 1 from public.groups`)).rows.length, 1);
-  assert.equal((await db.query(`select 1 from public.messages`)).rows.length, 1, 'mensagens em cascata');
-});
 
 test('conversa privada: só o administrador geral exclui, com as mensagens; a de outra empresa não', async () => {
   const { db, as } = await setup();

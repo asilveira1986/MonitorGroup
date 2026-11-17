@@ -232,7 +232,7 @@ CHECKS=$(cat <<'SQL'
   (169, 'Recuperar mensagens das conversas privadas, só administrador geral (0178)', to_regclass('public.private_history_requests') is not null and to_regprocedure('public.request_private_history_recovery(uuid,integer)') is not null),
   (170, 'Conversas privadas unidas por telefone (0179)', to_regprocedure('public.private_phone_key(text)') is not null and to_regprocedure('public.merge_duplicate_private_chats()') is not null),
   (171, 'Acompanhamento: últimas atividades de um usuário (0180)', to_regprocedure('public.user_recent_activity(text,integer)') is not null),
-  (172, 'Excluir grupos e conversas privadas, só administrador geral (0181)', to_regprocedure('public.delete_groups_platform(uuid[])') is not null and to_regprocedure('public.delete_private_chat(uuid)') is not null),
+  (172, 'Excluir conversa privada, só administrador geral (0181)', to_regprocedure('public.delete_private_chat(uuid)') is not null),
   (173, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )

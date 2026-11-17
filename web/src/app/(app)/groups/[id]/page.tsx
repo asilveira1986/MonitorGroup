@@ -19,7 +19,6 @@ import { TagEditor, type CustomerTag } from '@/components/customer-tags';
 import { Conversation } from './conversation';
 import { GroupFiles } from './group-files';
 import { GroupCopiesSyncButton, HistoryRecoveryButton } from './history-recovery';
-import { DeleteGroupButton } from '../delete-group-button';
 import { FollowupBar } from './followup';
 import type { FollowupInfo } from '@/lib/followup-view';
 import { withAdmins } from '@/lib/responsibles';
@@ -322,13 +321,11 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
             // recuperar mensagens que não foram guardadas (0161, experimental): só administradores
             // e sincronizar com as cópias do grupo em outros números (0166): os dois só para administradores
             action={
-              (isAdminUser && !g.removed_at) || profile.platform_admin ? (
+              isAdminUser && !g.removed_at ? (
                 <div className="flex flex-wrap items-center justify-end gap-1">
-                  {isAdminUser && !g.removed_at && <GroupCopiesSyncButton groupId={g.id} copies={copiesCount ?? 0} />}
+                  <GroupCopiesSyncButton groupId={g.id} copies={copiesCount ?? 0} />
                   {/* recuperar mensagens antigas (experimental): só o administrador geral da plataforma */}
-                  {profile.platform_admin && !g.removed_at && <HistoryRecoveryButton groupId={g.id} timeZone={tz} />}
-                  {/* excluir o grupo do sistema: só o administrador geral */}
-                  {profile.platform_admin && <DeleteGroupButton groupId={g.id} name={g.name} active={!g.removed_at} />}
+                  {profile.platform_admin && <HistoryRecoveryButton groupId={g.id} timeZone={tz} />}
                 </div>
               ) : undefined
             }
