@@ -122,6 +122,26 @@ export function messageChangeOf(
   return null;
 }
 
+/** WebMessageInfo.StubType.REVOKE (mensagem apagada para todos) */
+const STUB_REVOKE = 1;
+
+/**
+ * Edição ou "apagar para todos" que o Baileys 7 entrega como atualização (`messages.update`), e não como mensagem nova:
+ * a edição traz `update.message.editedMessage.message` e a exclusão `messageStubType` REVOKE (REVOKE). A chave aponta para
+ * a mensagem original (quem a escreveu pode ser o cliente, a equipe ou o próprio número conectado).
+ */
+export function changeFromUpdate(
+  key: { id?: string | null } | null | undefined,
+  update: { message?: proto.IMessage | null; messageStubType?: number | null } | null | undefined,
+): { kind: 'delete'; targetId: string } | { kind: 'edit'; targetId: string; body: string | null } | null {
+  const targetId = key?.id;
+  if (!targetId || !update) return null;
+  const edited = update.message?.editedMessage?.message;
+  if (edited) return { kind: 'edit', targetId, body: extractContent(edited)?.body ?? null };
+  if (update.messageStubType === STUB_REVOKE) return { kind: 'delete', targetId };
+  return null;
+}
+
 export const digitsOnly = (value: string | null | undefined) => (value ?? '').replace(/\D/g, '');
 
 /** "5511999998888@s.whatsapp.net" ou "5511999998888:12@s.whatsapp.net" -> "5511999998888" */

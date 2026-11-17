@@ -152,3 +152,25 @@ test('withMentions leva as pessoas marcadas no envio e ignora o que não é iden
     mentions: ['5551999990001@s.whatsapp.net'],
   });
 });
+
+test('edição e exclusão que o Baileys 7 entrega em messages.update', async () => {
+  const { proto } = await import('baileys');
+  const { changeFromUpdate } = await import('./text.js');
+  const key = { id: 'ABC123', remoteJid: '1203630@g.us' };
+  // edição: o texto novo vem em update.message.editedMessage.message
+  assert.deepEqual(
+    changeFromUpdate(key, { message: { editedMessage: { message: { conversation: 'Texto corrigido' } } } }),
+    { kind: 'edit', targetId: 'ABC123', body: 'Texto corrigido' },
+  );
+  // edição de texto longo (extendedTextMessage)
+  assert.deepEqual(
+    changeFromUpdate(key, { message: { editedMessage: { message: { extendedTextMessage: { text: 'Com link https://x.com' } } } } }),
+    { kind: 'edit', targetId: 'ABC123', body: 'Com link https://x.com' },
+  );
+  // apagar para todos
+  assert.deepEqual(changeFromUpdate(key, { message: null, messageStubType: proto.WebMessageInfo.StubType.REVOKE }), { kind: 'delete', targetId: 'ABC123' });
+  // atualização comum (tique) ou sem chave: nada
+  assert.equal(changeFromUpdate(key, {}), null);
+  assert.equal(changeFromUpdate({ id: null }, { message: { editedMessage: { message: { conversation: 'x' } } } }), null);
+  assert.equal(changeFromUpdate(key, undefined), null);
+});

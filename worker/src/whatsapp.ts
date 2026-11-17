@@ -30,7 +30,7 @@ import type { SockLike } from './automation/types.js';
 import { decodeVote, parsePollMessage } from './closing-flow/poll.js';
 import type { ClosingService } from './closing-flow/service.js';
 import { loadPollMessage } from './closing-flow/store.js';
-import { contactCardsOf, extractContent, withMentions as withMentionList, isAcknowledgement, isForwarded, isStickerOrEmoji, isThanksAfterTeam, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
+import { contactCardsOf, extractContent, withMentions as withMentionList, isAcknowledgement, isForwarded, isStickerOrEmoji, isThanksAfterTeam, changeFromUpdate, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
 import { selfReadIds } from './receipts.js';
@@ -1090,6 +1090,21 @@ export class WhatsAppManager {
     // tiques das mensagens do número conectado: status geral (✓ / ✓✓ / lida) ...
     sock.ev.on('messages.update', (updates) => {
       for (const { key, update } of updates) {
+        // mensagem editada ou apagada para todos, por qualquer pessoa (cliente, equipe ou o próprio número): atualiza o texto
+        const change = changeFromUpdate(key, update);
+        if (change && key.remoteJid) {
+          const chatJid = key.remoteJid;
+          session.queue = session.queue
+            .then(() =>
+              isJidGroup(chatJid)
+                ? this.applyMessageChange(session, chatJid, change)
+                : isPrivateJid(chatJid)
+                  ? this.applyPrivateChange(session, jidNormalizedUser(chatJid), change)
+                  : undefined,
+            )
+            .catch((err) => log.error({ err, id: key.id }, 'falha ao aplicar a edição/exclusão da mensagem'));
+          continue;
+        }
         if (!key.fromMe || !key.id || !key.remoteJid || typeof update.status !== 'number') continue;
         // entregue / lida: o relatório dos disparos (só mexe em mensagens que um disparo enviou)
         if (this.broadcast && update.status >= 3) void this.broadcast.handleStatus(key.id, update.status);
@@ -2194,6 +2209,8 @@ export class WhatsAppManager {
         : { body: change.body, edited_at: now, original_body: target.original_body ?? target.body };
     const { error } = await db.from('messages').update(patch).eq('id', target.id);
     if (error) logger.warn({ err: error.message }, 'não foi possível registrar a edição/exclusão da mensagem');
+    // o texto novo pode mudar a pendência da conversa (pedido, promessa, agradecimento)
+    if (!error) this.scheduleFollowup(session.companyId, group.id);
   }
 
   /**
