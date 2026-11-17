@@ -295,3 +295,16 @@ test('conversa lateral: quem marcou volta a pedir (pergunta, "preciso") e isso c
 test('cliente que não marcou ninguém continua pedindo à equipe', () => {
   assert.equal(markedRun([client('Preciso do extrato da C-', 0, from(AMANA))]).status, 'company');
 });
+
+test('cliente confirma que viu/recebeu o que a equipe prometeu: promessa cumprida', () => {
+  const promise = team('Bom dia! Certo, vou enviar ao advogado da Vibra para validação', 0);
+  const done = run([promise, client('Cintia, vi que enviaste o email da Vibra, Obrigado!!', 400)]);
+  assert.equal(done.status, 'resolved');
+  assert.equal(done.kind, 'confirmed');
+  assert.equal(run([promise, client('Recebi o contrato, obrigada', 60)]).status, 'resolved');
+  // cobrança, pergunta ou problema: a promessa continua com a empresa
+  assert.equal(run([promise, client('Ainda não recebi o email da Vibra', 60)]).status, 'company');
+  assert.equal(run([promise, client('Recebi, mas faltou o anexo', 60)]).status, 'company');
+  assert.equal(run([promise, client('Você enviou o email da Vibra?', 60)]).status, 'company');
+  assert.equal(run([promise, client('Alguma novidade?', 60)]).kind, 'promise');
+});
