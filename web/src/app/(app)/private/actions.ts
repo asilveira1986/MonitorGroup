@@ -22,6 +22,15 @@ export async function startPrivateChat(input: { jid?: string; phone?: string; na
   return { ok: true, data: { id: (data as { id: string }).id } };
 }
 
+/** Envia um contato (cartão do WhatsApp) na conversa privada (0182). */
+export async function sendPrivateContact(chatId: string, contact: { name: string; phone: string }): Promise<Result> {
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('send_private_contact', { p_chat_id: chatId, p_name: contact.name, p_phone: contact.phone });
+  if (error && /send_private_contact/.test(error.message)) return { ok: false, error: 'Falta aplicar o script do banco (item 0182).' };
+  return error ? fail(error) : { ok: true };
+}
+
 /** Exclui a conversa privada com todas as mensagens: só o administrador geral da plataforma (0181). */
 export async function deletePrivateChat(chatId: string): Promise<Result> {
   await requirePlatformAdmin();

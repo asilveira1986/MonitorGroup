@@ -15,7 +15,7 @@ import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
 import { Avatar } from '@/components/avatar';
 import { waFormat } from '@/components/wa-text';
 import { ContactCards } from '@/components/contact-cards';
-import { assignPrivateChat, deletePrivateChat, markPrivateChatRead, markPrivateChatUnread, preparePrivateUpload, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
+import { assignPrivateChat, deletePrivateChat, markPrivateChatRead, markPrivateChatUnread, preparePrivateUpload, sendPrivateContact, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
 import { eventFrom, eventText, type PrivateChatEvent } from '@/lib/private-chat-events';
 import {
   PrivateEditor,
@@ -29,6 +29,7 @@ import { TagChips, TagEditor, type CustomerTag } from '@/components/customer-tag
 import { ShareDialog, type ShareMode, type ShareSource } from '@/components/share-dialog';
 import { OwnerControl, type ChatAgent } from './owner-control';
 import { SaveContactButton } from './save-contact';
+import { AttachMenu, type ContactToSend } from '@/components/attach-menu';
 import { PrivateHistoryRecoveryButton } from './history-recovery';
 
 export type PrivateChat = {
@@ -359,7 +360,6 @@ function ChatView({
   const [replyTo, setReplyTo] = useState<PrivateMessage | null>(null);
   // encaminhar / responder num grupo (0105)
   const [share, setShare] = useState<{ source: ShareSource; mode: ShareMode } | null>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
   const addFiles = (list: ArrayLike<File> | null | undefined) => {
     const picked = Array.from(list ?? []);
     if (!picked.length) return;
@@ -371,6 +371,13 @@ function ChatView({
       return next.slice(0, 10);
     });
   };
+  // contato (cartão do WhatsApp) escolhido no menu de anexar: o worker envia e ele aparece na conversa
+  const sendContact = (contact: ContactToSend) =>
+    void sendPrivateContact(chat.id, contact).then((res) => {
+      if (!res.ok) return void toast.error(res.error);
+      toast.success('Contato enviado');
+    });
+
   const send = () => {
     const body = text.trim();
     if (!body && !files.length) return;
@@ -789,21 +796,14 @@ function ChatView({
           addFiles(e.dataTransfer.files);
         }}
       >
-        <input
-          ref={fileInput}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            addFiles(e.target.files);
-            e.target.value = '';
-          }}
-        />
         {!recording && (
           <>
-            <Button type="button" variant="ghost" onClick={() => fileInput.current?.click()} aria-label="Anexar arquivo" title="Anexar imagem, vídeo, áudio ou documentos (até 50 MB cada, vários de uma vez)">
-              <Paperclip className="h-4 w-4" />
-            </Button>
+            <AttachMenu
+              onFiles={addFiles}
+              onContact={sendContact}
+              iconClassName="h-4 w-4"
+              className="inline-flex h-10 items-center justify-center rounded-xl px-3 text-ink-2 hover:bg-surface-2 hover:text-ink"
+            />
             <Textarea
               value={text}
               onChange={(e) => setText(e.target.value)}

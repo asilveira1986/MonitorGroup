@@ -18,7 +18,8 @@ import {
 import { findShortcutTrigger, greeting, matchQuickReplies, renderQuickReply, type QuickReply } from '@/lib/quick-replies';
 import type { Message, OutgoingMessage } from '@/lib/types';
 import { StickerButton } from './sticker-picker';
-import { discardGroupMessage, prepareGroupAudioUpload, prepareGroupUpload, retryGroupMessage, sendGroupMessage, type GroupFile } from '../../actions';
+import { discardGroupMessage, prepareGroupAudioUpload, prepareGroupUpload, retryGroupMessage, sendGroupContact, sendGroupMessage, type GroupFile } from '../../actions';
+import { AttachMenu, type ContactToSend } from '@/components/attach-menu';
 
 export type ReplyConfig = {
   enabled: boolean;
@@ -75,7 +76,6 @@ export function Composer({
   const [recording, setRecording] = useState(false);
   // arquivos anexados (imagem, vídeo, áudio ou documento), um ou vários: vão em sequência e o texto é a legenda do primeiro
   const [files, setFiles] = useState<File[]>([]);
-  const fileInput = useRef<HTMLInputElement>(null);
   const addFiles = (list: ArrayLike<File> | null | undefined) => {
     const picked = Array.from(list ?? []);
     if (!picked.length) return;
@@ -167,6 +167,16 @@ export function Composer({
       </p>
     );
   }
+
+  // contato (cartão do WhatsApp) escolhido no menu de anexar
+  const sendContact = (contact: ContactToSend) =>
+    start(async () => {
+      const res = await sendGroupContact(groupId, contact, replyTo?.id ?? null);
+      if (!res.ok) return void toast.error(res.error);
+      toast.success('Contato enviado');
+      onClearReply();
+      router.refresh();
+    });
 
   const send = () => {
     const typed = text.trim();
@@ -313,16 +323,6 @@ export function Composer({
           addFiles(e.dataTransfer.files);
         }}
       >
-        <input
-          ref={fileInput}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            addFiles(e.target.files);
-            e.target.value = '';
-          }}
-        />
         {mentionOpen && mentionOptions.length > 0 && (
           <div
             className="absolute bottom-full left-0 right-14 z-20 mb-2 overflow-hidden rounded-xl border border-line bg-surface shadow-lg"
@@ -397,16 +397,12 @@ export function Composer({
         )}
         {!recording && (
           <>
-            <button
-              type="button"
-              onClick={() => fileInput.current?.click()}
+            <AttachMenu
               disabled={pending}
+              onFiles={addFiles}
+              onContact={sendContact}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line text-ink-2 transition hover:border-brand-line hover:text-brand-text disabled:opacity-40"
-              aria-label="Anexar arquivo"
-              title="Anexar imagem, vídeo, áudio ou documentos (até 50 MB cada, vários de uma vez)"
-            >
-              <Paperclip className="h-5 w-5" />
-            </button>
+            />
             <StickerButton
               groupId={groupId}
               quotedId={replyTo?.id ?? null}
