@@ -379,16 +379,20 @@ export function buildResolver(
 }
 
 /**
- * Conversa entre clientes: a mensagem do cliente que marca (@) só gente do grupo que NÃO é da equipe não chama a equipe,
- * e a resposta de quem foi marcado (logo em seguida, sem a equipe no meio) também não. Na dúvida (alguém marcado que
- * não foi reconhecido, ou que é da equipe) a mensagem continua valendo como antes: nunca esconde um pedido à equipe.
+ * Conversa entre clientes: a mensagem do cliente que marca (@) só gente do grupo que NÃO é da equipe não chama a equipe.
+ * Vira uma conversa lateral entre eles, que continua enquanto a equipe não entra:
+ *  - tudo o que a pessoa marcada escreve (resposta, arquivo...) fica de fora;
+ *  - quem marcou, ao continuar, também, desde que não peça nada (pergunta, "preciso", "por favor"...).
+ * A conversa lateral acaba quando a equipe fala, quando alguém marca a equipe (ou alguém não reconhecido), ou depois de
+ * 3 horas / 8 mensagens sem ela continuar. Na dúvida a mensagem continua valendo como antes: nunca esconde um pedido à equipe.
  */
 export function markAddressedElsewhere(messages: FollowupMessage[], resolve: PersonResolver, opts: { windowMs?: number; windowMessages?: number } = {}): FollowupMessage[] {
-  const windowMs = opts.windowMs ?? 30 * 60_000;
-  const windowMessages = opts.windowMessages ?? 3;
+  const windowMs = opts.windowMs ?? 3 * 3_600_000;
+  const windowMessages = opts.windowMessages ?? 8;
   const ordered = [...messages].sort((a, b) => a.at - b.at);
   const hidden = new Set<string>();
-  const marks: { index: number; at: number; persons: Set<string> }[] = [];
+  type Thread = { index: number; lastAt: number; author: string | null; persons: Set<string> };
+  let thread: Thread | null = null;
   const personOf = (m: FollowupMessage) => {
     for (const k of m.senderKeys ?? []) {
       const r = resolve(k);
@@ -396,24 +400,35 @@ export function markAddressedElsewhere(messages: FollowupMessage[], resolve: Per
     }
     return null;
   };
+  const asks = (m: FollowupMessage) => m.type === 'text' && Boolean(m.body) && (m.body!.includes('?') || Boolean(findPhrase(` ${normalize(m.body!)} `, CLIENT_ASKS)));
   ordered.forEach((m, i) => {
-    if (m.fromTeam) return;
+    if (m.fromTeam) {
+      thread = null;
+      return;
+    }
+    if (thread && (i - thread.index > windowMessages || m.at - thread.lastAt > windowMs)) thread = null;
+    const me = personOf(m);
     const keys = m.type === 'text' ? mentionKeys(m.body) : [];
     if (keys.length) {
       const people = keys.map(resolve);
-      const self = personOf(m);
-      if (people.every((r) => r && !r.team && r.person !== self)) {
+      if (people.every((r) => r && !r.team && r.person !== me)) {
         hidden.add(m.id);
-        marks.push({ index: i, at: m.at, persons: new Set(people.map((r) => r!.person)) });
-        return;
-      }
+        const persons = people.map((r) => r!.person);
+        if (thread) {
+          persons.forEach((p) => thread!.persons.add(p));
+          thread.index = i;
+          thread.lastAt = m.at;
+        } else thread = { index: i, lastAt: m.at, author: me, persons: new Set(persons) };
+      } else thread = null; // marcou a equipe, alguém não reconhecido ou mistura: vale como antes
+      return;
     }
-    const me = personOf(m);
-    if (!me) return;
-    const answered = marks.some(
-      (k) => i - k.index <= windowMessages && m.at - k.at <= windowMs && k.persons.has(me) && ordered.slice(k.index + 1, i).every((x) => !x.fromTeam),
-    );
-    if (answered) hidden.add(m.id);
+    if (!thread || !me) return;
+    if (thread.persons.has(me) || (me === thread.author && !asks(m))) {
+      hidden.add(m.id);
+      thread.index = i;
+      thread.lastAt = m.at;
+      if (me !== thread.author) thread.persons.add(me);
+    }
   });
   return hidden.size ? messages.map((m) => (hidden.has(m.id) ? { ...m, elsewhere: true } : m)) : messages;
 }
