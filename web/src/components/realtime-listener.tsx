@@ -8,7 +8,7 @@ import { useRealtime } from '@/lib/use-realtime';
  * Escuta novos alertas e mudanças nos grupos em tempo real e atualiza a tela
  * (os avisos em tela ficam no MessageNotifier).
  */
-const MIN_INTERVAL_MS = 10_000;
+const MIN_INTERVAL_MS = 4_000;
 // telas de indicadores (cálculo pesado no banco): no máximo uma vez por minuto
 const HEAVY_PAGES = ['/dashboard', '/reports'];
 const HEAVY_INTERVAL_MS = 60_000;
@@ -22,7 +22,7 @@ export function RealtimeListener() {
 
   // cada mensagem que chega atualiza o grupo: sem limite, a tela inteira era recarregada a cada
   // 1,5 s em empresas movimentadas, disputando com os cliques no menu. Agora: no máximo uma vez a
-  // cada 10 s, e só com a aba visível (ao voltar para a aba, atualiza).
+  // cada 4 s nas telas dos grupos, e só com a aba visível (ao voltar para a aba, atualiza).
   const last = useRef(0);
   const missed = useRef(false);
   const refresh = () => {
