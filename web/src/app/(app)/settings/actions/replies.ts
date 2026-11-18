@@ -119,6 +119,17 @@ export async function saveReplySettings(values: {
   return result(error);
 }
 
+/** Mensagens recebidas antes desta data (YYYY-MM-DD, início do dia) não contam como pendentes; vazio = tudo conta (0187). */
+export async function savePendingCutoff(date: string | null): Promise<Result & { updated?: number }> {
+  await requireAdmin();
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: 'Data inválida.' };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('set_pending_ignore_before', { p_date: date || null });
+  if (error) return /set_pending_ignore_before/.test(error.message) ? { ok: false, error: 'Falta aplicar o script do banco (item 0187).' } : result(error);
+  revalidatePath('/', 'layout');
+  return { ok: true, updated: Number(data ?? 0) };
+}
+
 /** Pendência da conversa por regras (0167): liga/desliga e as frases de pedido ao cliente e de entrega (vazio = padrão). */
 export async function saveFollowupSettings(values: { enabled: boolean; requestPhrases: string[]; deliveryPhrases: string[] }): Promise<Result> {
   const profile = await requireAdmin();
