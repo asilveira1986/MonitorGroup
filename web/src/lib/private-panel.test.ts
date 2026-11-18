@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATION = readFileSync(new URL('../../../supabase/migrations/0183_private_panel.sql', import.meta.url), 'utf8');
+const MIGRATIONS = ['0183_private_panel.sql', '0184_private_panel_today_only.sql'].map((f) => readFileSync(new URL(`../../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const CO = '00000000-0000-0000-0000-0000000000c1';
 const USER = '00000000-0000-0000-0000-0000000000a1';
 const C = (n: number) => `00000000-0000-0000-0000-00000000c00${n}`;
@@ -25,6 +25,7 @@ async function setup() {
     insert into public.app_settings values ('${CO}', 30, 'America/Sao_Paulo');
     insert into public.private_chats (id, company_id, name, last_message_at) values
       ('${C(1)}', '${CO}', 'Atrasada', now() - interval '2 hours'),
+      ('${C(6)}', '${CO}', 'Esperando desde ontem', now() - interval '30 hours'),
       ('${C(2)}', '${CO}', 'Aguardando', now() - interval '5 minutes'),
       ('${C(3)}', '${CO}', 'Respondida', now() - interval '1 minute'),
       ('${C(4)}', '${CO}', 'Sem mensagens hoje', now() - interval '5 days'),
@@ -32,12 +33,13 @@ async function setup() {
     update public.private_chats set closed_at = now() where id = '${C(5)}';
     insert into public.private_messages (chat_id, from_me, sent_at) values
       ('${C(1)}', false, now() - interval '2 hours'), ('${C(1)}', false, now() - interval '119 minutes'),
+      ('${C(6)}', false, now() - interval '30 hours'),
       ('${C(2)}', false, now() - interval '5 minutes'),
       ('${C(3)}', false, now() - interval '10 minutes'), ('${C(3)}', true, now() - interval '1 minute'),
       ('${C(4)}', true, now() - interval '5 days'), ('${C(4)}', false, now() - interval '5 days');
   `);
-  await db.exec(MIGRATION);
-  await db.exec(MIGRATION);
+  for (const m of MIGRATIONS) await db.exec(m);
+  for (const m of MIGRATIONS) await db.exec(m);
   await db.exec(`select set_config('test.uid', '${USER}', false)`);
   return db;
 }
@@ -54,6 +56,9 @@ test('painel de privadas: situação, espera e contagens de cada conversa em abe
   assert.equal(by['Respondida'].sent_today, 1);
   assert.equal(by['Sem mensagens hoje'].status, 'neutral');
   assert.equal(by['Encerrada'], undefined, 'encerradas não entram');
+  // sem resposta desde ontem (ou antes): não conta como pendente
+  assert.equal(by['Esperando desde ontem'].status, 'neutral');
+  assert.equal(by['Esperando desde ontem'].waiting_count, 0);
   // ordem: atrasadas, aguardando, respondidas, sem mensagens
-  assert.deepEqual(r.map((x) => x.name), ['Atrasada', 'Aguardando', 'Respondida', 'Sem mensagens hoje']);
+  assert.deepEqual(r.map((x) => x.name).slice(0, 3), ['Atrasada', 'Aguardando', 'Respondida']);
 });
