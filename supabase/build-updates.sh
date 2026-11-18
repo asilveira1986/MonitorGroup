@@ -261,6 +261,14 @@ trap 'rm -rf "$TMP"' EXIT
   echo "-- ====================================================================="
   cat <<'SQL'
 
+-- confere o banco antes de qualquer coisa: precisa ter a instalação inicial (0001_schema.sql)
+do $$
+begin
+  if to_regclass('public.whatsapp_instances') is null or to_regclass('public.groups') is null then
+    raise exception 'ESTE BANCO NÃO TEM A INSTALAÇÃO INICIAL (0001_schema.sql). Banco: %. Você está no projeto certo do Supabase? Compare o código no endereço da página (supabase.com/dashboard/project/CÓDIGO/...) com o SUPABASE_URL do app. Se for um projeto novo, rode antes supabase/migrations/0001_schema.sql e depois esta parte 1 e a parte 2.', current_database();
+  end if;
+end $$;
+
 -- controle dos scripts aplicados
 create table if not exists public.schema_migrations (
   version    text primary key,
