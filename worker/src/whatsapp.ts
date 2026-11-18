@@ -30,7 +30,7 @@ import type { SockLike } from './automation/types.js';
 import { decodeVote, parsePollMessage } from './closing-flow/poll.js';
 import type { ClosingService } from './closing-flow/service.js';
 import { loadPollMessage } from './closing-flow/store.js';
-import { contactCardsOf, extractContent, withMentions as withMentionList, isAcknowledgement, isForwarded, isStickerOrEmoji, isThanksAfterTeam, changeFromUpdate, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
+import { contactCardsOf, extractContent, forwardedAsVoice, withMentions as withMentionList, isAcknowledgement, isForwarded, isStickerOrEmoji, isThanksAfterTeam, changeFromUpdate, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, quotedMessageId, reactionOf } from './text.js';
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
 import { selfReadIds } from './receipts.js';
@@ -824,7 +824,7 @@ export class WhatsAppManager {
         const content = await mediaContent(row.message_type ?? 'audio', Buffer.from(await file.data.arrayBuffer()), row.media_mime ?? 'audio/ogg', {
           caption: row.text_to_send || undefined,
           fileName: row.media_name,
-          voice: row.voice,
+          voice: row.voice || forwardedAsVoice(row.forwarded, row.media_mime),
         });
         await session.sock.sendMessage(group.jid, withMentionList({ ...content, ...(contextInfo ? { contextInfo } : {}) }, row.mentions) as AnyMessageContent, { messageId: waId, quoted });
       } else {
@@ -2533,7 +2533,7 @@ export class WhatsAppManager {
           if (file.error || !file.data) throw new Error('Arquivo não encontrado no Storage.');
           const buffer = Buffer.from(await file.data.arrayBuffer());
           const mimetype = (row.media_mime as string | null) ?? 'application/octet-stream';
-          const content = await mediaContent(type, buffer, mimetype, { caption, fileName: row.media_name as string | null, voice: Boolean(row.voice) });
+          const content = await mediaContent(type, buffer, mimetype, { caption, fileName: row.media_name as string | null, voice: Boolean(row.voice) || forwardedAsVoice(Boolean(row.forwarded), row.media_mime as string | null) });
           const sent = await session.sock.sendMessage(to, { ...content, ...(contextInfo ? { contextInfo } : {}) } as AnyMessageContent, { messageId: waId, quoted });
           sentSeconds = Number(sent?.message?.audioMessage?.seconds ?? sent?.message?.videoMessage?.seconds) || null;
         } else {

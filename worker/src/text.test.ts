@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isWithinBusinessHours } from './business-hours.js';
-import { contactCardsOf, extractContent, withMentions, findKeyword, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, reactionOf, samePhone } from './text.js';
+import { forwardedAsVoice, contactCardsOf, extractContent, withMentions, findKeyword, isAcknowledgement, isStickerOrEmoji, messageChangeOf, phoneFromJid, quoteOf, quotedAuthor, reactionOf, samePhone } from './text.js';
 
 test('findKeyword ignora acentos e maiúsculas e respeita palavra inteira', () => {
   assert.equal(findKeyword('Isso é URGENTE!!', ['urgente']), 'urgente');
@@ -173,4 +173,11 @@ test('edição e exclusão que o Baileys 7 entrega em messages.update', async ()
   assert.equal(changeFromUpdate(key, {}), null);
   assert.equal(changeFromUpdate({ id: null }, { message: { editedMessage: { message: { conversation: 'x' } } } }), null);
   assert.equal(changeFromUpdate(key, undefined), null);
+});
+
+test('áudio encaminhado em OGG/Opus vai como mensagem de voz', () => {
+  assert.equal(forwardedAsVoice(true, 'audio/ogg; codecs=opus'), true);
+  assert.equal(forwardedAsVoice(true, 'audio/mpeg'), false);
+  assert.equal(forwardedAsVoice(false, 'audio/ogg; codecs=opus'), false);
+  assert.equal(forwardedAsVoice(true, null), false);
 });
