@@ -67,6 +67,8 @@ export type FollowupResult = {
   dueAt: number | null;
   /** quem deixou a pendência ou resolveu */
   actor: string | null;
+  /** mensagens do cliente que NÃO pediram resposta da empresa por a bola estar com ele (a equipe pediu algo e ele só se desculpou, avisou que não deu...) */
+  heldIds?: string[];
 };
 
 export type FollowupOptions = {
@@ -91,6 +93,9 @@ const CLIENT_ASKS = [
   'por gentileza', 'favor', 'solicito', 'solicitamos', 'aguardo retorno', 'aguardo resposta', 'alguem pode', 'alguem para',
   'urgente', 'quando', 'qual o', 'qual a', 'quais',
 ];
+
+/** "estamos/estou prontos (para...)": a equipe está disponível, não entregou nada. */
+const READY_RE = /\b(estamos|estou|estaremos|ficamos|fico|permanecemos|seguimos) (a )?pront[oa]s?\b/g;
 
 const FILE_TYPES = new Set(['image', 'video', 'document']);
 
@@ -281,6 +286,7 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
   };
 
   const ordered = [...messages].sort((a, b) => a.at - b.at);
+  const held: string[] = [];
   for (const [i, m] of ordered.entries()) {
     const text = ` ${normalize(m.body ?? '')} `;
     const hasFile = FILE_TYPES.has(m.type);
@@ -312,7 +318,8 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
         set('client', 'request', m, { trigger: request, dueAt: due(m) });
         continue;
       }
-      const delivery = hasFile ? 'arquivo' : findPhrase(text, deliveryPhrases);
+      // "estamos prontos para analisar" é disponibilidade, não entrega
+      const delivery = hasFile ? 'arquivo' : findPhrase(text.replace(READY_RE, ' '), deliveryPhrases);
       if (delivery) {
         set('resolved', 'delivered', m, { trigger: delivery === 'arquivo' ? null : delivery });
         continue;
@@ -356,6 +363,12 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
     // promessa em aberto: o cliente cobrar ou escrever de novo não apaga a promessa
     if (s.kind === 'promise') continue;
     const asks = text.includes('?') || findPhrase(text, CLIENT_ASKS);
+    // a equipe pediu algo ao cliente e ele responde sem entregar e sem perguntar ou pedir nada (desculpa, "tanta coisa que não
+    // deu para organizar", "amanhã envio"): a bola continua com ele (Pendente cliente), não com a empresa
+    if (s.status === 'client' && s.kind === 'request' && !asks) {
+      held.push(m.id);
+      continue;
+    }
     set('company', asks ? 'question' : 'reply', m);
   }
 
@@ -372,6 +385,7 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
     since: s.since,
     dueAt: s.dueAt,
     actor: s.msg.sender,
+    heldIds: held,
   };
 }
 
