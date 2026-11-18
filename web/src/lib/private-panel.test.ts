@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 
-const MIGRATIONS = ['0183_private_panel.sql', '0184_private_panel_today_only.sql', '0185_private_opens_pending.sql'].map((f) => readFileSync(new URL(`../../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
+const MIGRATIONS = ['0183_private_panel.sql', '0184_private_panel_today_only.sql', '0185_private_opens_pending.sql', '0188_private_panel_order.sql'].map((f) => readFileSync(new URL(`../../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const CO = '00000000-0000-0000-0000-0000000000c1';
 const USER = '00000000-0000-0000-0000-0000000000a1';
 // o dia de "hoje" do painel segue o fuso da empresa: usa um fuso em que agora é por volta do meio-dia, para o teste não depender
@@ -72,5 +72,10 @@ test('painel de privadas: situação, espera e contagens de cada conversa em abe
   assert.equal(by['Esperando desde ontem'].status, 'neutral');
   assert.equal(by['Esperando desde ontem'].waiting_count, 0);
   // ordem: atrasadas, aguardando, respondidas, sem mensagens
-  assert.deepEqual(r.map((x) => x.name).slice(0, 2), ['Atrasada', 'Aguardando']);
+  // do último cliente que escreveu para o primeiro (Aguardando 5 min, Respondida 10 min, Atrasada 2 h, Esperando desde ontem 30 h...)
+  const order = r.map((x) => x.name);
+  assert.ok(order.indexOf('Aguardando') < order.indexOf('Respondida'));
+  assert.ok(order.indexOf('Respondida') < order.indexOf('Atrasada'));
+  assert.ok(order.indexOf('Atrasada') < order.indexOf('Esperando desde ontem'));
+  assert.ok(order.indexOf('Esperando desde ontem') < order.indexOf('Sem mensagens hoje'));
 });
