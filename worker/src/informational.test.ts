@@ -47,3 +47,13 @@ test('cliente avisa que informa depois, ainda sem novidade: não pede resposta',
   assert.equal(isInformational('text', 'Ainda não, assim que tivermos retorno informo. Pode me mandar o contrato?'), false);
   assert.equal(isInformational('text', 'Ainda não, mas preciso do contrato assim que tiver'), false);
 });
+
+test('cliente diz que vai ver/verificar: não pede resposta', () => {
+  assert.equal(isInformational('text', 'vou verificar'), true);
+  assert.equal(isInformational('text', 'Vou ver isso e já te retorno'), true);
+  assert.equal(isInformational('text', 'Vou dar uma olhada, obrigado'), true);
+  // com pergunta, pedido ou problema, continua pedindo resposta
+  assert.equal(isInformational('text', 'Vou verificar, mas preciso do contrato'), false);
+  assert.equal(isInformational('text', 'Vou verificar. Qual o prazo?'), false);
+  assert.equal(isInformational('text', 'Não vou verificar'), false);
+});

@@ -236,7 +236,8 @@ CHECKS=$(cat <<'SQL'
   (173, 'Enviar contato pela conversa (0182)', to_regprocedure('public.send_group_contact(uuid,text,text,uuid)') is not null and to_regprocedure('public.send_private_contact(uuid,text,text)') is not null),
   (174, 'Painel de conversas privadas (0183)', to_regprocedure('public.private_panel()') is not null),
   (175, 'Painel de privadas: só o que chegou hoje conta como pendente (0184)', coalesce(pg_get_functiondef('public.private_panel()'::regprocedure) like '%desconsidera mensagens anteriores%', false)),
-  (176, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (176, 'Conversas privadas: mensagem que não pede resposta fora das pendências (0185)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'private_messages' and column_name = 'opens_pending')),
+  (177, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

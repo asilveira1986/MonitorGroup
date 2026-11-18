@@ -292,7 +292,8 @@ begin
   (173, 'Enviar contato pela conversa (0182)', to_regprocedure('public.send_group_contact(uuid,text,text,uuid)') is not null and to_regprocedure('public.send_private_contact(uuid,text,text)') is not null),
   (174, 'Painel de conversas privadas (0183)', to_regprocedure('public.private_panel()') is not null),
   (175, 'Painel de privadas: só o que chegou hoje conta como pendente (0184)', coalesce(pg_get_functiondef('public.private_panel()'::regprocedure) like '%desconsidera mensagens anteriores%', false)),
-  (176, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (176, 'Conversas privadas: mensagem que não pede resposta fora das pendências (0185)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'private_messages' and column_name = 'opens_pending')),
+  (177, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -301,7 +302,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184,0185', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -9397,6 +9398,78 @@ grant execute on function public.private_panel() to authenticated;
 $mig0184$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0185_private_opens_pending.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0185', $mig0185$
+-- =====================================================================
+-- Conversas privadas: mensagem do cliente que não pede resposta não conta como pendente.
+--
+-- private_messages.opens_pending: false para o que não pede resposta da equipe
+-- ("bom dia", "ok", "obrigado", 👍, "vou verificar", informes). O worker grava
+-- ao receber a mensagem e revisa as de hoje ao iniciar. O Painel de privadas
+-- (private_panel) só conta como pendentes as mensagens de hoje com opens_pending.
+-- =====================================================================
+
+alter table public.private_messages add column if not exists opens_pending boolean not null default true;
+
+create or replace function public.private_panel()
+returns jsonb
+language plpgsql stable security invoker set search_path = public as $$
+declare
+  v_sla int;
+  v_tz text;
+  v_today timestamptz;
+begin
+  select coalesce(default_sla_minutes, 30), coalesce(nullif(timezone, ''), 'America/Sao_Paulo') into v_sla, v_tz
+    from public.app_settings where company_id = public.current_company_id();
+  v_sla := coalesce(v_sla, 30);
+  v_tz := coalesce(v_tz, 'America/Sao_Paulo');
+  v_today := date_trunc('day', now() at time zone v_tz) at time zone v_tz;
+
+  return coalesce((
+    select jsonb_agg(row order by
+             case row->>'status' when 'late' then 0 when 'waiting' then 1 when 'answered' then 2 else 3 end,
+             coalesce(row->>'waiting_since', row->>'last_message_at') nulls last)
+      from (
+        select jsonb_build_object(
+          'id', c.id, 'name', c.name, 'phone', c.phone, 'instance_id', c.instance_id, 'assigned_to', c.assigned_to,
+          'tags', c.tags, 'unread_count', c.unread_count, 'last_message_at', c.last_message_at,
+          'last_message_preview', c.last_message_preview,
+          'waiting_since', w.since, 'waiting_count', w.n,
+          'received_today', t.received, 'sent_today', t.sent,
+          'sla_seconds', v_sla * 60,
+          'status', case
+            when w.since is not null and extract(epoch from (now() - w.since)) > v_sla * 60 then 'late'
+            when w.since is not null then 'waiting'
+            when t.received + t.sent > 0 then 'answered'
+            else 'neutral' end
+        ) as row
+        from public.private_chats c
+        left join lateral (
+          -- mensagens do cliente DE HOJE depois da última resposta da equipe (o que ficou de dias anteriores não conta como
+          -- pendente no painel: desconsidera mensagens anteriores ao dia) e, das de hoje, as que não pedem
+          -- resposta (agradecimento, "bom dia", "vou verificar"; opens_pending, 0185)
+          select min(m.sent_at) as since, count(*)::int as n
+            from public.private_messages m
+           where m.chat_id = c.id and not m.from_me and m.deleted_at is null and m.hidden_at is null
+             and m.sent_at >= v_today and m.opens_pending
+             and m.sent_at > coalesce((select max(x.sent_at) from public.private_messages x where x.chat_id = c.id and x.from_me), '-infinity'::timestamptz)
+        ) w on true
+        left join lateral (
+          select count(*) filter (where not m.from_me)::int as received, count(*) filter (where m.from_me)::int as sent
+            from public.private_messages m
+           where m.chat_id = c.id and m.sent_at >= v_today and m.deleted_at is null and m.hidden_at is null
+        ) t on true
+       where c.closed_at is null
+         and c.company_id = public.current_company_id()
+      ) q
+  ), '[]'::jsonb);
+end;
+$$;
+revoke all on function public.private_panel() from public, anon;
+grant execute on function public.private_panel() to authenticated;
+$mig0185$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -9640,6 +9713,7 @@ from (values
   (173, 'Enviar contato pela conversa (0182)', to_regprocedure('public.send_group_contact(uuid,text,text,uuid)') is not null and to_regprocedure('public.send_private_contact(uuid,text,text)') is not null),
   (174, 'Painel de conversas privadas (0183)', to_regprocedure('public.private_panel()') is not null),
   (175, 'Painel de privadas: só o que chegou hoje conta como pendente (0184)', coalesce(pg_get_functiondef('public.private_panel()'::regprocedure) like '%desconsidera mensagens anteriores%', false)),
-  (176, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (176, 'Conversas privadas: mensagem que não pede resposta fora das pendências (0185)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'private_messages' and column_name = 'opens_pending')),
+  (177, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
