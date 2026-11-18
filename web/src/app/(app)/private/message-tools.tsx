@@ -78,7 +78,7 @@ export function PrivateMedia({ message: m }: { message: PrivateMessageRow }) {
     );
   }
   if (m.message_type === 'audio') {
-    return <AudioPlayer src={src} seconds={m.media_seconds} onError={() => setBroken(true)} />;
+    return <AudioPlayer src={src} downloadHref={`${src}?download=1`} seconds={m.media_seconds} onError={() => setBroken(true)} />;
   }
   if (m.message_type === 'video') {
     return <video controls preload="metadata" src={src} onError={() => setBroken(true)} className="mb-1 max-h-72 max-w-full rounded-xl bg-black" />;
