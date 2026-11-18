@@ -43,7 +43,7 @@ function TransferDialog({
         <div className="flex items-start justify-between gap-3 border-b border-line p-4">
           <div>
             <h2 className="text-base font-semibold">Transferir atendimento</h2>
-            <p className="text-xs text-ink-2">Escolha quem vai continuar o atendimento. A pessoa é avisada.</p>
+            <p className="text-xs text-ink-2">Escolha quem vai continuar o atendimento. A pessoa é avisada e recebe o histórico. Se for de outro setor, a conversa passa para o número do setor dela (e se o contato já tem conversa lá, viram uma só).</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-1 text-muted hover:text-ink" aria-label="Fechar">
             <X className="h-5 w-5" />

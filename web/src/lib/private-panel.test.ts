@@ -7,6 +7,10 @@ import { PGlite } from '@electric-sql/pglite';
 const MIGRATIONS = ['0183_private_panel.sql', '0184_private_panel_today_only.sql', '0185_private_opens_pending.sql'].map((f) => readFileSync(new URL(`../../../supabase/migrations/${f}`, import.meta.url), 'utf8'));
 const CO = '00000000-0000-0000-0000-0000000000c1';
 const USER = '00000000-0000-0000-0000-0000000000a1';
+// o dia de "hoje" do painel segue o fuso da empresa: usa um fuso em que agora é por volta do meio-dia, para o teste não depender
+// da hora em que roda (perto da meia-noite as mensagens de poucas horas atrás seriam de "ontem")
+const offset = 12 - new Date().getUTCHours();
+const TZ = offset === 0 ? 'UTC' : `Etc/GMT${offset > 0 ? '-' : '+'}${Math.abs(offset)}`;
 const C = (n: number) => `00000000-0000-0000-0000-00000000c00${n}`;
 
 async function setup() {
@@ -23,7 +27,7 @@ async function setup() {
       deleted_at timestamptz, hidden_at timestamptz);
     -- (a coluna opens_pending vem da 0185)
     insert into public.profiles values ('${USER}', '${CO}');
-    insert into public.app_settings values ('${CO}', 30, 'America/Sao_Paulo');
+    insert into public.app_settings values ('${CO}', 30, '${TZ}');
     insert into public.private_chats (id, company_id, name, last_message_at) values
       ('${C(1)}', '${CO}', 'Atrasada', now() - interval '2 hours'),
       ('${C(7)}', '${CO}', 'Só bom dia e vou verificar', now() - interval '1 minute'),
