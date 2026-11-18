@@ -69,6 +69,8 @@ export type AppSettings = {
   demand_commitment_verbs?: string[];
   /** pendência da conversa por regras (0167) */
   followup_enabled?: boolean;
+  /** mensagens recebidas antes desta data não contam como pendentes (0187) */
+  pending_ignore_before?: string | null;
   followup_request_phrases?: string[] | null;
   followup_delivery_phrases?: string[] | null;
 };

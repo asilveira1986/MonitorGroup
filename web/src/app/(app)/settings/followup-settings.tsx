@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Button, Card, CardHeader, Textarea } from '@/components/ui';
 import { DEFAULT_DELIVERY_PHRASES, DEFAULT_REQUEST_PHRASES } from '@/lib/followup-phrases';
 import type { AppSettings } from '@/lib/types';
-import { saveFollowupSettings } from './actions/replies';
+import { saveFollowupSettings, savePendingCutoff } from './actions/replies';
 import { Row } from './demand-settings';
 
 const split = (text: string) => text.split(/[,\n;]+/).map((p) => p.trim()).filter(Boolean);
@@ -20,6 +20,8 @@ export function FollowupSettings({ settings, disabled }: { settings: AppSettings
   const [requests, setRequests] = useState((settings.followup_request_phrases?.length ? settings.followup_request_phrases : DEFAULT_REQUEST_PHRASES).join(', '));
   const [deliveries, setDeliveries] = useState((settings.followup_delivery_phrases?.length ? settings.followup_delivery_phrases : DEFAULT_DELIVERY_PHRASES).join(', '));
   const [pending, start] = useTransition();
+  // data de corte (0187): o banco guarda o início do dia no fuso da empresa
+  const [cutoff, setCutoff] = useState(settings.pending_ignore_before ? settings.pending_ignore_before.slice(0, 10) : '');
   const lock = disabled || pending;
 
   return (
@@ -70,6 +72,40 @@ export function FollowupSettings({ settings, disabled }: { settings: AppSettings
             </div>
           </div>
         )}
+        <div className="space-y-1 py-3">
+          <label className="text-sm font-medium" htmlFor="pending-cutoff">
+            Ignorar mensagens anteriores a
+          </label>
+          <p className="text-xs text-ink-2">
+            Mensagens recebidas <b>antes</b> desta data não contam como pendentes (aguardando resposta, Pendente empresa e Pendente cliente), nem as que já estavam
+            pendentes por elas. Deixe vazio para contar tudo. A data vale desde o começo do dia.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              id="pending-cutoff"
+              type="date"
+              value={cutoff}
+              onChange={(e) => setCutoff(e.target.value)}
+              disabled={lock}
+              className="h-10 rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none focus:border-brand-line"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={lock}
+              onClick={() =>
+                start(async () => {
+                  const res = await savePendingCutoff(cutoff || null);
+                  if (!res.ok) return void toast.error(res.error);
+                  toast.success(cutoff ? `Pendências anteriores a ${cutoff.split('-').reverse().join('/')} desconsideradas` : 'Todas as mensagens voltam a contar');
+                })
+              }
+            >
+              Aplicar data
+            </Button>
+          </div>
+        </div>
         <div className="flex justify-end pt-3">
           <Button
             type="button"

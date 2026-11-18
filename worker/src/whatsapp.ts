@@ -430,6 +430,8 @@ export class WhatsAppManager {
       .order('sent_at', { ascending: false })
       .limit(FOLLOWUP_MESSAGES);
     if (group.followup_dismissed_at) query = query.gt('sent_at', group.followup_dismissed_at as string);
+    // mensagens anteriores à data de corte (Configurações › Pendências da conversa) não entram na conta (0187)
+    if (settings.pending_ignore_before) query = query.gte('sent_at', settings.pending_ignore_before);
     const { data: rows, error } = await query;
     if (error) throw error;
     const now = new Date().toISOString();
@@ -2843,7 +2845,9 @@ export class WhatsAppManager {
         : (company?.name ?? member?.name ?? msg.pushName ?? session.lidNames.get(participant ?? '') ?? null),
       sentAtSeconds: toSeconds(msg.messageTimestamp),
       opensPending: !(
-        settings.ignore_acknowledgements &&
+        // recebida antes da data de corte das pendências (0187): não pede resposta
+        (settings.pending_ignore_before ? toSeconds(msg.messageTimestamp) * 1000 < new Date(settings.pending_ignore_before).getTime() : false) ||
+        (settings.ignore_acknowledgements &&
         (isAcknowledgement(content.type, content.body, settings.ignore_phrases) ||
           // o cliente só informa ("sem movimentação, escritório acompanhando"): não pede resposta
           (!team && isInformational(content.type, content.body)) ||
@@ -2852,7 +2856,7 @@ export class WhatsAppManager {
           (!team &&
             isThanksAfterTeam(content.type, content.body) &&
             // respondendo (citando) uma mensagem da equipe, ou logo depois da equipe
-            ((await this.quotedIsTeam(session, msg)) || (await this.lastWasTeam(session, msg)))))
+            ((await this.quotedIsTeam(session, msg)) || (await this.lastWasTeam(session, msg))))))
       ),
       // figurinha/emoji do cliente não conta como a última mensagem dele
       ignoredAsLast:
