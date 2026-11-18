@@ -303,7 +303,8 @@ begin
   (177, 'Transferir a conversa privada mantém o histórico e une com a do outro setor (0186)', coalesce(pg_get_functiondef('public.assign_private_chat(uuid,uuid,text)'::regprocedure) like '%passou para o número%', false)),
   (178, 'Ignorar mensagens anteriores a uma data nas pendências (0187)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'pending_ignore_before') and to_regprocedure('public.apply_pending_cutoff(uuid)') is not null),
   (179, 'Painel de privadas: do último cliente que escreveu para o primeiro (0188)', coalesce(pg_get_functiondef('public.private_panel()'::regprocedure) like '%last_client_message_at%', false)),
-  (180, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (180, 'Situação das notificações dos usuários, só administrador geral (0189)', to_regprocedure('public.platform_notification_status()') is not null),
+  (181, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -312,7 +313,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184,0185,0186,0187,0188', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184,0185,0186,0187,0188,0189', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -26233,6 +26234,52 @@ grant execute on function public.private_panel() to authenticated;
 $mig0188$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0189_platform_notification_status.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0189', $mig0189$
+-- =====================================================================
+-- Situação das notificações dos usuários (só administrador geral).
+--
+-- Uma linha por usuário ativo de todas as empresas: se ele desligou os
+-- avisos (profiles.alerts_off), quais tipos de push ele escolheu
+-- (push_prefs), quantos aparelhos têm push ativo e se estão entregando
+-- (último envio com sucesso / falhas) e quando abriu o sistema pela
+-- última vez. A tela "Notificações" usa isto.
+-- =====================================================================
+
+create or replace function public.platform_notification_status()
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Só o administrador geral vê a situação das notificações.' using errcode = '42501';
+  end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'id', p.id, 'name', coalesce(nullif(btrim(p.full_name), ''), p.email), 'email', p.email, 'role', p.role,
+             'company_id', p.company_id, 'company_name', c.name,
+             'alerts_off', coalesce(p.alerts_off, false), 'push_prefs', coalesce(p.push_prefs, '{}'::jsonb),
+             'last_seen_at', p.last_seen_at,
+             'devices', coalesce(s.devices, 0), 'devices_ok', coalesce(s.devices_ok, 0),
+             'last_push_ok_at', s.last_ok, 'max_failures', coalesce(s.max_failures, 0)
+           ) order by c.name nulls last, lower(coalesce(nullif(btrim(p.full_name), ''), p.email)))
+      from public.profiles p
+      left join public.companies c on c.id = p.company_id
+      left join lateral (
+        select count(*)::int as devices,
+               count(*) filter (where ps.failures < 3)::int as devices_ok,
+               max(ps.last_ok_at) as last_ok,
+               max(ps.failures) as max_failures
+          from public.push_subscriptions ps where ps.user_id = p.id
+      ) s on true
+     where p.active
+  ), '[]'::jsonb);
+end;
+$$;
+revoke all on function public.platform_notification_status() from public, anon;
+grant execute on function public.platform_notification_status() to authenticated;
+$mig0189$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -26480,6 +26527,7 @@ from (values
   (177, 'Transferir a conversa privada mantém o histórico e une com a do outro setor (0186)', coalesce(pg_get_functiondef('public.assign_private_chat(uuid,uuid,text)'::regprocedure) like '%passou para o número%', false)),
   (178, 'Ignorar mensagens anteriores a uma data nas pendências (0187)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'pending_ignore_before') and to_regprocedure('public.apply_pending_cutoff(uuid)') is not null),
   (179, 'Painel de privadas: do último cliente que escreveu para o primeiro (0188)', coalesce(pg_get_functiondef('public.private_panel()'::regprocedure) like '%last_client_message_at%', false)),
-  (180, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (180, 'Situação das notificações dos usuários, só administrador geral (0189)', to_regprocedure('public.platform_notification_status()') is not null),
+  (181, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

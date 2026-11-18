@@ -240,7 +240,8 @@ CHECKS=$(cat <<'SQL'
   (177, 'Transferir a conversa privada mantém o histórico e une com a do outro setor (0186)', coalesce(pg_get_functiondef('public.assign_private_chat(uuid,uuid,text)'::regprocedure) like '%passou para o número%', false)),
   (178, 'Ignorar mensagens anteriores a uma data nas pendências (0187)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'pending_ignore_before') and to_regprocedure('public.apply_pending_cutoff(uuid)') is not null),
   (179, 'Painel de privadas: do último cliente que escreveu para o primeiro (0188)', coalesce(pg_get_functiondef('public.private_panel()'::regprocedure) like '%last_client_message_at%', false)),
-  (180, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (180, 'Situação das notificações dos usuários, só administrador geral (0189)', to_regprocedure('public.platform_notification_status()') is not null),
+  (181, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

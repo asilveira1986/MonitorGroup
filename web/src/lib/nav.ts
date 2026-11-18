@@ -96,6 +96,7 @@ export const NAV_TREE: NavEntry[] = [
     icon: 'managementGroup',
     items: [
       { href: '/platform', label: 'Empresas', icon: 'platform', platformOnly: true },
+      { href: '/notificacoes', label: 'Notificações', icon: 'alerts', platformOnly: true },
       { href: '/reports', label: 'Relatórios', icon: 'reports' },
       { href: '/alerts', label: 'Alertas', icon: 'alerts', badgeKey: 'alerts' },
       // uso do sistema: o administrador da plataforma vê todas as empresas; o da empresa, só a própria (0135, 0174)

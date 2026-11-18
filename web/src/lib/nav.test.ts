@@ -17,7 +17,7 @@ test('estrutura pedida: Dashboard, grupos e itens soltos nas posições certas',
     'Grupos: Painel de grupos, Grupos, Aguardando resposta, Demandas',
     'Conversas: Conversas privadas, Painel de privadas, Contatos',
     'Automações: Disparos',
-    'Gestão: Empresas, Relatórios, Alertas, Acompanhamento, Log',
+    'Gestão: Empresas, Notificações, Relatórios, Alertas, Acompanhamento, Log',
     'Configurações',
   ]);
 });
@@ -28,7 +28,7 @@ test('itens escondidos somem, e o grupo vazio some junto', () => {
     'Dashboard',
     'Agenda',
     'Grupos: Painel de grupos, Grupos, Aguardando resposta',
-    'Gestão: Empresas, Relatórios, Alertas, Acompanhamento, Log',
+    'Gestão: Empresas, Notificações, Relatórios, Alertas, Acompanhamento, Log',
     'Configurações',
   ]);
 });
