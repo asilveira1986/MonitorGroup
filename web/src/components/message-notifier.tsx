@@ -298,6 +298,45 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
           });
         });
       })
+      // conversa privada transferida (ou atribuída) para o usuário: mesmo padrão dos avisos de mensagem,
+      // com alerta em tela, som e voz próprios do privado (o histórico do atendimento registra quem recebeu)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'private_chat_events', filter: 'type=in.(transferred,assigned)' }, (payload) => {
+        const e = payload.new as { chat_id: string; user_id: string | null; type: string; note: string | null; metadata: Record<string, unknown> | null; created_at: string };
+        const v = configRef.current;
+        if (!e?.chat_id || v.userOff || v.privateMine === false) return;
+        if (Date.now() - new Date(e.created_at).getTime() > 10 * 60_000) return;
+        void createClient()
+          .auth.getSession()
+          .then(({ data: auth }) => {
+            const me = auth.session?.user.id;
+            const m = e.metadata ?? {};
+            // só para quem recebeu, e não quando a pessoa assume a própria conversa
+            if (!me || m.to !== me || e.user_id === me) return;
+            const str = (x: unknown) => (typeof x === 'string' && x.trim() ? x.trim() : null);
+            const customer = str(m.customer) ?? 'um cliente';
+            const by = str(m.by_name);
+            const note = str(e.note);
+            pushRef.current({
+              sound: v.privateSound !== false,
+              speech:
+                v.privateVoice !== false
+                  ? `Conversa transferida para você${by ? ` por ${by}` : ''}: ${customer}.`
+                  : undefined,
+              key: `pt-${e.chat_id}`,
+              serverPushed: true,
+              tone: 'brand',
+              heading: 'Conversa transferida para você',
+              icon: MessageCircle,
+              group: customer,
+              who: by ? `Transferida por ${by}` : null,
+              phone: null,
+              text: note ? `Obs.: ${note}` : 'Já está em "Meus atendimentos".',
+              href: `/private?c=${e.chat_id}`,
+              action: 'Abrir conversa',
+              at: Date.now(),
+            });
+          });
+      })
       // compromisso novo na agenda do usuário (outra pessoa marcou, ou o incluíram nele): avisa na hora (0171)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'agenda_event_people' }, (payload) => {
         const row = payload.new as { event_id: string; user_id: string };

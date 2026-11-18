@@ -50,7 +50,12 @@ export type PrivateChat = {
   closed_at?: string | null;
   /** quem perdeu a conversa no "Liberar" (0164): só responde depois de assumir de novo */
   released_from?: string | null;
+  /** quando passou para o responsável atual (transferência conta como a última ação da conversa) */
+  assigned_at?: string | null;
 };
+/** última ação da conversa: a mensagem mais recente ou a transferência, o que for mais novo */
+const activityOf = (c: Pick<PrivateChat, 'last_message_at' | 'assigned_at' | 'assigned_to'>) =>
+  c.assigned_to && c.assigned_at && c.assigned_at > (c.last_message_at ?? '') ? c.assigned_at : (c.last_message_at ?? '');
 /** quem usa a tela: para as abas e o responsável (0114) */
 /** seesAll: muda o responsável de qualquer conversa (administradores); seesTeam: vê as de todos (0129). */
 type Viewer = { me: string; seesAll: boolean; seesTeam: boolean; agents: ChatAgent[]; /** administrador geral da plataforma (0178): recuperar mensagens antigas */ platformAdmin?: boolean };
@@ -989,14 +994,6 @@ export function PrivateInbox({
       if (!c?.id) return;
       // conversa que outro usuário assumiu: sai da lista de quem não vê todas
       if (!viewer.seesTeam && c.assigned_to && c.assigned_to !== viewer.me) return setChats((prev) => prev.filter((x) => x.id !== c.id));
-      // transferida para mim: já cai em "Meus atendimentos" (a lista abaixo) e avisa na hora, com atalho para abrir
-      const before = chatsRef.current.find((x) => x.id === c.id);
-      if (payload.eventType === 'UPDATE' && c.assigned_to === viewer.me && before?.assigned_to !== viewer.me && !c.closed_at) {
-        toast.success(`Conversa transferida para você: ${chatTitle(c)}`, {
-          description: 'Já está em "Meus atendimentos".',
-          action: { label: 'Abrir', onClick: () => { setTab('mine'); chooseRef.current(c.id); } },
-        });
-      }
       setChats((prev) => [c, ...prev.filter((x) => x.id !== c.id)]);
     })
     // "Liberar" (0164): quem atendia é avisado na hora
@@ -1057,7 +1054,7 @@ export function PrivateInbox({
     .filter((c) => !tagFilter || (c.tags ?? []).includes(tagFilter))
     .filter((c) => !sectorFilter || (sectorFilter === 'none' ? !sectorOf(c) : sectorOf(c) === sectorFilter))
     .filter((c) => inTab(c, tab))
-    .sort((a, b) => ((b.last_message_at ?? '') > (a.last_message_at ?? '') ? 1 : -1));
+    .sort((a, b) => (activityOf(b) > activityOf(a) ? 1 : -1));
   const current = all.find((c) => c.id === selected) ?? null;
   // conversa aberta que não está na lista carregada (recém-criada em "Nova conversa", link de aviso, conversa antiga):
   // busca direto no banco e a mantém na tela, para a conversa abrir sempre
@@ -1226,9 +1223,9 @@ export function PrivateInbox({
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
                       <span className={cn('min-w-0 flex-1 truncate text-sm', c.unread_count ? 'font-semibold' : 'font-medium')}>{title}</span>
-                      {c.last_message_at && (
+                      {activityOf(c) && (
                         <span className="shrink-0 text-[9px] text-muted" suppressHydrationWarning>
-                          {timeAgo(c.last_message_at)}
+                          {timeAgo(activityOf(c))}
                         </span>
                       )}
                     </span>
