@@ -16,6 +16,9 @@ const MARKERS = [
   'dou retorno', 'darei retorno', 'dou um retorno', 'te dou retorno', 'logo retorno', 'retorno em breve', 'em breve retorno',
   'te retorno', 'retornarei', 'retornamos assim que', 'volto a falar', 'volto com', 'dou noticias', 'te aviso', 'aviso assim que',
   'aviso quando',
+  // o cliente diz que vai ver/verificar ("vou verificar", "já verifico"): a bola está com ele
+  'vou verificar', 'vou ver', 'vou ver isso', 'vou olhar', 'vou analisar', 'vou conferir', 'vou checar', 'vou procurar', 'vou providenciar',
+  'vou dar uma olhada', 'ja verifico', 'ja vejo', 'verifico e retorno', 'vejo e retorno', 'ja te retorno', 'ja retorno', 'ja te aviso',
   // "assim que tivermos retorno, informo no grupo": avisa que vai informar, não pede nada
   'assim que tivermos algum retorno', 'assim que tivermos retorno', 'assim que tiver algum retorno', 'assim que tiver retorno',
   'assim que tivermos', 'assim que tiver', 'assim que houver', 'assim que souber', 'assim que soubermos', 'informo no grupo',

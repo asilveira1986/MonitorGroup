@@ -38,6 +38,7 @@ import { audioContent } from './audio.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
 import { runHistoryRecovery, type Cursor, type Page, type RecoveryResult } from './history-recovery.js';
 import { isInformational } from './informational.js';
+import { opensPendingPrivate } from './private-pending.js';
 import { buildResolver, classifyFollowup, markAddressedElsewhere, mentionKeys, personKey, type FollowupMessage } from './followup.js';
 import { DEFAULT_COMMITMENT_VERBS } from './commitment.js';
 
@@ -275,6 +276,7 @@ export class WhatsAppManager {
       await db.from('groups').update({ followup_updated_at: null }).in('followup_status', ['company', 'client']).then(() => {}, () => {});
       await this.reviewInformationalPendings().catch((err) => logger.warn({ err }, 'falha ao revisar as pendências que eram só informe'));
       await this.reclassifySignedMessages().catch((err) => logger.warn({ err }, 'falha ao revisar as mensagens assinadas pela equipe'));
+      await this.reviewPrivateOpensPending().catch((err) => logger.warn({ err }, 'falha ao revisar as pendências das conversas privadas'));
       void this.sweepFollowups();
     }, 45_000);
     setInterval(() => void this.sweepFollowups(), FOLLOWUP_SWEEP_MS);
@@ -348,6 +350,29 @@ export class WhatsAppManager {
     }
     await db.from('groups').update({ followup_updated_at: null }).in('id', [...groups]).then(() => {}, () => {});
     logger.info({ messages: [...byMember.values()].reduce((n, x) => n + x.ids.length, 0), groups: groups.size }, 'mensagens assinadas pela equipe reclassificadas');
+  }
+
+  /**
+   * Ao iniciar: mensagens de clientes nas conversas privadas dos últimos 2 dias que não pedem resposta ("bom dia", "ok",
+   * "vou verificar", 👍) deixam de contar como pendentes no Painel de privadas (0185), como as novas já fazem.
+   */
+  private async reviewPrivateOpensPending() {
+    const since = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    const { data, error } = await db
+      .from('private_messages')
+      .select('id, company_id, message_type, body')
+      .eq('from_me', false)
+      .eq('opens_pending', true)
+      .gte('sent_at', since)
+      .limit(5000);
+    if (error || !data?.length) return; // sem o script 0185
+    const ids: string[] = [];
+    for (const m of data as { id: string; company_id: string; message_type: string; body: string | null }[]) {
+      const st = await getSettings(m.company_id).catch(() => null);
+      if (st && !opensPendingPrivate(m.message_type, m.body, st)) ids.push(m.id);
+    }
+    for (let i = 0; i < ids.length; i += 200) await db.from('private_messages').update({ opens_pending: false }).in('id', ids.slice(i, i + 200));
+    if (ids.length) logger.info({ messages: ids.length }, 'mensagens privadas que não pedem resposta revisadas');
   }
 
   private followupTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -2272,6 +2297,16 @@ export class WhatsAppManager {
       p_count_unread: !fromHistory,
     });
     if (error) logger.warn({ err: error.message }, 'não foi possível guardar a mensagem privada');
+    // mensagem do cliente que não pede resposta ("bom dia", "ok", "vou verificar", 👍): fora das pendências do painel (0185)
+    {
+      const r0 = ingested as { inserted?: boolean; message_id?: string } | null;
+      if (r0?.inserted && r0.message_id && !fromMe) {
+        const st = await getSettings(session.companyId).catch(() => null);
+        if (st && !opensPendingPrivate(content.type, content.body, st)) {
+          await db.from('private_messages').update({ opens_pending: false }).eq('id', r0.message_id).then(() => {}, () => {});
+        }
+      }
+    }
     // imagem/áudio/arquivo: guarda para abrir no painel (em segundo plano)
     const r = ingested as { inserted?: boolean; message_id?: string; chat_id?: string } | null;
     // foto de perfil de quem escreveu (a fila ignora quem já foi visto nos últimos 7 dias)
