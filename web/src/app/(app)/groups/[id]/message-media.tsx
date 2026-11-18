@@ -94,7 +94,7 @@ export function MessageMedia({ message: m, onViewed }: { message: Message; onVie
 
   if (m.message_type === 'audio') {
     return (
-      <AudioPlayer src={src} seconds={m.media_seconds} onPlay={onViewed} onError={() => setBroken(true)} />
+      <AudioPlayer src={src} downloadHref={`${src}?download=1`} seconds={m.media_seconds} onPlay={onViewed} onError={() => setBroken(true)} />
     );
   }
 

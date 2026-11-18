@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, Mic, Pause, Play } from 'lucide-react';
+import { Download, Loader2, Mic, Pause, Play } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/format';
 
@@ -18,6 +18,7 @@ export function AudioPlayer({
   onPlay,
   onError,
   voice = true,
+  downloadHref,
 }: {
   src: string;
   /** duração guardada (null: aparece quando o arquivo carregar) */
@@ -25,6 +26,8 @@ export function AudioPlayer({
   onPlay?: () => void;
   onError?: () => void;
   voice?: boolean;
+  /** link que baixa o arquivo (mostra o botão de download) */
+  downloadHref?: string;
 }) {
   const ref = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -77,6 +80,11 @@ export function AudioPlayer({
             {voice && <Mic className="h-3 w-3" aria-hidden />}
             {playing || current > 0 ? `${clock(current)} / ${total ? clock(total) : '—'}` : total ? clock(total) : '—'}
           </span>
+          {downloadHref && (
+            <a href={downloadHref} download className="rounded px-1 hover:text-ink" title="Baixar áudio" aria-label="Baixar áudio">
+              <Download className="h-3 w-3" aria-hidden />
+            </a>
+          )}
           <button
             type="button"
             onClick={() => setSpeed((s) => SPEEDS[(SPEEDS.indexOf(s) + 1) % SPEEDS.length])}
