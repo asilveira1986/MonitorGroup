@@ -17,6 +17,8 @@ export type PanelChat = {
   assigned_to: string | null;
   unread_count: number;
   last_message_at: string | null;
+  /** a mensagem mais recente do cliente: ordena do último que escreveu para o primeiro (0188) */
+  last_client_message_at?: string | null;
   last_message_preview: string | null;
   waiting_since: string | null;
   waiting_count: number | null;
@@ -211,7 +213,10 @@ export function PrivatePanel({
     [allChats, sector, responsible, q, digits],
   );
   const counts = useMemo(() => Object.fromEntries(ORDER.map((k) => [k, base.filter((c) => c.status === k).length])) as Record<PanelStatus, number>, [base]);
-  const shown = filter === 'all' ? base : base.filter((c) => c.status === filter);
+  // do último cliente que escreveu para o primeiro (sem mensagem do cliente, no fim)
+  const byClient = (a: PanelChat, b: PanelChat) =>
+    (b.last_client_message_at ?? '').localeCompare(a.last_client_message_at ?? '') || (b.last_message_at ?? '').localeCompare(a.last_message_at ?? '');
+  const shown = [...(filter === 'all' ? base : base.filter((c) => c.status === filter))].sort(byClient);
   const activeFilters = [filter !== 'all', sector !== 'all', responsible !== 'all', Boolean(q)].filter(Boolean).length;
   const clear = () => {
     setFilter('all');

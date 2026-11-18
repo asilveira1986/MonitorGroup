@@ -238,6 +238,7 @@ from (values
   (176, 'Conversas privadas: mensagem que não pede resposta fora das pendências (0185)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'private_messages' and column_name = 'opens_pending')),
   (177, 'Transferir a conversa privada mantém o histórico e une com a do outro setor (0186)', coalesce(pg_get_functiondef('public.assign_private_chat(uuid,uuid,text)'::regprocedure) like '%passou para o número%', false)),
   (178, 'Ignorar mensagens anteriores a uma data nas pendências (0187)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'pending_ignore_before') and to_regprocedure('public.apply_pending_cutoff(uuid)') is not null),
-  (179, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (179, 'Painel de privadas: do último cliente que escreveu para o primeiro (0188)', coalesce(pg_get_functiondef('public.private_panel()'::regprocedure) like '%last_client_message_at%', false)),
+  (180, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
