@@ -18,18 +18,21 @@ export const metadata: Metadata = { title: 'Monitor Group · Conversas privadas'
 export default async function PrivatePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const profile = await requireProfile();
   const supabase = await createClient();
-  const [{ data: allowed }, { data: openChats }, { data: settings }, { data: instance }, { data: tagRows }] = await Promise.all([
+  const [{ data: allowed }, { data: openChats }, { data: mineChats }, { data: settings }, { data: instance }, { data: tagRows }] = await Promise.all([
     supabase.rpc('can_use_private_chats'),
     // em aberto: as 300 mais recentes. As finalizadas NÃO vêm daqui: o navegador as busca direto no banco ao abrir a aba
     // "Finalizado" (esta página é refeita a cada minuto; carregar mil finalizadas toda vez encarecia a hospedagem)
     // conversas novas, ainda sem mensagem, vêm primeiro (antes ficavam no fim e fora das 300)
     supabase.from('private_chats').select('*').is('closed_at', null).order('last_message_at', { ascending: false, nullsFirst: true }).limit(300),
+    // as que estão com o próprio usuário vêm sempre (uma conversa antiga transferida para ele ficaria fora das 300 mais recentes)
+    supabase.from('private_chats').select('*').eq('assigned_to', profile.id).is('closed_at', null).limit(500),
     appSettings(),
     supabase.from('whatsapp_instances').select('status').eq('status', 'connected').limit(1).maybeSingle(),
     // etiquetas de clientes (0103)
     supabase.from('customer_tags').select('id, name, color').order('name'),
   ]);
-  const chats = openChats ?? [];
+  // as 300 mais recentes e as do próprio usuário (sem repetir)
+  const chats = [...(openChats ?? []), ...(mineChats ?? []).filter((m) => !(openChats ?? []).some((o) => o.id === m.id))];
   // foto de cada conversa (guardada pelo worker): pelo identificador da conversa ou, sem foto nele, pelo número
   const chatRows = (chats ?? []) as PrivateChat[];
   const phoneJid = (c: PrivateChat) => (c.phone ? `${c.phone}@s.whatsapp.net` : null);

@@ -969,12 +969,34 @@ export function PrivateInbox({
     setChats(initialChats);
   }
 
+  // o que o aviso em tempo real precisa saber do momento (o callback abaixo nasce uma vez): conversas, aberta e como abrir
+  const chatsRef = useRef(chats);
+  const selectedRef = useRef(selected);
+  const chooseRef = useRef<(id: string | null) => void>(() => {});
   useRealtime('private-chats', (channel) =>
     channel.on('postgres_changes', { event: '*', schema: 'public', table: 'private_chats' }, (payload) => {
+      // conversa apagada (ou unida a outra do mesmo contato, ao transferir para outro setor, 0186): sai da lista
+      if (payload.eventType === 'DELETE') {
+        const gone = (payload.old as { id?: string } | null)?.id;
+        if (!gone) return;
+        setChats((prev) => prev.filter((x) => x.id !== gone));
+        setPinned((prev) => prev.filter((x) => x.id !== gone));
+        setOlder((prev) => prev.filter((x) => x.id !== gone));
+        if (selectedRef.current === gone) chooseRef.current(null);
+        return;
+      }
       const c = payload.new as PrivateChat;
       if (!c?.id) return;
       // conversa que outro usuário assumiu: sai da lista de quem não vê todas
       if (!viewer.seesTeam && c.assigned_to && c.assigned_to !== viewer.me) return setChats((prev) => prev.filter((x) => x.id !== c.id));
+      // transferida para mim: já cai em "Meus atendimentos" (a lista abaixo) e avisa na hora, com atalho para abrir
+      const before = chatsRef.current.find((x) => x.id === c.id);
+      if (payload.eventType === 'UPDATE' && c.assigned_to === viewer.me && before?.assigned_to !== viewer.me && !c.closed_at) {
+        toast.success(`Conversa transferida para você: ${chatTitle(c)}`, {
+          description: 'Já está em "Meus atendimentos".',
+          action: { label: 'Abrir', onClick: () => { setTab('mine'); chooseRef.current(c.id); } },
+        });
+      }
       setChats((prev) => [c, ...prev.filter((x) => x.id !== c.id)]);
     })
     // "Liberar" (0164): quem atendia é avisado na hora
@@ -1003,6 +1025,11 @@ export function PrivateInbox({
     },
     [pathname, router, silent],
   );
+  useEffect(() => {
+    chatsRef.current = chats;
+    selectedRef.current = selected;
+    chooseRef.current = choose;
+  });
   // abre a conversa do resultado (buscando-a se ela não está na lista carregada) com a pesquisa já posicionada
   const openHit = async (h: { id: string; chat_id: string }) => {
     if (!all.some((c) => c.id === h.chat_id)) {
