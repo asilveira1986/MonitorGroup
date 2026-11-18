@@ -308,3 +308,21 @@ test('cliente confirma que viu/recebeu o que a equipe prometeu: promessa cumprid
   assert.equal(run([promise, client('Você enviou o email da Vibra?', 60)]).status, 'company');
   assert.equal(run([promise, client('Alguma novidade?', 60)]).kind, 'promise');
 });
+
+test('equipe pediu documentos e o cliente só se desculpa: a bola continua com o cliente (Pendente cliente)', () => {
+  const ask = team('Boa tarde Mitzi e Nadja,\n\nQuando conseguirem nos enviar os documentos que falamos em reunião na semana passada, estamos prontos para analisá-los.', 0);
+  const r = run([ask, client('Oi. Tanta coisa que não deu para parar para organizar', 60), client('Desculpa', 60)]);
+  assert.equal(r.status, 'client');
+  assert.equal(r.kind, 'request');
+  assert.equal(r.heldIds?.length, 2);
+  // "estamos prontos para analisar" é disponibilidade, não entrega
+  assert.equal(run([ask]).status, 'client');
+  // entregou (arquivo ou "segue"): a empresa confere
+  assert.equal(run([ask, client('Segue os documentos', 60, { type: 'document' })]).status, 'company');
+  assert.equal(run([ask, client('Segue', 60)]).kind, 'received');
+  // pergunta ou pedido do cliente: a empresa responde
+  assert.equal(run([ask, client('Quais documentos exatamente?', 60)]).status, 'company');
+  assert.equal(run([ask, client('Preciso de mais um prazo', 60)]).status, 'company');
+  // sem pedido da equipe, a mensagem do cliente continua pedindo resposta
+  assert.equal(run([client('Desculpa o atraso', 0)]).status, 'company');
+});

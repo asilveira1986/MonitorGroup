@@ -460,6 +460,13 @@ export class WhatsAppManager {
       timeZone: settings.timezone,
       businessEnd: settings.business_end.slice(0, 5),
     });
+    // o "aguardando resposta" (SLA) segue o mesmo critério: o cliente que só responde a um pedido da equipe com uma desculpa
+    // ou aviso (a bola está com ele) não pede resposta da empresa
+    if (r.heldIds?.length) {
+      const { data: changed } = await db.from('messages').update({ opens_pending: false }).in('id', r.heldIds).eq('opens_pending', true).select('id');
+      // sem data de corte: não descarta as pendências antigas que continuam valendo
+      if (changed?.length) await db.rpc('rebuild_group_state', { p_group_id: groupId, p_live_since: '1970-01-01T00:00:00Z' });
+    }
     await db
       .from('groups')
       .update({

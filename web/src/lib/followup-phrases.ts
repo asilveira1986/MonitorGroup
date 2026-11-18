@@ -17,6 +17,9 @@ export const DEFAULT_REQUEST_PHRASES = [
   'pode me passar', 'pode nos passar', 'pode passar', 'me passe', 'nos passe', 'pode me informar', 'pode nos informar', 'pode informar',
   'me informe', 'nos informe', 'me avise', 'nos avise', 'pode me avisar', 'pode nos avisar', 'quando conseguir', 'assim que tiver',
   'assim que puder', 'quando tiver',
+  // "quando conseguirem nos enviar os documentos"
+  'quando conseguirem', 'quando puderem', 'quando possivel', 'conseguirem nos enviar', 'puderem nos enviar', 'nos enviar', 'nos encaminhar',
+  'nos mandar', 'nos remeter', 'nos enviem', 'nos encaminhem',
 ];
 
 /** Entregas da equipe (e do cliente, quando foi pedido algo a ele). */
