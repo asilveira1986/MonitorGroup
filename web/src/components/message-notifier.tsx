@@ -92,6 +92,8 @@ type ScreenItem = {
   sound?: boolean;
   /** o servidor também manda este aviso por push (alertas e privado): não repete na notificação do computador */
   serverPushed?: boolean;
+  /** etiqueta da notificação do navegador (a mesma do push do servidor: as duas se juntam numa só) */
+  noticeTag?: string;
 };
 
 /** som de cada tipo de aviso quando não há fala */
@@ -165,7 +167,7 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
         {
           title: `${item.heading} · ${item.group}`,
           body: [item.who, item.text, item.note].filter(Boolean).join('\n'),
-          tag: `screen-${item.key}`,
+          tag: item.noticeTag ?? `screen-${item.key}`,
           url: item.href,
           // "0 = fica na tela até alguém fechar" vale também aqui
           keep: configRef.current.autoClose === 0 || item.tone === 'critical',
@@ -323,7 +325,9 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
                   ? `Conversa transferida para você${by ? ` por ${by}` : ''}: ${customer}.`
                   : undefined,
               key: `pt-${e.chat_id}`,
-              serverPushed: true,
+              // o servidor também envia push com esta etiqueta; aqui garante a notificação do navegador
+              // mesmo se o push atrasar ou falhar (as duas se juntam numa só)
+              noticeTag: `private:${e.chat_id}`,
               tone: 'brand',
               heading: 'Conversa transferida para você',
               icon: MessageCircle,
