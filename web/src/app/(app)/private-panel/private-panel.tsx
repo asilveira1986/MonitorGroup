@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, Clock, MessageCircle, Phone, Search, UserCheck, X } from 'lucide-react';
+import { Building2, Clock, MailOpen, MessageCircle, Phone, Search, UserCheck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -137,7 +137,8 @@ export function PrivatePanel({
   responsibles: { id: string; name: string }[];
 }) {
   const router = useRouter();
-  const [filter, setFilter] = useState<PanelStatus | 'all'>('all');
+  // situação (atrasados, aguardando, respondidos) ou "não lidas" (conversas com mensagens que ninguém abriu)
+  const [filter, setFilter] = useState<PanelStatus | 'unread' | 'all'>('all');
   const [sector, setSector] = useState('all');
   const [responsible, setResponsible] = useState('all');
   const [query, setQuery] = useState('');
@@ -147,9 +148,10 @@ export function PrivatePanel({
   useEffect(() => {
     const load = () => {
       try {
-        const saved = JSON.parse(sessionStorage.getItem(FILTERS_KEY) ?? 'null') as { filter?: PanelStatus | 'all'; sector?: string; responsible?: string; query?: string } | null;
+        const saved = JSON.parse(sessionStorage.getItem(FILTERS_KEY) ?? 'null') as { filter?: PanelStatus | 'unread' | 'all'; sector?: string; responsible?: string; query?: string } | null;
         if (saved) {
-          if (saved.filter) setFilter(saved.filter);
+          // ("sem mensagens" deixou de ser filtro: vira Todos)
+          if (saved.filter && saved.filter !== 'neutral') setFilter(saved.filter);
           if (saved.sector) setSector(saved.sector);
           if (saved.responsible) setResponsible(saved.responsible);
           if (typeof saved.query === 'string') setQuery(saved.query);
@@ -216,7 +218,8 @@ export function PrivatePanel({
   // do último cliente que escreveu para o primeiro (sem mensagem do cliente, no fim)
   const byClient = (a: PanelChat, b: PanelChat) =>
     (b.last_client_message_at ?? '').localeCompare(a.last_client_message_at ?? '') || (b.last_message_at ?? '').localeCompare(a.last_message_at ?? '');
-  const shown = [...(filter === 'all' ? base : base.filter((c) => c.status === filter))].sort(byClient);
+  const unreadCount = base.filter((c) => c.unread_count > 0).length;
+  const shown = [...(filter === 'all' ? base : filter === 'unread' ? base.filter((c) => c.unread_count > 0) : base.filter((c) => c.status === filter))].sort(byClient);
   const activeFilters = [filter !== 'all', sector !== 'all', responsible !== 'all', Boolean(q)].filter(Boolean).length;
   const clear = () => {
     setFilter('all');
@@ -271,7 +274,7 @@ export function PrivatePanel({
               Todos
               <span className={cn(COUNT, filter === 'all' ? 'bg-bg/20 text-bg' : 'bg-surface-2 text-ink')}>{base.length}</span>
             </button>
-            {ORDER.map((k) => {
+            {ORDER.filter((k) => k !== 'neutral').map((k) => {
               const Icon = STATUS[k].icon;
               const on = filter === k;
               return (
@@ -290,6 +293,23 @@ export function PrivatePanel({
                 </button>
               );
             })}
+            {/* não lidas: conversas com mensagens que ninguém abriu (no lugar de "sem mensagens") */}
+            <button
+              type="button"
+              onClick={() => setFilter(filter === 'unread' ? 'all' : 'unread')}
+              aria-pressed={filter === 'unread'}
+              title="Conversas com mensagens não lidas"
+              disabled={!unreadCount && filter !== 'unread'}
+              className={cn(
+                CHIP,
+                'disabled:cursor-default disabled:opacity-45',
+                filter === 'unread' ? 'border-brand-line bg-brand-soft/60 text-ink' : 'border-line text-ink-2 hover:border-ink-2 hover:text-ink',
+              )}
+            >
+              <MailOpen className={cn('h-3.5 w-3.5', filter === 'unread' ? '' : 'opacity-70')} aria-hidden />
+              Não lidas
+              <span className={cn(COUNT, unreadCount ? 'bg-good text-white' : 'bg-surface-2 text-muted')}>{unreadCount}</span>
+            </button>
           </div>
           <div className="flex shrink-0 items-center justify-between gap-3 text-xs text-ink-2 lg:justify-end">
             <span>
