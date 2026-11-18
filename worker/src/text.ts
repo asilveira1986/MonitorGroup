@@ -225,3 +225,11 @@ export function quotedMessageId(message: proto.IMessage | null | undefined): str
   const inner = (content as Record<string, unknown>)[type] as { contextInfo?: proto.IContextInfo } | undefined;
   return inner?.contextInfo?.stanzaId ?? null;
 }
+
+/**
+ * Áudio encaminhado que era mensagem de voz (OGG/Opus): vai de novo como mensagem de voz. Como arquivo de áudio comum
+ * o WhatsApp do destinatário pode não entregar ou não tocar.
+ */
+export function forwardedAsVoice(forwarded: boolean | null | undefined, mimetype: string | null | undefined): boolean {
+  return Boolean(forwarded) && /ogg|opus/i.test(mimetype ?? '');
+}
