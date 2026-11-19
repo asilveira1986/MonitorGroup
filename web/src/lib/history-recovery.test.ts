@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DAY_OPTIONS, DEFAULT_DAYS, isOpen, STATUS_LABEL, summary, validDays } from './history-recovery.ts';
+import { DAY_OPTIONS, DEFAULT_DAYS, isOpen, queueHints, STATUS_LABEL, summary, validDays, type QueueInfo } from './history-recovery.ts';
 
 test('recuperação: períodos oferecidos são válidos e o padrão está entre eles', () => {
   for (const d of DAY_OPTIONS) assert.equal(validDays(d), true, String(d));
@@ -43,4 +43,29 @@ test('lote: lê o andamento do banco e ignora o que não é um lote', () => {
   assert.equal(b!.added, 10); // número vindo como texto
   assert.equal(b!.groupsWithNews, 1);
   assert.deepEqual(b!.failedNotes, [{ note: 'O celular não respondeu.', n: 1 }, { note: null, n: 2 }]);
+});
+
+const NOW = new Date('2026-11-19T15:00:00Z').getTime();
+const q = (over: Partial<QueueInfo>): QueueInfo => ({ instanceName: 'Cível', instanceStatus: 'connected', instanceSeenAt: '2026-11-19T14:59:30Z', ahead: 0, ...over });
+
+test('fila: número desconectado explica e para por aí', () => {
+  const h = queueHints(q({ instanceStatus: 'disconnected' }), NOW);
+  assert.equal(h.length, 1);
+  assert.equal(h[0].tone, 'warning');
+  assert.match(h[0].text, /desconectado/);
+});
+
+test('fila: sem sinal do worker há mais de 3 minutos avisa', () => {
+  const h = queueHints(q({ instanceSeenAt: '2026-11-19T14:50:00Z' }), NOW);
+  assert.equal(h[0].tone, 'warning');
+  assert.match(h[0].text, /Sem sinal do worker há 10 min/);
+});
+
+test('fila: tudo certo mostra o último sinal e quantos pedidos vêm antes', () => {
+  const h = queueHints(q({ ahead: 3 }), NOW);
+  assert.equal(h[0].tone, 'good');
+  assert.match(h[0].text, /há 30 s/);
+  assert.match(h[1].text, /3 pedido\(s\) na frente/);
+  assert.match(queueHints(q({}), NOW)[1].text, /até 30 segundos/);
+  assert.deepEqual(queueHints(null, NOW), []);
 });

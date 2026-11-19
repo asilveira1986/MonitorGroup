@@ -4,7 +4,7 @@ import { History } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { DEFAULT_DAYS } from '@/lib/history-recovery';
+import { DEFAULT_DAYS, type QueueInfo } from '@/lib/history-recovery';
 import { HistoryRecoveryPanel } from '../groups/[id]/history-recovery';
 import type { HistoryRequestView } from '../groups/history-actions';
 import { cancelPrivateRecovery, latestPrivateRecovery, startPrivateRecovery } from './history-actions';
@@ -17,6 +17,7 @@ export function PrivateHistoryRecoveryButton({ chatId, timeZone }: { chatId: str
   const [busy, setBusy] = useState(false);
   const [days, setDays] = useState<number>(DEFAULT_DAYS);
   const [request, setRequest] = useState<HistoryRequestView | null>(null);
+  const [queue, setQueue] = useState<QueueInfo | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const lastStatus = useRef<string | null>(null);
 
@@ -24,6 +25,7 @@ export function PrivateHistoryRecoveryButton({ chatId, timeZone }: { chatId: str
     if (!quiet) setLoading(false);
     if (!res.ok) return void (quiet || toast.error(res.error));
     setRequest(res.request);
+    setQueue(res.queue);
     const was = lastStatus.current;
     const done = res.request && res.request.status !== 'pending' && res.request.status !== 'running';
     // concluiu trazendo mensagens novas: mostra na conversa
@@ -97,6 +99,7 @@ export function PrivateHistoryRecoveryButton({ chatId, timeZone }: { chatId: str
           <HistoryRecoveryPanel
             kind="private"
             request={request}
+            queue={queue}
             loading={loading}
             busy={busy}
             days={days}
