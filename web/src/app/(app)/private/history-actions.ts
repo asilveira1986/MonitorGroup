@@ -3,7 +3,7 @@
 import type { ActionResult as Result } from '@/lib/action-result';
 import { requirePlatformAdmin } from '@/lib/auth';
 import { friendlyDbError } from '@/lib/db-errors';
-import { validDays, type RecoveryStatus } from '@/lib/history-recovery';
+import { parseBatchStatus, validDays, type BatchStatus, type RecoveryStatus } from '@/lib/history-recovery';
 import { createClient } from '@/lib/supabase/server';
 import type { HistoryRequestView } from '../groups/history-actions';
 
@@ -56,4 +56,34 @@ export async function cancelPrivateRecovery(id: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('cancel_private_history_recovery', { p_id: id });
   return error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true };
+}
+
+// ------------------------------------------------------------ todas as conversas (0191)
+
+/** Pede a recuperação de todas as conversas privadas da empresa (um pedido por conversa; o worker faz um de cada vez). */
+export async function startPrivateRecoveryAll(days: number, onlyOpen: boolean): Promise<Result & { created?: number; skipped?: number }> {
+  await requirePlatformAdmin();
+  if (!validDays(days)) return { ok: false, error: 'Escolha um período de 1 a 30 dias.' };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('request_private_history_recovery_all', { p_days: days, p_only_open: onlyOpen });
+  if (error) return /request_private_history_recovery_all/.test(error.message) ? { ok: false, error: 'Falta aplicar o script do banco (item 0191).' } : { ok: false, error: friendlyDbError(error.message) };
+  const r = (data ?? {}) as { created?: number; skipped?: number };
+  return { ok: true, created: r.created ?? 0, skipped: r.skipped ?? 0 };
+}
+
+/** Andamento do pedido em lote mais recente (mesmo formato do dos grupos). */
+export async function privateRecoveryBatchStatus(): Promise<{ ok: true; status: BatchStatus | null } | { ok: false; error: string }> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('private_history_recovery_batch_status');
+  if (error) return /private_history_recovery_batch_status/.test(error.message) ? { ok: false, error: 'Falta aplicar o script do banco (item 0191).' } : { ok: false, error: friendlyDbError(error.message) };
+  return { ok: true, status: parseBatchStatus(data) };
+}
+
+/** Cancela o que ainda não terminou no lote (as conversas já concluídas ficam como estão). */
+export async function cancelPrivateRecoveryBatch(batchId: string): Promise<Result & { cancelled?: number }> {
+  await requirePlatformAdmin();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('cancel_private_history_recovery_batch', { p_batch: batchId });
+  return error ? { ok: false, error: friendlyDbError(error.message) } : { ok: true, cancelled: Number(data ?? 0) };
 }

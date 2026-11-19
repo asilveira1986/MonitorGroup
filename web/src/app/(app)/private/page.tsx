@@ -1,6 +1,7 @@
 import { Lock, MessageCircle } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
+import { PrivateRecoveryAllButton } from '../groups/history-recovery-all';
 import { appSettings } from '@/lib/app-settings';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -64,6 +65,10 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
     ? { options: ((sectorRows ?? []) as { id: string; name: string }[]).filter((s) => usedSectors.has(s.id)), byInstance }
     : undefined;
   const sp = await searchParams;
+  // recuperar mensagens de todas as conversas (0191, experimental): só o administrador geral da plataforma
+  const { count: openChatCount } = profile.platform_admin
+    ? await supabase.from('private_chats').select('id', { count: 'exact', head: true }).is('closed_at', null)
+    : { count: 0 };
 
   return (
     <div data-wide>
@@ -71,6 +76,11 @@ export default async function PrivatePage({ searchParams }: { searchParams: Prom
         title="Conversas privadas"
         description="Mensagens no privado do WhatsApp conectado: responda, veja os contatos e inicie conversas. Não entram nos indicadores dos grupos."
       />
+      {allowed && profile.platform_admin && (
+        <div className="-mt-2 mb-3 flex justify-end">
+          <PrivateRecoveryAllButton openChats={openChatCount ?? 0} />
+        </div>
+      )}
       {!allowed ? (
         <Card>
           <EmptyState
