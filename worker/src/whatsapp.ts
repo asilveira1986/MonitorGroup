@@ -57,6 +57,8 @@ const FOLLOWUP_MESSAGES = 60;
 /** depois de um celular mudo, os demais pedidos dessa conexão são encerrados por este tempo */
 const RECOVERY_MUTE_MS = 10 * 60_000;
 const RECOVERY_BETWEEN_GROUPS_MS = 3_000;
+/** nota do pedido de recuperação privada parado por falta de conexão (aparece no painel) */
+const PRIVATE_RECOVERY_WAITING_NOTE = 'Aguardando: o número conectado não está conectado agora. Reconecte em Configurações › WhatsApp; o pedido segue sozinho.';
 /** espera pela resposta do celular a cada pedido de histórico (0161) */
 const RECOVERY_REPLY_MS = 45_000;
 /** depois da primeira parte da resposta, espera um instante por partes seguintes */
@@ -1698,6 +1700,8 @@ export class WhatsAppManager {
   }
 
   /** Pedidos de recuperação das conversas privadas (0178): um de cada vez, na conexão da conversa. Sem o script, não faz nada. */
+  private privateRecoveryError: string | null = null;
+
   private async processPrivateRecoveries() {
     // a mesma fila de histórico dos grupos: um pedido ao celular por vez na conexão
     if (this.recoveryBusy) return;
@@ -1711,14 +1715,27 @@ export class WhatsAppManager {
         .lt('updated_at', new Date(now.getTime() - 10 * 60_000).toISOString());
       const { data, error } = await db
         .from('private_history_requests')
-        .select('id, chat_id, since, created_at, private_chats!inner(jid, instance_id)')
+        .select('id, chat_id, since, created_at, note, private_chats!inner(jid, instance_id)')
         .eq('status', 'pending')
         .order('created_at')
         .limit(20);
-      if (error || !data?.length) return; // sem o script 0178: nada
-      for (const req of data as unknown as { id: string; chat_id: string; since: string; created_at: string; private_chats: { jid: string; instance_id: string } }[]) {
+      if (error) {
+        // sem o script 0178 ou falha do banco: registra (uma vez por mensagem) em vez de ficar parado sem explicação
+        if (error.message !== this.privateRecoveryError) {
+          this.privateRecoveryError = error.message;
+          logger.warn({ err: error.message }, 'não foi possível ler os pedidos de recuperação das conversas privadas');
+        }
+        return;
+      }
+      this.privateRecoveryError = null;
+      if (!data?.length) return;
+      for (const req of data as unknown as { id: string; chat_id: string; since: string; created_at: string; note: string | null; private_chats: { jid: string; instance_id: string } }[]) {
         const session = this.sessions.get(req.private_chats.instance_id);
         if (!session || session.stopped || !session.sock.user) {
+          // o painel mostra a nota: avisa que o pedido está parado porque o número não está conectado
+          if (req.note !== PRIVATE_RECOVERY_WAITING_NOTE) {
+            await db.from('private_history_requests').update({ note: PRIVATE_RECOVERY_WAITING_NOTE }).eq('id', req.id).eq('status', 'pending');
+          }
           if (now.getTime() - new Date(req.created_at).getTime() > 30 * 60_000) {
             await db
               .from('private_history_requests')
@@ -1730,7 +1747,7 @@ export class WhatsAppManager {
         }
         const { data: claimed } = await db
           .from('private_history_requests')
-          .update({ status: 'running', started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .update({ status: 'running', note: null, started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
           .eq('id', req.id)
           .eq('status', 'pending')
           .select('id');
