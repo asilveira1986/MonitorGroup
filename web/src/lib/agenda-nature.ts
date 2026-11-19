@@ -1,7 +1,7 @@
 /** Natureza do compromisso da agenda (0168): particular ou profissional, escolha obrigatória. */
 export type EventNature = 'professional' | 'personal';
 
-export const NATURES: { key: EventNature; label: string }[] = [
+const NATURES: { key: EventNature; label: string }[] = [
   { key: 'professional', label: 'Profissional' },
   { key: 'personal', label: 'Particular' },
 ];

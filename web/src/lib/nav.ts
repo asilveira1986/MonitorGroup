@@ -3,7 +3,7 @@
  * o menu do celular e os testes usarem a mesma lógica. Os ícones são só nomes; o componente os traduz.
  */
 
-export type BadgeKey = 'pending' | 'alerts' | 'demands' | 'agenda' | 'private';
+type BadgeKey = 'pending' | 'alerts' | 'demands' | 'agenda' | 'private';
 
 export type IconKey =
   | 'dashboard'
@@ -46,7 +46,7 @@ export type NavGroup = {
   items: NavItem[];
 };
 
-export type NavEntry = ({ kind: 'item' } & NavItem) | ({ kind: 'group' } & NavGroup);
+type NavEntry = ({ kind: 'item' } & NavItem) | ({ kind: 'group' } & NavGroup);
 
 export type NavCounts = Partial<Record<BadgeKey, number>>;
 

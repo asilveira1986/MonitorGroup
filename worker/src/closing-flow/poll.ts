@@ -8,7 +8,7 @@ export const parsePollMessage = (raw: string): Record<string, unknown> => JSON.p
 type PollCreation = { options?: { optionName?: string | null }[] | null };
 
 /** Opções da enquete criada (nomes), na ordem em que foram enviadas. */
-export function pollOptionNames(message: Record<string, unknown>): string[] {
+function pollOptionNames(message: Record<string, unknown>): string[] {
   const m = message as { pollCreationMessage?: PollCreation; pollCreationMessageV2?: PollCreation; pollCreationMessageV3?: PollCreation };
   const poll = m.pollCreationMessage ?? m.pollCreationMessageV2 ?? m.pollCreationMessageV3;
   return (poll?.options ?? []).map((o) => o.optionName ?? '');

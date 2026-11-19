@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Card } from '@/components/ui';
 
-export type GroupStat = {
+type GroupStat = {
   /** texto curto, cabe numa linha do card */
   label: string;
   /** texto completo, mostrado ao passar o mouse */
@@ -13,7 +13,7 @@ export type GroupStat = {
  * Resumo do grupo nos últimos 30 dias: cartões pequenos, todos numa linha (no celular, dois por linha), alinhados à
  * direita. Ficam na linha do nome do grupo (veja GroupTitleRow).
  */
-export function GroupStats({ stats }: { stats: GroupStat[] }) {
+function GroupStats({ stats }: { stats: GroupStat[] }) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
       {stats.map((k) => (

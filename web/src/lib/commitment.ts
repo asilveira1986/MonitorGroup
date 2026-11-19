@@ -25,7 +25,7 @@ export const DEFAULT_COMMITMENT_VERBS = [
   'avisar', 'confirmar', 'levantar', 'solicitar', 'acompanhar', 'alinhar', 'buscar', 'separar', 'instalar', 'refazer',
 ];
 
-export type CommitmentMatch = { trigger: string; kind: 'phrase' | 'verb' };
+type CommitmentMatch = { trigger: string; kind: 'phrase' | 'verb' };
 
 const normalize = (s: string) =>
   s

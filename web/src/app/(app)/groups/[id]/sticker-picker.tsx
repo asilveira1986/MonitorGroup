@@ -21,7 +21,7 @@ import {
 type Tab = 'library' | 'received';
 
 /** Janela das figurinhas (só apresentação: quem busca e grava é o StickerButton). */
-export function StickerPanel({
+function StickerPanel({
   library,
   received,
   loading,

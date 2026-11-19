@@ -3,7 +3,7 @@ import type { BroadcastSettings, BroadcastSock, BroadcastStore, Campaign, Recipi
 
 type Logger = { info(o: object, m?: string): void; warn(o: object, m?: string): void };
 
-export type BroadcastDeps = {
+type BroadcastDeps = {
   store: BroadcastStore;
   getSock: (instanceId: string) => BroadcastSock | undefined;
   /** gera o id da mensagem; é registrado antes do envio para o eco do WhatsApp não contar como resposta da equipe */

@@ -38,8 +38,8 @@ export type FollowupMessage = {
   elsewhere?: boolean;
 };
 
-export type FollowupStatus = 'company' | 'client' | 'resolved';
-export type FollowupKind =
+type FollowupStatus = 'company' | 'client' | 'resolved';
+type FollowupKind =
   | 'question' // cliente perguntou/pediu
   | 'reply' // cliente escreveu e ninguém respondeu
   | 'promise' // equipe prometeu
@@ -51,7 +51,7 @@ export type FollowupKind =
   | 'thanked'
   | 'confirmed'; // cliente confirmou que viu/recebeu o que a equipe prometeu
 
-export type FollowupResult = {
+type FollowupResult = {
   status: FollowupStatus | null;
   kind: FollowupKind | null;
   /** frase pronta para a tela, ex.: "Promessa da equipe sem entrega" */
@@ -71,7 +71,7 @@ export type FollowupResult = {
   heldIds?: string[];
 };
 
-export type FollowupOptions = {
+type FollowupOptions = {
   commitmentVerbs: string[];
   commitmentPhrases: string[];
   requestPhrases?: string[] | null;
@@ -150,7 +150,7 @@ const ANNOUNCEMENT_OPENING =
 const ANNOUNCEMENT_PHRASES = ['gostariamos de informar', 'gostaria de informar', 'informamos que', 'comunicamos que', 'venho informar', 'viemos informar', 'vimos informar', 'passando para informar', 'passando para avisar', 'temos o prazer de informar', 'divulgamos'];
 const MIN_ANNOUNCEMENT = 300;
 
-export function isInstitutional(body: string | null | undefined): boolean {
+function isInstitutional(body: string | null | undefined): boolean {
   if (!body || body.length < MIN_INSTITUTIONAL) return false;
   const plain = normalize(body);
   // comunicado ao grupo (texto longo para todos): informa, não combina nada com um cliente específico
@@ -173,7 +173,7 @@ const CONDITIONAL = /\b(caso|se|sempre que|quando|qualquer|eventual|eventuais|ha
  * ("caso tenha alguma demanda, retornaremos") nem aviso institucional longo, assinado ("Atenciosamente, Flores Advogados").
  * A promessa é procurada frase por frase, para a condição de uma frase não valer para a outra.
  */
-export function findSpecificPromise(body: string | null | undefined, verbs: string[] | null | undefined, phrases: string[] | null | undefined) {
+function findSpecificPromise(body: string | null | undefined, verbs: string[] | null | undefined, phrases: string[] | null | undefined) {
   if (!body) return null;
   if (isInstitutional(body)) return null;
   for (const sentence of body.split(/(?<=[.!?:])\s+|\n+/)) {
@@ -266,7 +266,7 @@ const NOT_CONFIRMING = new Set([
  * Mensagem do cliente que confirma ter visto ou recebido o que a equipe prometeu: um verbo de "enviou/recebi/chegou/vi"
  * sem pergunta, pedido, "não", "mas" ou problema. Só vale com uma promessa da equipe em aberto.
  */
-export function confirmsDelivery(type: string, body: string | null | undefined): boolean {
+function confirmsDelivery(type: string, body: string | null | undefined): boolean {
   if (type !== 'text' || !body || body.includes('?') || body.length > 400) return false;
   const words = normalize(body).split(' ').filter(Boolean);
   if (words.some((w) => NOT_CONFIRMING.has(w))) return false;
@@ -402,7 +402,7 @@ export function mentionKeys(body: string | null | undefined): string[] {
 export const personKey = (v: string | null | undefined): string => (v ?? '').split('@')[0].split(':')[0].replace(/\D/g, '');
 
 /** Quem é a pessoa por trás de um identificador do grupo (telefone ou LID) e se é da equipe; null = não reconhecida. */
-export type PersonResolver = (key: string) => { person: string; team: boolean } | null;
+type PersonResolver = (key: string) => { person: string; team: boolean } | null;
 
 /**
  * Monta o reconhecimento de pessoas a partir dos participantes do grupo (cada um com jid, LID e telefone) e dos
@@ -477,7 +477,7 @@ export function markAddressedElsewhere(messages: FollowupMessage[], resolve: Per
   return hidden.size ? messages.map((m) => (hidden.has(m.id) ? { ...m, elsewhere: true } : m)) : messages;
 }
 
-export const REASON: Record<FollowupKind, string> = {
+const REASON: Record<FollowupKind, string> = {
   question: 'Pergunta ou pedido do cliente sem resposta',
   reply: 'Mensagem do cliente sem resposta',
   promise: 'Promessa da equipe ainda sem entrega',

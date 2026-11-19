@@ -121,7 +121,7 @@ const toRule = (v: RepeatState): RepeatRule | null =>
 const sameRule = (a: RepeatRule | null, b: RepeatRule | null) => JSON.stringify(a) === JSON.stringify(b);
 
 /** "Toda semana (seg, qua) · 10 vezes" */
-export function repeatLabel(r: RepeatRule | null | undefined) {
+function repeatLabel(r: RepeatRule | null | undefined) {
   if (!r) return null;
   const f = FREQ.find((x) => x.key === r.freq);
   if (!f) return null;
@@ -244,7 +244,7 @@ function RepeatPicker({ value, onChange }: { value: RepeatState; onChange: (v: R
 const REMINDER_OPTIONS = [0, 5, 10, 15, 30, 60, 120, 180, 1440, 2880, 10080];
 const MAX_REMINDERS = 5;
 
-export function reminderLabel(m: number, allDay = false) {
+function reminderLabel(m: number, allDay = false) {
   if (allDay) {
     if (m < 1440) return m === 0 ? 'No dia, às 8h' : `No dia, ${m < 60 ? `${m} min` : `${m / 60} h`} antes das 8h`;
     return m === 1440 ? 'Na véspera, às 8h' : m % 10080 === 0 ? `${m / 10080} semana(s) antes, às 8h` : `${m / 1440} dias antes, às 8h`;
@@ -330,7 +330,7 @@ function zonedParts(iso: string, timeZone: string) {
 }
 
 export type Person = { id: string; name: string };
-export type AgendaTeam = { id: string; name: string; userIds: string[] };
+type AgendaTeam = { id: string; name: string; userIds: string[] };
 
 const initialsOf = (name: string) =>
   name
@@ -880,7 +880,7 @@ export function EventActions({
  * Detalhes do compromisso (/agenda?evento=...): abre ao tocar na notificação da agenda ou no
  * compromisso; mostra horário, observação, participantes e lembretes, com concluir/editar/excluir.
  */
-export function EventDetails({
+function EventDetails({
   event,
   timeZone,
   people,

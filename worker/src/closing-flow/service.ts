@@ -17,7 +17,7 @@ export type ClosingMessage = {
   isNotify: boolean;
 };
 
-export type ClosingDeps = {
+type ClosingDeps = {
   store: ClosingStore;
   sender: ClosingSender;
   logger: Log;
@@ -51,7 +51,7 @@ export function matchOption(text: string, options: ClosingOption[]): number {
   return options.findIndex((o) => normalizeAnswer(o.label) === t);
 }
 
-export function answerNotice(opts: { group: string; client: string | null; answer: string; reopen: boolean; link: string }): string {
+function answerNotice(opts: { group: string; client: string | null; answer: string; reopen: boolean; link: string }): string {
   const who = opts.client ? `${opts.client} respondeu` : 'O cliente respondeu';
   return [
     `📋 *Pesquisa de encerramento* — ${opts.group}`,

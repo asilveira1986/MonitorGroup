@@ -3,7 +3,7 @@ import { logger } from './logger.js';
 import type { AlertRule } from './db.js';
 import { digitsOnly } from './text.js';
 
-export type AlertPayload = {
+type AlertPayload = {
   id: string;
   title: string;
   description: string;

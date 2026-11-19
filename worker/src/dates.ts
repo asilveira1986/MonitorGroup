@@ -46,7 +46,7 @@ function offsetMinutes(date: Date, timeZone: string): number {
 }
 
 /** Data/hora local (no fuso informado) convertida para um Date em UTC. */
-export function localToDate(y: number, m: number, d: number, h: number, min: number, timeZone: string): Date {
+function localToDate(y: number, m: number, d: number, h: number, min: number, timeZone: string): Date {
   const guess = Date.UTC(y, m - 1, d, h, min);
   let result = guess - offsetMinutes(new Date(guess), timeZone) * 60_000;
   result = guess - offsetMinutes(new Date(result), timeZone) * 60_000; // ajuste em mudança de horário

@@ -34,7 +34,7 @@ async function alertableIndicators(companyId: string): Promise<Set<string> | nul
   return new Set(keys);
 }
 
-export async function loadRules(companyId: string, type?: AlertRule['type']): Promise<AlertRule[]> {
+async function loadRules(companyId: string, type?: AlertRule['type']): Promise<AlertRule[]> {
   let query = db.from('alert_rules').select('*').eq('active', true).eq('company_id', companyId);
   if (type) query = query.eq('type', type);
   const rules = (check(await query, 'load rules') ?? []) as AlertRule[];

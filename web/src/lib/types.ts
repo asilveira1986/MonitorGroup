@@ -180,7 +180,7 @@ export type AlertType =
   | 'deadline_missed'
   | 'rework'
   | 'recurrence';
-export type Severity = 'info' | 'warning' | 'critical';
+type Severity = 'info' | 'warning' | 'critical';
 
 export type AlertRule = {
   id: string;
@@ -334,6 +334,7 @@ export type PendingItem = {
   pending_body: string | null;
 };
 
+// NOTA: sem uso no momento; mantida de propósito.
 export type DashboardData = {
   kpis: {
     received: number;

@@ -175,7 +175,7 @@ export function normalizeBrPhone(raw: string): string | null {
   return null;
 }
 
-export type ParsedContacts = { rows: { phone: string; name: string | null }[]; invalid: number; duplicates: number };
+type ParsedContacts = { rows: { phone: string; name: string | null }[]; invalid: number; duplicates: number };
 
 const NAME_HEADERS = ['nome', 'name', 'cliente', 'contato'];
 const PHONE_HEADERS = ['telefone', 'celular', 'phone', 'whatsapp', 'fone', 'numero', 'número', 'tel'];
@@ -232,7 +232,7 @@ export type OptOut = { id: string; phone: string; name: string | null; source: '
 
 // ------------------------------------------------------------------ fase 3
 
-export type RecurrenceFreq = 'daily' | 'weekly' | 'monthly';
+type RecurrenceFreq = 'daily' | 'weekly' | 'monthly';
 
 /** Como o disparo se repete (no fuso da empresa). days: 0 = domingo ... 6 = sábado. */
 export type Recurrence = {

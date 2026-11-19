@@ -27,7 +27,7 @@ export type ReceiveDiagnosis = {
 };
 
 /** `sync`: a outra cópia tem mensagens que esta não tem; o painel oferece "Sincronizar agora" (0166). */
-export type Finding = { tone: 'good' | 'warning' | 'critical' | 'neutral'; text: string; action?: 'sync' };
+type Finding = { tone: 'good' | 'warning' | 'critical' | 'neutral'; text: string; action?: 'sync' };
 
 const HOUR = 3600_000;
 const STATUS: Record<string, string> = { disconnected: 'desconectado', connecting: 'conectando', qr: 'esperando a leitura do QR Code', connected: 'conectado' };

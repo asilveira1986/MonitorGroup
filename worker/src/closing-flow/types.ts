@@ -86,8 +86,8 @@ export interface ClosingStore {
   reopenGroup(groupId: string, at: Date): Promise<void>;
 }
 
-export type TextRequest = { instanceId: string; jid: string; text: string; mentions?: string[] };
-export type PollRequest = { instanceId: string; jid: string; question: string; options: string[] };
+type TextRequest = { instanceId: string; jid: string; text: string; mentions?: string[] };
+type PollRequest = { instanceId: string; jid: string; question: string; options: string[] };
 
 export interface ClosingSender {
   sendText(req: TextRequest): Promise<string>;

@@ -176,7 +176,7 @@ export async function getIndicatorDetails(
 // ---------------------------------------------------------------------
 // Responder pelo painel (a fila é enviada pelo worker)
 // ---------------------------------------------------------------------
-export type GroupAudio = { path: string; mime: string; size: number; voice: boolean };
+type GroupAudio = { path: string; mime: string; size: number; voice: boolean };
 /** Arquivo anexado numa resposta de grupo (0136): imagem, vídeo, áudio ou documento, com legenda opcional. */
 /** Envia um contato (cartão do WhatsApp) no grupo (0182). */
 export async function sendGroupContact(groupId: string, contact: { name: string; phone: string }, quotedMessageId: string | null = null): Promise<Result> {

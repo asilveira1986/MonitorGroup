@@ -62,7 +62,7 @@ export async function enableSystemNotices(): Promise<SystemNoticeState> {
   return permission;
 }
 
-export type SystemNoticeResult = { ok: true; via: 'service-worker' | 'navegador' } | { ok: false; reason: string };
+type SystemNoticeResult = { ok: true; via: 'service-worker' | 'navegador' } | { ok: false; reason: string };
 
 /** Registro do service worker já ativo (registra se preciso e espera a ativação por alguns segundos). */
 async function activeRegistration(): Promise<ServiceWorkerRegistration | undefined> {

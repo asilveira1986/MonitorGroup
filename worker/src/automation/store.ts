@@ -42,7 +42,7 @@ type PendingRow = {
 };
 
 /** Etapas guardadas em jsonb -> lista segura (campos que faltam viram o padrão; entrada estranha é ignorada). */
-export function parseSteps(raw: unknown): EscalationStep[] {
+function parseSteps(raw: unknown): EscalationStep[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((s): s is Record<string, unknown> => typeof s === 'object' && s !== null)

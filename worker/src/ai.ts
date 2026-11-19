@@ -23,7 +23,7 @@ const Result = z.object({
   category: z.string(),
   summary: z.string(),
 });
-export type DemandClassification = z.infer<typeof Result>;
+type DemandClassification = z.infer<typeof Result>;
 
 const SYSTEM = `Você analisa mensagens que clientes enviam em grupos de WhatsApp de atendimento de uma empresa.
 Decida se a mensagem é uma DEMANDA: um pedido concreto que exige uma entrega ou ação da equipe

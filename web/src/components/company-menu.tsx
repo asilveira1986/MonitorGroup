@@ -6,10 +6,10 @@ import { toast } from 'sonner';
 import { switchCompany } from '@/app/(app)/platform/actions';
 import { cn } from '@/lib/format';
 
-export type CompanyOption = { id: string; name: string; active: boolean; hasLogo?: boolean };
+type CompanyOption = { id: string; name: string; active: boolean; hasLogo?: boolean };
 
 /** Logo da empresa (ou o ícone, sem logo). */
-export function CompanyLogo({ id, current, hasLogo, name, className }: { id: string; current?: boolean; hasLogo?: boolean; name: string; className?: string }) {
+function CompanyLogo({ id, current, hasLogo, name, className }: { id: string; current?: boolean; hasLogo?: boolean; name: string; className?: string }) {
   return hasLogo ? (
     // eslint-disable-next-line @next/next/no-img-element -- logo privado por link temporário
     <img src={current ? '/company-logo' : `/company-logo?id=${id}`} alt={name} className={cn('h-7 w-7 shrink-0 rounded-lg bg-white object-contain p-0.5', className)} />

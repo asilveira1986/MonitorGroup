@@ -9,7 +9,7 @@ import { batchOpen, batchProgress, DAY_OPTIONS, DEFAULT_DAYS, type BatchStatus }
 import { cancelHistoryRecoveryBatch, historyRecoveryBatchStatus, startHistoryRecoveryAll } from './history-actions';
 
 /** Janela da recuperação em todos os grupos (só apresentação: quem busca e grava é o HistoryRecoveryAllButton). */
-export function HistoryRecoveryAllPanel({
+function HistoryRecoveryAllPanel({
   status,
   loading,
   busy,

@@ -6,7 +6,7 @@
 export type Validation<T> = { ok: true; value: T } | { ok: false; error: string };
 
 /** Etapa de cobrança (0158): a 1ª, a 2ª... Passando da última, repete a última. */
-export type EscalationStep = {
+type EscalationStep = {
   /** minutos desta cobrança (desde a mensagem, na 1ª; desde a cobrança anterior, nas demais); null = o geral da regra */
   waitMin: number | null;
   mentionGroupResponsibles: boolean;
@@ -15,7 +15,7 @@ export type EscalationStep = {
 };
 
 export const MAX_STEPS = 10;
-export const MAX_ACK_DELAY_SEC = 600;
+const MAX_ACK_DELAY_SEC = 600;
 
 /** Campos que o administrador pode editar numa regra. Qualquer outro campo recebido é ignorado. */
 export type RuleValues = {
@@ -177,9 +177,11 @@ export function normalizePhone(raw: string): string | null {
   return digits.length >= 12 && digits.length <= 15 ? digits : null;
 }
 
+// NOTA: usada apenas nos testes; mantida de propósito.
 export const phoneToJid = (phone: string) => `${phone}@s.whatsapp.net`;
 
 /** Nome e telefone de um atendente: o telefone com DDI e pelo menos 12 dígitos. */
+// NOTA: usada apenas nos testes; mantida de propósito.
 export function validateTeamMember(input: { name?: unknown; phone?: unknown }): Validation<{ name: string; phone: string }> {
   const name = typeof input.name === 'string' ? input.name.trim() : '';
   if (!name) return { ok: false, error: 'Informe o nome.' };

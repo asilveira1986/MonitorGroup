@@ -2,10 +2,10 @@ import { appSettings } from '@/lib/app-settings';
 import { createClient } from '@/lib/supabase/server';
 
 /** Períodos de vários dias (dias para trás a partir de hoje). */
-export const PERIOD_DAYS: Record<string, number> = { '7d': 6, '30d': 29, '90d': 89 };
+const PERIOD_DAYS: Record<string, number> = { '7d': 6, '30d': 29, '90d': 89 };
 /** Períodos de um dia só: hoje, ontem ou um dia escolhido (?period=day&date=AAAA-MM-DD). */
-export const DAY_PERIODS = ['today', 'yesterday', 'day'];
-export const PERIOD_LABEL: Record<string, string> = {
+const DAY_PERIODS = ['today', 'yesterday', 'day'];
+const PERIOD_LABEL: Record<string, string> = {
   today: 'Hoje',
   yesterday: 'Ontem',
   '7d': 'Últimos 7 dias',
@@ -18,7 +18,7 @@ const isUuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f-]
 const first = (v: unknown) => (Array.isArray(v) ? v[0] : v);
 
 /** Data (AAAA-MM-DD) de hoje no fuso da empresa. */
-export function todayYmd(timeZone: string, now = new Date()) {
+function todayYmd(timeZone: string, now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
 }
 
@@ -28,7 +28,7 @@ export function addDays(ymd: string, days: number) {
 }
 
 /** Meia-noite de uma data AAAA-MM-DD no fuso da empresa. */
-export function midnightInTz(timeZone: string, ymd: string): Date {
+function midnightInTz(timeZone: string, ymd: string): Date {
   const noonUtc = new Date(`${ymd}T12:00:00Z`);
   const offset =
     new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })

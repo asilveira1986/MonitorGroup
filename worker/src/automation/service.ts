@@ -51,7 +51,7 @@ export type AutomationMessage = {
 };
 
 /** Ids das mensagens enviadas pela automação: voltam pelo WhatsApp e não podem contar como resposta da equipe. */
-export type BotRegistry = { mark(id: string): void; has(id: string | null | undefined): boolean };
+type BotRegistry = { mark(id: string): void; has(id: string | null | undefined): boolean };
 
 export function createBotRegistry(ttlMs = 15 * 60_000, now: () => number = Date.now): BotRegistry {
   const ids = new Map<string, number>();
@@ -108,7 +108,7 @@ const mentionToken = (jid: string) => `@${jid.split('@')[0].split(':')[0]}`;
 const quote = (text: string) => (text ? `"${text}"` : '');
 
 /** Texto do aviso no grupo interno quando chega a mensagem do cliente. */
-export function noticeText(opts: { group: string; client: string | null; preview: string; link: string }): string {
+function noticeText(opts: { group: string; client: string | null; preview: string; link: string }): string {
   return [
     '📩 Nova mensagem de cliente sem resposta',
     `Grupo: ${opts.group}`,
@@ -141,7 +141,7 @@ export function escalationText(opts: {
     .join('\n');
 }
 
-export type AutomationDeps = {
+type AutomationDeps = {
   store: AutomationStore;
   sender: Sender;
   bots: BotRegistry;
