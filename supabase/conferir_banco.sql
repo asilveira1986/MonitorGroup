@@ -241,6 +241,7 @@ from (values
   (179, 'Painel de privadas: do último cliente que escreveu para o primeiro (0188)', coalesce(pg_get_functiondef('public.private_panel()'::regprocedure) like '%last_client_message_at%', false)),
   (180, 'Situação das notificações dos usuários, só administrador geral (0189)', to_regprocedure('public.platform_notification_status()') is not null),
   (181, 'Contato enviado pela conversa privada sem assinatura, chega com o telefone (0190)', coalesce(pg_get_functiondef('public.private_outgoing_sign()'::regprocedure) like '%''contact''%', false)),
-  (182, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (182, 'Recuperar mensagens de todas as conversas privadas (0191)', to_regprocedure('public.request_private_history_recovery_all(integer,boolean)') is not null),
+  (183, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

@@ -305,7 +305,8 @@ begin
   (179, 'Painel de privadas: do último cliente que escreveu para o primeiro (0188)', coalesce(pg_get_functiondef('public.private_panel()'::regprocedure) like '%last_client_message_at%', false)),
   (180, 'Situação das notificações dos usuários, só administrador geral (0189)', to_regprocedure('public.platform_notification_status()') is not null),
   (181, 'Contato enviado pela conversa privada sem assinatura, chega com o telefone (0190)', coalesce(pg_get_functiondef('public.private_outgoing_sign()'::regprocedure) like '%''contact''%', false)),
-  (182, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (182, 'Recuperar mensagens de todas as conversas privadas (0191)', to_regprocedure('public.request_private_history_recovery_all(integer,boolean)') is not null),
+  (183, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -314,7 +315,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184,0185,0186,0187,0188,0189,0190', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184,0185,0186,0187,0188,0189,0190,0191', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -26305,6 +26306,117 @@ $$;
 $mig0190$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0191_private_history_recovery_all.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0191', $mig0191$
+-- =====================================================================
+-- Recuperar mensagens antigas de TODAS as conversas privadas de uma vez, só para o
+-- administrador geral da plataforma (recurso experimental, como o dos grupos, 0161).
+--
+--  * private_history_requests.batch_id: liga os pedidos feitos juntos.
+--  * request_private_history_recovery_all: um pedido por conversa da empresa (as em aberto,
+--    ou todas); conversas que já têm pedido aberto ficam de fora (contadas em skipped). O
+--    worker faz um de cada vez, da conversa mais recente para a mais antiga.
+--  * private_history_recovery_batch_status / cancel_private_history_recovery_batch: andamento
+--    do lote mais recente e cancelamento do que ainda não terminou (mesmo formato dos grupos).
+-- =====================================================================
+
+alter table public.private_history_requests add column if not exists batch_id uuid;
+create index if not exists private_history_requests_batch_idx on public.private_history_requests (company_id, batch_id) where batch_id is not null;
+
+create or replace function public.request_private_history_recovery_all(p_days int, p_only_open boolean default true)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_batch    uuid := gen_random_uuid();
+  v_created  int;
+  v_eligible int;
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Só quem administra a plataforma recupera as mensagens de todas as conversas.' using errcode = '42501';
+  end if;
+  if p_days is null or p_days < 1 or p_days > 30 then
+    raise exception 'Escolha um período de 1 a 30 dias.';
+  end if;
+  select count(*) into v_eligible from public.private_chats c
+   where c.company_id = public.current_company_id()
+     and (not coalesce(p_only_open, true) or c.closed_at is null);
+  insert into public.private_history_requests (company_id, chat_id, days, since, batch_id)
+  select c.company_id, c.id, p_days, now() - make_interval(days => p_days), v_batch
+    from public.private_chats c
+   where c.company_id = public.current_company_id()
+     and (not coalesce(p_only_open, true) or c.closed_at is null)
+     and not exists (select 1 from public.private_history_requests h where h.chat_id = c.id and h.status in ('pending', 'running'))
+   order by c.last_message_at desc nulls last;
+  get diagnostics v_created = row_count;
+  return jsonb_build_object('batch_id', v_batch, 'created', v_created, 'skipped', v_eligible - v_created);
+end;
+$$;
+revoke all on function public.request_private_history_recovery_all(int, boolean) from public, anon;
+grant execute on function public.request_private_history_recovery_all(int, boolean) to authenticated;
+
+-- andamento do lote mais recente da empresa (null = nunca houve); mesmo formato do dos grupos
+create or replace function public.private_history_recovery_batch_status()
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_batch uuid;
+  v_out   jsonb;
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Só quem administra a plataforma vê o andamento da recuperação em todas as conversas.' using errcode = '42501';
+  end if;
+  select batch_id into v_batch from public.private_history_requests
+   where company_id = public.current_company_id() and batch_id is not null
+   order by created_at desc limit 1;
+  if v_batch is null then
+    return null;
+  end if;
+  select jsonb_build_object(
+    'batch_id', v_batch,
+    'days', max(days),
+    'created_at', min(created_at),
+    'total', count(*),
+    'pending', count(*) filter (where status = 'pending'),
+    'running', count(*) filter (where status = 'running'),
+    'done', count(*) filter (where status = 'done'),
+    'failed', count(*) filter (where status = 'failed'),
+    'cancelled', count(*) filter (where status = 'cancelled'),
+    'added', coalesce(sum(messages_added), 0),
+    'found', coalesce(sum(messages_found), 0),
+    'groups_with_news', count(*) filter (where messages_added > 0),
+    'failed_notes', (
+      select coalesce(jsonb_agg(jsonb_build_object('note', n.note, 'n', n.c) order by n.c desc), '[]'::jsonb)
+      from (select note, count(*) c from public.private_history_requests
+             where batch_id = v_batch and status = 'failed' group by note order by count(*) desc limit 5) n)
+  ) into v_out
+  from public.private_history_requests where batch_id = v_batch;
+  return v_out;
+end;
+$$;
+revoke all on function public.private_history_recovery_batch_status() from public, anon;
+grant execute on function public.private_history_recovery_batch_status() to authenticated;
+
+create or replace function public.cancel_private_history_recovery_batch(p_batch uuid)
+returns int
+language plpgsql security definer set search_path = public as $$
+declare
+  v_n int;
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Só quem administra a plataforma cancela a recuperação em todas as conversas.' using errcode = '42501';
+  end if;
+  update public.private_history_requests
+     set status = 'cancelled', finished_at = now(), updated_at = now(), note = coalesce(note, 'Cancelado por um administrador.')
+   where batch_id = p_batch and company_id = public.current_company_id() and status in ('pending', 'running');
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+revoke all on function public.cancel_private_history_recovery_batch(uuid) from public, anon;
+grant execute on function public.cancel_private_history_recovery_batch(uuid) to authenticated;
+$mig0191$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -26554,6 +26666,7 @@ from (values
   (179, 'Painel de privadas: do último cliente que escreveu para o primeiro (0188)', coalesce(pg_get_functiondef('public.private_panel()'::regprocedure) like '%last_client_message_at%', false)),
   (180, 'Situação das notificações dos usuários, só administrador geral (0189)', to_regprocedure('public.platform_notification_status()') is not null),
   (181, 'Contato enviado pela conversa privada sem assinatura, chega com o telefone (0190)', coalesce(pg_get_functiondef('public.private_outgoing_sign()'::regprocedure) like '%''contact''%', false)),
-  (182, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (182, 'Recuperar mensagens de todas as conversas privadas (0191)', to_regprocedure('public.request_private_history_recovery_all(integer,boolean)') is not null),
+  (183, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
