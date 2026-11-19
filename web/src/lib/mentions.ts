@@ -25,7 +25,7 @@ const strip = (value: string) =>
     .toLowerCase();
 
 /** Só o que vem antes do "@" no identificador (o número ou o LID). */
-export const mentionDigits = (jid: string) => jid.split('@')[0].split(':')[0];
+const mentionDigits = (jid: string) => jid.split('@')[0].split(':')[0];
 
 /** Nome mostrado na lista e no texto: o nome do participante, ou o telefone, ou o número do identificador. */
 export function mentionLabel(m: MentionMember): string {

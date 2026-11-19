@@ -1,5 +1,5 @@
 /** Categorias do log de atividades (nome e cor), usadas no Log e nas atividades de um usuário (Acompanhamento). */
-export type ActivityTone = 'neutral' | 'brand' | 'good' | 'warning' | 'critical';
+type ActivityTone = 'neutral' | 'brand' | 'good' | 'warning' | 'critical';
 
 export const ACTIVITY_CATEGORIES: Record<string, { label: string; tone: ActivityTone }> = {
   acesso: { label: 'Acesso', tone: 'neutral' },

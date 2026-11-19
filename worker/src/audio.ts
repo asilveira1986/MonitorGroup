@@ -6,7 +6,7 @@ import { logger } from './logger.js';
  * (OGG/Opus mono), que toca no Android e no iPhone. Sem o ffmpeg instalado, devolve null
  * e o áudio vai como veio.
  */
-export function toVoiceNote(input: Buffer): Promise<Buffer | null> {
+function toVoiceNote(input: Buffer): Promise<Buffer | null> {
   return new Promise((resolve) => {
     let done = false;
     const finish = (out: Buffer | null) => {

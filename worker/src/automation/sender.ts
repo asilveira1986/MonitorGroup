@@ -1,6 +1,6 @@
 import type { SockLike } from './types.js';
 
-export type SendRequest = {
+type SendRequest = {
   instanceId: string;
   jid: string;
   text: string;

@@ -19,7 +19,7 @@ import { findKeyword } from './text.js';
  * Os eventos são gravados mesmo com os indicadores desligados: ao religar, o histórico está completo.
  */
 
-export type DemandMessage = {
+type DemandMessage = {
   companyId: string;
   groupId: string;
   groupName: string;
@@ -46,7 +46,7 @@ type Demand = {
 };
 
 // ordem importa: a primeira categoria que casar vence (a mais genérica fica por último)
-export const DEFAULT_CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   { name: 'Financeiro', keywords: ['boleto', 'nota fiscal', 'pagamento', 'fatura', 'cobrança', 'pix', 'reembolso'] },
   { name: 'Erro', keywords: ['erro', 'não funciona', 'bug', 'travou', 'problema', 'parou', 'falha'] },
   { name: 'Dúvida', keywords: ['dúvida', 'como faço', 'como funciona', 'pergunta', 'saber se'] },
@@ -89,7 +89,7 @@ async function loadParams(companyId: string): Promise<Params> {
   return value;
 }
 
-export function classifyCategory(text: string | null, categories: Params['categories']): string | null {
+function classifyCategory(text: string | null, categories: Params['categories']): string | null {
   for (const c of categories) if (findKeyword(text, c.keywords)) return c.name;
   return null;
 }

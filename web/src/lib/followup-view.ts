@@ -17,7 +17,7 @@ export type FollowupInfo = {
   followup_dismissed_by?: string | null;
 };
 
-export type FollowupBadge = {
+type FollowupBadge = {
   side: 'company' | 'client';
   /** "Pendente empresa" / "Pendente cliente" */
   label: string;

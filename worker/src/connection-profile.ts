@@ -1,6 +1,6 @@
 import type { AuthenticationCreds } from 'baileys';
 
-export type ConnectionProfile = 'desktop' | 'chrome';
+type ConnectionProfile = 'desktop' | 'chrome';
 /** perfil de conexão usado no pareamento, guardado junto da sessão (reconexões usam o mesmo) */
 export type MonitorCreds = AuthenticationCreds & { monitorProfile?: ConnectionProfile };
 

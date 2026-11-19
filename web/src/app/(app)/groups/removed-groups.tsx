@@ -12,7 +12,7 @@ import { deleteRemovedGroups } from '../actions';
 
 export type RemovedGroup = Group & { message_count: number };
 
-export const CONFIRM_DELETE =
+const CONFIRM_DELETE =
   'Excluir definitivamente {n}?\n\nTodas as mensagens, métricas e alertas serão apagados. Esta ação não pode ser desfeita.';
 
 /** Grupos que saíram do WhatsApp: acompanhamento e exclusão definitiva. */

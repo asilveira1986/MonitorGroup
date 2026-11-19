@@ -4,7 +4,7 @@
  */
 export type SettingsCheck = 'whatsapp' | 'users' | 'team' | 'sectors' | 'quickReplies' | 'alertRules';
 
-export type SettingsItem = {
+type SettingsItem = {
   href: string;
   label: string;
   description: string;

@@ -66,7 +66,7 @@ export function extractContent(message: proto.IMessage | null | undefined): { ty
   return { type: TYPE_LABELS[type] ?? type.replace(/Message$/, ''), body: body || null };
 }
 
-export type ContactCard = { name: string | null; phone: string };
+type ContactCard = { name: string | null; phone: string };
 
 /** Telefone e nome de um cartão de contato (vCard): o `waid` do WhatsApp, ou o primeiro TEL. */
 function parseVCard(vcard: string | null | undefined, displayName: string | null | undefined): ContactCard | null {

@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { formatPhone } from '@/lib/format';
 import { startPrivateChat } from '@/app/(app)/private/actions';
 
-export type ContactCard = { name: string | null; phone: string };
+type ContactCard = { name: string | null; phone: string };
 
 /**
  * Contatos compartilhados numa mensagem (grupo ou privado): clicar abre (ou acha) a conversa

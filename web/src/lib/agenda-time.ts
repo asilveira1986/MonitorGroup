@@ -40,6 +40,7 @@ export function endFor(start: string, minutes: number): string {
 }
 
 /** Duração entre dois horários do mesmo dia, em minutos (null se não houver término válido). */
+// NOTA: usada apenas nos testes; mantida de propósito.
 export function durationMinutes(start: string, end: string): number | null {
   const s = toMinutes(start);
   const e = toMinutes(end);

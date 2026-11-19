@@ -6,7 +6,7 @@ import { validateGroupIds, type Validation } from './automation-rules.ts';
 
 export type ClosingOptionValue = { label: string; reply: string; reopen: boolean; notify: boolean };
 
-export type ClosingFlowValues = {
+type ClosingFlowValues = {
   name: string;
   enabled: boolean;
   question: string;
@@ -25,8 +25,8 @@ const MENTION = /^\d{8,15}@(s\.whatsapp\.net|lid)$/;
 export const MIN_OPTIONS = 2;
 // o WhatsApp aceita até 12 opções numa enquete; 6 já é muito para uma pesquisa de encerramento
 export const MAX_OPTIONS = 6;
-export const MAX_LABEL = 100;
-export const MAX_REPLY = 1000;
+const MAX_LABEL = 100;
+const MAX_REPLY = 1000;
 
 /** Opção em branco que o formulário usa ao adicionar uma nova linha. */
 export const emptyOption = (): ClosingOptionValue => ({ label: '', reply: '', reopen: false, notify: false });

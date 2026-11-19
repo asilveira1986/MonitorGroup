@@ -11,7 +11,7 @@ export type BroadcastSettings = {
   dailyLimit: number;
 };
 
-export type CampaignMedia = {
+type CampaignMedia = {
   path: string;
   type: 'image' | 'video' | 'document' | 'audio';
   mime: string;

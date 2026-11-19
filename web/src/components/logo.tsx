@@ -7,7 +7,7 @@ import { cn } from '@/lib/format';
  * no fundo claro, no escuro e no menu lateral (deep) sem trocar de arquivo.
  * Abaixo de 20px o ponto de alerta sai, como pede o guia da marca.
  */
-export function LogoMark({ size = 36, className, alertDot = size >= 20 }: { size?: number; className?: string; alertDot?: boolean }) {
+function LogoMark({ size = 36, className, alertDot = size >= 20 }: { size?: number; className?: string; alertDot?: boolean }) {
   return (
     <svg viewBox="0 0 64 64" width={size} height={size} className={cn('shrink-0', className)} role="img" aria-label="Monitor Group">
       <path fill="#C6F432" d="M20 6h24a14 14 0 0 1 14 14v18a14 14 0 0 1-14 14H25l-11 8v-9.2A14 14 0 0 1 6 38V20A14 14 0 0 1 20 6z" />

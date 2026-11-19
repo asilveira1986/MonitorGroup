@@ -6,7 +6,7 @@
 export type AgendaPerson = { id: string; name: string; member_ids?: string[] };
 export type AgendaTeamRef = { id: string; name: string; userIds: string[] };
 
-export type AgendaFilterState = {
+type AgendaFilterState = {
   /** usuários escolhidos (válidos) */
   selectedUsers: string[];
   /** setores escolhidos (válidos) */

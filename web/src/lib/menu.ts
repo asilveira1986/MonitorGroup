@@ -21,6 +21,7 @@ export const MENU_ITEMS = [
   { href: '/settings', label: 'Configurações', description: 'Configurações do sistema.', alwaysForAdmins: true },
 ] as const;
 
+// NOTA: sem uso no momento; mantida de propósito.
 export type MenuHref = (typeof MENU_ITEMS)[number]['href'];
 
 /** Acesso configurado de um item (sem valor = todos). */

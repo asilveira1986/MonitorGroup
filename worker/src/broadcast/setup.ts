@@ -11,7 +11,7 @@ import { isOptOutText } from './service.js';
 import { createSupabaseBroadcastStore } from './store.js';
 import type { BroadcastSock } from './types.js';
 
-export type WorkerBroadcast = BroadcastService & {
+type WorkerBroadcast = BroadcastService & {
   isBotMessage(id: string | null | undefined): boolean;
   handleIncoming(info: { instanceId: string; jid: string; alt: string | null; name: string | null; text: string | null }): Promise<void>;
   /** recibo do WhatsApp de uma mensagem do número conectado (3 entregue, 4 lida) */

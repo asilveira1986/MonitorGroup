@@ -49,6 +49,7 @@ const KINDS = {
     hint: '{prazo} é a data de entrega, ou “a definir”.',
   },
 } as const;
+// NOTA: sem uso no momento; mantida de propósito.
 export type NoticeKind = keyof typeof KINDS;
 
 const SAMPLE: Record<string, string> = {

@@ -15,7 +15,7 @@ import { useRealtime } from '@/lib/use-realtime';
 import { renderTemplate, sampleValues, speak, spokenDuration, templateFor, type VoiceOptions } from '@/lib/voice';
 
 /** Configuração dos alertas em tela (Configurações › Avisos), igual para todos. */
-export type AlertConfig = {
+type AlertConfig = {
   /** mostra o aviso de nova mensagem */
   enabled: boolean;
   /** mostra também os alertas do sistema e o aviso de SLA excedido */

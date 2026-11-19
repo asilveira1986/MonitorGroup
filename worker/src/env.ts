@@ -7,7 +7,7 @@ function required(name: string): string {
 }
 
 /** Aceita a URL do painel, com /rest/v1, sem https:// ou entre aspas. */
-export function normalizeSupabaseUrl(raw: string): string {
+function normalizeSupabaseUrl(raw: string): string {
   let value = raw.trim().replace(/^['"]|['"]$/g, '').trim();
   const dashboard = value.match(/supabase\.com\/dashboard\/project\/([a-z0-9]+)/i);
   if (dashboard) return `https://${dashboard[1].toLowerCase()}.supabase.co`;

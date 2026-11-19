@@ -78,7 +78,7 @@ export type HeatmapData = {
   by_day?: { label: string; value: number }[];
   business?: { start_hour: number; end_hour: number; days: number[] };
 };
-export type ErrorData = { visual: 'error'; message: string };
+type ErrorData = { visual: 'error'; message: string };
 export type IndicatorData = KpiData | TableData | SeriesData | HeatmapData | ErrorData;
 
 export type IndicatorValue = {

@@ -17,7 +17,7 @@ import {
 } from '@/lib/voice';
 import { saveVoiceSettings } from '@/app/(app)/settings/actions/alerts';
 
-export type VoiceSettingsValue = {
+type VoiceSettingsValue = {
   voice: boolean;
   messages: boolean;
   sla: boolean;

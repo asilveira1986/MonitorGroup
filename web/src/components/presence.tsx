@@ -53,7 +53,7 @@ export function PresenceProvider({ companyId, userId, children }: { companyId: s
   return <OnlineContext.Provider value={online}>{children}</OnlineContext.Provider>;
 }
 
-export const useOnline = () => useContext(OnlineContext);
+const useOnline = () => useContext(OnlineContext);
 
 /** Bolinha verde na foto de quem está online (o pai precisa ser "relative"). */
 export function OnlineDot({ userId, className }: { userId: string | null | undefined; className?: string }) {

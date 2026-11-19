@@ -9,7 +9,7 @@ import type { BlockConfig, IndicatorConfig, ParamField } from '@/lib/indicators'
 import { saveBusinessHours } from '@/app/(app)/settings/actions/company';
 import { resetIndicators, setIndicatorBlockEnabled, updateIndicator } from '@/app/(app)/settings/actions/indicators';
 
-export type BusinessHours = { days: number[]; start: string; end: string; holidays: number };
+type BusinessHours = { days: number[]; start: string; end: string; holidays: number };
 
 const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 

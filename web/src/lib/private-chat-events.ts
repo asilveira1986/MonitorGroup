@@ -1,5 +1,5 @@
 /** Histórico do atendimento de uma conversa privada (0164): assumiu, transferiu, liberou, finalizou. */
-export type PrivateChatEventType = 'assigned' | 'released' | 'transferred' | 'finished';
+type PrivateChatEventType = 'assigned' | 'released' | 'transferred' | 'finished';
 
 export type PrivateChatEvent = {
   id: string;

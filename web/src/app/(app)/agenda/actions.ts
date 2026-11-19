@@ -7,7 +7,7 @@ import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
 
-export type AgendaEventInput = {
+type AgendaEventInput = {
   /** participantes (usuários); vazio = só quem criou */
   people: string[];
   title: string;
