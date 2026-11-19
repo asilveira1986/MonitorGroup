@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge, Button } from '@/components/ui';
 import { cn, formatDateTime } from '@/lib/format';
-import { DAY_OPTIONS, DEFAULT_DAYS, isOpen, STATUS_LABEL, summary } from '@/lib/history-recovery';
+import { ago, DAY_OPTIONS, DEFAULT_DAYS, isOpen, queueHints, STALLED_RUNNING_MS, STATUS_LABEL, summary, type QueueInfo } from '@/lib/history-recovery';
 import { diagnose, recoveryLimitText, type ReceiveDiagnosis } from '@/lib/receive-diagnosis';
 import { cancelHistoryRecovery, groupReceiveDiagnosis, latestHistoryRecovery, startHistoryRecovery, syncGroupCopies, type HistoryRequestView } from '../history-actions';
 
@@ -24,7 +24,10 @@ export function HistoryRecoveryPanel({
   diagnosis,
   diagnosedAt = 0,
   kind = 'group',
+  queue = null,
 }: {
+  /** por que o pedido na fila ainda não começou (conversas privadas): conexão do número, sinal do worker, pedidos à frente */
+  queue?: QueueInfo | null;
   /** onde se recupera: o texto muda (grupo ou conversa privada) */
   kind?: 'group' | 'private';
   request: HistoryRequestView | null;
@@ -43,6 +46,17 @@ export function HistoryRecoveryPanel({
   timeZone?: string;
 }) {
   const fmt = (iso: string) => formatDateTime(iso, timeZone);
+  // relógio da janela: atualiza "há X s" enquanto o pedido está na fila ou rodando
+  const [now, setNow] = useState(() => Date.now());
+  const waiting = request ? isOpen(request.status) : false;
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(timer);
+  }, [waiting, request?.updatedAt, request?.status]);
+  const hints = request?.status === 'pending' ? queueHints(queue, now) : [];
+  const lastSignal = request?.status === 'running' ? ago(request.updatedAt, now) : null;
+  const stalled = request?.status === 'running' && request.updatedAt ? now - new Date(request.updatedAt).getTime() > STALLED_RUNNING_MS : false;
   const findings = diagnosis ? diagnose(diagnosis, diagnosedAt, fmt) : [];
   const open = request ? isOpen(request.status) : false;
   const tone = !request ? 'neutral' : request.status === 'done' ? 'good' : request.status === 'failed' ? 'critical' : request.status === 'cancelled' ? 'neutral' : 'warning';
@@ -95,6 +109,18 @@ export function HistoryRecoveryPanel({
               <p className="tabular text-ink">{summary({ added: request.added, found: request.found, requests: request.requests })}</p>
               {request.oldestAt && <p className="text-muted">Chegou até {formatDateTime(request.oldestAt, timeZone)}</p>}
               {request.note && <p className="text-ink-2">{request.note}</p>}
+              {hints.map((h, i) => (
+                <p key={i} className="flex gap-1.5">
+                  <span className={cn('mt-1 h-2 w-2 shrink-0 rounded-full', h.tone === 'good' ? 'bg-good' : 'bg-warning')} aria-hidden />
+                  <span className={h.tone === 'warning' ? 'text-warning-ink' : 'text-ink-2'}>{h.text}</span>
+                </p>
+              ))}
+              {lastSignal && (
+                <p className={stalled ? 'text-warning-ink' : 'text-muted'}>
+                  Último sinal do worker {lastSignal}
+                  {stalled ? ': sem andamento há alguns minutos, o celular pode não estar respondendo. Dá para cancelar e pedir de novo.' : '.'}
+                </p>
+              )}
               {open && (
                 <Button size="sm" variant="secondary" onClick={onCancel} disabled={busy}>
                   Cancelar

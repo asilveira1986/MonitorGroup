@@ -79,3 +79,49 @@ export function parseBatchStatus(raw: unknown): BatchStatus | null {
     failedNotes: notes.map((x) => ({ note: typeof x.note === 'string' ? x.note : null, n: n(x.n) })),
   };
 }
+
+/** Situação da fila de um pedido (para explicar por que ainda não começou): o número, o último sinal do worker e quantos pedidos vêm antes. */
+export type QueueInfo = {
+  instanceName: string | null;
+  instanceStatus: string | null;
+  /** último sinal do worker nesta conexão (heartbeat de 1 minuto) */
+  instanceSeenAt: string | null;
+  /** pedidos abertos (grupos e conversas) criados antes deste */
+  ahead: number;
+};
+
+/** Sem sinal do worker há mais que isto (o heartbeat é de 1 minuto): ele pode estar parado ou reiniciando. */
+const STALE_WORKER_MS = 3 * 60_000;
+
+/** "há 12 s", "há 3 min", "há 2 h" */
+export function ago(iso: string | null | undefined, nowMs: number): string | null {
+  const t = iso ? new Date(iso).getTime() : NaN;
+  if (!Number.isFinite(t)) return null;
+  const s = Math.max(0, Math.round((nowMs - t) / 1000));
+  if (s < 60) return `há ${s} s`;
+  if (s < 3600) return `há ${Math.round(s / 60)} min`;
+  return `há ${Math.round(s / 3600)} h`;
+}
+
+/** Linhas que explicam o que está acontecendo com um pedido na fila (tone: good = tudo certo, warning = precisa de atenção). */
+export function queueHints(q: QueueInfo | null | undefined, nowMs: number): { tone: 'good' | 'warning'; text: string }[] {
+  if (!q) return [];
+  const out: { tone: 'good' | 'warning'; text: string }[] = [];
+  const name = q.instanceName ? ` (${q.instanceName})` : '';
+  if (q.instanceStatus !== 'connected') {
+    out.push({ tone: 'warning', text: `O número conectado${name} está desconectado. Reconecte em Configurações › WhatsApp; o pedido segue sozinho.` });
+    return out;
+  }
+  const seen = q.instanceSeenAt ? new Date(q.instanceSeenAt).getTime() : NaN;
+  if (!Number.isFinite(seen) || nowMs - seen > STALE_WORKER_MS) {
+    out.push({ tone: 'warning', text: `Sem sinal do worker ${ago(q.instanceSeenAt, nowMs) ?? 'recente'}: ele pode estar parado ou reiniciando. Confira o serviço do worker.` });
+  } else {
+    out.push({ tone: 'good', text: `Número conectado${name}; último sinal do worker ${ago(q.instanceSeenAt, nowMs)}.` });
+  }
+  if (q.ahead > 0) out.push({ tone: 'good', text: `${q.ahead} pedido(s) na frente na fila (o worker faz um de cada vez, os grupos antes das conversas privadas).` });
+  else out.push({ tone: 'good', text: 'O worker deve assumir o pedido em até 30 segundos.' });
+  return out;
+}
+
+/** Pedido em andamento sem nenhum sinal novo do worker há mais que isto: provavelmente parado. */
+export const STALLED_RUNNING_MS = 3 * 60_000;

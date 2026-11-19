@@ -265,9 +265,8 @@ export class WhatsAppManager {
       for (const s of this.sessions.values()) void this.recoverUnknownSenders(s);
     }, RECOVER_SENDERS_MS);
     // recuperação de mensagens antigas pedida no painel (0161, experimental)
-    setInterval(() => void this.processRecoveries(), RECOVERY_POLL_MS);
-    // idem nas conversas privadas (0178, só pedida pelo administrador geral)
-    setInterval(() => void this.processPrivateRecoveries(), RECOVERY_POLL_MS);
+    // e nas conversas privadas (0178, só pedida pelo administrador geral): uma fila só, os grupos primeiro
+    setInterval(() => void this.processRecoveryQueues(), RECOVERY_POLL_MS);
     // cópias do mesmo grupo em números diferentes ficam com a mesma conversa (0166): ao iniciar, os últimos 30 dias;
     // depois, de minuto em minuto, as últimas 6 horas
     setTimeout(() => void this.syncGroupCopies(24 * 30), 60_000);
@@ -1638,10 +1637,25 @@ export class WhatsAppManager {
   /** conexão -> até quando não insistir (o celular não respondeu ao último pedido) */
   private recoveryMuted = new Map<string, number>();
 
-  /** Pedidos de recuperação do painel: um de cada vez, na conexão do grupo. Sem o script 0161, não faz nada. */
-  private async processRecoveries() {
+  /**
+   * Os pedidos de recuperação dos grupos e das conversas privadas dividem o celular (um pedido por vez). Antes cada fila tinha
+   * o seu temporizador e a mesma trava: os dois disparavam juntos, a dos grupos pegava a trava e a das conversas privadas
+   * encontrava "ocupado" e desistia, todo ciclo, então os pedidos das privadas ficavam "Na fila" para sempre. Agora uma
+   * rotina só: primeiro os grupos, depois as conversas privadas.
+   */
+  private async processRecoveryQueues() {
     if (this.recoveryBusy) return;
     this.recoveryBusy = true;
+    try {
+      await this.processRecoveries();
+      await this.processPrivateRecoveries();
+    } finally {
+      this.recoveryBusy = false;
+    }
+  }
+
+  /** Pedidos de recuperação dos grupos: um de cada vez, na conexão do grupo. Sem o script 0161, não faz nada. */
+  private async processRecoveries() {
     try {
       const now = new Date();
       // interrompidos (o worker reiniciou no meio): encerra com o motivo
@@ -1694,8 +1708,6 @@ export class WhatsAppManager {
       }
     } catch (err) {
       logger.warn({ err }, 'falha ao processar a recuperação de mensagens antigas');
-    } finally {
-      this.recoveryBusy = false;
     }
   }
 
@@ -1703,9 +1715,7 @@ export class WhatsAppManager {
   private privateRecoveryError: string | null = null;
 
   private async processPrivateRecoveries() {
-    // a mesma fila de histórico dos grupos: um pedido ao celular por vez na conexão
-    if (this.recoveryBusy) return;
-    this.recoveryBusy = true;
+    // roda depois dos grupos, na mesma rotina (processRecoveryQueues): um pedido ao celular por vez na conexão
     try {
       const now = new Date();
       await db
@@ -1757,8 +1767,6 @@ export class WhatsAppManager {
       }
     } catch (err) {
       logger.warn({ err }, 'falha ao processar a recuperação de mensagens das conversas privadas');
-    } finally {
-      this.recoveryBusy = false;
     }
   }
 

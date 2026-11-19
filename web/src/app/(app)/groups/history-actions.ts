@@ -19,6 +19,8 @@ export type HistoryRequestView = {
   note: string | null;
   createdAt: string;
   finishedAt: string | null;
+  /** último sinal do worker neste pedido (só nas conversas privadas) */
+  updatedAt?: string | null;
 };
 
 type Row = {
