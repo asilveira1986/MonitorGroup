@@ -2,8 +2,12 @@ import { AlertOctagon, AlertTriangle, Info } from 'lucide-react';
 import type { ButtonHTMLAttributes, ComponentProps, ReactNode, SelectHTMLAttributes } from 'react';
 import { cn, SEVERITY_LABEL } from '@/lib/format';
 
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn('card-elev rounded-2xl border border-line/80 bg-surface', className)}>{children}</div>;
+export function Card({ className, children, dropZone }: { className?: string; children: ReactNode; /** área onde dá para soltar arquivos (use-file-drop.ts) */ dropZone?: boolean }) {
+  return (
+    <div className={cn('card-elev rounded-2xl border border-line/80 bg-surface', className)} data-drop-zone={dropZone ? '' : undefined}>
+      {children}
+    </div>
+  );
 }
 
 export function CardHeader({

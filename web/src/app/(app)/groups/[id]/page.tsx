@@ -314,7 +314,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<'/gr
           </div>
         </div>
 
-        <Card className="order-1 min-w-0 lg:order-2 lg:flex lg:h-full lg:min-h-0 lg:flex-col">
+        <Card dropZone className="order-1 min-w-0 lg:order-2 lg:flex lg:h-full lg:min-h-0 lg:flex-col">
           <CardHeader
             title="Conversa"
             description="Role para cima para ver as anteriores · azul = cliente, verde = equipe"

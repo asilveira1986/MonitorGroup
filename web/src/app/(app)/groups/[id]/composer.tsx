@@ -20,6 +20,7 @@ import type { Message, OutgoingMessage } from '@/lib/types';
 import { StickerButton } from './sticker-picker';
 import { discardGroupMessage, prepareGroupAudioUpload, prepareGroupUpload, retryGroupMessage, sendGroupContact, sendGroupMessage, type GroupFile } from '../../actions';
 import { AttachMenu, type ContactToSend } from '@/components/attach-menu';
+import { useFileDrop } from '@/lib/use-file-drop';
 
 export type ReplyConfig = {
   enabled: boolean;
@@ -87,6 +88,8 @@ export function Composer({
       return next.slice(0, MAX_FILES);
     });
   };
+  // soltar arquivos em qualquer lugar da conversa (o cartão com data-drop-zone), não só no campo de mensagem
+  useFileDrop(() => ref.current?.closest<HTMLElement>('[data-drop-zone]'), addFiles, config.enabled);
   const closingShortcut = config.closingShortcut || 'fechamento';
   const quick = useMemo(() => config.quickReplies ?? [], [config.quickReplies]);
   const options = useMemo(() => (trigger ? matchQuickReplies(quick, trigger.query) : []), [quick, trigger]);
@@ -315,14 +318,7 @@ export function Composer({
           </button>
         </div>
       )}
-      <div
-        className="relative flex items-end gap-2"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          addFiles(e.dataTransfer.files);
-        }}
-      >
+      <div className="relative flex items-end gap-2">
         {mentionOpen && mentionOptions.length > 0 && (
           <div
             className="absolute bottom-full left-0 right-14 z-20 mb-2 overflow-hidden rounded-xl border border-line bg-surface shadow-lg"

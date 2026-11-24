@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client';
 import { ChatSearch, type SearchHit } from '@/components/chat-search';
 import { snippet } from '@/lib/message-search';
 import { CLOSED_DEFAULT_DAYS, CLOSED_MAX, CLOSED_PERIODS, closedSince } from '@/lib/private-closed';
+import { useFileDrop } from '@/lib/use-file-drop';
 import { useRealtime } from '@/lib/use-realtime';
 import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
 import { Avatar } from '@/components/avatar';
@@ -504,10 +505,13 @@ function ChatView({
   }, [messages, events, hasOlder]);
   // quem perdeu a conversa no "Liberar" só responde depois de assumir de novo (0164)
   const releasedFromMe = !chat.assigned_to && !chat.closed_at && chat.released_from === viewer.me;
+  // soltar arquivos em qualquer lugar da conversa; desligado quando não dá para responder (conversa liberada para outro atendimento)
+  const dropZone = useRef<HTMLDivElement>(null);
+  useFileDrop(() => dropZone.current, addFiles, !releasedFromMe);
   const [assuming, startAssume] = useTransition();
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={dropZone} data-drop-zone className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-3">
         <button type="button" onClick={onBack} className="rounded-lg p-1 text-ink-2 hover:bg-surface-2 md:hidden" aria-label="Voltar para a lista">
           <ArrowLeft className="h-5 w-5" />
@@ -794,11 +798,6 @@ function ChatView({
         onSubmit={(e) => {
           e.preventDefault();
           send();
-        }}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          addFiles(e.dataTransfer.files);
         }}
       >
         {!recording && (
