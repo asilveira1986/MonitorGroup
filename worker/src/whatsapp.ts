@@ -45,7 +45,8 @@ import { DEFAULT_COMMITMENT_VERBS } from './commitment.js';
 const MAX_QR_ATTEMPTS = 6; // ~2 minutos esperando a leitura do QR code
 /** respostas do painel que não saíram neste prazo (WhatsApp desconectado) falham em vez de sair atrasadas */
 const OUTBOX_EXPIRE_MS = 10 * 60_000;
-const POLL_MS = 3_000;
+/** de quanto em quanto tempo o worker confere o que o painel pediu (conectar, enviar, editar...): é o atraso máximo até a mensagem sair */
+const POLL_MS = 1_000;
 const HEARTBEAT_MS = 60_000;
 const RECOVERY_POLL_MS = 30_000;
 /** sincronização das cópias do mesmo grupo em números diferentes (0166) */
@@ -612,7 +613,12 @@ export class WhatsAppManager {
   }
 
   /** Atende os comandos enviados pelo painel (conectar / desconectar). */
+  private polling = false;
+
   private async poll() {
+    // com o ciclo de 1 s, um ciclo lento (envio, banco) não pode se sobrepor ao seguinte
+    if (this.polling) return;
+    this.polling = true;
     try {
       const rows = (check(
         await db.from('whatsapp_instances').select('id, requested_action, company_id, status'),
@@ -670,6 +676,8 @@ export class WhatsAppManager {
       await this.processOutbox();
     } catch (err) {
       logger.error({ err }, 'erro ao verificar comandos do painel');
+    } finally {
+      this.polling = false;
     }
   }
 
