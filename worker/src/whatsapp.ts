@@ -2508,18 +2508,24 @@ export class WhatsAppManager {
         .update({ status: 'sending' })
         .eq('id', id)
         .eq('status', 'pending')
-        .select('*, private_chats!inner(id, jid)')
+        .select('*, private_chats!inner(id, jid, last_message_at)')
         .maybeSingle();
       if (!row) continue;
-      const chat = (row as unknown as { private_chats: { id: string; jid: string } }).private_chats;
+      const chat = (row as unknown as { private_chats: { id: string; jid: string; last_message_at: string | null } }).private_chats;
       const waId = generateMessageIDV2(me);
+      // tempos de cada etapa (ms), para o log mostrar onde o envio demora: espera na fila, conferência do número, envio, gravação
+      const t0 = Date.now();
+      const waited = t0 - new Date(row.created_at as string).getTime();
       try {
         let to = chat.jid;
-        if (to.endsWith('@s.whatsapp.net')) {
+        // só confere se o número tem WhatsApp quando a conversa ainda não tem nenhuma mensagem (número novo digitado no painel):
+        // com histórico, o número já se provou válido, e a consulta ao WhatsApp a cada envio era a etapa mais lenta
+        if (to.endsWith('@s.whatsapp.net') && !chat.last_message_at) {
           const [found] = (await session.sock.onWhatsApp(to.split('@')[0])) ?? [];
           if (!found?.exists) throw new Error('Este número não tem WhatsApp.');
           to = jidNormalizedUser(found.jid);
         }
+        const tChecked = Date.now();
         const { data: who } = await db.from('profiles').select('full_name, email').eq('id', row.created_by ?? '').maybeSingle();
         session.outbox.set(waId, (who?.full_name as string) || (who?.email as string) || 'Painel');
         // resposta citando uma mensagem (0071)
@@ -2572,6 +2578,7 @@ export class WhatsAppManager {
         } else {
           await session.sock.sendMessage(to, { text: outText as string, ...(contextInfo ? { contextInfo } : {}) }, { messageId: waId, quoted });
         }
+        const tSent = Date.now();
         const now = new Date().toISOString();
         await db.from('private_outgoing').update({ status: 'sent', wa_message_id: waId, sent_at: now, error: null }).eq('id', id);
         // grava já (o eco do WhatsApp com o mesmo id é ignorado)
@@ -2615,6 +2622,10 @@ export class WhatsAppManager {
           if (sentSeconds) await db.from('private_messages').update({ media_seconds: Math.round(sentSeconds) }).eq('id', sentId);
         }
         setTimeout(() => session.outbox.delete(waId), 10 * 60_000);
+        logger.info(
+          { id, ms: { fila: waited, conferirNumero: tChecked - t0, prepararEEnviar: tSent - tChecked, gravar: Date.now() - tSent, total: Date.now() - t0 + waited } },
+          'mensagem privada enviada',
+        );
       } catch (err) {
         session.outbox.delete(waId);
         logger.warn({ err, id }, 'falha ao enviar mensagem privada');
