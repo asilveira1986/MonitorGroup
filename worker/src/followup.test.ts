@@ -388,3 +388,44 @@ test('chamou pelo nome: a equipe falando encerra a conversa lateral; sem nome, o
   );
   assert.equal(namedRun([client('Boa tarde! Preciso do extrato da C-', 0, from(AMANA))]).status, 'company');
 });
+
+// anexo do cliente sem texto, confirmado por ele logo em seguida ("Tudo certo"), depois da equipe: não pede nada
+const img = (min: number, extra: Partial<FollowupMessage> = {}) => client('', min, { type: 'image', body: null, ...extra });
+const ack = (body: string, min: number, extra: Partial<FollowupMessage> = {}) => client(body, min, { opensPending: false, ...extra });
+
+test('print/anexo do cliente seguido de "Tudo certo", depois da equipe: não é pendência da empresa', () => {
+  const photo = img(6);
+  const r = run([team('Recebemos aqui, já ajustado no sistema.', 0), photo, ack('Tudo certo', 6)]);
+  assert.equal(r.status, 'resolved');
+  assert.deepEqual(r.heldIds, [photo.id], 'o anexo também sai do "aguardando resposta"');
+  // vários anexos antes da confirmação
+  const a = img(6);
+  const b = img(6);
+  const many = run([team('Pronto, enviado.', 0), a, b, ack('Ok, obrigado', 7)]);
+  assert.equal(many.status, 'resolved');
+  assert.deepEqual(many.heldIds, [a.id, b.id]);
+});
+
+test('anexo do cliente sem a confirmação, ou com outra coisa escrita, continua pendente', () => {
+  // ainda sem confirmação
+  assert.equal(run([team('Recebemos aqui, já ajustado no sistema.', 0), img(6)]).status, 'company');
+  // a "confirmação" traz pedido ou pergunta
+  assert.equal(run([team('Recebemos aqui.', 0), img(6), client('Tudo certo, mas e o prazo?', 6)]).status, 'company');
+  // a confirmação veio tarde demais (mais de 10 minutos depois)
+  assert.equal(run([team('Recebemos aqui.', 0), img(6), ack('Tudo certo', 40)]).status, 'company');
+  // o anexo tem legenda: o cliente escreveu algo
+  assert.equal(run([team('Recebemos aqui.', 0), client('Segue o comprovante', 6, { type: 'image' }), ack('Tudo certo', 6)]).status, 'company');
+});
+
+test('anexo + "Tudo certo" sem a equipe antes, ou confirmado por outra pessoa: continua pendente', () => {
+  // ninguém da equipe falou antes: o anexo é novo assunto
+  assert.equal(run([img(0), ack('Tudo certo', 1)]).status, 'company');
+  // a confirmação é de outra pessoa do grupo
+  assert.equal(run([team('Recebemos aqui.', 0), img(6, { sender: 'Álvaro' }), ack('Tudo certo', 6, { sender: 'Marcos' })]).status, 'company');
+});
+
+test('a equipe pediu o documento: o anexo é a entrega pedida e conta, mesmo com "Tudo certo" depois', () => {
+  const r = run([team('Favor enviar o RG e o comprovante de endereço.', 0), img(6), ack('Tudo certo', 6)]);
+  assert.equal(r.status, 'company');
+  assert.equal(r.kind, 'received');
+});
