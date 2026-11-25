@@ -47,6 +47,8 @@ const MAX_QR_ATTEMPTS = 6; // ~2 minutos esperando a leitura do QR code
 const OUTBOX_EXPIRE_MS = 10 * 60_000;
 /** de quanto em quanto tempo o worker confere o que o painel pediu (conectar, enviar, editar...): é o atraso máximo até a mensagem sair */
 const POLL_MS = 1_000;
+/** ciclo de atendimento do painel acima disto (ms) é registrado no log como lento */
+const OUTBOX_SLOW_CYCLE_MS = 2_000;
 const HEARTBEAT_MS = 60_000;
 const RECOVERY_POLL_MS = 30_000;
 /** sincronização das cópias do mesmo grupo em números diferentes (0166) */
@@ -692,9 +694,34 @@ export class WhatsAppManager {
       .eq('status', 'pending')
       .lt('created_at', new Date(Date.now() - OUTBOX_EXPIRE_MS).toISOString());
 
-    for (const session of this.sessions.values()) {
-      const me = session.sock.user?.id;
-      if (!me || session.stopped) continue;
+    // um número não espera o outro: cada conexão tem o seu socket e as suas filas, e as reservas das mensagens são atômicas.
+    // Antes era um número por vez (cada um com 5 consultas ao banco e os envios), então com vários números a mensagem de um
+    // esperava o ciclo dos outros terminar.
+    const startedAt = Date.now();
+    const ready = [...this.sessions.values()].filter((s) => s.sock.user?.id && !s.stopped);
+    const timings = await Promise.all(ready.map((session) => this.processSessionOutbox(session, session.sock.user!.id)));
+    // ciclo lento: o log mostra qual número e qual etapa demoraram, para achar a causa do atraso no envio
+    const total = Date.now() - startedAt;
+    if (total > OUTBOX_SLOW_CYCLE_MS) logger.warn({ ms: total, numeros: timings }, 'ciclo de envio do painel lento');
+  }
+
+  /** As filas de envio de um número (grupos, edições, privadas), uma etapa depois da outra; devolve o tempo de cada etapa (ms). */
+  private async processSessionOutbox(session: Session, me: string): Promise<{ instancia: string; ms: number; grupos: number; acoes: number; privadas: number; acoesPrivadas: number }> {
+    const t0 = Date.now();
+    const lap = (() => {
+      let last = t0;
+      return () => {
+        const now = Date.now();
+        const ms = now - last;
+        last = now;
+        return ms;
+      };
+    })();
+    let grupos = 0;
+    let acoes = 0;
+    let privadas = 0;
+    let acoesPrivadas = 0;
+    try {
       const { data } = await db
         .from('outgoing_messages')
         .select('id')
@@ -714,10 +741,17 @@ export class WhatsAppManager {
           .maybeSingle();
         if (claimed) await this.sendOutgoing(session, me, claimed as OutgoingRow);
       }
+      grupos = lap();
       await this.processMessageActions(session);
+      acoes = lap();
       await this.processPrivateOutbox(session, me);
+      privadas = lap();
       await this.processPrivateActions(session);
+      acoesPrivadas = lap();
+    } catch (err) {
+      logger.warn({ err, instanceId: session.instanceId }, 'falha ao atender as filas de envio do número');
     }
+    return { instancia: session.instanceId, ms: Date.now() - t0, grupos, acoes, privadas, acoesPrivadas };
   }
 
   /** Editar / apagar (para todos ou só para o número conectado), pedidos no painel. */
