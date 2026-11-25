@@ -273,6 +273,46 @@ function confirmsDelivery(type: string, body: string | null | undefined): boolea
   return words.some((w) => DELIVERED_WORDS.includes(w));
 }
 
+/** Mesmo remetente: algum identificador (telefone/LID) em comum, ou o mesmo nome quando não há identificadores. */
+const sameSender = (a: FollowupMessage, b: FollowupMessage) => {
+  if (a.senderKeys?.length && b.senderKeys?.length) return a.senderKeys.some((k) => b.senderKeys!.includes(k));
+  return Boolean(a.sender) && a.sender === b.sender;
+};
+
+/** Até quando uma confirmação ("Tudo certo", "Ok") ainda conta como parte do mesmo envio do anexo. */
+const CONFIRM_WINDOW_MS = 10 * 60_000;
+
+/**
+ * Anexo do cliente sem texto (print, foto, arquivo) logo depois da equipe, seguido só de confirmações dele ("Tudo certo",
+ * "Ok", "Obrigado"): ele só mostrou ou confirmou o que a equipe fez, não pede nada. Vale quando:
+ *  - a mensagem antes do envio é da equipe (ele está respondendo a ela);
+ *  - depois do anexo, o mesmo cliente manda só confirmações (e, no meio, outros anexos dele), em até 10 minutos, sem a equipe
+ *    nem outra pessoa falar antes;
+ *  - quem chama aqui já descartou o caso em que a equipe pediu algo ao cliente (aí o anexo é a entrega pedida).
+ * Um anexo sozinho, ainda sem a confirmação, continua pendente até ela chegar.
+ */
+function confirmedByAck(ordered: FollowupMessage[], i: number): boolean {
+  const m = ordered[i];
+  if (m.fromTeam || !FILE_TYPES.has(m.type) || (m.body ?? '').trim()) return false;
+  // o que veio antes do envio (pulando os anexos dele mesmo) é da equipe
+  let k = i - 1;
+  while (k >= 0 && !ordered[k].fromTeam && sameSender(ordered[k], m) && m.at - ordered[k].at <= CONFIRM_WINDOW_MS) k--;
+  if (k < 0 || !ordered[k].fromTeam) return false;
+  // depois: só anexos e confirmações do mesmo cliente, com pelo menos uma confirmação
+  let confirmed = false;
+  for (let j = i + 1; j < ordered.length; j++) {
+    const next = ordered[j];
+    if (next.fromTeam || !sameSender(next, m) || next.at - m.at > CONFIRM_WINDOW_MS) break;
+    if (FILE_TYPES.has(next.type) && !(next.body ?? '').trim()) continue;
+    if (!next.opensPending) {
+      confirmed = true;
+      continue;
+    }
+    return false; // escreveu outra coisa: vale como antes
+  }
+  return confirmed;
+}
+
 export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOptions): FollowupResult {
   const requestPhrases = opts.requestPhrases?.length ? opts.requestPhrases : DEFAULT_REQUEST_PHRASES;
   const deliveryPhrases = opts.deliveryPhrases?.length ? opts.deliveryPhrases : DEFAULT_DELIVERY_PHRASES;
@@ -354,6 +394,12 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
       // "obrigado" depois do retorno da equipe à promessa, ou depois de uma resposta longa (a análise entregue na
       // própria mensagem): encerrado; nos outros casos não muda nada
       if (s.kind === 'promise' && (s.teamAfterPromise || (s.msg?.body?.length ?? 0) >= LONG_REPORT)) set('resolved', 'thanked', m);
+      continue;
+    }
+    // anexo sem texto que o cliente confirma logo em seguida ("Tudo certo"), depois de uma mensagem da equipe que não lhe pediu nada:
+    // ele só mostrou/confirmou. Se a equipe pediu algo (status 'client'), o anexo é a entrega pedida e conta, abaixo.
+    if (s.status !== 'client' && confirmedByAck(ordered, i)) {
+      held.push(m.id);
       continue;
     }
     if (s.status === 'client' && (hasFile || findPhrase(text, deliveryPhrases))) {
