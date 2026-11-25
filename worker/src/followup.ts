@@ -422,15 +422,82 @@ export function buildResolver(
   return (key) => byKey.get(personKey(key)) ?? null;
 }
 
+/** Primeiro nome, sem acento e em minúsculas ("Cleber Souza ❤️" vira "cleber"); null se não houver. */
+export function firstNameOf(name: string | null | undefined): string | null {
+  const plain = (name ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  return /[a-z]{2,}/.exec(plain)?.[0] ?? null;
+}
+
+/** Saudações que podem vir antes do nome ("Boa tarde, Cleber!"). */
+const GREETING = '(?:ola|oi|opa|ei|eai|e ai|fala|salve|bom dia|boa tarde|boa noite)';
+const NOT_NAMES = new Set(['bom', 'boa', 'ola', 'oi', 'opa', 'ei', 'eai', 'fala', 'salve', 'obrigado', 'obrigada', 'valeu', 'ok', 'sim', 'nao', 'tudo', 'bem', 'certo']);
+const VOCATIVE = new RegExp(`^(?:${GREETING}[\\s,!.]*)*([a-z]{2,})(?:\\s+[a-z]{2,})?\\s*[,!:?]`);
+
+/**
+ * Nome de quem a mensagem chama logo no começo ("Boa tarde, Cleber! Tudo bem?", "Cleber, você viu?"): o primeiro nome,
+ * sem acento e em minúsculas. Só vale com pontuação logo depois do nome (ou do sobrenome), para não confundir com uma
+ * frase qualquer. null = a mensagem não chama ninguém pelo nome.
+ */
+export function addressedName(body: string | null | undefined): string | null {
+  if (!body) return null;
+  const first = body.split('\n')[0].normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
+  const name = VOCATIVE.exec(first)?.[1] ?? null;
+  // "Bom dia!", "Obrigado!", "Ok," são saudações e respostas curtas, não nomes
+  return name && !NOT_NAMES.has(name) ? name : null;
+}
+
+/** Quem é a pessoa chamada por um primeiro nome: só se for uma pessoa do grupo, que não é da equipe; null = não dá para saber. */
+type NameResolver = (firstName: string) => { person: string; team: boolean } | null;
+
+/**
+ * Reconhece quem o primeiro nome chama, a partir dos nomes dos participantes e de quem já escreveu no grupo. Na dúvida
+ * devolve null (a mensagem continua valendo como antes): o nome também é de alguém da equipe (cadastro, ou quem já
+ * respondeu como equipe), ou de mais de uma pessoa do grupo, ou de ninguém conhecido.
+ */
+export function buildNameResolver(
+  participants: { jid?: string | null; lid?: string | null; phone?: string | null; name?: string | null }[],
+  messages: FollowupMessage[],
+  resolve: PersonResolver,
+  teamNames: (string | null | undefined)[] = [],
+): NameResolver {
+  const teamFirst = new Set(
+    [...teamNames, ...messages.filter((m) => m.fromTeam).map((m) => m.sender)].map(firstNameOf).filter((n): n is string => Boolean(n)),
+  );
+  const byName = new Map<string, Set<string>>();
+  const add = (name: string | null | undefined, keys: (string | null | undefined)[]) => {
+    const n = firstNameOf(name);
+    if (!n) return;
+    for (const k of keys) {
+      const r = resolve(personKey(k));
+      if (r && !r.team) {
+        byName.set(n, (byName.get(n) ?? new Set()).add(r.person));
+        return;
+      }
+    }
+  };
+  for (const p of participants) add(p.name, [p.jid, p.lid, p.phone]);
+  for (const m of messages) if (!m.fromTeam) add(m.sender, m.senderKeys ?? []);
+  return (first) => {
+    if (teamFirst.has(first)) return null;
+    const persons = byName.get(first);
+    return persons?.size === 1 ? { person: [...persons][0], team: false } : null;
+  };
+}
+
 /**
  * Conversa entre clientes: a mensagem do cliente que marca (@) só gente do grupo que NÃO é da equipe não chama a equipe.
  * Vira uma conversa lateral entre eles, que continua enquanto a equipe não entra:
  *  - tudo o que a pessoa marcada escreve (resposta, arquivo...) fica de fora;
  *  - quem marcou, ao continuar, também, desde que não peça nada (pergunta, "preciso", "por favor"...).
+ * Também vale chamar pelo nome, sem "@" ("Boa tarde, Cleber! Tudo bem?"), se o nome é de uma única pessoa do grupo que não é da equipe.
  * A conversa lateral acaba quando a equipe fala, quando alguém marca a equipe (ou alguém não reconhecido), ou depois de
  * 3 horas / 8 mensagens sem ela continuar. Na dúvida a mensagem continua valendo como antes: nunca esconde um pedido à equipe.
  */
-export function markAddressedElsewhere(messages: FollowupMessage[], resolve: PersonResolver, opts: { windowMs?: number; windowMessages?: number } = {}): FollowupMessage[] {
+export function markAddressedElsewhere(
+  messages: FollowupMessage[],
+  resolve: PersonResolver,
+  opts: { windowMs?: number; windowMessages?: number; resolveName?: NameResolver } = {},
+): FollowupMessage[] {
   const windowMs = opts.windowMs ?? 3 * 3_600_000;
   const windowMessages = opts.windowMessages ?? 8;
   const ordered = [...messages].sort((a, b) => a.at - b.at);
@@ -453,8 +520,11 @@ export function markAddressedElsewhere(messages: FollowupMessage[], resolve: Per
     if (thread && (i - thread.index > windowMessages || m.at - thread.lastAt > windowMs)) thread = null;
     const me = personOf(m);
     const keys = m.type === 'text' ? mentionKeys(m.body) : [];
-    if (keys.length) {
-      const people = keys.map(resolve);
+    // sem "@": o cliente chamou o outro pelo nome ("Boa tarde, Cleber!"); só vale se o nome é de uma única pessoa do grupo que não é da equipe
+    const named = !keys.length && m.type === 'text' && opts.resolveName ? addressedName(m.body) : null;
+    const byName = named ? opts.resolveName!(named) : null;
+    if (keys.length || byName) {
+      const people = byName ? [byName] : keys.map(resolve);
       if (people.every((r) => r && !r.team && r.person !== me)) {
         hidden.add(m.id);
         const persons = people.map((r) => r!.person);

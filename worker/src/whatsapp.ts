@@ -39,7 +39,7 @@ import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile
 import { runHistoryRecovery, type Cursor, type Page, type RecoveryResult } from './history-recovery.js';
 import { isInformational } from './informational.js';
 import { opensPendingPrivate } from './private-pending.js';
-import { buildResolver, classifyFollowup, markAddressedElsewhere, mentionKeys, personKey, type FollowupMessage } from './followup.js';
+import { addressedName, buildNameResolver, buildResolver, classifyFollowup, markAddressedElsewhere, mentionKeys, personKey, type FollowupMessage } from './followup.js';
 import { DEFAULT_COMMITMENT_VERBS } from './commitment.js';
 
 const MAX_QR_ATTEMPTS = 6; // ~2 minutos esperando a leitura do QR code
@@ -456,20 +456,26 @@ export class WhatsAppManager {
           !(isAcknowledgement(m.message_type as string, m.body as string | null, settings.ignore_phrases) || isInformational(m.message_type as string, m.body as string | null)),
         closes: Boolean(m.closes_conversation),
       }));
-    // conversa entre clientes ("@fulano preciso do extrato" e a resposta do fulano): a equipe não foi chamada.
-    // Só consulta os participantes quando há marcação (@) em mensagem de cliente
+    // conversa entre clientes ("@fulano preciso do extrato" e a resposta do fulano, ou "Boa tarde, Cleber!"): a equipe não foi chamada.
+    // Só consulta os participantes quando há marcação (@) ou um nome chamado no começo da mensagem de um cliente
     let considered: FollowupMessage[] = messages;
-    if (messages.some((m) => !m.fromTeam && mentionKeys(m.body).length)) {
+    if (messages.some((m) => !m.fromTeam && (mentionKeys(m.body).length || addressedName(m.body)))) {
       const [{ data: people }, { data: team }] = await Promise.all([
-        db.from('group_participants').select('jid, lid, phone').eq('group_id', groupId).is('left_at', null).limit(1000),
-        db.from('team_members').select('jid, phone').eq('company_id', companyId),
+        db.from('group_participants').select('jid, lid, phone, name').eq('group_id', groupId).is('left_at', null).limit(1000),
+        db.from('team_members').select('jid, phone, name').eq('company_id', companyId),
       ]);
       // equipe: o cadastro de atendentes e quem já respondeu como equipe neste grupo
       const teamKeys = [
         ...((team ?? []) as { jid: string | null; phone: string | null }[]).flatMap((t) => [t.jid, t.phone]),
         ...messages.filter((m) => m.fromTeam).flatMap((m) => m.senderKeys ?? []),
       ].filter((k): k is string => Boolean(k));
-      if (people?.length) considered = markAddressedElsewhere(messages, buildResolver(people as { jid: string | null; lid: string | null; phone: string | null }[], teamKeys));
+      if (people?.length) {
+        const participants = people as { jid: string | null; lid: string | null; phone: string | null; name: string | null }[];
+        const resolve = buildResolver(participants, teamKeys);
+        // chamar pelo nome, sem "@": o nome precisa ser de uma única pessoa do grupo que não é da equipe
+        const resolveName = buildNameResolver(participants, messages, resolve, ((team ?? []) as { name: string | null }[]).map((t) => t.name));
+        considered = markAddressedElsewhere(messages, resolve, { resolveName });
+      }
       // o "aguardando resposta" (SLA) segue o mesmo critério: conversa entre clientes não pede resposta da equipe
       const sideTalk = considered.filter((m) => m.elsewhere).map((m) => m.id);
       if (sideTalk.length) {

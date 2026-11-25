@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_COMMITMENT_VERBS } from './commitment.js';
-import { buildResolver, classifyFollowup, markAddressedElsewhere, mentionKeys, type FollowupMessage } from './followup.js';
+import { addressedName, buildNameResolver, buildResolver, classifyFollowup, firstNameOf, markAddressedElsewhere, mentionKeys, type FollowupMessage } from './followup.js';
 
 const T0 = Date.UTC(2026, 10, 3, 13, 0, 0); // terça, 10h em Brasília
 let n = 0;
@@ -325,4 +325,66 @@ test('equipe pediu documentos e o cliente só se desculpa: a bola continua com o
   assert.equal(run([ask, client('Preciso de mais um prazo', 60)]).status, 'company');
   // sem pedido da equipe, a mensagem do cliente continua pedindo resposta
   assert.equal(run([client('Desculpa o atraso', 0)]).status, 'company');
+});
+
+// conversa entre clientes sem "@": o cliente chama o outro pelo nome ("Boa tarde, Cleber! Tudo bem?")
+test('firstNameOf: primeiro nome sem acento e em minúsculas', () => {
+  assert.equal(firstNameOf('Cleber Souza ❤️'), 'cleber');
+  assert.equal(firstNameOf('  José Álvaro'), 'jose');
+  assert.equal(firstNameOf('+55 51 9996-4702'), null);
+  assert.equal(firstNameOf(null), null);
+});
+
+test('addressedName: nome chamado no começo da mensagem, com pontuação depois', () => {
+  assert.equal(addressedName('Boa tarde, Cleber! Tudo bem?'), 'cleber');
+  assert.equal(addressedName('Cleber, você viu o contrato?'), 'cleber');
+  assert.equal(addressedName('Oi Maria Clara, tudo bem?'), 'maria');
+  assert.equal(addressedName('Bom dia Cleber!'), 'cleber');
+  // frase comum, saudação ou resposta curta: não chama ninguém
+  assert.equal(addressedName('Preciso do extrato da C-'), null);
+  assert.equal(addressedName('Bom dia!'), null);
+  assert.equal(addressedName('Obrigado, Cleber'), null);
+  assert.equal(addressedName('Boa tarde, vocês conseguem enviar até sexta'), null);
+  assert.equal(addressedName(null), null);
+});
+
+const named = [
+  { jid: `${AMANA}@s.whatsapp.net`, lid: null, phone: AMANA, name: 'Nicholas Matos' },
+  { jid: `${FZP}@s.whatsapp.net`, lid: `${LID_FZP}@lid`, phone: FZP, name: 'Cleber Souza' },
+  { jid: `${EQUIPE}@s.whatsapp.net`, lid: null, phone: EQUIPE, name: 'Ana Paula' },
+  { jid: `${EQUIPE_CLIENTE}@s.whatsapp.net`, lid: null, phone: EQUIPE_CLIENTE, name: 'Marcos Lima' },
+];
+const namedRun = (msgs: FollowupMessage[], people = named) => {
+  const res = buildResolver(people, [EQUIPE]);
+  return run(markAddressedElsewhere(msgs, res, { resolveName: buildNameResolver(people, msgs, res, ['Ana Paula']) }));
+};
+
+test('cliente chama outro cliente pelo nome e ele responde: não é pendência da empresa', () => {
+  const r = namedRun([
+    client('Boa tarde, Cleber! Tudo bem?', 0, from(AMANA)),
+    client('Boa tarde! Tudo bem sim, e você?', 2, from(FZP)),
+  ]);
+  assert.equal(r.status, null);
+  // só a saudação, sem resposta ainda
+  assert.equal(namedRun([client('Boa tarde, Cleber! Tudo bem?', 0, from(AMANA))]).status, null);
+});
+
+test('chamou pelo nome, mas o nome é da equipe, de ninguém ou de mais de uma pessoa: continua pendente', () => {
+  // Ana é da equipe
+  assert.equal(namedRun([client('Boa tarde, Ana! Tudo bem?', 0, from(AMANA))]).status, 'company');
+  // ninguém no grupo com esse nome
+  assert.equal(namedRun([client('Boa tarde, Roberto! Tudo bem?', 0, from(AMANA))]).status, 'company');
+  // dois Clebers no grupo: não dá para saber quem foi chamado
+  const dois = [...named, { jid: '5551977776666@s.whatsapp.net', lid: null, phone: '5551977776666', name: 'Cleber Dias' }];
+  assert.equal(namedRun([client('Boa tarde, Cleber! Tudo bem?', 0, from(AMANA))], dois).status, 'company');
+  // o nome também é de quem já respondeu como equipe neste grupo
+  assert.equal(namedRun([team('Bom dia! Já estou vendo o contrato.', 0, { sender: 'Cleber Lopes', ...from(EQUIPE) }), client('Boa tarde, Cleber! Preciso do extrato', 5, from(AMANA))]).status, 'company');
+});
+
+test('chamou pelo nome: a equipe falando encerra a conversa lateral; sem nome, o pedido continua valendo', () => {
+  assert.equal(
+    namedRun([client('Boa tarde, Cleber! Tudo bem?', 0, from(AMANA)), team('Boa tarde! Em que posso ajudar?', 1, from(EQUIPE)), client('Preciso do extrato, por favor', 2, from(FZP))]).status,
+    'company',
+  );
+  assert.equal(namedRun([client('Boa tarde! Preciso do extrato da C-', 0, from(AMANA))]).status, 'company');
 });
