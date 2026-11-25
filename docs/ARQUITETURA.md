@@ -79,6 +79,11 @@ Módulos de `lib/` que mais se usa:
   `conferir_banco.sql`. Commite os arquivos gerados junto.
 - Uma tela que usa uma coluna nova deve funcionar (mostrar o aviso "rode o script") quando o script ainda não foi rodado.
   Por isso `appSettings()` lê `select('*')` e as ações passam o erro por `dbResult`.
+- **Atualização automática do banco:** o fluxo `.github/workflows/atualizar-banco.yml` roda `supabase/atualizar_banco.sql` no
+  Supabase a cada mesclagem na branch padrão (regenera o script a partir das migrations antes). Precisa do segredo
+  `SUPABASE_DB_URL` no GitHub (string de conexão do **Session pooler** do Supabase; a conexão direta só tem IPv6 e o GitHub
+  só IPv4). Sem o segredo ele se pula sozinho. Por isso uma migration que entra na branch padrão **vai direto para
+  produção**: escreva-a para poder rodar de novo e sem apagar dados. Dá para rodar na mão em Actions › Atualizar banco.
 
 ## 5. Receitas
 

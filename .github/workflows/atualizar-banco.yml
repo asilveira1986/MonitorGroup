@@ -1,0 +1,50 @@
+name: Atualizar banco
+
+# Aplica no Supabase os scripts do banco que ainda faltam, a cada mesclagem na branch padrão.
+# O script (supabase/atualizar_banco.sql) é seguro para repetir: o banco guarda quais migrations já foram aplicadas
+# (schema_migrations), só as que faltam rodam, e ele confere antes se está no banco certo.
+#
+# Precisa do segredo SUPABASE_DB_URL (GitHub › Settings › Secrets and variables › Actions): a string de conexão do
+# Supabase pelo "Session pooler" (Project Settings › Database › Connection string). A conexão direta do Supabase só
+# tem IPv6, e os servidores do GitHub só têm IPv4. Sem o segredo, este fluxo se pula sozinho (não deixa o CI vermelho).
+on:
+  push:
+    branches: [claude/whatsapp-group-monitor-e1ekgb]
+  workflow_dispatch:
+
+# uma atualização por vez; uma que começou não é cancelada no meio por outra mais nova
+concurrency:
+  group: atualizar-banco
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  banco:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: Conferir o segredo
+        id: segredo
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::notice title=Banco não atualizado::O segredo SUPABASE_DB_URL não está cadastrado. Cadastre-o para o banco ser atualizado a cada mesclagem."
+            echo "pronto=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pronto=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.segredo.outputs.pronto == 'true'
+
+      # sempre a partir das migrations, para nunca aplicar um atualizar_banco.sql desatualizado
+      - name: Gerar o script completo
+        if: steps.segredo.outputs.pronto == 'true'
+        run: sh supabase/build-updates.sh
+
+      - name: Aplicar no banco
+        if: steps.segredo.outputs.pronto == 'true'
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/atualizar_banco.sql
