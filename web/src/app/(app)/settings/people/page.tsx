@@ -19,6 +19,7 @@ import { RoleSelect } from '../users/role-select';
 import { OnlineDot } from '@/components/presence';
 import { EditPerson, GeneratePasswordButton, MakeAttendantButton, NewPersonDialog } from './person-forms';
 import { PeopleSearch } from './people-search';
+import { ActiveToggle } from './active-toggle';
 import { PersonRow } from './person-dialog';
 import { ScreenAccessForm, type ScreenRow } from './screen-access';
 
@@ -156,6 +157,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
             const m = p.member;
             const menu = isAdmin ? actionsFor(p) : [];
             // a escolha de telas é do administrador, para os outros usuários (não para si, e a de quem administra a plataforma só outro dela)
+            const canToggleActive = Boolean(isAdmin && u && u.id !== me.id && (!u.platform_admin || me.platform_admin));
             const canSetScreens = Boolean(isAdmin && u && u.id !== me.id && (!u.platform_admin || me.platform_admin));
             const who = u ? { role: u.role, platformAdmin: Boolean(u.platform_admin), screenAccess: u.screen_access } : null;
             const screenRows: ScreenRow[] = who
@@ -171,6 +173,8 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
                 you={u?.id === me.id}
                 status={u ? (u.active ? 'active' : 'inactive') : 'none'}
                 menu={menu.length > 0 ? <RowMenu actions={menu} label={`Ações de ${p.name}`} /> : undefined}
+                // inativar/ativar direto da lista: administradores, para os outros (não para si; quem administra a plataforma, só outro dela)
+                quickAction={canToggleActive && u ? <ActiveToggle userId={u.id} name={p.name} active={u.active} /> : undefined}
               >
                 {/* dados da pessoa */}
                 <section aria-label="Dados" className="space-y-3">

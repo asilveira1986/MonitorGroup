@@ -21,12 +21,15 @@ export function PersonRow({
   you = false,
   status,
   menu,
+  quickAction,
   children,
 }: {
   name: string;
   you?: boolean;
   status: PersonStatus;
   menu?: ReactNode;
+  /** botão ao lado da linha (Inativar / Ativar), fora da área que abre o painel */
+  quickAction?: ReactNode;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -49,11 +52,11 @@ export function PersonRow({
 
   const s = STATUS[status];
   return (
-    <li>
+    <li className="flex items-center hover:bg-surface-2">
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none sm:px-5"
+        className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left focus-visible:bg-surface-2 focus-visible:outline-none sm:px-5"
         aria-haspopup="dialog"
         aria-label={`Abrir ${name}`}
       >
@@ -63,6 +66,7 @@ export function PersonRow({
         <Badge tone={s.tone}>{s.label}</Badge>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted" aria-hidden />
       </button>
+      {quickAction}
       {open && (
         // z-40: as janelas de editar pessoa e senha gerada (z-50) abrem por cima deste painel
         <div
