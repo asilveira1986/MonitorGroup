@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { PrivateRecoveryAllButton } from '../groups/history-recovery-all';
 import { appSettings } from '@/lib/app-settings';
-import { requireProfile } from '@/lib/auth';
+import { requireMenu } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PrivateInbox, type PrivateChat } from './inbox';
 import type { ChatAgent } from './owner-control';
@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: 'Monitor Group · Conversas privadas'
  * responsável; administradores veem todas (0114).
  */
 export default async function PrivatePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const profile = await requireProfile();
+  const profile = await requireMenu('/private');
   const supabase = await createClient();
   const [{ data: allowed }, { data: openChats }, { data: mineChats }, { data: settings }, { data: instance }, { data: tagRows }] = await Promise.all([
     supabase.rpc('can_use_private_chats'),

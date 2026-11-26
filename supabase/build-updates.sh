@@ -243,7 +243,8 @@ CHECKS=$(cat <<'SQL'
   (180, 'Situação das notificações dos usuários, só administrador geral (0189)', to_regprocedure('public.platform_notification_status()') is not null),
   (181, 'Contato enviado pela conversa privada sem assinatura, chega com o telefone (0190)', coalesce(pg_get_functiondef('public.private_outgoing_sign()'::regprocedure) like '%''contact''%', false)),
   (182, 'Recuperar mensagens de todas as conversas privadas (0191)', to_regprocedure('public.request_private_history_recovery_all(integer,boolean)') is not null),
-  (183, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (183, 'Acesso às telas por usuário (0192)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'screen_access')),
+  (184, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

@@ -6,7 +6,7 @@ import { Sidebar } from '@/components/sidebar';
 import { appSettings } from '@/lib/app-settings';
 import { currentCompany, requireProfile } from '@/lib/auth';
 import { demandsEnabled } from '@/lib/format';
-import { canSeeMenu, MENU_ITEMS } from '@/lib/menu';
+import { hiddenScreens } from '@/lib/screens';
 import { createClient } from '@/lib/supabase/server';
 
 export default async function AppLayout({ children }: LayoutProps<'/'>) {
@@ -60,16 +60,11 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
           ...(privateOk ? [] : ['/private', '/private-panel', '/contacts']),
           // disparos em massa (0150): por enquanto só o administrador geral da plataforma
           ...(profile.platform_admin ? [] : ['/broadcasts']),
-          ...MENU_ITEMS.filter(
-            (i) =>
-              !canSeeMenu(
-                settings?.menu_access as Record<string, unknown> | null,
-                i.href,
-                profile.role === 'admin' || profile.platform_admin,
-                profile.role === 'viewer',
-                profile.role === 'agenda',
-              ),
-          ).map((i) => i.href),
+          // as telas que o perfil, os menus da empresa e a escolha de telas desta pessoa (Configurações › Pessoas) não liberam
+          ...hiddenScreens(
+            { role: profile.role, platformAdmin: profile.platform_admin, screenAccess: profile.screen_access },
+            settings?.menu_access as Record<string, unknown> | null,
+          ),
         ]}
         user={{ name: profile.full_name || profile.email.split('@')[0], role: profile.role, initials, avatarUrl: profile.avatar_url }}
         platformAdmin={profile.platform_admin}
