@@ -2,7 +2,7 @@ import { Lock } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import type { CustomerTag } from '@/components/customer-tags';
-import { requireProfile } from '@/lib/auth';
+import { requireMenu } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { ContactsSync } from '../private/contacts-sync';
 import { ContactsBook } from './contacts-book';
@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: 'Monitor Group · Contatos' };
  * conversas privadas.
  */
 export default async function ContactsPage() {
-  const profile = await requireProfile();
+  const profile = await requireMenu('/contacts');
   const supabase = await createClient();
   const [{ data: allowed }, { data: tagRows }, { data: conns }, { count: contacts }, { count: named }] = await Promise.all([
     supabase.rpc('can_use_private_chats'),

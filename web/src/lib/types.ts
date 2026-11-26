@@ -16,6 +16,8 @@ export type Profile = {
   must_change_password?: boolean;
   /** desligou os avisos só para si (0058) */
   alerts_off?: boolean;
+  /** telas liberadas ou bloqueadas só para esta pessoa (0192); null = o padrão do perfil */
+  screen_access?: Record<string, boolean> | null;
   /** Meu perfil (0085) */
   phone?: string | null;
   photo_path?: string | null;

@@ -2,7 +2,7 @@ import { appSettings } from '@/lib/app-settings';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
-import { canSeeMenu, MENU_ITEMS } from '@/lib/menu';
+import { canAccessScreen, SCREENS } from '@/lib/screens';
 import type { Profile } from '@/lib/types';
 
 /** Usuário logado + perfil ativo. Redireciona caso contrário. */
@@ -71,12 +71,11 @@ export const menuConfig = cache(async (): Promise<Record<string, unknown>> => {
  */
 export async function requireMenu(href: string): Promise<Profile> {
   const profile = await requireProfile();
-  const isAdmin = profile.role === 'admin' || profile.platform_admin;
-  const viewer = profile.role === 'viewer';
-  const agendaOnly = profile.role === 'agenda';
   const config = await menuConfig();
-  if (!canSeeMenu(config, href, isAdmin, viewer, agendaOnly)) {
-    const first = MENU_ITEMS.find((i) => canSeeMenu(config, i.href, isAdmin, viewer, agendaOnly));
+  // o perfil, os menus da empresa e a escolha de telas para esta pessoa (Configurações › Pessoas)
+  const who = { role: profile.role, platformAdmin: profile.platform_admin, screenAccess: profile.screen_access };
+  if (!canAccessScreen(href, who, config)) {
+    const first = SCREENS.find((s) => canAccessScreen(s.href, who, config));
     redirect(first ? first.href : '/auth/pending');
   }
   return profile;

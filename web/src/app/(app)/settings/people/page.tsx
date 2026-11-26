@@ -3,7 +3,8 @@ import { AdminNotice } from '@/components/admin-notice';
 import { RowMenu, type RowAction } from '@/components/disclosure';
 import { ImageUpload } from '@/components/image-upload';
 import { Badge, Card, CardHeader, EmptyState } from '@/components/ui';
-import { requireProfile } from '@/lib/auth';
+import { menuConfig, requireProfile } from '@/lib/auth';
+import { canAccessScreen, defaultScreenAccess, SCREENS } from '@/lib/screens';
 import { formatPhone } from '@/lib/format';
 import { ROLE_HINT, ROLE_LABEL } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
@@ -18,6 +19,8 @@ import { RoleSelect } from '../users/role-select';
 import { OnlineDot } from '@/components/presence';
 import { EditPerson, GeneratePasswordButton, MakeAttendantButton, NewPersonDialog } from './person-forms';
 import { PeopleSearch } from './people-search';
+import { PersonRow } from './person-dialog';
+import { ScreenAccessForm, type ScreenRow } from './screen-access';
 
 type Person = { key: string; name: string; email: string | null; phone: string | null; profile?: Profile; member?: TeamMember };
 
@@ -31,6 +34,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
   const q = typeof sp.q === 'string' ? sp.q.trim() : '';
   const me = await requireProfile();
   const isAdmin = me.role === 'admin' || me.platform_admin;
+  const menus = await menuConfig();
   const supabase = await createClient();
   const [{ data: profiles }, { data: allowed }, { data: team }, { data: groupRows }, { data: sectorRows }, { data: memberRows }] = await Promise.all([
     isAdmin ? supabase.from('profiles').select('*').order('created_at') : Promise.resolve({ data: [] }),
@@ -151,92 +155,122 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
             const u = p.profile;
             const m = p.member;
             const menu = isAdmin ? actionsFor(p) : [];
+            // a escolha de telas é do administrador, para os outros usuários (não para si, e a de quem administra a plataforma só outro dela)
+            const canSetScreens = Boolean(isAdmin && u && u.id !== me.id && (!u.platform_admin || me.platform_admin));
+            const who = u ? { role: u.role, platformAdmin: Boolean(u.platform_admin), screenAccess: u.screen_access } : null;
+            const screenRows: ScreenRow[] = who
+              ? SCREENS.map((s) => {
+                  const allowed = canAccessScreen(s.href, who, menus);
+                  return { ...s, locked: s.locked ?? null, allowed, defaultAllowed: s.locked ? allowed : defaultScreenAccess(menus, s.href, who) };
+                })
+              : [];
             return (
-              <li key={p.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
-                <span className="relative shrink-0">
-                  {m ? (
-                    <ImageUpload
-                      compact
-                      round
-                      size="h-9 w-9"
-                      label={`Foto de ${p.name}`}
-                      src={m.photo_path ? `/team-photo/${m.id}` : null}
-                      prepare={prepareImageUpload.bind(null, 'team')}
-                      save={saveTeamPhoto.bind(null, m.id)}
-                      disabled={me.role === 'viewer'}
-                      fallback={
-                        <span className="flex h-full w-full items-center justify-center bg-brand-soft text-xs font-semibold text-brand-text">
-                          {p.name.slice(0, 2).toUpperCase()}
-                        </span>
-                      }
-                    />
-                  ) : (
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-2 text-ink-2">
-                      {u?.photo_path ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={`/profile-photo/${u.id}`} alt="" className="h-full w-full object-cover" />
+              <PersonRow
+                key={p.key}
+                name={p.name}
+                you={u?.id === me.id}
+                status={u ? (u.active ? 'active' : 'inactive') : 'none'}
+                menu={menu.length > 0 ? <RowMenu actions={menu} label={`Ações de ${p.name}`} /> : undefined}
+              >
+                {/* dados da pessoa */}
+                <section aria-label="Dados" className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <span className="relative shrink-0">
+                      {m ? (
+                        <ImageUpload
+                          compact
+                          round
+                          size="h-12 w-12"
+                          label={`Foto de ${p.name}`}
+                          src={m.photo_path ? `/team-photo/${m.id}` : null}
+                          prepare={prepareImageUpload.bind(null, 'team')}
+                          save={saveTeamPhoto.bind(null, m.id)}
+                          disabled={me.role === 'viewer'}
+                          fallback={
+                            <span className="flex h-full w-full items-center justify-center bg-brand-soft text-sm font-semibold text-brand-text">
+                              {p.name.slice(0, 2).toUpperCase()}
+                            </span>
+                          }
+                        />
                       ) : (
-                        <UserRound className="h-4 w-4" />
+                        <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-2 text-ink-2">
+                          {u?.photo_path ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={`/profile-photo/${u.id}`} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <UserRound className="h-5 w-5" />
+                          )}
+                        </span>
                       )}
+                      <OnlineDot userId={u?.id} />
                     </span>
-                  )}
-                  <OnlineDot userId={u?.id} />
-                </span>
-                <div className="min-w-0 flex-1 basis-56">
-                  <p className="truncate text-sm font-medium">
-                    {p.name} {u?.id === me.id && <span className="font-normal text-muted">(você)</span>}
-                  </p>
-                  <p className="truncate text-xs text-muted">
-                    {[p.phone ? formatPhone(p.phone) : m ? 'WhatsApp identificado pela conversa' : null, p.email].filter(Boolean).join(' · ')}
-                  </p>
-                  <p className="mt-1 flex flex-wrap gap-1">
-                    {m && (
-                      <Badge tone="good">
-                        <Users className="h-3 w-3" /> Atende nos grupos
-                        {groupsOf.get(m.id) ? ` · responsável por ${groupsOf.get(m.id)}` : ''}
-                      </Badge>
-                    )}
-                    {u && !u.active && <Badge tone="critical">Sem acesso</Badge>}
-                    {u &&
-                      (sectorsOf.get(u.id) ?? [])
-                        .map((id) => sectors.find((s) => s.id === id)?.name)
-                        .filter(Boolean)
-                        .map((name) => (
-                          <Badge key={name} tone="info">
-                            <Building2 className="h-3 w-3" /> {name}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs text-muted">
+                        {[p.phone ? formatPhone(p.phone) : m ? 'WhatsApp identificado pela conversa' : null, p.email].filter(Boolean).join(' · ') || 'Sem telefone nem e-mail'}
+                      </p>
+                      <p className="mt-1 flex flex-wrap gap-1">
+                        {m && (
+                          <Badge tone="good">
+                            <Users className="h-3 w-3" /> Atende nos grupos
+                            {groupsOf.get(m.id) ? ` · responsável por ${groupsOf.get(m.id)}` : ''}
                           </Badge>
-                        ))}
-                    {!u && <Badge tone="neutral">Sem acesso ao painel</Badge>}
+                        )}
+                        {u &&
+                          (sectorsOf.get(u.id) ?? [])
+                            .map((id) => sectors.find((s) => s.id === id)?.name)
+                            .filter(Boolean)
+                            .map((name) => (
+                              <Badge key={name} tone="info">
+                                <Building2 className="h-3 w-3" /> {name}
+                              </Badge>
+                            ))}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {u &&
+                      (u.id === me.id || !isAdmin ? (
+                        <Badge tone="brand">
+                          <ShieldCheck className="h-3 w-3" /> {ROLE_LABEL[u.role]}
+                        </Badge>
+                      ) : (
+                        <span title={ROLE_HINT[u.role]}>
+                          <RoleSelect userId={u.id} role={u.role} />
+                        </span>
+                      ))}
+                    {isAdmin && m && !u && <GrantAccess member={m} />}
+                    {isAdmin && u && !m && <MakeAttendantButton profileId={u.id} />}
+                    {isAdmin && m && <AlertScope member={m} groups={groupsOf.get(m.id) ?? 0} />}
+                    {isAdmin && (
+                      <EditPerson
+                        profileId={u?.id ?? null}
+                        memberId={m?.id ?? null}
+                        name={p.name}
+                        phone={p.phone}
+                        sectors={sectors}
+                        sectorIds={u ? (sectorsOf.get(u.id) ?? []) : []}
+                        email={u && (!u.platform_admin || me.platform_admin) ? u.email : null}
+                      />
+                    )}
+                    {/* senha nova (a de quem administra a plataforma, só outro administrador da plataforma) */}
+                    {isAdmin && u && (!u.platform_admin || me.platform_admin) && <GeneratePasswordButton profileId={u.id} name={p.name} />}
+                  </div>
+                </section>
+
+                {/* telas do sistema e o que a pessoa tem acesso */}
+                {canSetScreens && u ? (
+                  <ScreenAccessForm key={`${u.role}-${JSON.stringify(u.screen_access ?? null)}`} userId={u.id} name={p.name} roleLabel={ROLE_LABEL[u.role]} rows={screenRows} />
+                ) : (
+                  <p className="rounded-xl bg-surface-2 px-3 py-2 text-xs text-ink-2">
+                    {!u
+                      ? 'Esta pessoa ainda não entra no painel. Dê acesso ao painel para escolher as telas que ela pode abrir.'
+                      : u.id === me.id
+                        ? 'Você não altera o seu próprio acesso às telas.'
+                        : 'Só administradores escolhem as telas de cada pessoa.'}
                   </p>
-                </div>
-                <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
-                  {u &&
-                    (u.id === me.id || !isAdmin ? (
-                      <Badge tone="brand">
-                        <ShieldCheck className="h-3 w-3" /> {ROLE_LABEL[u.role]}
-                      </Badge>
-                    ) : (
-                      <span title={ROLE_HINT[u.role]}>
-                        <RoleSelect userId={u.id} role={u.role} />
-                      </span>
-                    ))}
-                  {isAdmin && m && !u && <GrantAccess member={m} />}
-                  {isAdmin && u && !m && <MakeAttendantButton profileId={u.id} />}
-                  {isAdmin && m && <AlertScope member={m} groups={groupsOf.get(m.id) ?? 0} />}
-                  {isAdmin && <EditPerson
-                      profileId={u?.id ?? null}
-                      memberId={m?.id ?? null}
-                      name={p.name}
-                      phone={p.phone}
-                      sectors={sectors}
-                      sectorIds={u ? (sectorsOf.get(u.id) ?? []) : []}
-                      email={u && (!u.platform_admin || me.platform_admin) ? u.email : null}
-                    />}
-                  {/* senha nova (a de quem administra a plataforma, só outro administrador da plataforma) */}
-                  {isAdmin && u && (!u.platform_admin || me.platform_admin) && <GeneratePasswordButton profileId={u.id} name={p.name} />}
-                  {menu.length > 0 && <RowMenu actions={menu} label={`Ações de ${p.name}`} />}
-                </div>
-              </li>
+                )}
+              </PersonRow>
             );
           })}
           {people.length > 0 && shown.length === 0 && (
