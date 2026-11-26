@@ -26,8 +26,21 @@ export default async function PrivatePanelPage() {
   const sectorOfInstance = new Map(((instRows ?? []) as { id: string; sector_id?: string | null }[]).map((i) => [i.id, i.sector_id ?? null]));
   const instanceName = new Map(((instRows ?? []) as { id: string; name?: string | null }[]).map((i) => [i.id, i.name ?? null]));
   const agentName = new Map(((agents ?? []) as { id: string; name: string }[]).map((a) => [a.id, a.name]));
-  const chats = ((data ?? []) as PanelChat[]).map((c) => ({
+  // foto de cada conversa (guardada pelo worker): pelo identificador da conversa ou, sem foto nele, pelo número
+  const panelRows = (data ?? []) as PanelChat[];
+  const chatIds = panelRows.map((c) => c.id);
+  const { data: jidRows } = chatIds.length ? await supabase.from('private_chats').select('id, jid').in('id', chatIds) : { data: [] };
+  const jidOf = new Map(((jidRows ?? []) as { id: string; jid: string | null }[]).map((r) => [r.id, r.jid]));
+  const phoneJid = (c: PanelChat) => (c.phone ? `${c.phone}@s.whatsapp.net` : null);
+  const candidates = (c: PanelChat) => [jidOf.get(c.id) ?? null, phoneJid(c)].filter((j): j is string => Boolean(j));
+  const photoJids = [...new Set(panelRows.flatMap(candidates))];
+  const { data: avatarRows } = photoJids.length
+    ? await supabase.from('contact_avatars').select('jid').in('jid', photoJids).not('path', 'is', null)
+    : { data: [] };
+  const withPhoto = new Set(((avatarRows ?? []) as { jid: string }[]).map((a) => a.jid));
+  const chats = panelRows.map((c) => ({
     ...c,
+    photo: candidates(c).find((j) => withPhoto.has(j)) ?? null,
     sector_id: c.instance_id ? (sectorOfInstance.get(c.instance_id) ?? null) : null,
     instance_name: c.instance_id ? (instanceName.get(c.instance_id) ?? null) : null,
     assigned_name: c.assigned_to ? (agentName.get(c.assigned_to) ?? 'outro usuário') : null,

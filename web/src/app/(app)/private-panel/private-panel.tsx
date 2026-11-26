@@ -4,8 +4,9 @@ import { Building2, Clock, MailOpen, MessageCircle, Phone, Search, UserCheck, X 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Avatar } from '@/components/avatar';
 import { EmptyState } from '@/components/ui';
-import { cn, formatDuration, formatNumber, formatPhone } from '@/lib/format';
+import { CONTACT_INITIALS, cn, formatDuration, formatNumber, formatPhone, initials } from '@/lib/format';
 import { useRealtime } from '@/lib/use-realtime';
 import { ACTIVE_FIELD, CHIP, COUNT, FIELD, FilterField, ORDER, STATUS, type PanelStatus } from '../panel/panel';
 
@@ -30,6 +31,8 @@ export type PanelChat = {
   sector_id?: string | null;
   instance_name?: string | null;
   assigned_name?: string | null;
+  /** identificador (jid) com a foto de perfil guardada, se houver */
+  photo?: string | null;
 };
 
 const SILENT_DAYS = 3;
@@ -63,7 +66,8 @@ function ChatCard({ c, now }: { c: PanelChat; now: number }) {
     >
       <div>
         <div className="flex items-start gap-1.5">
-          <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', s.dot)} aria-hidden />
+          <Avatar jid={c.photo} hasPhoto={Boolean(c.photo)} name={title} fallback={initials(title, CONTACT_INITIALS)} className="h-9 w-9 rounded-full bg-brand-soft text-xs text-brand-text" />
+          <span className={cn('mt-1 h-2 w-2 shrink-0 rounded-full', s.dot)} title={s.label} aria-hidden />
           <h3 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-ink">{title}</h3>
           {c.unread_count > 0 && (
             <span className="tabular ml-auto shrink-0 rounded-full bg-good px-1.5 text-[9px] font-semibold text-white" title="Não lidas">
@@ -72,17 +76,17 @@ function ChatCard({ c, now }: { c: PanelChat; now: number }) {
           )}
         </div>
         {c.name && c.phone && (
-          <p className="mt-0.5 flex items-center gap-1 truncate pl-3.5 text-[9px] text-muted">
+          <p className="mt-0.5 flex items-center gap-1 truncate pl-[2.625rem] text-[9px] text-muted">
             <Phone className="h-3 w-3 shrink-0" aria-hidden /> {formatPhone(c.phone)}
           </p>
         )}
-        <p className="mt-0.5 flex items-center gap-1 truncate pl-3.5 text-[9px] text-ink-2" title={c.assigned_name ? `Responsável: ${c.assigned_name}` : 'Aguardando atendimento (sem responsável)'}>
+        <p className="mt-0.5 flex items-center gap-1 truncate pl-[2.625rem] text-[9px] text-ink-2" title={c.assigned_name ? `Responsável: ${c.assigned_name}` : 'Aguardando atendimento (sem responsável)'}>
           <UserCheck className="h-3 w-3 shrink-0" aria-hidden /> <span className="truncate">{c.assigned_name ?? 'sem responsável'}</span>
         </p>
         {time && !quiet && (
           <p
             className={cn(
-              'mt-0.5 flex items-center gap-1 pl-3.5 text-[9px] tabular',
+              'mt-0.5 flex items-center gap-1 pl-[2.625rem] text-[9px] tabular',
               c.status === 'late' ? 'font-semibold text-critical-ink' : c.status === 'waiting' ? 'font-semibold text-warning-ink' : 'text-muted',
             )}
             title={time.title}
