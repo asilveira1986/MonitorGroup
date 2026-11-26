@@ -279,38 +279,60 @@ const sameSender = (a: FollowupMessage, b: FollowupMessage) => {
   return Boolean(a.sender) && a.sender === b.sender;
 };
 
-/** Até quando uma confirmação ("Tudo certo", "Ok") ainda conta como parte do mesmo envio do anexo. */
+/** Até quando as mensagens seguintes do mesmo cliente ainda contam como parte da mesma resposta dele. */
 const CONFIRM_WINDOW_MS = 10 * 60_000;
+/** Resposta curta: acima disto já é uma mensagem de verdade, que a equipe precisa ler. */
+const MAX_PLAIN_STATEMENT = 80;
+/** Palavras que mostram pedido, dúvida, problema ou cobrança: a mensagem não é só uma resposta curta. */
+const NOT_PLAIN = new Set([
+  'nao', 'nada', 'problema', 'problemas', 'erro', 'ainda', 'falta', 'faltou', 'faltando', 'urgente', 'mas', 'porem', 'entretanto',
+  'preciso', 'precisamos', 'precisa', 'quero', 'queria', 'quer', 'gostaria', 'favor', 'aguardo', 'aguardando', 'pendente', 'duvida',
+  'atraso', 'atrasado', 'cade', 'novidade', 'novidades', 'quando', 'como', 'qual', 'quais', 'onde', 'porque', 'pq', 'poderia',
+  'poderiam', 'pode', 'podem', 'consegue', 'conseguem', 'ajuda', 'ajudar', 'verificar', 'verifica', 'enviar', 'envia', 'manda',
+]);
+
+/** Anexo sem texto (print, foto, arquivo) do cliente. */
+const bareFile = (m: FollowupMessage) => FILE_TYPES.has(m.type) && !(m.body ?? '').trim();
 
 /**
- * Anexo do cliente sem texto (print, foto, arquivo) logo depois da equipe, seguido só de confirmações dele ("Tudo certo",
- * "Ok", "Obrigado"): ele só mostrou ou confirmou o que a equipe fez, não pede nada. Vale quando:
- *  - a mensagem antes do envio é da equipe (ele está respondendo a ela);
- *  - depois do anexo, o mesmo cliente manda só confirmações (e, no meio, outros anexos dele), em até 10 minutos, sem a equipe
- *    nem outra pessoa falar antes;
- *  - quem chama aqui já descartou o caso em que a equipe pediu algo ao cliente (aí o anexo é a entrega pedida).
- * Um anexo sozinho, ainda sem a confirmação, continua pendente até ela chegar.
+ * Resposta curta do cliente, sem pedido, pergunta, problema nem entrega ("Seguimos então", "Fechado"): só informa ou concorda.
+ * "Aguardo o prazo", "Não consegui" ou "Segue o contrato" não são respostas simples e continuam valendo.
  */
-function confirmedByAck(ordered: FollowupMessage[], i: number): boolean {
+function plainStatement(m: FollowupMessage, deliveryPhrases: string[]): boolean {
+  const body = (m.body ?? '').trim();
+  if (m.type !== 'text' || !body || body.length > MAX_PLAIN_STATEMENT || body.includes('?')) return false;
+  const text = ` ${normalize(body)} `;
+  if (findPhrase(text, CLIENT_ASKS) || findPhrase(text, deliveryPhrases)) return false;
+  return !text.split(' ').some((w) => NOT_PLAIN.has(w));
+}
+
+/**
+ * O cliente respondeu à equipe e agradeceu/confirmou: não pede nada. Vale para a mensagem `i` quando ela é um anexo sem
+ * texto (print, foto, arquivo) ou uma resposta curta sem pedido ("Seguimos então", "Fechado"), e:
+ *  - a mensagem antes dessa resposta do cliente (pulando as outras mensagens dele) é da equipe: ele está respondendo a ela;
+ *  - depois, o mesmo cliente manda só respostas desse tipo e confirmações ("Tudo certo", "Ok", "Obrigado"), em até 10 minutos,
+ *    sem a equipe nem outra pessoa falar antes, e a última é uma confirmação.
+ * Uma resposta sozinha, ainda sem a confirmação no fim, continua pendente até ela chegar. Quem chama aqui já descartou o caso em
+ * que a equipe pediu algo ao cliente (aí a resposta ou o anexo é a entrega pedida).
+ */
+function closedByAck(ordered: FollowupMessage[], i: number, deliveryPhrases: string[]): boolean {
   const m = ordered[i];
-  if (m.fromTeam || !FILE_TYPES.has(m.type) || (m.body ?? '').trim()) return false;
-  // o que veio antes do envio (pulando os anexos dele mesmo) é da equipe
+  const plain = (x: FollowupMessage) => bareFile(x) || plainStatement(x, deliveryPhrases);
+  if (m.fromTeam || !plain(m)) return false;
+  // o que veio antes (pulando as mensagens do mesmo cliente) é da equipe
   let k = i - 1;
   while (k >= 0 && !ordered[k].fromTeam && sameSender(ordered[k], m) && m.at - ordered[k].at <= CONFIRM_WINDOW_MS) k--;
   if (k < 0 || !ordered[k].fromTeam) return false;
-  // depois: só anexos e confirmações do mesmo cliente, com pelo menos uma confirmação
-  let confirmed = false;
+  // depois: só respostas curtas, anexos e confirmações do mesmo cliente, terminando numa confirmação
+  let endsWithAck = false;
   for (let j = i + 1; j < ordered.length; j++) {
     const next = ordered[j];
     if (next.fromTeam || !sameSender(next, m) || next.at - m.at > CONFIRM_WINDOW_MS) break;
-    if (FILE_TYPES.has(next.type) && !(next.body ?? '').trim()) continue;
-    if (!next.opensPending) {
-      confirmed = true;
-      continue;
-    }
-    return false; // escreveu outra coisa: vale como antes
+    if (!next.opensPending) endsWithAck = true;
+    else if (plain(next)) endsWithAck = false;
+    else return false; // escreveu outra coisa: vale como antes
   }
-  return confirmed;
+  return endsWithAck;
 }
 
 export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOptions): FollowupResult {
@@ -396,9 +418,9 @@ export function classifyFollowup(messages: FollowupMessage[], opts: FollowupOpti
       if (s.kind === 'promise' && (s.teamAfterPromise || (s.msg?.body?.length ?? 0) >= LONG_REPORT)) set('resolved', 'thanked', m);
       continue;
     }
-    // anexo sem texto que o cliente confirma logo em seguida ("Tudo certo"), depois de uma mensagem da equipe que não lhe pediu nada:
-    // ele só mostrou/confirmou. Se a equipe pediu algo (status 'client'), o anexo é a entrega pedida e conta, abaixo.
-    if (s.status !== 'client' && confirmedByAck(ordered, i)) {
+    // anexo sem texto ou resposta curta que o cliente fecha logo em seguida com uma confirmação ("Tudo certo", "Obrigado"), depois de
+    // uma mensagem da equipe que não lhe pediu nada: ele só respondeu/confirmou. Se a equipe pediu algo (status 'client'), o anexo é a entrega pedida e conta, abaixo.
+    if (s.status !== 'client' && closedByAck(ordered, i, deliveryPhrases)) {
       held.push(m.id);
       continue;
     }

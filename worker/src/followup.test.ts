@@ -429,3 +429,42 @@ test('a equipe pediu o documento: o anexo é a entrega pedida e conta, mesmo com
   assert.equal(r.status, 'company');
   assert.equal(r.kind, 'received');
 });
+
+// resposta curta do cliente fechada com agradecimento, depois da equipe ("Ok", "Seguimos então", "Obrigado")
+const say = (body: string, min: number, extra: Partial<FollowupMessage> = {}) => client(body, min, extra);
+
+test('cliente responde à equipe com uma frase curta e agradece: não é pendência da empresa', () => {
+  const stmt = say('Seguimos então', 27);
+  const r = run([team('Estou representando o Tarlles também', 0), ack('Ok', 27), stmt, ack('Obrigado', 27)]);
+  assert.equal(r.status, 'resolved');
+  assert.ok(r.heldIds?.includes(stmt.id), 'a frase também sai do "aguardando resposta"');
+  // duas frases curtas antes do agradecimento
+  assert.equal(run([team('Combinado para sexta.', 0), say('Fechado', 5), say('Seguimos assim', 5), ack('Obrigado!', 6)]).status, 'resolved');
+});
+
+test('resposta curta sem o agradecimento no fim, ou com pedido, problema ou entrega: continua pendente', () => {
+  // ainda sem o agradecimento: pendente até ele chegar
+  assert.equal(run([team('Estou representando o Tarlles também', 0), say('Seguimos então', 27)]).status, 'company');
+  // o último é outra frase, não uma confirmação
+  assert.equal(run([team('Combinado.', 0), say('Fechado', 5), ack('Obrigado', 5), say('Seguimos assim', 6)]).status, 'company');
+  // pedido, problema ou entrega no meio
+  assert.equal(run([team('Combinado.', 0), say('Preciso do contrato', 5), ack('Obrigado', 5)]).status, 'company');
+  assert.equal(run([team('Combinado.', 0), say('Não consegui acessar o link', 5), ack('Obrigado', 5)]).status, 'company');
+  assert.equal(run([team('Combinado.', 0), say('Segue o contrato assinado', 5), ack('Obrigado', 5)]).status, 'company');
+  assert.equal(run([team('Combinado.', 0), say('Aguardo o prazo', 5), ack('Obrigado', 5)]).status, 'company');
+  // pergunta
+  assert.equal(run([team('Combinado.', 0), say('Seguimos então?', 5), ack('Obrigado', 5)]).status, 'company');
+});
+
+test('resposta curta + agradecimento: só vale logo depois da equipe, do mesmo cliente e se a equipe não pediu nada', () => {
+  // ninguém da equipe falou antes
+  assert.equal(run([say('Seguimos então', 0), ack('Obrigado', 1)]).status, 'company');
+  // o agradecimento é de outra pessoa
+  assert.equal(run([team('Combinado.', 0), say('Seguimos então', 5, { sender: 'Rodrigo' }), ack('Obrigado', 5, { sender: 'Marcos' })]).status, 'company');
+  // mensagem longa: é mais que uma resposta curta
+  const longo = 'Seguimos então com o que combinamos na reunião de ontem, incluindo os prazos de cada etapa do processo';
+  assert.equal(run([team('Combinado.', 0), say(longo, 5), ack('Obrigado', 5)]).status, 'company');
+  // a equipe tinha pedido algo: a resposta do cliente não é descartada por esta regra (fica com o cliente, como antes)
+  const r = run([team('Pode confirmar o horário da reunião?', 0), say('Seguimos então', 5), ack('Obrigado', 5)]);
+  assert.equal(r.status, 'client');
+});
