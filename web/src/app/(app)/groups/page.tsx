@@ -169,6 +169,8 @@ export default async function GroupsPage({ searchParams }: PageProps<'/groups'>)
             tags={tags}
             // SLA por grupo: só administradores (0173)
             canEditSla={profile.role === 'admin' || Boolean(profile.platform_admin)}
+            // monitorar/ignorar: só administradores (quem recebeu a tela Grupos só consulta)
+            canManage={profile.role === 'admin' || Boolean(profile.platform_admin)}
             defaultSla={defaultSla}
           />
         )}

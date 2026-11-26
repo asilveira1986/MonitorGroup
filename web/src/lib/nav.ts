@@ -76,8 +76,8 @@ export const NAV_TREE: NavEntry[] = [
     items: [
       // conversas privadas (0069) e contatos (0112): mesmo acesso, na empresa com o módulo ligado
       { href: '/private', label: 'Conversas privadas', icon: 'private', badgeKey: 'private' },
-      // painel das conversas privadas (cartões): por enquanto só o administrador geral da plataforma
-      { href: '/private-panel', label: 'Painel de privadas', icon: 'panel', platformOnly: true },
+      // painel das conversas privadas (cartões): do administrador da plataforma, que pode liberar para pessoas (Configurações › Pessoas): quem esconde é hiddenScreens
+      { href: '/private-panel', label: 'Painel de privadas', icon: 'panel' },
       { href: '/contacts', label: 'Contatos', icon: 'contacts' },
     ],
   },
@@ -100,7 +100,8 @@ export const NAV_TREE: NavEntry[] = [
       { href: '/reports', label: 'Relatórios', icon: 'reports' },
       { href: '/alerts', label: 'Alertas', icon: 'alerts', badgeKey: 'alerts' },
       // uso do sistema: o administrador da plataforma vê todas as empresas; o da empresa, só a própria (0135, 0174)
-      { href: '/acompanhamento', label: 'Acompanhamento', icon: 'tracking', adminOnly: true },
+      // administradores sempre veem; outra pessoa, só se o administrador liberar (Configurações › Pessoas): quem esconde é hiddenScreens
+      { href: '/acompanhamento', label: 'Acompanhamento', icon: 'tracking' },
       // log de atividades dos usuários: só quem administra a plataforma
       { href: '/logs', label: 'Log', icon: 'logs', platformOnly: true },
     ],

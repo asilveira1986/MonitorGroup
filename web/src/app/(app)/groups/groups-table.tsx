@@ -54,6 +54,7 @@ export function GroupsTable({
   tags = [],
   defaultSla,
   canEditSla = false,
+  canManage = true,
 }: {
   groups: Group[];
   photos?: string[];
@@ -61,6 +62,8 @@ export function GroupsTable({
   /** SLA padrão da empresa (minutos); o do grupo só aparece para administradores */
   defaultSla?: number;
   canEditSla?: boolean;
+  /** monitorar/ignorar o grupo: só administradores. Quem recebeu a tela Grupos do administrador só consulta */
+  canManage?: boolean;
 }) {
   const withPhoto = new Set(photos ?? []);
   return (
@@ -98,7 +101,7 @@ export function GroupsTable({
               </span>
             </Link>
             <div className="flex flex-col items-end gap-2 pt-2">
-              <MonitorToggle groupId={g.id} monitored={g.monitored} />
+              {canManage && <MonitorToggle groupId={g.id} monitored={g.monitored} />}
               {canEditSla && defaultSla !== undefined && (
                 <span className="flex items-center gap-1 text-[9px] text-muted">
                   SLA <SlaField groupId={g.id} sla={g.sla_minutes} defaultSla={defaultSla} />
@@ -123,7 +126,7 @@ export function GroupsTable({
                 SLA
               </th>
             )}
-            <th className="px-5 py-3 font-medium">Monitorar</th>
+            {canManage && <th className="px-5 py-3 font-medium">Monitorar</th>}
           </tr>
         </thead>
         <tbody>
@@ -165,9 +168,11 @@ export function GroupsTable({
                   <SlaField groupId={g.id} sla={g.sla_minutes} defaultSla={defaultSla} />
                 </td>
               )}
-              <td className="px-5 py-3">
-                <MonitorToggle groupId={g.id} monitored={g.monitored} />
-              </td>
+              {canManage && (
+                <td className="px-5 py-3">
+                  <MonitorToggle groupId={g.id} monitored={g.monitored} />
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
