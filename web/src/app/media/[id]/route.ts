@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { requireProfile } from '@/lib/auth';
+import { downloadName } from '@/lib/download-name';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
 
 const LINK_SECONDS = 60 * 60;
@@ -21,8 +22,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   if (!message?.media_path) return new Response('Arquivo não encontrado', { status: 404 });
 
   const download = request.nextUrl.searchParams.has('download');
-  const ext = message.media_path.split('.').pop();
-  const name = message.message_type === 'document' && message.body ? message.body : `${message.message_type}-${id.slice(0, 8)}.${ext}`;
+  // documento: o texto da mensagem com a extensão do arquivo (a legenda sozinha baixava sem o ".pdf")
+  const name = downloadName({ type: message.message_type, body: message.body, id, path: message.media_path });
   const { data, error } = await createAdminClient()
     .storage.from('media')
     .createSignedUrl(message.media_path, LINK_SECONDS, download ? { download: name } : undefined);
