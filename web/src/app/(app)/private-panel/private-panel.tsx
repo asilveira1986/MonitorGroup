@@ -62,11 +62,11 @@ function ChatCard({ c, now }: { c: PanelChat; now: number }) {
       href={`/private?c=${c.id}`}
       prefetch={false}
       title={`${title} · ${s.label}`}
-      className={cn('flex min-h-[5.5rem] flex-col justify-between rounded-xl border p-3 shadow-sm transition hover:-translate-y-px hover:shadow-md', s.card)}
+      className={cn('flex min-h-[5rem] flex-col justify-between rounded-xl border p-2.5 shadow-sm transition hover:-translate-y-px hover:shadow-md', s.card)}
     >
       <div>
         <div className="flex items-center gap-2">
-          <Avatar jid={c.photo} hasPhoto={Boolean(c.photo)} name={title} fallback={initials(title, CONTACT_INITIALS)} className="h-9 w-9 rounded-full bg-brand-soft text-xs text-brand-text" />
+          <Avatar jid={c.photo} hasPhoto={Boolean(c.photo)} name={title} fallback={initials(title, CONTACT_INITIALS)} className="h-8 w-8 rounded-full bg-brand-soft text-xs text-brand-text" />
           <span className={cn('h-2 w-2 shrink-0 rounded-full', s.dot)} title={s.label} aria-hidden />
           <h3 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-ink">{title}</h3>
           {c.unread_count > 0 && (
@@ -76,7 +76,7 @@ function ChatCard({ c, now }: { c: PanelChat; now: number }) {
           )}
         </div>
         {c.name && c.phone && (
-          <p className="mt-2 flex items-center gap-1 truncate text-[9px] text-muted">
+          <p className="mt-1.5 flex items-center gap-1 truncate text-[9px] text-muted">
             <Phone className="h-3 w-3 shrink-0" aria-hidden /> {formatPhone(c.phone)}
           </p>
         )}
@@ -84,12 +84,12 @@ function ChatCard({ c, now }: { c: PanelChat; now: number }) {
           <UserCheck className="h-3 w-3 shrink-0" aria-hidden /> <span className="truncate">{c.assigned_name ?? 'sem responsável'}</span>
         </p>
         {c.last_message_preview && (
-          <p className="mt-2 line-clamp-2 break-words text-[11px] leading-snug text-ink-2" title={c.last_message_preview}>
+          <p className="mt-1.5 line-clamp-2 break-words text-[11px] leading-snug text-ink-2" title={c.last_message_preview}>
             {c.last_message_preview}
           </p>
         )}
       </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-black/5 pt-2">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-black/5 pt-1.5">
         {quiet ? (
           <p className={cn('whitespace-nowrap text-xs', longQuiet ? 'text-warning-ink' : 'text-ink-2')} suppressHydrationWarning>
             {daysQuiet == null ? (
