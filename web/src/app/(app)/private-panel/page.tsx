@@ -1,7 +1,7 @@
 import { AlertTriangle, Lock } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
-import { requirePlatformAdmin } from '@/lib/auth';
+import { requireMenu } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PrivatePanel, type PanelChat } from './private-panel';
 
@@ -10,10 +10,11 @@ export const metadata: Metadata = { title: 'Monitor Group · Painel de privadas'
 /**
  * Painel de conversas privadas: um cartão por conversa em aberto, como o Painel de grupos. Vermelho: o cliente espera
  * além do tempo de resposta padrão. Amarelo: aguardando resposta. Verde: conversa de hoje respondida. Neutro: sem
- * mensagens hoje. Por enquanto só o administrador geral da plataforma abre.
+ * mensagens hoje. Abre o administrador geral da plataforma e quem ele liberar.
  */
 export default async function PrivatePanelPage() {
-  await requirePlatformAdmin();
+  // o administrador da plataforma, ou quem ele liberou em Configurações › Pessoas (os dados seguem o que cada pessoa pode ver)
+  await requireMenu('/private-panel');
   const supabase = await createClient();
   const [{ data: allowed }, { data, error }, { data: instRows }, { data: sectorRows }, { data: agents }] = await Promise.all([
     supabase.rpc('can_use_private_chats'),

@@ -307,7 +307,8 @@ begin
   (181, 'Contato enviado pela conversa privada sem assinatura, chega com o telefone (0190)', coalesce(pg_get_functiondef('public.private_outgoing_sign()'::regprocedure) like '%''contact''%', false)),
   (182, 'Recuperar mensagens de todas as conversas privadas (0191)', to_regprocedure('public.request_private_history_recovery_all(integer,boolean)') is not null),
   (183, 'Acesso às telas por usuário (0192)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'screen_access')),
-  (184, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (184, 'Acompanhamento liberado para quem recebeu a tela (0193)', to_regprocedure('public.has_screen_access(text)') is not null),
+  (185, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -316,7 +317,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184,0185,0186,0187,0188,0189,0190,0191,0192', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184,0185,0186,0187,0188,0189,0190,0191,0192,0193', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -26436,6 +26437,99 @@ notify pgrst, 'reload schema';
 $mig0192$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0193_monitor_for_granted_users.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0193', $mig0193$
+-- =====================================================================
+-- Acompanhamento liberado, pelo administrador, para quem não é administrador (Configurações › Pessoas).
+--
+--  * has_screen_access(href): a pessoa logada recebeu esta tela? (profiles.screen_access, 0192)
+--  * platform_monitor(): além dos administradores, abre para quem recebeu a tela Acompanhamento. Quem não é administrador vê
+--    só a PRÓPRIA empresa (e sem os usuários da plataforma), como o administrador da empresa. O histórico de atividades de cada
+--    pessoa (user_recent_activity, 0180) continua só para administradores.
+-- =====================================================================
+
+create or replace function public.has_screen_access(p_href text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select p.screen_access -> p_href = 'true'::jsonb from public.profiles p where p.id = auth.uid() and p.active), false)
+$$;
+revoke all on function public.has_screen_access(text) from public, anon;
+grant execute on function public.has_screen_access(text) to authenticated;
+
+create or replace function public.platform_monitor()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_today timestamptz := date_trunc('day', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo';
+begin
+  -- administrador da plataforma: todas as empresas; administrador de uma empresa: só a dele (e sem os usuários da plataforma)
+  if not (public.is_admin() or public.has_screen_access('/acompanhamento')) then
+    raise exception 'Somente administradores, ou quem recebeu a tela, veem o acompanhamento.' using errcode = '42501';
+  end if;
+  return coalesce((
+    with u as (
+      select p.id, p.company_id, coalesce(nullif(btrim(p.full_name), ''), p.email) as name, p.email, p.role,
+             p.platform_admin,
+             -- último acesso: o painel aberto (last_seen_at) ou o último login
+             greatest(p.last_seen_at, a.last_sign_in_at) as last_access,
+             p.last_seen_at >= now() - interval '3 minutes' as online
+        from public.profiles p
+        left join auth.users a on a.id = p.id
+       where p.active and p.company_id is not null
+         and (public.is_platform_admin() or (p.company_id = public.current_company_id() and not p.platform_admin))
+    ),
+    msgs as (
+      select g.company_id,
+             count(*) filter (where m.sent_at >= v_today) as today,
+             count(*) as d7
+        from public.messages m join public.groups g on g.id = m.group_id
+       where m.sent_at >= now() - interval '7 days'
+       group by g.company_id
+    ),
+    pmsgs as (
+      select company_id, count(*) filter (where sent_at >= v_today) as today, count(*) as d7
+        from public.private_messages where sent_at >= now() - interval '7 days'
+       group by company_id
+    )
+    select jsonb_agg(jsonb_build_object(
+      'id', c.id, 'name', c.name, 'active', c.active, 'created_at', c.created_at,
+      'users', (select count(*) from u where u.company_id = c.id),
+      'online', (select count(*) from u where u.company_id = c.id and u.online),
+      'today', (select count(*) from u where u.company_id = c.id and u.last_access >= v_today),
+      'week', (select count(*) from u where u.company_id = c.id and u.last_access >= now() - interval '7 days'),
+      'idle_7d', (select count(*) from u where u.company_id = c.id and u.last_access < now() - interval '7 days'),
+      'never', (select count(*) from u where u.company_id = c.id and u.last_access is null),
+      'last_access', (select max(u.last_access) from u where u.company_id = c.id),
+      'numbers', (select count(*) from public.whatsapp_instances w where w.company_id = c.id),
+      'numbers_connected', (select count(*) from public.whatsapp_instances w where w.company_id = c.id and w.status = 'connected'),
+      'numbers_list', coalesce((select jsonb_agg(jsonb_build_object('name', coalesce(nullif(w.push_name, ''), w.name), 'phone', w.phone,
+                                                                    'status', w.status, 'last_seen_at', w.last_seen_at) order by w.name)
+                                  from public.whatsapp_instances w where w.company_id = c.id), '[]'::jsonb),
+      'groups', (select count(*) from public.groups g where g.company_id = c.id and g.monitored and g.removed_at is null),
+      'groups_waiting', (select count(*) from public.groups g where g.company_id = c.id and g.monitored and g.removed_at is null and g.pending_since is not null),
+      'messages_today', coalesce((select today from msgs where msgs.company_id = c.id), 0),
+      'messages_7d', coalesce((select d7 from msgs where msgs.company_id = c.id), 0),
+      'private_today', coalesce((select today from pmsgs where pmsgs.company_id = c.id), 0),
+      'private_7d', coalesce((select d7 from pmsgs where pmsgs.company_id = c.id), 0),
+      'private_waiting', (select count(*) from public.private_chats pc where pc.company_id = c.id and pc.assigned_to is null and pc.closed_at is null and pc.last_message_at is not null),
+      'alerts_open', (select count(*) from public.alerts al where al.company_id = c.id and al.status <> 'resolved'),
+      'demands_open', (select count(*) from public.demands d where d.company_id = c.id and d.status in ('aberta', 'em_andamento')),
+      'demands_overdue', (select count(*) from public.demands d where d.company_id = c.id and d.status in ('aberta', 'em_andamento') and d.promised_at < now()),
+      'last_activity', (select max(l.created_at) from public.activity_log l where l.company_id = c.id),
+      'people', coalesce((select jsonb_agg(jsonb_build_object('name', u.name, 'email', u.email, 'role', u.role,
+                                                              'platform_admin', u.platform_admin,
+                                                              'last_access', u.last_access, 'online', coalesce(u.online, false))
+                                           order by coalesce(u.online, false) desc, u.last_access desc nulls last, u.name)
+                            from u where u.company_id = c.id), '[]'::jsonb)
+    ) order by c.active desc, c.name)
+    from public.companies c
+   where public.is_platform_admin() or c.id = public.current_company_id()
+  ), '[]'::jsonb);
+end;
+$$;
+revoke all on function public.platform_monitor() from public, anon;
+grant execute on function public.platform_monitor() to authenticated;
+$mig0193$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -26687,6 +26781,7 @@ from (values
   (181, 'Contato enviado pela conversa privada sem assinatura, chega com o telefone (0190)', coalesce(pg_get_functiondef('public.private_outgoing_sign()'::regprocedure) like '%''contact''%', false)),
   (182, 'Recuperar mensagens de todas as conversas privadas (0191)', to_regprocedure('public.request_private_history_recovery_all(integer,boolean)') is not null),
   (183, 'Acesso às telas por usuário (0192)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'screen_access')),
-  (184, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (184, 'Acompanhamento liberado para quem recebeu a tela (0193)', to_regprocedure('public.has_screen_access(text)') is not null),
+  (185, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

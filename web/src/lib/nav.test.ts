@@ -33,11 +33,15 @@ test('itens escondidos somem, e o grupo vazio some junto', () => {
   ]);
 });
 
-test('quem não é administrador não vê Empresas, Acompanhamento nem Log', () => {
-  const t = visibleNav(NAV_TREE, { hidden: ['/broadcasts'], platformAdmin: false });
+test('quem não é administrador não vê Empresas nem Log; o Acompanhamento some pela lista de telas não liberadas (Configurações › Pessoas)', () => {
+  // Acompanhamento não é mais fixo para administradores: quem esconde é a lista `hidden` (hiddenScreens), que o layout monta por pessoa
+  const t = visibleNav(NAV_TREE, { hidden: ['/broadcasts', '/acompanhamento'], platformAdmin: false });
   assert.deepEqual(names(t).filter((n) => n.startsWith('Gestão')), ['Gestão: Relatórios, Alertas']);
+  // liberado para a pessoa: aparece
+  const granted = visibleNav(NAV_TREE, { hidden: ['/broadcasts'], platformAdmin: false });
+  assert.deepEqual(names(granted).filter((n) => n.startsWith('Gestão')), ['Gestão: Relatórios, Alertas, Acompanhamento']);
   // sem nenhum item visível, o grupo Gestão some inteiro
-  const only = visibleNav(NAV_TREE, { hidden: ['/reports', '/alerts'], platformAdmin: false });
+  const only = visibleNav(NAV_TREE, { hidden: ['/reports', '/alerts', '/acompanhamento'], platformAdmin: false });
   assert.ok(!names(only).some((n) => n.startsWith('Gestão')));
 });
 

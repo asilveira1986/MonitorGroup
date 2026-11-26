@@ -18,6 +18,7 @@ export function UserRow({
   online,
   lastAccess,
   timeZone,
+  canSeeActivity = true,
 }: {
   name: string;
   email: string;
@@ -25,6 +26,8 @@ export function UserRow({
   online: boolean;
   lastAccess: string | null;
   timeZone?: string;
+  /** histórico de atividades da pessoa: só administradores (quem recebeu a tela Acompanhamento não vê) */
+  canSeeActivity?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<UserActivity[] | null>(null);
@@ -57,10 +60,11 @@ export function UserRow({
     <li className="text-sm">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => canSeeActivity && setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-left hover:bg-surface-2/60"
-        title="Ver as últimas atividades deste usuário"
+        disabled={!canSeeActivity}
+        className={cn('flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-left', canSeeActivity ? 'hover:bg-surface-2/60' : 'cursor-default')}
+        title={canSeeActivity ? 'Ver as últimas atividades deste usuário' : undefined}
       >
         <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', online ? 'bg-good' : 'bg-line')} title={online ? 'Online agora' : 'Offline'} />
         <span className="min-w-0 flex-1">
@@ -70,9 +74,9 @@ export function UserRow({
         <span className={cn('w-36 text-right text-xs', online ? 'font-medium text-good-ink' : idle ? 'text-warning-ink' : 'text-muted')} suppressHydrationWarning>
           {online ? 'online agora' : lastAccess ? `acessou ${timeAgo(lastAccess)}` : 'nunca acessou'}
         </span>
-        <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted transition-transform', open && 'rotate-180')} aria-hidden />
+        {canSeeActivity && <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted transition-transform', open && 'rotate-180')} aria-hidden />}
       </button>
-      {open && (
+      {open && canSeeActivity && (
         <div className="border-t border-line bg-surface-2/40 px-3 py-2">
           <div className="mb-1.5 flex items-center gap-2 text-xs text-ink-2">
             <p className="font-semibold">Últimas atividades de {name}</p>

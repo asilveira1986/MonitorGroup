@@ -4,7 +4,7 @@ import { RowMenu, type RowAction } from '@/components/disclosure';
 import { ImageUpload } from '@/components/image-upload';
 import { Badge, Card, CardHeader, EmptyState } from '@/components/ui';
 import { menuConfig, requireProfile } from '@/lib/auth';
-import { canAccessScreen, defaultScreenAccess, SCREENS } from '@/lib/screens';
+import { canAccessScreen, defaultScreenAccess, SCREENS, type ScreenLock } from '@/lib/screens';
 import { formatPhone } from '@/lib/format';
 import { ROLE_HINT, ROLE_LABEL } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
@@ -163,7 +163,21 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
             const screenRows: ScreenRow[] = who
               ? SCREENS.map((s) => {
                   const allowed = canAccessScreen(s.href, who, menus);
-                  return { ...s, locked: s.locked ?? null, allowed, defaultAllowed: s.locked ? allowed : defaultScreenAccess(menus, s.href, who) };
+                  // Grupos e Acompanhamento: administradores sempre têm (travado); para os demais o administrador libera ou não
+                  // Painel de privadas: o administrador da plataforma sempre tem; só ele libera para os demais (para outro editor, travada)
+                  const isAdminTarget = who.role === 'admin' || who.platformAdmin;
+                  const locked: ScreenLock | null =
+                    s.locked ??
+                    (s.adminDefault && isAdminTarget
+                      ? 'admin'
+                      : s.platformDefault
+                        ? who.platformAdmin
+                          ? 'admin'
+                          : me.platform_admin
+                            ? null
+                            : 'grant'
+                        : null);
+                  return { ...s, locked, allowed, defaultAllowed: locked ? allowed : defaultScreenAccess(menus, s.href, who) };
                 })
               : [];
             return (

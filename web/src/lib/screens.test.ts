@@ -41,14 +41,24 @@ test('a escolha pessoal vale sobre o padrão, para liberar e para bloquear', () 
   assert.equal(canAccessScreen('/demands', { ...agent, screenAccess: { '/alerts': false } }, {}), true);
 });
 
-test('telas fixas não se configuram por pessoa', () => {
-  // só administradores: a escolha não libera para um atendente
-  assert.equal(canAccessScreen('/groups', { ...agent, screenAccess: { '/groups': true } }, {}), false);
-  assert.equal(canAccessScreen('/acompanhamento', { ...agent, screenAccess: { '/acompanhamento': true } }, {}), false);
-  // nem bloqueia um administrador
-  assert.equal(canAccessScreen('/groups', { ...admin, screenAccess: { '/groups': false } }, {}), true);
+test('Grupos e Acompanhamento: só administradores por padrão, e o administrador pode liberar para outra pessoa', () => {
+  for (const href of ['/groups', '/acompanhamento']) {
+    assert.equal(canAccessScreen(href, agent, {}), false, `${href} atendente, sem liberação`);
+    assert.equal(canAccessScreen(href, viewer, {}), false, `${href} só ver painéis, sem liberação`);
+    assert.equal(canAccessScreen(href, { ...agent, screenAccess: { [href]: true } }, {}), true, `${href} atendente, liberado`);
+    assert.equal(canAccessScreen(href, { ...viewer, screenAccess: { [href]: true } }, {}), true, `${href} só ver painéis, liberado`);
+    assert.equal(canAccessScreen(href, { ...agent, screenAccess: { [href]: false } }, {}), false, `${href} bloqueio explícito`);
+    // administradores sempre têm, mesmo com escolha em contrário
+    assert.equal(canAccessScreen(href, admin, {}), true, `${href} administrador`);
+    assert.equal(canAccessScreen(href, { ...admin, screenAccess: { [href]: false } }, {}), true, `${href} administrador não se bloqueia`);
+  }
+  // menu da empresa não libera Grupos para atendente (só a escolha pessoal)
+  assert.equal(canAccessScreen('/groups', agent, { '/groups': 'all' }), false);
+});
+
+test('telas só da plataforma não se configuram por pessoa', () => {
   // só da plataforma
-  for (const href of ['/platform', '/logs', '/notificacoes', '/broadcasts', '/private-panel']) {
+  for (const href of ['/platform', '/logs', '/notificacoes', '/broadcasts']) {
     assert.equal(canAccessScreen(href, { ...admin, screenAccess: { [href]: true } }, {}), false, href);
     assert.equal(canAccessScreen(href, platform, {}), true, href);
   }
@@ -60,7 +70,11 @@ test('Configurações nunca some para administrador, mesmo bloqueada', () => {
 });
 
 test('parseScreenAccess: só entradas booleanas de telas configuráveis', () => {
-  assert.deepEqual(parseScreenAccess({ '/alerts': false, '/panel': true, '/groups': true, '/inexistente': true, '/reports': 'sim' }), { '/alerts': false, '/panel': true });
+  assert.deepEqual(parseScreenAccess({ '/alerts': false, '/panel': true, '/groups': true, '/platform': true, '/inexistente': true, '/reports': 'sim' }), {
+    '/alerts': false,
+    '/panel': true,
+    '/groups': true,
+  });
   assert.deepEqual(parseScreenAccess(null), {});
   assert.deepEqual(parseScreenAccess([true]), {});
   assert.deepEqual(parseScreenAccess('x'), {});
@@ -69,8 +83,14 @@ test('parseScreenAccess: só entradas booleanas de telas configuráveis', () => 
 test('screenAccessOverrides: guarda só o que difere do padrão da pessoa; tudo igual volta ao padrão', () => {
   // atendente: padrão vê tudo que não é fixo
   const all = Object.fromEntries(EDITABLE_SCREENS.map((s) => [s.href, true]));
-  assert.equal(screenAccessOverrides(all, agent, {}), null);
-  assert.deepEqual(screenAccessOverrides({ ...all, '/alerts': false }, agent, {}), { '/alerts': false });
+  // (Grupos, Acompanhamento e Painel de privadas: o atendente não tem por padrão, então marcar é liberar)
+  const base = { ...all, '/groups': false, '/acompanhamento': false, '/private-panel': false };
+  assert.equal(screenAccessOverrides(base, agent, {}), null);
+  // administrador: Grupos e Acompanhamento sempre ligados, nada a guardar (o Painel de privadas ele não tem por padrão)
+  assert.equal(screenAccessOverrides({ ...base, '/groups': true, '/acompanhamento': true }, admin, {}), null);
+  // (atendente não tem Grupos nem Acompanhamento por padrão: marcá-los é uma liberação)
+  assert.deepEqual(screenAccessOverrides({ ...all, '/alerts': false }, agent, {}), { '/alerts': false, '/groups': true, '/acompanhamento': true, '/private-panel': true });
+  assert.deepEqual(screenAccessOverrides({ ...base, '/alerts': false }, agent, {}), { '/alerts': false });
   // só ver painéis: marcar Relatórios libera só ele
   const none = Object.fromEntries(EDITABLE_SCREENS.map((s) => [s.href, false]));
   // (conversas privadas e contatos seguem as próprias regras: o padrão é liberado, então ficam marcadas)
@@ -84,7 +104,8 @@ test('screenAccessOverrides: guarda só o que difere do padrão da pessoa; tudo 
 test('hiddenScreens: as telas que somem do menu para a pessoa', () => {
   const hidden = hiddenScreens({ ...agent, screenAccess: { '/alerts': false } }, {});
   assert.ok(hidden.includes('/alerts'));
-  assert.ok(hidden.includes('/groups'), 'Grupos é só de administradores');
+  assert.ok(hidden.includes('/groups'), 'Grupos é só de administradores, sem liberação');
+  assert.ok(!hiddenScreens({ ...agent, screenAccess: { '/groups': true } }, {}).includes('/groups'), 'Grupos liberado');
   assert.ok(hidden.includes('/platform'));
   assert.ok(!hidden.includes('/demands'));
   // administrador da plataforma vê todas
@@ -97,4 +118,27 @@ test('toda tela do menu lateral está na lista de telas', () => {
   for (const href of ['/dashboard', '/agenda', '/panel', '/groups', '/pending', '/demands', '/private', '/contacts', '/reports', '/alerts', '/settings']) {
     assert.ok(hrefs.includes(href), href);
   }
+});
+
+test('Painel de privadas: padrão só do administrador da plataforma, que libera para quem ele autorizar', () => {
+  // sem liberação, nem o administrador da empresa tem
+  assert.equal(canAccessScreen('/private-panel', admin, {}), false);
+  assert.equal(canAccessScreen('/private-panel', agent, {}), false);
+  assert.equal(canAccessScreen('/private-panel', viewer, {}), false);
+  // o administrador da plataforma sempre tem, mesmo com escolha em contrário
+  assert.equal(canAccessScreen('/private-panel', platform, {}), true);
+  assert.equal(canAccessScreen('/private-panel', { ...platform, screenAccess: { '/private-panel': false } }, {}), true);
+  // liberado para uma pessoa
+  assert.equal(canAccessScreen('/private-panel', { ...agent, screenAccess: { '/private-panel': true } }, {}), true);
+  assert.equal(canAccessScreen('/private-panel', { ...admin, screenAccess: { '/private-panel': true } }, {}), true);
+  assert.equal(canAccessScreen('/private-panel', { ...agent, screenAccess: { '/private-panel': false } }, {}), false);
+  // as outras telas de Conversas não mudam
+  assert.equal(canAccessScreen('/private', agent, {}), true);
+  // some do menu de quem não recebeu
+  assert.ok(hiddenScreens(agent, {}).includes('/private-panel'));
+  assert.ok(!hiddenScreens({ ...agent, screenAccess: { '/private-panel': true } }, {}).includes('/private-panel'));
+  // a escolha guardada: só o que difere do padrão (liberação), e nada para o administrador da plataforma
+  assert.deepEqual(screenAccessOverrides({ '/private-panel': true }, agent, {}), { '/private-panel': true });
+  assert.equal(screenAccessOverrides({ '/private-panel': false }, agent, {}), null);
+  assert.equal(screenAccessOverrides({ '/private-panel': false }, platform, {}), null);
 });

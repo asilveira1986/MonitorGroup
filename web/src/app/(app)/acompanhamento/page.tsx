@@ -2,7 +2,7 @@ import { Activity, AlertTriangle } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
 import { appSettings } from '@/lib/app-settings';
-import { requireAdmin } from '@/lib/auth';
+import { requireMenu } from '@/lib/auth';
 import { cn, formatNumber, formatPhone, timeAgo } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import { AutoRefresh } from './auto-refresh';
@@ -50,8 +50,11 @@ const sum = (list: Company[], k: keyof Company) => list.reduce((n, c) => n + Num
  * própria (0174). Os demais não abrem.
  */
 export default async function MonitorPage() {
-  const profile = await requireAdmin();
+  // administradores, ou quem recebeu a tela em Configurações › Pessoas
+  const profile = await requireMenu('/acompanhamento');
   const platform = Boolean(profile.platform_admin);
+  // o histórico de atividades de cada pessoa (as do Log) fica só para administradores
+  const canSeeActivity = profile.role === 'admin' || platform;
   const supabase = await createClient();
   // quem está vendo a tela também está online
   await supabase.rpc('touch_last_seen');
@@ -155,6 +158,7 @@ export default async function MonitorPage() {
                             online={p.online}
                             lastAccess={p.last_access}
                             timeZone={timeZone}
+                            canSeeActivity={canSeeActivity}
                           />
                         ))}
                         {c.people.length === 0 && <li className="px-3 py-2 text-sm text-muted">Nenhum usuário ativo.</li>}
