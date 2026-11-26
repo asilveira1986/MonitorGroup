@@ -133,3 +133,31 @@ export async function saveScreenAccess(id: string, wanted: Record<string, boolea
   revalidatePath('/settings/people');
   return result(error);
 }
+
+/**
+ * Administrador: inativa ou ativa uma pessoa direto da lista de Pessoas. Inativar é o mesmo que "Bloquear acesso ao painel": o
+ * convite do e-mail sai e o perfil fica inativo (a pessoa não entra mais; o histórico continua com o nome dela). Ativar devolve o
+ * convite com o perfil atual e ativa o perfil. Não vale para si mesmo, e o acesso de quem administra a plataforma só outro
+ * administrador da plataforma altera.
+ */
+export async function setUserActive(id: string, active: boolean): Promise<Result> {
+  const me = await requireAdmin();
+  if (id === me.id) return { ok: false, error: 'Você não pode inativar o seu próprio acesso.' };
+  const supabase = await createClient();
+  // a leitura respeita as permissões de quem pede: só pessoas da empresa dele
+  const { data: user } = await supabase.from('profiles').select('id, email, role, company_id, platform_admin').eq('id', id).maybeSingle();
+  if (!user) return { ok: false, error: 'Usuário não encontrado.' };
+  if (user.platform_admin && !me.platform_admin) return { ok: false, error: 'O acesso de quem administra a plataforma só outro administrador da plataforma altera.' };
+  if (active) {
+    // convite de volta (o banco ativa o perfil com o perfil do convite) e perfil ativo
+    const { error: inviteError } = await supabase
+      .from('allowed_emails')
+      .upsert({ email: user.email, role: user.role, company_id: user.company_id ?? me.company_id });
+    if (inviteError) return result(inviteError);
+  } else {
+    await supabase.from('allowed_emails').delete().eq('email', user.email);
+  }
+  const { error } = await supabase.from('profiles').update({ active }).eq('id', id);
+  revalidatePath('/settings/people');
+  return result(error);
+}
