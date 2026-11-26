@@ -120,7 +120,7 @@ test('toda tela do menu lateral está na lista de telas', () => {
   }
 });
 
-test('Painel de privadas: padrão só do administrador da plataforma, que libera para quem ele autorizar', () => {
+test('Painel de privadas: desligado para todos (só o administrador da plataforma tem), e o administrador libera pessoa a pessoa', () => {
   // sem liberação, nem o administrador da empresa tem
   assert.equal(canAccessScreen('/private-panel', admin, {}), false);
   assert.equal(canAccessScreen('/private-panel', agent, {}), false);

@@ -8,8 +8,8 @@
  * Telas fixas (`locked`) não se configuram por pessoa: as que são só do administrador da plataforma. Telas `adminDefault`
  * (Grupos, Acompanhamento) são, por padrão, só de administradores, mas o administrador pode liberar para outra pessoa; para
  * administradores ficam sempre ligadas. Quem recebe a liberação vê a tela só para consulta (sem os controles de gestão).
- * Telas `platformDefault` (Painel de privadas) são, por padrão, só do administrador da plataforma, e só ele pode liberá-las para
- * outras pessoas (nem o administrador da empresa libera).
+ * Telas `platformDefault` (Painel de privadas) são, por padrão, só do administrador da plataforma (ninguém mais vê, nem o
+ * administrador da empresa); o administrador libera para quem quiser, pessoa a pessoa, e por enquanto fica desligada para todos.
  * Sem dependências, para o menu, as páginas, a tela de Pessoas e os testes usarem a mesma regra.
  */
 import { canSeeMenu, MENU_ITEMS } from './menu.ts';
@@ -17,9 +17,9 @@ import type { Role } from './types.ts';
 
 /**
  * Por que uma tela aparece travada na lista de uma pessoa: 'platform' = fixa, só do administrador da plataforma; 'admin' = esta
- * pessoa sempre tem; 'grant' = só o administrador da plataforma libera (quem edita não é ele).
+ * pessoa sempre tem.
  */
-export type ScreenLock = 'platform' | 'admin' | 'grant';
+export type ScreenLock = 'platform' | 'admin';
 
 export type ScreenDef = {
   href: string;
@@ -31,7 +31,7 @@ export type ScreenDef = {
   locked?: 'platform';
   /** padrão: só administradores; o administrador pode liberar para outra pessoa */
   adminDefault?: true;
-  /** padrão: só o administrador da plataforma; só ele libera para outra pessoa */
+  /** padrão: só o administrador da plataforma; o administrador libera para outra pessoa */
   platformDefault?: true;
 };
 
@@ -44,7 +44,7 @@ export const SCREENS: ScreenDef[] = [
   { href: '/pending', label: 'Aguardando resposta', description: 'Fila de clientes esperando resposta.', section: 'Grupos' },
   { href: '/demands', label: 'Demandas', description: 'Pedidos dos clientes e entregas.', section: 'Grupos' },
   { href: '/private', label: 'Conversas privadas', description: 'Conversas 1 a 1 do WhatsApp conectado.', section: 'Conversas' },
-  { href: '/private-panel', label: 'Painel de privadas', description: 'Cartões das conversas privadas. Só o administrador da plataforma libera para outra pessoa.', section: 'Conversas', platformDefault: true },
+  { href: '/private-panel', label: 'Painel de privadas', description: 'Cartões das conversas privadas, um por conversa em aberto. Desligado por padrão: libere só para quem precisar.', section: 'Conversas', platformDefault: true },
   { href: '/contacts', label: 'Contatos', description: 'Agenda de contatos do WhatsApp.', section: 'Conversas' },
   { href: '/broadcasts', label: 'Disparos', description: 'Envios em massa.', section: 'Automações', locked: 'platform' },
   { href: '/reports', label: 'Relatórios', description: 'Relatórios para imprimir ou exportar.', section: 'Gestão' },
@@ -60,7 +60,6 @@ export const SCREENS: ScreenDef[] = [
 export const LOCK_REASON: Record<ScreenLock, string> = {
   admin: 'Sempre liberada para este perfil',
   platform: 'Só o administrador da plataforma',
-  grant: 'Só o administrador da plataforma libera',
 };
 
 /** Telas que se configuram por pessoa. */

@@ -164,19 +164,10 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
               ? SCREENS.map((s) => {
                   const allowed = canAccessScreen(s.href, who, menus);
                   // Grupos e Acompanhamento: administradores sempre têm (travado); para os demais o administrador libera ou não
-                  // Painel de privadas: o administrador da plataforma sempre tem; só ele libera para os demais (para outro editor, travada)
+                  // Painel de privadas: o administrador da plataforma sempre tem; para os demais, o administrador libera ou não
                   const isAdminTarget = who.role === 'admin' || who.platformAdmin;
                   const locked: ScreenLock | null =
-                    s.locked ??
-                    (s.adminDefault && isAdminTarget
-                      ? 'admin'
-                      : s.platformDefault
-                        ? who.platformAdmin
-                          ? 'admin'
-                          : me.platform_admin
-                            ? null
-                            : 'grant'
-                        : null);
+                    s.locked ?? ((s.adminDefault && isAdminTarget) || (s.platformDefault && who.platformAdmin) ? 'admin' : null);
                   return { ...s, locked, allowed, defaultAllowed: locked ? allowed : defaultScreenAccess(menus, s.href, who) };
                 })
               : [];

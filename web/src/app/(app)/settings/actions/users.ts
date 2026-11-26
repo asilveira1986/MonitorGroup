@@ -3,7 +3,7 @@
 import { randomInt } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { menuConfig, requireAdmin, requireProfile } from '@/lib/auth';
-import { parseScreenAccess, SCREENS, screenAccessOverrides } from '@/lib/screens';
+import { screenAccessOverrides } from '@/lib/screens';
 import { dbResult as result, type ActionResult as Result } from '@/lib/action-result';
 import { friendlyDbError } from '@/lib/db-errors';
 import { createAdminClient, createClient } from '@/lib/supabase/server';
@@ -116,7 +116,7 @@ export async function updateUser(id: string, values: { role?: 'admin' | 'agent' 
 /**
  * Administrador: libera ou bloqueia telas só para uma pessoa (Configurações › Pessoas). Recebe o que ficou marcado e guarda só o
  * que difere do padrão dela (perfil + menus da empresa); tudo igual ao padrão volta ao padrão. Telas fixas (só da plataforma) e telas
- * que não existem são ignoradas; as que só o administrador da plataforma libera (Painel de privadas) ele muda, o administrador da empresa não. Não vale para o próprio administrador, como o perfil e o acesso.
+ * que não existem são ignoradas; Não vale para o próprio administrador, como o perfil e o acesso.
  */
 export async function saveScreenAccess(id: string, wanted: Record<string, boolean>): Promise<Result> {
   const me = await requireAdmin();
@@ -127,13 +127,7 @@ export async function saveScreenAccess(id: string, wanted: Record<string, boolea
   const { data: user } = await supabase.from('profiles').select('id, role, platform_admin, screen_access').eq('id', id).maybeSingle();
   if (!user) return { ok: false, error: 'Usuário não encontrado.' };
   if (user.platform_admin && !me.platform_admin) return { ok: false, error: 'O acesso de quem administra a plataforma só outro administrador da plataforma altera.' };
-  // telas que só o administrador da plataforma libera (Painel de privadas): quem não é ele não muda; fica como está
-  const merged = { ...wanted };
-  if (!me.platform_admin) {
-    const current = parseScreenAccess(user.screen_access);
-    for (const s of SCREENS) if (s.platformDefault) merged[s.href] = current[s.href] === true;
-  }
-  const overrides = screenAccessOverrides(merged, { role: user.role, platformAdmin: Boolean(user.platform_admin) }, await menuConfig());
+  const overrides = screenAccessOverrides(wanted, { role: user.role, platformAdmin: Boolean(user.platform_admin) }, await menuConfig());
   const { error } = await supabase.from('profiles').update({ screen_access: overrides }).eq('id', id);
   if (error && /screen_access/.test(error.message)) return { ok: false, error: 'Falta aplicar o script do banco (item 0192).' };
   revalidatePath('/settings/people');
