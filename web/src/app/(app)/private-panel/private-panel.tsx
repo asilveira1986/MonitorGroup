@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, Clock, MessageCircle, MessageSquareText, Phone, Search, Tag, UserCheck, X } from 'lucide-react';
+import { Building2, Clock, MailOpen, MessageCircle, MessageSquareText, Phone, Search, Tag, UserCheck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -153,6 +153,8 @@ export function PrivatePanel({
   const [tab, setTab] = useState<Tab>(seesTeam ? 'team' : 'queue');
   const [sector, setSector] = useState('all');
   const [tagFilter, setTagFilter] = useState('all');
+  // só conversas com mensagens que ninguém abriu (vale dentro da aba escolhida)
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [query, setQuery] = useState('');
   const restored = useRef(false);
 
@@ -160,12 +162,13 @@ export function PrivatePanel({
   useEffect(() => {
     const load = () => {
       try {
-        const saved = JSON.parse(sessionStorage.getItem(FILTERS_KEY) ?? 'null') as { tab?: Tab; sector?: string; tag?: string; query?: string } | null;
+        const saved = JSON.parse(sessionStorage.getItem(FILTERS_KEY) ?? 'null') as { tab?: Tab; sector?: string; tag?: string; query?: string; unread?: boolean } | null;
         if (saved) {
           if (saved.tab === 'queue' || saved.tab === 'mine' || (saved.tab === 'team' && seesTeam)) setTab(saved.tab);
           if (saved.sector) setSector(saved.sector);
           if (saved.tag) setTagFilter(saved.tag);
           if (typeof saved.query === 'string') setQuery(saved.query);
+          if (saved.unread === true) setUnreadOnly(true);
         }
       } catch {
         /* sem armazenamento da sessão */
@@ -177,11 +180,11 @@ export function PrivatePanel({
   useEffect(() => {
     if (!restored.current) return;
     try {
-      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ tab, sector, tag: tagFilter, query }));
+      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ tab, sector, tag: tagFilter, query, unread: unreadOnly }));
     } catch {
       /* sem armazenamento da sessão */
     }
-  }, [tab, sector, tagFilter, query]);
+  }, [tab, sector, tagFilter, query, unreadOnly]);
 
   // relógio dos tempos dos cartões e atualização: a cada minuto (só com a aba visível) e a cada mudança nas conversas
   const [now, setNow] = useState(() => Date.now());
@@ -239,11 +242,13 @@ export function PrivatePanel({
   // do último cliente que escreveu para o primeiro (sem mensagem do cliente, no fim)
   const byClient = (a: PanelChat, b: PanelChat) =>
     (b.last_client_message_at ?? '').localeCompare(a.last_client_message_at ?? '') || (b.last_message_at ?? '').localeCompare(a.last_message_at ?? '');
-  const shown = base.filter((c) => inTab(c, tab)).sort(byClient);
-  const activeFilters = [sector !== 'all', tagFilter !== 'all', Boolean(q)].filter(Boolean).length;
+  const unreadCount = base.filter((c) => inTab(c, tab) && c.unread_count > 0).length;
+  const shown = base.filter((c) => inTab(c, tab) && (!unreadOnly || c.unread_count > 0)).sort(byClient);
+  const activeFilters = [sector !== 'all', tagFilter !== 'all', unreadOnly, Boolean(q)].filter(Boolean).length;
   const clear = () => {
     setSector('all');
     setTagFilter('all');
+    setUnreadOnly(false);
     setQuery('');
   };
 
@@ -310,6 +315,23 @@ export function PrivatePanel({
                 </button>
               );
             })}
+            {/* não lidas: só as conversas da aba com mensagens que ninguém abriu */}
+            <button
+              type="button"
+              onClick={() => setUnreadOnly((v) => !v)}
+              aria-pressed={unreadOnly}
+              title="Só conversas com mensagens não lidas"
+              disabled={!unreadCount && !unreadOnly}
+              className={cn(
+                CHIP,
+                'disabled:cursor-default disabled:opacity-45',
+                unreadOnly ? 'border-brand-line bg-brand-soft/60 text-ink' : 'border-line text-ink-2 hover:border-ink-2 hover:text-ink',
+              )}
+            >
+              <MailOpen className={cn('h-3.5 w-3.5', unreadOnly ? '' : 'opacity-70')} aria-hidden />
+              Não lidas
+              <span className={cn(COUNT, unreadCount ? 'bg-good text-white' : 'bg-surface-2 text-muted')}>{unreadCount}</span>
+            </button>
           </div>
           <div className="flex shrink-0 items-center justify-between gap-3 text-xs text-ink-2 lg:justify-end">
             <span>
