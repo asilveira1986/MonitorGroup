@@ -65,9 +65,9 @@ function ChatCard({ c, now }: { c: PanelChat; now: number }) {
       className={cn('flex min-h-[5.5rem] flex-col justify-between rounded-xl border p-3 shadow-sm transition hover:-translate-y-px hover:shadow-md', s.card)}
     >
       <div>
-        <div className="flex items-start gap-1.5">
+        <div className="flex items-center gap-2">
           <Avatar jid={c.photo} hasPhoto={Boolean(c.photo)} name={title} fallback={initials(title, CONTACT_INITIALS)} className="h-9 w-9 rounded-full bg-brand-soft text-xs text-brand-text" />
-          <span className={cn('mt-1 h-2 w-2 shrink-0 rounded-full', s.dot)} title={s.label} aria-hidden />
+          <span className={cn('h-2 w-2 shrink-0 rounded-full', s.dot)} title={s.label} aria-hidden />
           <h3 className="line-clamp-2 min-w-0 text-sm font-semibold leading-snug text-ink">{title}</h3>
           {c.unread_count > 0 && (
             <span className="tabular ml-auto shrink-0 rounded-full bg-good px-1.5 text-[9px] font-semibold text-white" title="Não lidas">
@@ -76,33 +76,20 @@ function ChatCard({ c, now }: { c: PanelChat; now: number }) {
           )}
         </div>
         {c.name && c.phone && (
-          <p className="mt-0.5 flex items-center gap-1 truncate pl-[2.625rem] text-[9px] text-muted">
+          <p className="mt-2 flex items-center gap-1 truncate text-[9px] text-muted">
             <Phone className="h-3 w-3 shrink-0" aria-hidden /> {formatPhone(c.phone)}
           </p>
         )}
-        <p className="mt-0.5 flex items-center gap-1 truncate pl-[2.625rem] text-[9px] text-ink-2" title={c.assigned_name ? `Responsável: ${c.assigned_name}` : 'Aguardando atendimento (sem responsável)'}>
+        <p className="mt-1 flex items-center gap-1 truncate text-[9px] text-ink-2" title={c.assigned_name ? `Responsável: ${c.assigned_name}` : 'Aguardando atendimento (sem responsável)'}>
           <UserCheck className="h-3 w-3 shrink-0" aria-hidden /> <span className="truncate">{c.assigned_name ?? 'sem responsável'}</span>
         </p>
         {c.last_message_preview && (
-          <p className="mt-1 line-clamp-2 break-words text-[11px] leading-snug text-ink-2" title={c.last_message_preview}>
+          <p className="mt-2 line-clamp-2 break-words text-[11px] leading-snug text-ink-2" title={c.last_message_preview}>
             {c.last_message_preview}
           </p>
         )}
-        {time && !quiet && (
-          <p
-            className={cn(
-              'mt-0.5 flex items-center gap-1 pl-[2.625rem] text-[9px] tabular',
-              c.status === 'late' ? 'font-semibold text-critical-ink' : c.status === 'waiting' ? 'font-semibold text-warning-ink' : 'text-muted',
-            )}
-            title={time.title}
-            suppressHydrationWarning
-          >
-            <Clock className="h-3 w-3 shrink-0" aria-hidden />
-            {time.label} {time.value}
-          </p>
-        )}
       </div>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-black/5 pt-2">
         {quiet ? (
           <p className={cn('whitespace-nowrap text-xs', longQuiet ? 'text-warning-ink' : 'text-ink-2')} suppressHydrationWarning>
             {daysQuiet == null ? (
@@ -116,6 +103,18 @@ function ChatCard({ c, now }: { c: PanelChat; now: number }) {
                 <span className={cn('text-base font-semibold tabular', longQuiet ? 'text-warning-ink' : 'text-ink')}>{daysQuiet}</span> {daysQuiet === 1 ? 'dia' : 'dias'} sem mensagens
               </>
             )}
+          </p>
+        ) : time ? (
+          <p
+            className={cn(
+              'flex items-center gap-1.5 text-[11px] tabular',
+              c.status === 'late' ? 'font-semibold text-critical-ink' : c.status === 'waiting' ? 'font-semibold text-warning-ink' : 'text-muted',
+            )}
+            title={time.title}
+            suppressHydrationWarning
+          >
+            <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            {time.label} {time.value}
           </p>
         ) : null}
       </div>
