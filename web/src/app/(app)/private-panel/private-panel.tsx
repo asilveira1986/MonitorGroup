@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from '@/components/avatar';
 import { EmptyState } from '@/components/ui';
-import { CONTACT_INITIALS, cn, formatDuration, formatNumber, formatPhone, initials } from '@/lib/format';
+import { CONTACT_INITIALS, cn, formatDuration, formatPhone, initials } from '@/lib/format';
 import { useRealtime } from '@/lib/use-realtime';
 import { ACTIVE_FIELD, CHIP, COUNT, FIELD, FilterField, ORDER, STATUS, type PanelStatus } from '../panel/panel';
 
@@ -112,11 +112,7 @@ function ChatCard({ c, now }: { c: PanelChat; now: number }) {
               </>
             )}
           </p>
-        ) : (
-          <p className="whitespace-nowrap text-xs text-ink-2">
-            <span className="text-base font-semibold tabular text-ink">{formatNumber(c.received_today)}</span> {c.received_today === 1 ? 'mensagem hoje' : 'mensagens hoje'}
-          </p>
-        )}
+        ) : null}
         {(c.waiting_count ?? 0) > 0 && (
           <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-semibold', s.badge)}>
             <s.icon className="h-3 w-3" aria-hidden />
