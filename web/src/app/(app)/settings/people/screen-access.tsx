@@ -1,6 +1,6 @@
 'use client';
 
-import { Lock, RotateCcw } from 'lucide-react';
+import { ChevronRight, Lock, RotateCcw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -30,11 +30,14 @@ export function ScreenAccessForm({ userId, name, roleLabel, rows }: { userId: st
   const [checked, setChecked] = useState<Record<string, boolean>>(() => Object.fromEntries(rows.map((r) => [r.href, r.allowed])));
   const [saved, setSaved] = useState<Record<string, boolean>>(checked);
   const [pending, start] = useTransition();
+  // seções recolhidas por padrão (a lista é longa); o resumo no título mostra quantas telas estão liberadas
+  const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const editable = rows.filter((r) => !r.locked);
   const dirty = editable.some((r) => checked[r.href] !== saved[r.href]);
   const customized = editable.filter((r) => checked[r.href] !== r.defaultAllowed).length;
   const sections = [...new Set(rows.map((r) => r.section))];
+  const allOpen = sections.every((s) => open[s]);
 
   const save = (values: Record<string, boolean>, message: string) =>
     start(async () => {
@@ -56,43 +59,71 @@ export function ScreenAccessForm({ userId, name, roleLabel, rows }: { userId: st
         </p>
       </div>
 
-      {sections.map((section) => (
-        <div key={section} className="rounded-xl border border-line">
-          <p className="border-b border-line bg-surface-2 px-3 py-1.5 text-xs font-semibold text-ink-2">{section}</p>
-          <ul className="divide-y divide-line">
-            {rows
-              .filter((r) => r.section === section)
-              .map((r) => {
-                const diff = !r.locked && checked[r.href] !== r.defaultAllowed;
-                return (
-                  <li key={r.href}>
-                    <label className={`flex items-start gap-3 px-3 py-2 ${r.locked ? 'opacity-70' : 'cursor-pointer hover:bg-surface-2'}`}>
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--brand)]"
-                        checked={checked[r.href] ?? false}
-                        disabled={pending || Boolean(r.locked)}
-                        onChange={(e) => setChecked((prev) => ({ ...prev, [r.href]: e.target.checked }))}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                          {r.label}
-                          {r.locked && (
-                            <Badge tone="neutral">
-                              <Lock className="h-3 w-3" /> {LOCK_REASON[r.locked]}
-                            </Badge>
-                          )}
-                          {diff && <Badge tone="info">Personalizado</Badge>}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setOpen(Object.fromEntries(sections.map((s) => [s, !allOpen])))}
+          className="text-xs font-medium text-ink-2 underline-offset-2 hover:text-ink hover:underline"
+        >
+          {allOpen ? 'Recolher tudo' : 'Expandir tudo'}
+        </button>
+      </div>
+
+      {sections.map((section) => {
+        const inSection = rows.filter((r) => r.section === section);
+        const allowedCount = inSection.filter((r) => checked[r.href]).length;
+        const changed = inSection.filter((r) => !r.locked && checked[r.href] !== r.defaultAllowed).length;
+        const isOpen = Boolean(open[section]);
+        return (
+          <div key={section} className="rounded-xl border border-line">
+            <button
+              type="button"
+              onClick={() => setOpen((prev) => ({ ...prev, [section]: !prev[section] }))}
+              aria-expanded={isOpen}
+              className={`flex w-full items-center gap-2 bg-surface-2 px-3 py-2 text-left hover:bg-line/40 ${isOpen ? 'rounded-t-xl border-b border-line' : 'rounded-xl'}`}
+            >
+              <ChevronRight className={`h-4 w-4 shrink-0 text-muted transition ${isOpen ? 'rotate-90' : ''}`} aria-hidden />
+              <span className="min-w-0 flex-1 text-xs font-semibold text-ink-2">{section}</span>
+              {changed > 0 && <Badge tone="info">Personalizado</Badge>}
+              <span className="tabular shrink-0 text-xs text-muted">
+                {allowedCount} de {inSection.length} liberada{inSection.length === 1 ? '' : 's'}
+              </span>
+            </button>
+            {isOpen && (
+              <ul className="divide-y divide-line">
+                {inSection.map((r) => {
+                  const diff = !r.locked && checked[r.href] !== r.defaultAllowed;
+                  return (
+                    <li key={r.href}>
+                      <label className={`flex items-start gap-3 px-3 py-2 ${r.locked ? 'opacity-70' : 'cursor-pointer hover:bg-surface-2'}`}>
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--brand)]"
+                          checked={checked[r.href] ?? false}
+                          disabled={pending || Boolean(r.locked)}
+                          onChange={(e) => setChecked((prev) => ({ ...prev, [r.href]: e.target.checked }))}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                            {r.label}
+                            {r.locked && (
+                              <Badge tone="neutral">
+                                <Lock className="h-3 w-3" /> {LOCK_REASON[r.locked]}
+                              </Badge>
+                            )}
+                            {diff && <Badge tone="info">Personalizado</Badge>}
+                          </span>
+                          <span className="block text-xs text-muted">{r.description}</span>
                         </span>
-                        <span className="block text-xs text-muted">{r.description}</span>
-                      </span>
-                    </label>
-                  </li>
-                );
-              })}
-          </ul>
-        </div>
-      ))}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        );
+      })}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" disabled={pending || !dirty} onClick={() => save(checked, 'Acesso às telas salvo')}>
