@@ -37,6 +37,44 @@ jobs:
             echo "pronto=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Confere só o FORMATO da URI, sem imprimir nenhum pedaço dela (uma senha colada errada já apareceu inteira no log, dentro da
+      # mensagem de erro do psql). Antes, manda o GitHub esconder a senha em qualquer linha seguinte do job.
+      - name: Conferir o formato da URI
+        if: steps.segredo.outputs.pronto == 'true'
+        run: |
+          url="$SUPABASE_DB_URL"
+          body="${url#*://}"
+          userinfo="${body%@*}" # usuário e senha: tudo antes do último @
+          pass="${userinfo##*:}"
+          [ "${#pass}" -ge 4 ] && echo "::add-mask::$pass"
+          pass2="${pass##*@}"
+          [ "$pass2" != "$pass" ] && [ "${#pass2}" -ge 4 ] && echo "::add-mask::$pass2"
+
+          erro() { echo "::error title=SUPABASE_DB_URL no formato errado::$1"; exit 1; }
+          at="$(printf '%s' "$url" | tr -cd '@' | wc -c)"
+          host="${url##*@}"
+
+          case "$url" in
+            postgres://*|postgresql://*) ;;
+            *) erro 'A URI precisa começar com postgresql://' ;;
+          esac
+          case "$url" in
+            *[[:space:]]*) erro 'A URI tem espaço ou quebra de linha. Cole de novo, sem espaços antes nem depois.' ;;
+          esac
+          case "$url" in
+            *'['*|*']'*) erro 'A URI tem colchetes. Tire os colchetes de [YOUR-PASSWORD]: a senha vai sem eles.' ;;
+          esac
+          [ "$at" -eq 1 ] || erro "A URI tem $at sinais @; precisa ter exatamente um, logo depois da senha (usuario:senha@servidor). Não coloque @ antes da senha."
+          case "$host" in
+            db.*.supabase.co*) erro 'Esta é a conexão direta, que só tem IPv6 e não funciona no GitHub. Use a do Session pooler (Connect › Session pooler).' ;;
+          esac
+          if [[ "$host" == *pooler.supabase.com* && "$userinfo" != postgres.* ]]; then
+            erro 'No Session pooler o usuário é postgres.CODIGO_DO_PROJETO (com o ponto), e não só postgres.'
+          fi
+          [[ "$url" =~ ^postgres(ql)?://[^:@/]+:[^@/]+@[^@:/]+(:[0-9]+)?/[^/]+$ ]] \
+            || erro 'A URI não está no formato postgresql://usuario:senha@servidor:5432/postgres. Se a senha tem @, #, ? ou /, troque por uma só com letras e números.'
+          echo 'Formato da URI conferido.'
+
       - uses: actions/checkout@v4
         if: steps.segredo.outputs.pronto == 'true'
 
