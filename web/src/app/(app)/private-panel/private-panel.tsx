@@ -1,14 +1,15 @@
 'use client';
 
-import { Building2, Clock, MailOpen, MessageCircle, MessageSquareText, Phone, Search, UserCheck, X } from 'lucide-react';
+import { Building2, Clock, MessageCircle, MessageSquareText, Phone, Search, Tag, UserCheck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from '@/components/avatar';
+import type { CustomerTag } from '@/components/customer-tags';
 import { EmptyState } from '@/components/ui';
 import { CONTACT_INITIALS, cn, formatDuration, formatPhone, initials } from '@/lib/format';
 import { useRealtime } from '@/lib/use-realtime';
-import { ACTIVE_FIELD, CHIP, COUNT, FIELD, FilterField, ORDER, STATUS, type PanelStatus } from '../panel/panel';
+import { ACTIVE_FIELD, CHIP, COUNT, FIELD, FilterField, STATUS, type PanelStatus } from '../panel/panel';
 
 export type PanelChat = {
   id: string;
@@ -16,6 +17,8 @@ export type PanelChat = {
   phone: string | null;
   instance_id: string | null;
   assigned_to: string | null;
+  /** etiquetas (ids) da conversa */
+  tags?: string[] | null;
   unread_count: number;
   last_message_at: string | null;
   /** a mensagem mais recente do cliente: ordena do último que escreveu para o primeiro (0188) */
@@ -123,23 +126,33 @@ function ChatCard({ c, now }: { c: PanelChat; now: number }) {
   );
 }
 
-/** Grade de cartões das conversas privadas, com busca, setor do número, responsável e situação. Atualiza sozinha. */
+type Tab = 'queue' | 'mine' | 'team';
+
+/**
+ * Grade de cartões das conversas privadas, com os mesmos filtros da tela de Conversas privadas: Aguardando (sem responsável),
+ * Meus atendimentos e, para quem vê a equipe, Todos; mais busca, setor e etiqueta. Atualiza sozinha.
+ */
 export function PrivatePanel({
   chats: allChats,
   sectors,
   hasNoSector,
-  responsibles,
+  tags,
+  me,
+  seesAll,
+  seesTeam,
 }: {
   chats: PanelChat[];
   sectors: { id: string; name: string }[];
   hasNoSector: boolean;
-  responsibles: { id: string; name: string }[];
+  tags: CustomerTag[];
+  me: string;
+  seesAll: boolean;
+  seesTeam: boolean;
 }) {
   const router = useRouter();
-  // situação (atrasados, aguardando, respondidos) ou "não lidas" (conversas com mensagens que ninguém abriu)
-  const [filter, setFilter] = useState<PanelStatus | 'unread' | 'all'>('all');
+  const [tab, setTab] = useState<Tab>(seesTeam ? 'team' : 'queue');
   const [sector, setSector] = useState('all');
-  const [responsible, setResponsible] = useState('all');
+  const [tagFilter, setTagFilter] = useState('all');
   const [query, setQuery] = useState('');
   const restored = useRef(false);
 
@@ -147,12 +160,11 @@ export function PrivatePanel({
   useEffect(() => {
     const load = () => {
       try {
-        const saved = JSON.parse(sessionStorage.getItem(FILTERS_KEY) ?? 'null') as { filter?: PanelStatus | 'unread' | 'all'; sector?: string; responsible?: string; query?: string } | null;
+        const saved = JSON.parse(sessionStorage.getItem(FILTERS_KEY) ?? 'null') as { tab?: Tab; sector?: string; tag?: string; query?: string } | null;
         if (saved) {
-          // ("sem mensagens" deixou de ser filtro: vira Todos)
-          if (saved.filter && saved.filter !== 'neutral') setFilter(saved.filter);
+          if (saved.tab === 'queue' || saved.tab === 'mine' || (saved.tab === 'team' && seesTeam)) setTab(saved.tab);
           if (saved.sector) setSector(saved.sector);
-          if (saved.responsible) setResponsible(saved.responsible);
+          if (saved.tag) setTagFilter(saved.tag);
           if (typeof saved.query === 'string') setQuery(saved.query);
         }
       } catch {
@@ -161,15 +173,15 @@ export function PrivatePanel({
       restored.current = true;
     };
     load();
-  }, []);
+  }, [seesTeam]);
   useEffect(() => {
     if (!restored.current) return;
     try {
-      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ filter, sector, responsible, query }));
+      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ tab, sector, tag: tagFilter, query }));
     } catch {
       /* sem armazenamento da sessão */
     }
-  }, [filter, sector, responsible, query]);
+  }, [tab, sector, tagFilter, query]);
 
   // relógio dos tempos dos cartões e atualização: a cada minuto (só com a aba visível) e a cada mudança nas conversas
   const [now, setNow] = useState(() => Date.now());
@@ -208,22 +220,30 @@ export function PrivatePanel({
       allChats.filter(
         (c) =>
           (sector === 'all' || (sector === 'none' ? !c.sector_id : c.sector_id === sector)) &&
-          (responsible === 'all' || (responsible === 'none' ? !c.assigned_to : c.assigned_to === responsible)) &&
+          (tagFilter === 'all' || (c.tags ?? []).includes(tagFilter)) &&
           (!q || (c.name ?? '').toLowerCase().includes(q) || (digits.length >= 3 && (c.phone ?? '').includes(digits))),
       ),
-    [allChats, sector, responsible, q, digits],
+    [allChats, sector, tagFilter, q, digits],
   );
-  const counts = useMemo(() => Object.fromEntries(ORDER.map((k) => [k, base.filter((c) => c.status === k).length])) as Record<PanelStatus, number>, [base]);
+  // o painel só tem conversas em aberto: aguardando = sem responsável; meus = atribuídas a mim; todos = a equipe toda
+  const inTab = (c: PanelChat, t: Tab) => t === 'team' || (t === 'mine' ? c.assigned_to === me : !c.assigned_to);
+  const tabInfo = (t: Tab) => {
+    const list = base.filter((c) => inTab(c, t));
+    return { count: list.length, unread: list.filter((c) => c.unread_count > 0).length };
+  };
+  const TABS: { key: Tab; label: string; title: string }[] = [
+    { key: 'queue', label: 'Aguardando', title: 'Aguardando atendimento (sem responsável)' },
+    { key: 'mine', label: 'Meus atendimentos', title: 'Meus atendimentos' },
+    ...(seesTeam ? [{ key: 'team' as const, label: 'Todos', title: 'Todos em atendimento na equipe' }] : []),
+  ];
   // do último cliente que escreveu para o primeiro (sem mensagem do cliente, no fim)
   const byClient = (a: PanelChat, b: PanelChat) =>
     (b.last_client_message_at ?? '').localeCompare(a.last_client_message_at ?? '') || (b.last_message_at ?? '').localeCompare(a.last_message_at ?? '');
-  const unreadCount = base.filter((c) => c.unread_count > 0).length;
-  const shown = [...(filter === 'all' ? base : filter === 'unread' ? base.filter((c) => c.unread_count > 0) : base.filter((c) => c.status === filter))].sort(byClient);
-  const activeFilters = [filter !== 'all', sector !== 'all', responsible !== 'all', Boolean(q)].filter(Boolean).length;
+  const shown = base.filter((c) => inTab(c, tab)).sort(byClient);
+  const activeFilters = [sector !== 'all', tagFilter !== 'all', Boolean(q)].filter(Boolean).length;
   const clear = () => {
-    setFilter('all');
     setSector('all');
-    setResponsible('all');
+    setTagFilter('all');
     setQuery('');
   };
 
@@ -237,10 +257,11 @@ export function PrivatePanel({
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nome ou telefone" aria-label="Buscar conversa" className={cn(FIELD, 'pl-9')} />
             </div>
           </FilterField>
-          {(sectors.length > 0 || hasNoSector) && (
+          {/* setor do número da conversa: só para administradores, como na tela de conversas privadas */}
+          {seesAll && (sectors.length > 0 || hasNoSector) && (
             <FilterField label="Setor" icon={Building2}>
               <select value={sector} onChange={(e) => setSector(e.target.value)} aria-label="Filtrar por setor" className={cn(FIELD, sector !== 'all' && ACTIVE_FIELD)}>
-                <option value="all">Todos</option>
+                <option value="all">Todos os setores</option>
                 {sectors.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -250,65 +271,45 @@ export function PrivatePanel({
               </select>
             </FilterField>
           )}
-          <FilterField label="Responsável" icon={UserCheck}>
-            <select value={responsible} onChange={(e) => setResponsible(e.target.value)} aria-label="Filtrar por responsável" className={cn(FIELD, responsible !== 'all' && ACTIVE_FIELD)}>
-              <option value="all">Todos</option>
-              {responsibles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-              <option value="none">Sem responsável (aguardando atendimento)</option>
-            </select>
-          </FilterField>
+          {tags.length > 0 && (
+            <FilterField label="Etiqueta" icon={Tag}>
+              <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} aria-label="Filtrar por etiqueta" className={cn(FIELD, tagFilter !== 'all' && ACTIVE_FIELD)}>
+                <option value="all">Todas as etiquetas</option>
+                {tags.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
+          )}
         </div>
         <div className="flex flex-col gap-2 border-t border-line pt-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 sm:flex-wrap" role="group" aria-label="Filtrar por situação">
-            <button
-              type="button"
-              onClick={() => setFilter('all')}
-              aria-pressed={filter === 'all'}
-              className={cn(CHIP, filter === 'all' ? 'border-ink bg-ink text-bg' : 'border-line text-ink-2 hover:border-ink-2 hover:text-ink')}
-            >
-              Todos
-              <span className={cn(COUNT, filter === 'all' ? 'bg-bg/20 text-bg' : 'bg-surface-2 text-ink')}>{base.length}</span>
-            </button>
-            {ORDER.filter((k) => k !== 'neutral').map((k) => {
-              const Icon = STATUS[k].icon;
-              const on = filter === k;
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 sm:flex-wrap" role="tablist" aria-label="Quais conversas">
+            {TABS.map((t) => {
+              const info = tabInfo(t.key);
+              const on = tab === t.key;
               return (
                 <button
-                  key={k}
+                  key={t.key}
                   type="button"
-                  onClick={() => setFilter(on ? 'all' : k)}
-                  aria-pressed={on}
-                  title={STATUS[k].label}
-                  disabled={!counts[k] && !on}
-                  className={cn(CHIP, 'disabled:cursor-default disabled:opacity-45', on ? cn(STATUS[k].card, 'text-ink') : 'border-line text-ink-2 hover:border-ink-2 hover:text-ink')}
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => setTab(t.key)}
+                  title={t.title}
+                  className={cn(CHIP, on ? 'border-ink bg-ink text-bg' : 'border-line text-ink-2 hover:border-ink-2 hover:text-ink')}
                 >
-                  <Icon className={cn('h-3.5 w-3.5', on ? '' : 'opacity-70')} aria-hidden />
-                  {STATUS[k].filter}
-                  <span className={cn(COUNT, counts[k] ? STATUS[k].badge : 'bg-surface-2 text-muted')}>{counts[k]}</span>
+                  {t.label}
+                  {info.unread > 0 ? (
+                    <span className={cn(COUNT, 'bg-good text-white')} title="Conversas com mensagens não lidas">
+                      {info.unread}
+                    </span>
+                  ) : (
+                    <span className={cn(COUNT, on ? 'bg-bg/20 text-bg' : 'bg-surface-2 text-ink')}>{info.count}</span>
+                  )}
                 </button>
               );
             })}
-            {/* não lidas: conversas com mensagens que ninguém abriu (no lugar de "sem mensagens") */}
-            <button
-              type="button"
-              onClick={() => setFilter(filter === 'unread' ? 'all' : 'unread')}
-              aria-pressed={filter === 'unread'}
-              title="Conversas com mensagens não lidas"
-              disabled={!unreadCount && filter !== 'unread'}
-              className={cn(
-                CHIP,
-                'disabled:cursor-default disabled:opacity-45',
-                filter === 'unread' ? 'border-brand-line bg-brand-soft/60 text-ink' : 'border-line text-ink-2 hover:border-ink-2 hover:text-ink',
-              )}
-            >
-              <MailOpen className={cn('h-3.5 w-3.5', filter === 'unread' ? '' : 'opacity-70')} aria-hidden />
-              Não lidas
-              <span className={cn(COUNT, unreadCount ? 'bg-good text-white' : 'bg-surface-2 text-muted')}>{unreadCount}</span>
-            </button>
           </div>
           <div className="flex shrink-0 items-center justify-between gap-3 text-xs text-ink-2 lg:justify-end">
             <span>

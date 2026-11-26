@@ -2,6 +2,7 @@ import { AlertTriangle, Lock } from 'lucide-react';
 import type { Metadata } from 'next';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { requireMenu } from '@/lib/auth';
+import type { CustomerTag } from '@/components/customer-tags';
 import { createClient } from '@/lib/supabase/server';
 import { PrivatePanel, type PanelChat } from './private-panel';
 
@@ -14,14 +15,18 @@ export const metadata: Metadata = { title: 'Monitor Group · Painel de privadas'
  */
 export default async function PrivatePanelPage() {
   // o administrador da plataforma, ou quem ele liberou em Configurações › Pessoas (os dados seguem o que cada pessoa pode ver)
-  await requireMenu('/private-panel');
+  const me = await requireMenu('/private-panel');
   const supabase = await createClient();
-  const [{ data: allowed }, { data, error }, { data: instRows }, { data: sectorRows }, { data: agents }] = await Promise.all([
+  const [{ data: allowed }, { data, error }, { data: instRows }, { data: sectorRows }, { data: agents }, { data: seesAll }, { data: seesTeam, error: seesTeamError }, { data: tagRows }] = await Promise.all([
     supabase.rpc('can_use_private_chats'),
     supabase.rpc('private_panel'),
     supabase.from('whatsapp_instances').select('*'),
     supabase.from('sectors').select('id, name').order('name'),
     supabase.rpc('private_chat_agents'),
+    // quem vê todas as conversas / a equipe (mesmas regras da tela de conversas privadas)
+    supabase.rpc('private_sees_all'),
+    supabase.rpc('private_sees_team'),
+    supabase.from('customer_tags').select('id, name, color').order('name'),
   ]);
   const sectorOfInstance = new Map(((instRows ?? []) as { id: string; sector_id?: string | null }[]).map((i) => [i.id, i.sector_id ?? null]));
   const instanceName = new Map(((instRows ?? []) as { id: string; name?: string | null }[]).map((i) => [i.id, i.name ?? null]));
@@ -47,9 +52,6 @@ export default async function PrivatePanelPage() {
   }));
   const usedSectors = new Set(chats.map((c) => c.sector_id));
   const sectors = ((sectorRows ?? []) as { id: string; name: string }[]).filter((s) => usedSectors.has(s.id));
-  const responsibles = [...new Map(chats.filter((c) => c.assigned_to).map((c) => [c.assigned_to!, c.assigned_name!])).entries()]
-    .map(([id, name]) => ({ id, name }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
   return (
     <div data-wide>
@@ -70,7 +72,15 @@ export default async function PrivatePanelPage() {
           />
         </Card>
       ) : (
-        <PrivatePanel chats={chats} sectors={sectors} hasNoSector={usedSectors.has(null)} responsibles={responsibles} />
+        <PrivatePanel
+          chats={chats}
+          sectors={sectors}
+          hasNoSector={usedSectors.has(null)}
+          tags={(tagRows ?? []) as CustomerTag[]}
+          me={me.id}
+          seesAll={Boolean(seesAll)}
+          seesTeam={Boolean(seesTeamError ? seesAll : seesTeam)}
+        />
       )}
     </div>
   );
