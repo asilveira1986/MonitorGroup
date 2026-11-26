@@ -1,9 +1,10 @@
 'use client';
 
-import { Download, ExternalLink, FileText, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight, Download, ExternalLink, FileText, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { AudioPlayer } from '@/components/audio-player';
 import { formatSize } from '@/lib/format';
+import { getGallery } from '@/lib/image-gallery';
 import type { Message } from '@/lib/types';
 
 const UNAVAILABLE: Record<string, (m: Message) => string> = {
@@ -12,13 +13,41 @@ const UNAVAILABLE: Record<string, (m: Message) => string> = {
   expired: () => 'Arquivo apagado pelo prazo de guarda.',
 };
 
-/** Imagem ampliada, por cima da tela. */
-export function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+/**
+ * Imagem ampliada, por cima da tela. Com mais de uma imagem na conversa, as setas do teclado (ou os botões)
+ * passam para a anterior e a próxima.
+ */
+export function Lightbox({ src: first, alt: firstAlt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  const [items] = useState(() => {
+    const all = getGallery();
+    return all.some((i) => i.src === first) ? all : [];
+  });
+  const [src, setSrc] = useState(first);
+  const index = items.findIndex((i) => i.src === src);
+  const alt = index >= 0 ? items[index].alt : firstAlt;
+  const many = items.length > 1 && index >= 0;
+  const go = useCallback(
+    (step: number) => {
+      if (items.length < 2 || index < 0) return;
+      setSrc(items[(index + step + items.length) % items.length].src);
+    },
+    [items, index],
+  );
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        go(-1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        go(1);
+      }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, go]);
+  const arrow = 'absolute top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25';
   return (
     <div
       role="dialog"
@@ -27,9 +56,20 @@ export function Lightbox({ src, alt, onClose }: { src: string; alt: string; onCl
       className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/85 p-4"
       onClick={onClose}
     >
+      {many && (
+        <>
+          <button type="button" aria-label="Imagem anterior" title="Anterior (←)" onClick={(e) => (e.stopPropagation(), go(-1))} className={`${arrow} left-3`}>
+            <ChevronLeft className="h-6 w-6" />
+          </button>
+          <button type="button" aria-label="Próxima imagem" title="Próxima (→)" onClick={(e) => (e.stopPropagation(), go(1))} className={`${arrow} right-3`}>
+            <ChevronRight className="h-6 w-6" />
+          </button>
+        </>
+      )}
       {/* eslint-disable-next-line @next/next/no-img-element -- arquivo privado por link temporário */}
-      <img src={src} alt={alt} className="max-h-[82vh] max-w-full rounded-lg object-contain shadow-2xl" />
-      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+      <img key={src} src={src} alt={alt} className="max-h-[82vh] max-w-full rounded-lg object-contain shadow-2xl" onClick={(e) => e.stopPropagation()} />
+      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        {many && <span className="tabular rounded-full bg-white/15 px-3 py-1.5 text-sm text-white">{index + 1} / {items.length}</span>}
         <a
           href={`${src}?download=1`}
           className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-sm text-white hover:bg-white/25"

@@ -16,6 +16,7 @@ import { ClipboardList } from 'lucide-react';
 import { DemandForm } from '@/components/demands/demand-form';
 import { MessageSenderPicker } from '../group-controls';
 import { PAGE_SIZE } from './constants';
+import { useRegisterGallery } from '@/lib/image-gallery';
 import { MessageMedia } from './message-media';
 import { MessageEditor, MessageMenu, type MessageMenuItem } from './message-menu';
 import { startPrivateChat } from '../../private/actions';
@@ -443,6 +444,12 @@ export function Conversation({
 
   const dayFormat = useMemo(() => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone }), [timeZone]);
   const chronological = useMemo(() => [...messages].reverse(), [messages]);
+  // imagens da conversa, na ordem da tela: as setas do teclado passam de uma para outra ao ampliar
+  const galleryItems = useMemo(
+    () => chronological.filter((m) => m.message_type === 'image' && m.media_path && !m.deleted_at).map((m) => ({ src: `/media/${m.id}`, alt: m.body || 'Imagem' })),
+    [chronological],
+  );
+  useRegisterGallery(galleryItems);
   // a resposta enviada some da fila quando a mensagem dela chega pelo WhatsApp
   const queued = useMemo(() => {
     const arrived = new Set(messages.map((m) => m.wa_message_id));

@@ -14,6 +14,7 @@ import { useFileDrop } from '@/lib/use-file-drop';
 import { useRealtime } from '@/lib/use-realtime';
 import { VoiceRecorder, type VoiceClip } from '@/components/voice-recorder';
 import { Avatar } from '@/components/avatar';
+import { useRegisterGallery } from '@/lib/image-gallery';
 import { waFormat } from '@/components/wa-text';
 import { ContactCards } from '@/components/contact-cards';
 import { assignPrivateChat, deletePrivateChat, markPrivateChatRead, markPrivateChatUnread, preparePrivateUpload, sendPrivateContact, sendPrivateMessage, startPrivateChat, type PrivateMedia as PrivateMediaInput } from './actions';
@@ -503,6 +504,16 @@ function ChatView({
       ...events.filter((e) => !from || e.created_at >= from).map((e) => ({ kind: 'event' as const, at: e.created_at, e })),
     ].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
   }, [messages, events, hasOlder]);
+  // imagens da conversa, na ordem da tela: as setas do teclado passam de uma para outra ao ampliar
+  const galleryItems = useMemo(
+    () =>
+      timeline
+        .flatMap((t) => (t.kind === 'msg' ? [t.m] : []))
+        .filter((m) => m.message_type === 'image' && m.media_path && !m.deleted_at)
+        .map((m) => ({ src: `/private-media/${m.id}`, alt: m.body || 'Imagem' })),
+    [timeline],
+  );
+  useRegisterGallery(galleryItems);
   // quem perdeu a conversa no "Liberar" só responde depois de assumir de novo (0164)
   const releasedFromMe = !chat.assigned_to && !chat.closed_at && chat.released_from === viewer.me;
   // soltar arquivos em qualquer lugar da conversa; desligado quando não dá para responder (conversa liberada para outro atendimento)
