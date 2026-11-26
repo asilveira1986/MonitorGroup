@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, Clock, MailOpen, MessageCircle, Phone, Search, UserCheck, X } from 'lucide-react';
+import { Building2, Clock, MailOpen, MessageCircle, MessageSquareText, Phone, Search, UserCheck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -84,8 +84,9 @@ function ChatCard({ c, now }: { c: PanelChat; now: number }) {
           <UserCheck className="h-3 w-3 shrink-0" aria-hidden /> <span className="truncate">{c.assigned_name ?? 'sem responsável'}</span>
         </p>
         {c.last_message_preview && (
-          <p className="mt-1.5 line-clamp-2 break-words text-[11px] leading-snug text-ink-2" title={c.last_message_preview}>
-            {c.last_message_preview}
+          <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-snug text-ink-2" title={c.last_message_preview}>
+            <MessageSquareText className="mt-0.5 h-3 w-3 shrink-0 text-muted" aria-label="Última mensagem" />
+            <span className="line-clamp-2 min-w-0 break-words">{c.last_message_preview}</span>
           </p>
         )}
       </div>
