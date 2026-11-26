@@ -1,6 +1,7 @@
 name: Atualizar banco
 
-# Aplica no Supabase os scripts do banco que ainda faltam, a cada mesclagem na branch padrão.
+# Aplica no Supabase os scripts do banco que ainda faltam, só quando você pedir (Actions › Atualizar banco › Run workflow).
+# Não roda sozinho a cada mesclagem: as migrations novas continuam sendo aplicadas na mão, pelo SQL Editor.
 # O script (supabase/atualizar_banco.sql) é seguro para repetir: o banco guarda quais migrations já foram aplicadas
 # (schema_migrations), só as que faltam rodam, e ele confere antes se está no banco certo.
 #
@@ -8,8 +9,6 @@ name: Atualizar banco
 # Supabase pelo "Session pooler" (Project Settings › Database › Connection string). A conexão direta do Supabase só
 # tem IPv6, e os servidores do GitHub só têm IPv4. Sem o segredo, este fluxo se pula sozinho (não deixa o CI vermelho).
 on:
-  push:
-    branches: [claude/whatsapp-group-monitor-e1ekgb]
   workflow_dispatch:
 
 # uma atualização por vez; uma que começou não é cancelada no meio por outra mais nova
