@@ -215,17 +215,35 @@ function NewChatDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: 
 
 /** Mensagem citada dentro do balão (resposta). */
 function Quoted({ target }: { target: PrivateMessage | undefined }) {
+  // clicar leva à mensagem respondida (quando ela já está carregada na conversa) e a destaca por um instante
+  const jump = () => {
+    if (!target) return;
+    const el = document.getElementById(`msg-${target.id}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ring-2', 'ring-brand');
+    setTimeout(() => el.classList.remove('ring-2', 'ring-brand'), 1600);
+  };
   return (
-    <div className="mb-1.5 rounded-lg border-l-4 border-brand/70 bg-black/[0.04] px-2.5 py-1 text-xs dark:bg-white/[0.06]">
+    <button
+      type="button"
+      onClick={jump}
+      disabled={!target}
+      title={target ? 'Ir para a mensagem respondida' : undefined}
+      className={cn(
+        'mb-1.5 block w-full rounded-lg border-l-4 border-brand/70 bg-black/[0.04] px-2.5 py-1 text-left text-xs dark:bg-white/[0.06]',
+        target ? 'cursor-pointer hover:bg-black/[0.07]' : 'cursor-default',
+      )}
+    >
       {target ? (
         <>
-          <p className="font-semibold text-brand-text">{target.from_me ? 'Você' : target.sender_name || 'Contato'}</p>
-          <p className="line-clamp-2 text-ink-2">{target.deleted_at ? '🚫 Esta mensagem foi apagada' : target.body || TYPE_LABEL[target.message_type] || target.message_type}</p>
+          <span className="block font-semibold text-brand-text">{target.from_me ? 'Você' : target.sender_name || 'Contato'}</span>
+          <span className="line-clamp-2 text-ink-2">{target.deleted_at ? '🚫 Esta mensagem foi apagada' : target.body || TYPE_LABEL[target.message_type] || target.message_type}</span>
         </>
       ) : (
-        <p className="italic text-muted">Mensagem citada (mais antiga)</p>
+        <span className="block italic text-muted">Mensagem citada (mais antiga)</span>
       )}
-    </div>
+    </button>
   );
 }
 
