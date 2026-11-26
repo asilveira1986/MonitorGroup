@@ -252,6 +252,31 @@ export function PrivatePanel({
     setQuery('');
   };
 
+  const renderTab = (t: { key: Tab; label: string; title: string }) => {
+    const info = tabInfo(t.key);
+    const on = tab === t.key;
+    return (
+      <button
+        key={t.key}
+        type="button"
+        role="tab"
+        aria-selected={on}
+        onClick={() => setTab(t.key)}
+        title={t.title}
+        className={cn(CHIP, on ? 'border-ink bg-ink text-bg' : 'border-line text-ink-2 hover:border-ink-2 hover:text-ink')}
+      >
+        {t.label}
+        {info.unread > 0 ? (
+          <span className={cn(COUNT, 'bg-good text-white')} title="Conversas com mensagens não lidas">
+            {info.unread}
+          </span>
+        ) : (
+          <span className={cn(COUNT, on ? 'bg-bg/20 text-bg' : 'bg-surface-2 text-ink')}>{info.count}</span>
+        )}
+      </button>
+    );
+  };
+
   return (
     <>
       <div className="mb-4 space-y-3 rounded-2xl border border-line bg-surface p-4 shadow-sm">
@@ -291,30 +316,7 @@ export function PrivatePanel({
         </div>
         <div className="flex flex-col gap-2 border-t border-line pt-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 sm:flex-wrap" role="tablist" aria-label="Quais conversas">
-            {TABS.map((t) => {
-              const info = tabInfo(t.key);
-              const on = tab === t.key;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={on}
-                  onClick={() => setTab(t.key)}
-                  title={t.title}
-                  className={cn(CHIP, on ? 'border-ink bg-ink text-bg' : 'border-line text-ink-2 hover:border-ink-2 hover:text-ink')}
-                >
-                  {t.label}
-                  {info.unread > 0 ? (
-                    <span className={cn(COUNT, 'bg-good text-white')} title="Conversas com mensagens não lidas">
-                      {info.unread}
-                    </span>
-                  ) : (
-                    <span className={cn(COUNT, on ? 'bg-bg/20 text-bg' : 'bg-surface-2 text-ink')}>{info.count}</span>
-                  )}
-                </button>
-              );
-            })}
+            {TABS.filter((t) => t.key !== 'team').map(renderTab)}
             {/* não lidas: só as conversas da aba com mensagens que ninguém abriu */}
             <button
               type="button"
@@ -332,6 +334,8 @@ export function PrivatePanel({
               Não lidas
               <span className={cn(COUNT, unreadCount ? 'bg-good text-white' : 'bg-surface-2 text-muted')}>{unreadCount}</span>
             </button>
+            {/* Todos fica por último */}
+            {TABS.filter((t) => t.key === 'team').map(renderTab)}
           </div>
           <div className="flex shrink-0 items-center justify-between gap-3 text-xs text-ink-2 lg:justify-end">
             <span>
