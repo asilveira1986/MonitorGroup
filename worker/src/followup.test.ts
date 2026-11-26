@@ -468,3 +468,11 @@ test('resposta curta + agradecimento: só vale logo depois da equipe, do mesmo c
   const r = run([team('Pode confirmar o horário da reunião?', 0), say('Seguimos então', 5), ack('Obrigado', 5)]);
   assert.equal(r.status, 'client');
 });
+
+test('mensagens do mesmo segundo valem na ordem em que chegaram: a frase curta e o agradecimento seguidos', () => {
+  // o WhatsApp registra a hora em segundos: "Ok", "Seguimos então" e "Obrigado" podem ter exatamente a mesma hora
+  const stmt = say('Seguimos então', 27);
+  const r = run([team('Estou representando o Tarlles também', 0), ack('Ok', 27), stmt, ack('Obrigado', 27)]);
+  assert.equal(r.status, 'resolved');
+  assert.ok(r.heldIds?.includes(stmt.id));
+});

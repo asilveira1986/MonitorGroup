@@ -431,7 +431,10 @@ export class WhatsAppManager {
       .from('messages')
       .select('id, from_team, message_type, body, sent_at, sender_name, sender_jid, sender_phone, closes_conversation, ignored_as_last, deleted_at, hidden_at')
       .eq('group_id', groupId)
+      // o WhatsApp registra a hora em segundos: mensagens seguidas ("Seguimos então", "Obrigado") empatam. Desempata pela hora em que
+      // entraram no banco, que é a ordem em que chegaram (como as funções do banco fazem)
       .order('sent_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(FOLLOWUP_MESSAGES);
     if (group.followup_dismissed_at) query = query.gt('sent_at', group.followup_dismissed_at as string);
     // mensagens anteriores à data de corte (Configurações › Pendências da conversa) não entram na conta (0187)
@@ -439,7 +442,10 @@ export class WhatsAppManager {
     const { data: rows, error } = await query;
     if (error) throw error;
     const now = new Date().toISOString();
-    const messages = (rows ?? [])
+    // da mais antiga para a mais nova (a consulta traz a mais nova primeiro, para o limite pegar as últimas): quem classifica ordena só pela
+    // hora, e no empate de segundo vale a ordem em que chegaram
+    const messages = [...(rows ?? [])]
+      .reverse()
       .filter((m) => !m.deleted_at && !m.hidden_at && !m.ignored_as_last)
       .map((m) => ({
         id: m.id as string,
