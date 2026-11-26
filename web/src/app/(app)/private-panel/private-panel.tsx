@@ -83,6 +83,11 @@ function ChatCard({ c, now }: { c: PanelChat; now: number }) {
         <p className="mt-0.5 flex items-center gap-1 truncate pl-[2.625rem] text-[9px] text-ink-2" title={c.assigned_name ? `Responsável: ${c.assigned_name}` : 'Aguardando atendimento (sem responsável)'}>
           <UserCheck className="h-3 w-3 shrink-0" aria-hidden /> <span className="truncate">{c.assigned_name ?? 'sem responsável'}</span>
         </p>
+        {c.last_message_preview && (
+          <p className="mt-1 line-clamp-2 break-words text-[11px] leading-snug text-ink-2" title={c.last_message_preview}>
+            {c.last_message_preview}
+          </p>
+        )}
         {time && !quiet && (
           <p
             className={cn(
@@ -113,12 +118,6 @@ function ChatCard({ c, now }: { c: PanelChat; now: number }) {
             )}
           </p>
         ) : null}
-        {(c.waiting_count ?? 0) > 0 && (
-          <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-semibold', s.badge)}>
-            <s.icon className="h-3 w-3" aria-hidden />
-            {c.waiting_count} sem resposta
-          </span>
-        )}
       </div>
     </Link>
   );
