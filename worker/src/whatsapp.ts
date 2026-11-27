@@ -34,7 +34,7 @@ import { contactCardsOf, extractContent, forwardedAsVoice, withMentions as withM
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
 import { selfReadIds } from './receipts.js';
-import { ackErrorCode, ERROR_STATUS, retryDelayMs, shouldRetrySend } from './delivery.js';
+import { ackErrorCode, ERROR_STATUS, privateFailureAlert, retryDelayMs, shouldRetrySend } from './delivery.js';
 import { audioContent } from './audio.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
 import { runHistoryRecovery, type Cursor, type Page, type RecoveryResult } from './history-recovery.js';
@@ -194,6 +194,8 @@ export class WhatsAppManager {
   private sessions = new Map<string, Session>();
   /** mensagens privadas enviadas pelo painel que dá para reenviar se o WhatsApp recusar (id da mensagem -> como reenviar) */
   private resendable = new Map<string, { resend: () => Promise<unknown>; attempts: number }>();
+  /** mensagens privadas que já geraram o alerta de não entregue (um só por mensagem) */
+  private failureAlerted = new Set<string>();
   private reconnectAttempts = new Map<string, number>();
   private version: [number, number, number] | undefined;
 
@@ -2584,6 +2586,50 @@ export class WhatsAppManager {
     }
     log.warn('mensagem privada não entregue: recusada pelo WhatsApp');
     await this.savePrivateStatus(session, waId, ERROR_STATUS);
+    await this.alertPrivateSendFailed(session, waId, code, entry?.attempts ?? 0).catch((err) => log.warn({ err }, 'falha ao criar o alerta de mensagem não entregue'));
+  }
+
+  /**
+   * Alerta em tela (tela de Alertas e aviso no canto, no mesmo formato dos alertas do sistema) para quem escreveu a mensagem e
+   * para o responsável pela conversa: a mensagem não foi entregue depois dos reenvios automáticos (0194). Um só por mensagem.
+   */
+  private async alertPrivateSendFailed(session: Session, waId: string, code: string | null, retries: number) {
+    if (this.failureAlerted.has(waId)) return;
+    this.failureAlerted.add(waId);
+    setTimeout(() => this.failureAlerted.delete(waId), 60 * 60_000);
+    const { data: msg } = await db
+      .from('private_messages')
+      .select('chat_id, body, message_type')
+      .eq('company_id', session.companyId)
+      .eq('wa_message_id', waId)
+      .maybeSingle();
+    if (!msg) return;
+    const [{ data: chat }, { data: out }] = await Promise.all([
+      db.from('private_chats').select('id, name, phone, assigned_to, instance_id').eq('id', msg.chat_id as string).maybeSingle(),
+      db.from('private_outgoing').select('created_by').eq('wa_message_id', waId).maybeSingle(),
+    ]);
+    if (!chat) return;
+    const alert = privateFailureAlert({
+      contactName: (chat.name as string | null) ?? null,
+      phone: (chat.phone as string | null) ?? null,
+      body: (msg.body as string | null) ?? null,
+      messageType: (msg.message_type as string | null) ?? 'text',
+      code,
+      retries,
+      sender: (out?.created_by as string | null) ?? null,
+      responsible: (chat.assigned_to as string | null) ?? null,
+    });
+    const { error } = await db.from('alerts').insert({
+      type: 'message_failed',
+      severity: 'critical',
+      instance_id: chat.instance_id as string,
+      private_chat_id: chat.id as string,
+      user_ids: alert.userIds,
+      title: alert.title,
+      description: alert.description,
+    });
+    if (error) throw new Error(error.message);
+    logger.info({ waId, destinatarios: alert.userIds.length }, 'alerta de mensagem privada não entregue criado');
   }
 
   /** Respostas privadas escritas no painel (0069): confere se o número tem WhatsApp e envia. */

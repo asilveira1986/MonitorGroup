@@ -67,6 +67,8 @@ export const ALERT_TYPE_LABEL: Record<string, string> = {
   no_reply: 'Sem resposta',
   // mensagem de encerramento (0149)
   closing_reopen: 'Cliente pediu para reabrir',
+  // mensagem privada que o WhatsApp recusou mesmo depois dos reenvios automáticos (0194)
+  message_failed: 'Mensagem não entregue',
 };
 
 export const DEMAND_STATUS_LABEL: Record<string, string> = {
