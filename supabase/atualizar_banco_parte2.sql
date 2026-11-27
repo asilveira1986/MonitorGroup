@@ -310,7 +310,8 @@ begin
   (183, 'Acesso às telas por usuário (0192)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'screen_access')),
   (184, 'Acompanhamento liberado para quem recebeu a tela (0193)', to_regprocedure('public.has_screen_access(text)') is not null),
   (185, 'Alerta em tela de mensagem privada não entregue (0194)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'alerts' and column_name = 'user_ids')),
-  (186, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (186, 'Histórico de desconexões dos números (0195)', to_regclass('public.whatsapp_connection_log') is not null),
+  (187, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -319,7 +320,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184,0185,0186,0187,0188,0189,0190,0191,0192,0193,0194', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184,0185,0186,0187,0188,0189,0190,0191,0192,0193,0194,0195', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -10140,6 +10141,74 @@ notify pgrst, 'reload schema';
 $mig0194$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0195_connection_log.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0195', $mig0195$
+-- =====================================================================
+-- Histórico de desconexões dos números de WhatsApp (Configurações › WhatsApp).
+--
+--  * whatsapp_connection_log: um registro por período fora do ar (do momento em que o número deixou de estar conectado até
+--    voltar a conectar; ended_at vazio = ainda desconectado), com o motivo informado pela conexão.
+--  * um gatilho em whatsapp_instances abre e fecha os períodos sozinho a cada mudança de situação: vale para qualquer caminho
+--    do worker (queda, reconexão, sessão encerrada no celular, QR expirado, reinício do serviço).
+--  * quando o worker reinicia com o número marcado como conectado (ficou fora sem avisar), o período começa na última
+--    atividade registrada (last_seen_at), não na hora em que o serviço voltou.
+--  * só administradores leem (da própria empresa; o administrador da plataforma lê todas).
+-- =====================================================================
+
+create table if not exists public.whatsapp_connection_log (
+  id          uuid primary key default gen_random_uuid(),
+  company_id  uuid references public.companies(id) on delete cascade,
+  instance_id uuid not null references public.whatsapp_instances(id) on delete cascade,
+  started_at  timestamptz not null default now(),
+  ended_at    timestamptz,
+  reason      text,
+  created_at  timestamptz not null default now()
+);
+create index if not exists whatsapp_connection_log_instance_idx on public.whatsapp_connection_log (instance_id, started_at desc);
+create index if not exists whatsapp_connection_log_open_idx on public.whatsapp_connection_log (instance_id) where ended_at is null;
+
+alter table public.whatsapp_connection_log enable row level security;
+drop policy if exists connection_log_read on public.whatsapp_connection_log;
+create policy connection_log_read on public.whatsapp_connection_log for select
+  using ((select public.is_admin()) and (company_id = (select public.current_company_id()) or (select public.is_platform_admin())));
+
+create or replace function public.whatsapp_connection_log_track()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.status is not distinct from old.status then
+    -- sem mudança de situação, mas já fora do ar: guarda o motivo mais recente
+    if new.status <> 'connected' and new.last_error is not null and new.last_error is distinct from old.last_error then
+      update public.whatsapp_connection_log set reason = new.last_error where instance_id = new.id and ended_at is null;
+    end if;
+    return new;
+  end if;
+  if new.status = 'connected' then
+    -- voltou: fecha o período aberto
+    update public.whatsapp_connection_log set ended_at = now() where instance_id = new.id and ended_at is null;
+  elsif old.status = 'connected' then
+    -- caiu: abre um período (se o serviço ficou parado, começa na última atividade registrada)
+    insert into public.whatsapp_connection_log (company_id, instance_id, started_at, reason)
+    values (
+      new.company_id,
+      new.id,
+      case when old.last_seen_at is not null and old.last_seen_at < now() - interval '3 minutes' then old.last_seen_at else now() end,
+      new.last_error
+    );
+  elsif new.last_error is not null then
+    update public.whatsapp_connection_log set reason = new.last_error where instance_id = new.id and ended_at is null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists whatsapp_connection_log_track on public.whatsapp_instances;
+create trigger whatsapp_connection_log_track after update of status, last_error on public.whatsapp_instances
+  for each row execute function public.whatsapp_connection_log_track();
+
+notify pgrst, 'reload schema';
+$mig0195$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -10393,6 +10462,7 @@ from (values
   (183, 'Acesso às telas por usuário (0192)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'screen_access')),
   (184, 'Acompanhamento liberado para quem recebeu a tela (0193)', to_regprocedure('public.has_screen_access(text)') is not null),
   (185, 'Alerta em tela de mensagem privada não entregue (0194)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'alerts' and column_name = 'user_ids')),
-  (186, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (186, 'Histórico de desconexões dos números (0195)', to_regclass('public.whatsapp_connection_log') is not null),
+  (187, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
