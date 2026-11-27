@@ -248,6 +248,14 @@ function Quoted({ target }: { target: PrivateMessage | undefined }) {
 }
 
 function StatusTicks({ status }: { status: number | null }) {
+  // 0 = o WhatsApp recusou a mensagem (e o reenvio automático não resolveu): o cliente não recebeu
+  if (status === 0) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-critical-ink" title="O WhatsApp recusou esta mensagem e ela não foi entregue. Envie de novo.">
+        <AlertCircle className="h-3.5 w-3.5" aria-hidden /> Não entregue
+      </span>
+    );
+  }
   if (!status || status < 2) return null;
   const Icon = status >= 3 ? CheckCheck : Check;
   return <Icon className={cn('h-3.5 w-3.5', status >= 4 ? 'text-sky-500' : 'text-muted')} aria-label={status >= 4 ? 'lida' : status >= 3 ? 'entregue' : 'enviada'} />;
