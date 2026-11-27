@@ -34,6 +34,7 @@ import { contactCardsOf, extractContent, forwardedAsVoice, withMentions as withM
 import { processDemandSignals } from './demands.js';
 import { contactName, isPrivateJid, privateEnabled, saveContacts } from './private.js';
 import { selfReadIds } from './receipts.js';
+import { ackErrorCode, ERROR_STATUS, retryDelayMs, shouldRetrySend } from './delivery.js';
 import { audioContent } from './audio.js';
 import { chooseProfile, isPaired, type MonitorCreds } from './connection-profile.js';
 import { runHistoryRecovery, type Cursor, type Page, type RecoveryResult } from './history-recovery.js';
@@ -191,6 +192,8 @@ baileysLogger.level = process.env.BAILEYS_LOG_LEVEL ?? 'warn';
 
 export class WhatsAppManager {
   private sessions = new Map<string, Session>();
+  /** mensagens privadas enviadas pelo painel que dá para reenviar se o WhatsApp recusar (id da mensagem -> como reenviar) */
+  private resendable = new Map<string, { resend: () => Promise<unknown>; attempts: number }>();
   private reconnectAttempts = new Map<string, number>();
   private version: [number, number, number] | undefined;
 
@@ -1205,13 +1208,12 @@ export class WhatsAppManager {
         // entregue / lida: o relatório dos disparos (só mexe em mensagens que um disparo enviou)
         if (this.broadcast && update.status >= 3) void this.broadcast.handleStatus(key.id, update.status);
         if (isPrivateJid(key.remoteJid)) {
-          void db
-            .from('private_messages')
-            .update({ wa_status: update.status })
-            .eq('company_id', session.companyId)
-            .eq('wa_message_id', key.id)
-            .or(`wa_status.is.null,wa_status.lt.${update.status}`)
-            .then(({ error }) => error && log.warn({ err: error.message }, 'status da mensagem privada'));
+          // recusa do WhatsApp (status 0): reenvia ou marca como não entregue; os demais avisos viram tique
+          const handled =
+            update.status === ERROR_STATUS
+              ? this.handlePrivateSendError(session, key.id, ackErrorCode(update))
+              : this.savePrivateStatus(session, key.id, update.status);
+          void handled.catch((err) => log.warn({ err }, 'status da mensagem privada'));
           continue;
         }
         if (!isJidGroup(key.remoteJid)) continue;
@@ -2538,6 +2540,52 @@ export class WhatsAppManager {
     }
   }
 
+  /**
+   * Grava o status (tique) de uma mensagem privada enviada. O aviso do WhatsApp pode chegar antes de a mensagem entrar no banco
+   * (ela é gravada logo depois do envio): sem a mensagem, espera e tenta de novo, como nos grupos, em vez de perder o tique.
+   * Só avança (um tique menor não apaga um maior).
+   */
+  private async savePrivateStatus(session: Session, waId: string, status: number) {
+    for (const wait of [0, 1500, 5000, 15000]) {
+      if (wait) await new Promise((r) => setTimeout(r, wait));
+      const { data, error } = await db
+        .from('private_messages')
+        .update({ wa_status: status })
+        .eq('company_id', session.companyId)
+        .eq('wa_message_id', waId)
+        .or(`wa_status.is.null,wa_status.lt.${status}`)
+        .select('id');
+      if (error) throw new Error(error.message);
+      if (data?.length) return;
+      // nada mudou: ou a mensagem ainda não foi gravada (espera) ou já está com este tique ou um maior (pronto)
+      const { data: exists } = await db.from('private_messages').select('id').eq('company_id', session.companyId).eq('wa_message_id', waId).maybeSingle();
+      if (exists) return;
+    }
+  }
+
+  /**
+   * O WhatsApp aceitou a mensagem privada e depois a recusou (aviso com código de erro). Reenvia com o MESMO id (o cliente
+   * nunca recebe duas vezes), até duas vezes, menos nas recusas em que isso não adianta (ex.: 463, conta com restrição). Se não
+   * der, marca a mensagem como não entregue (status 0), e o painel mostra o aviso.
+   */
+  private async handlePrivateSendError(session: Session, waId: string, code: string | null) {
+    const log = logger.child({ instanceId: session.instanceId, waId, code });
+    const entry = this.resendable.get(waId);
+    if (entry && shouldRetrySend(code, entry.attempts)) {
+      entry.attempts += 1;
+      log.warn({ tentativa: entry.attempts }, 'o WhatsApp recusou a mensagem privada: reenviando com o mesmo id');
+      await new Promise((r) => setTimeout(r, retryDelayMs(entry.attempts)));
+      try {
+        await entry.resend();
+        return; // se for recusada de novo, volta aqui; se for aceita, o tique chega pelos avisos normais
+      } catch (err) {
+        log.warn({ err }, 'falha ao reenviar a mensagem privada');
+      }
+    }
+    log.warn('mensagem privada não entregue: recusada pelo WhatsApp');
+    await this.savePrivateStatus(session, waId, ERROR_STATUS);
+  }
+
   /** Respostas privadas escritas no painel (0069): confere se o número tem WhatsApp e envia. */
   private async processPrivateOutbox(session: Session, me: string) {
     const { data, error } = await db
@@ -2604,6 +2652,9 @@ export class WhatsAppManager {
         const contextInfo = row.forwarded ? FORWARDED : undefined;
         const type = (row.message_type as string) || 'text';
         let sentSeconds: number | null = null;
+        // a conexão atual do número (se reconectou, usa a nova) e como reenviar esta mensagem
+        const sock = () => this.sessions.get(session.instanceId)?.sock ?? session.sock;
+        let resend: () => Promise<WAMessage | undefined>;
         // com a assinatura do usuário (0116), quando houver; sem o script, o texto como foi escrito
         const outText = (row.text_to_send as string | null) ?? (row.body as string | null);
         const caption = outText ?? undefined;
@@ -2611,7 +2662,8 @@ export class WhatsAppManager {
           // contato enviado pelo painel (0182): o cartão (vCard) vem pronto em text_to_send
           const vcard = (row.text_to_send as string | null) ?? '';
           const name = ((row.media_name as string | null) || vcard.match(/^FN:(.*)$/m)?.[1] || 'Contato').trim();
-          await session.sock.sendMessage(to, { contacts: { displayName: name, contacts: [{ displayName: name, vcard }] } } as AnyMessageContent, { messageId: waId, quoted });
+          resend = () => sock().sendMessage(to, { contacts: { displayName: name, contacts: [{ displayName: name, vcard }] } } as AnyMessageContent, { messageId: waId, quoted });
+          await resend();
         } else if (row.media_path) {
           // arquivo enviado pelo painel: está no Storage
           const file = await db.storage.from('media').download(row.media_path as string);
@@ -2619,11 +2671,16 @@ export class WhatsAppManager {
           const buffer = Buffer.from(await file.data.arrayBuffer());
           const mimetype = (row.media_mime as string | null) ?? 'application/octet-stream';
           const content = await mediaContent(type, buffer, mimetype, { caption, fileName: row.media_name as string | null, voice: Boolean(row.voice) || forwardedAsVoice(Boolean(row.forwarded), row.media_mime as string | null) });
-          const sent = await session.sock.sendMessage(to, { ...content, ...(contextInfo ? { contextInfo } : {}) } as AnyMessageContent, { messageId: waId, quoted });
+          resend = () => sock().sendMessage(to, { ...content, ...(contextInfo ? { contextInfo } : {}) } as AnyMessageContent, { messageId: waId, quoted });
+          const sent = await resend();
           sentSeconds = Number(sent?.message?.audioMessage?.seconds ?? sent?.message?.videoMessage?.seconds) || null;
         } else {
-          await session.sock.sendMessage(to, { text: outText as string, ...(contextInfo ? { contextInfo } : {}) }, { messageId: waId, quoted });
+          resend = () => sock().sendMessage(to, { text: outText as string, ...(contextInfo ? { contextInfo } : {}) }, { messageId: waId, quoted });
+          await resend();
         }
+        // se o WhatsApp recusar a mensagem depois (aviso de erro), o worker reenvia com o mesmo id (guarda por 10 minutos)
+        this.resendable.set(waId, { resend, attempts: 0 });
+        setTimeout(() => this.resendable.delete(waId), 10 * 60_000);
         const tSent = Date.now();
         const now = new Date().toISOString();
         await db.from('private_outgoing').update({ status: 'sent', wa_message_id: waId, sent_at: now, error: null }).eq('id', id);
