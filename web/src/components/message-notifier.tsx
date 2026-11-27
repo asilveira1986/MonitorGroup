@@ -424,8 +424,8 @@ export function MessageNotifier({ config }: { config: AlertConfig }) {
               group: group ?? a.title,
               who: group ? a.title : null,
               text: a.description,
-              href: a.group_id ? `/groups/${a.group_id}` : '/alerts',
-              action: a.group_id ? 'Abrir grupo' : 'Ver alertas',
+              href: a.group_id ? `/groups/${a.group_id}` : a.private_chat_id ? `/private?c=${a.private_chat_id}` : '/alerts',
+              action: a.group_id ? 'Abrir grupo' : a.private_chat_id ? 'Abrir conversa' : 'Ver alertas',
               at: Date.now(),
             });
           const supabase = createClient();

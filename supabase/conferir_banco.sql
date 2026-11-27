@@ -244,6 +244,7 @@ from (values
   (182, 'Recuperar mensagens de todas as conversas privadas (0191)', to_regprocedure('public.request_private_history_recovery_all(integer,boolean)') is not null),
   (183, 'Acesso às telas por usuário (0192)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'screen_access')),
   (184, 'Acompanhamento liberado para quem recebeu a tela (0193)', to_regprocedure('public.has_screen_access(text)') is not null),
-  (185, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (185, 'Alerta em tela de mensagem privada não entregue (0194)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'alerts' and column_name = 'user_ids')),
+  (186, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

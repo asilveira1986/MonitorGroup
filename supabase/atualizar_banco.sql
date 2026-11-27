@@ -308,7 +308,8 @@ begin
   (182, 'Recuperar mensagens de todas as conversas privadas (0191)', to_regprocedure('public.request_private_history_recovery_all(integer,boolean)') is not null),
   (183, 'Acesso às telas por usuário (0192)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'screen_access')),
   (184, 'Acompanhamento liberado para quem recebeu a tela (0193)', to_regprocedure('public.has_screen_access(text)') is not null),
-  (185, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (185, 'Alerta em tela de mensagem privada não entregue (0194)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'alerts' and column_name = 'user_ids')),
+  (186, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -317,7 +318,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184,0185,0186,0187,0188,0189,0190,0191,0192,0193', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184,0185,0186,0187,0188,0189,0190,0191,0192,0193,0194', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -26530,6 +26531,54 @@ grant execute on function public.platform_monitor() to authenticated;
 $mig0193$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0194_private_send_failed_alert.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0194', $mig0194$
+-- =====================================================================
+-- Alerta em tela quando uma mensagem privada do painel não é entregue (o WhatsApp recusou mesmo depois dos reenvios
+-- automáticos do worker).
+--
+--  * alerts.private_chat_id: a conversa privada do alerta (o alerta abre a conversa).
+--  * alerts.user_ids: quem recebe o alerta (quem escreveu a mensagem e o responsável pela conversa). Alerta com destinatários
+--    só aparece para eles (na tela de Alertas e no aviso em tela); nem os outros usuários da empresa o veem.
+--  * as políticas de leitura/atualização dos alertas passam a respeitar user_ids; sem user_ids valem as regras de antes
+--    (alertas de grupo pelos grupos que a pessoa vê, e alertas sem grupo para todos da empresa).
+-- =====================================================================
+
+alter table public.alerts add column if not exists private_chat_id uuid references public.private_chats(id) on delete cascade;
+alter table public.alerts add column if not exists user_ids uuid[];
+create index if not exists alerts_private_chat_idx on public.alerts (private_chat_id) where private_chat_id is not null;
+
+drop policy if exists alerts_read on public.alerts;
+create policy alerts_read on public.alerts for select
+  using (
+    case
+      when user_ids is not null then (select auth.uid()) = any (user_ids)
+      else group_id in (select unnest(public.visible_group_ids()))
+           or (group_id is null and (select public.is_active_user()) and company_id = (select public.current_company_id()))
+    end
+  );
+
+drop policy if exists alerts_update on public.alerts;
+create policy alerts_update on public.alerts for update
+  using (
+    case
+      when user_ids is not null then (select auth.uid()) = any (user_ids)
+      else group_id in (select unnest(public.visible_group_ids()))
+           or (group_id is null and (select public.is_active_user()) and company_id = (select public.current_company_id()))
+    end
+  )
+  with check (
+    case
+      when user_ids is not null then (select auth.uid()) = any (user_ids)
+      else group_id in (select unnest(public.visible_group_ids()))
+           or (group_id is null and (select public.is_active_user()) and company_id = (select public.current_company_id()))
+    end
+  );
+
+notify pgrst, 'reload schema';
+$mig0194$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -26782,6 +26831,7 @@ from (values
   (182, 'Recuperar mensagens de todas as conversas privadas (0191)', to_regprocedure('public.request_private_history_recovery_all(integer,boolean)') is not null),
   (183, 'Acesso às telas por usuário (0192)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'screen_access')),
   (184, 'Acompanhamento liberado para quem recebeu a tela (0193)', to_regprocedure('public.has_screen_access(text)') is not null),
-  (185, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (185, 'Alerta em tela de mensagem privada não entregue (0194)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'alerts' and column_name = 'user_ids')),
+  (186, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;

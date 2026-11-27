@@ -34,3 +34,35 @@ export function shouldRetrySend(code: string | null, attempts: number): boolean 
 export function retryDelayMs(attempt: number): number {
   return 3_000 * Math.max(1, attempt);
 }
+
+const TYPE_LABEL: Record<string, string> = {
+  image: 'Imagem',
+  video: 'Vídeo',
+  audio: 'Áudio',
+  document: 'Documento',
+  sticker: 'Figurinha',
+  contact: 'Contato',
+};
+
+/** Alerta em tela de uma mensagem privada que não foi entregue: título, descrição e quem recebe (quem escreveu e o responsável). */
+export function privateFailureAlert(input: {
+  contactName: string | null;
+  phone: string | null;
+  body: string | null;
+  messageType: string;
+  code: string | null;
+  retries: number;
+  sender: string | null;
+  responsible: string | null;
+}): { title: string; description: string; userIds: string[] } {
+  const who = input.contactName?.trim() || (input.phone ? `+${input.phone}` : 'o contato');
+  const text = input.body?.trim() ? `"${input.body.trim().slice(0, 120)}${input.body.trim().length > 120 ? '…' : ''}"` : (TYPE_LABEL[input.messageType] ?? 'A mensagem');
+  const tries = input.retries > 0 ? ` mesmo depois de ${input.retries} ${input.retries === 1 ? 'reenvio automático' : 'reenvios automáticos'}` : '';
+  const reason = input.code ? ` (código ${input.code})` : '';
+  return {
+    title: `Mensagem não entregue a ${who}`,
+    description: `${text} não chegou ao cliente: o WhatsApp recusou o envio${tries}${reason}. Abra a conversa e envie de novo.`,
+    // quem escreveu e o responsável pela conversa (sem repetir; vazio = só ninguém vê, nunca todos)
+    userIds: [...new Set([input.sender, input.responsible].filter((id): id is string => Boolean(id)))],
+  };
+}

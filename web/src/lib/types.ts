@@ -210,9 +210,12 @@ export type Alert = {
   id: string;
   rule_id: string | null;
   /** tipos das regras e os da automação de atendimento (0144: new_message e no_reply, sem regra) */
-  type: AlertType | 'new_message' | 'no_reply';
+  type: AlertType | 'new_message' | 'no_reply' | 'message_failed';
   severity: Severity;
   group_id: string | null;
+  /** conversa privada do alerta e quem o recebe (0194: mensagem privada não entregue) */
+  private_chat_id?: string | null;
+  user_ids?: string[] | null;
   instance_id: string | null;
   message_id: string | null;
   title: string;
