@@ -246,6 +246,7 @@ from (values
   (184, 'Acompanhamento liberado para quem recebeu a tela (0193)', to_regprocedure('public.has_screen_access(text)') is not null),
   (185, 'Alerta em tela de mensagem privada não entregue (0194)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'alerts' and column_name = 'user_ids')),
   (186, 'Histórico de desconexões dos números (0195)', to_regclass('public.whatsapp_connection_log') is not null),
-  (187, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (187, 'Nova conversa reaproveita a conversa que a pessoa já tem (0196)', coalesce(pg_get_functiondef('public.start_private_chat(text,text,text)'::regprocedure) like '%0196%', false)),
+  (188, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
