@@ -248,7 +248,8 @@ CHECKS=$(cat <<'SQL'
   (185, 'Alerta em tela de mensagem privada não entregue (0194)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'alerts' and column_name = 'user_ids')),
   (186, 'Histórico de desconexões dos números (0195)', to_regclass('public.whatsapp_connection_log') is not null),
   (187, 'Nova conversa reaproveita a conversa que a pessoa já tem (0196)', coalesce(pg_get_functiondef('public.start_private_chat(text,text,text)'::regprocedure) like '%0196%', false)),
-  (188, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (188, 'Limpeza das conversas privadas vazias duplicadas (0197)', to_regprocedure('public.cleanup_empty_duplicate_private_chats()') is not null),
+  (189, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 SQL
 )
 VERSIONS=$(ls migrations | grep -E '^0[0-9]{3}_' | grep -v '^0001_' | cut -c1-4 | paste -sd, -)

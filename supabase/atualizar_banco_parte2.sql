@@ -312,7 +312,8 @@ begin
   (185, 'Alerta em tela de mensagem privada não entregue (0194)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'alerts' and column_name = 'user_ids')),
   (186, 'Histórico de desconexões dos números (0195)', to_regclass('public.whatsapp_connection_log') is not null),
   (187, 'Nova conversa reaproveita a conversa que a pessoa já tem (0196)', coalesce(pg_get_functiondef('public.start_private_chat(text,text,text)'::regprocedure) like '%0196%', false)),
-  (188, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (188, 'Limpeza das conversas privadas vazias duplicadas (0197)', to_regprocedure('public.cleanup_empty_duplicate_private_chats()') is not null),
+  (189, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
       ) as t(ord, item, ok)
       where not coalesce(ok, false)
     $q$ into v_fail;
@@ -321,7 +322,7 @@ begin
   end;
   if v_fail is not null then
     insert into public.schema_migrations (version)
-    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184,0185,0186,0187,0188,0189,0190,0191,0192,0193,0194,0195,0196', ',')) v where v < v_fail
+    select v from unnest(string_to_array('0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057,0058,0059,0060,0061,0062,0063,0064,0065,0066,0067,0068,0069,0070,0071,0072,0073,0074,0075,0076,0077,0078,0079,0080,0081,0082,0083,0084,0085,0086,0087,0088,0089,0090,0091,0092,0093,0094,0095,0096,0097,0098,0099,0100,0101,0102,0103,0104,0105,0106,0107,0108,0109,0110,0111,0112,0113,0114,0115,0116,0117,0118,0119,0120,0121,0122,0123,0124,0125,0126,0127,0128,0129,0130,0131,0132,0133,0134,0135,0136,0137,0138,0139,0140,0141,0142,0143,0144,0145,0146,0147,0148,0149,0150,0151,0152,0153,0154,0155,0156,0157,0158,0159,0160,0161,0162,0163,0164,0165,0166,0167,0168,0169,0170,0171,0172,0173,0174,0175,0176,0177,0178,0179,0180,0181,0182,0183,0184,0185,0186,0187,0188,0189,0190,0191,0192,0193,0194,0195,0196,0197', ',')) v where v < v_fail
     on conflict do nothing;
   end if;
 end $seed$;
@@ -10313,6 +10314,83 @@ notify pgrst, 'reload schema';
 $mig0196$);
 commit;
 
+-- >>>>>>>>>>>>>>>>>>>> 0197_merge_empty_duplicate_private_chats.sql <<<<<<<<<<<<<<<<<<<<
+select public._apply_migration('0197', $mig0197$
+-- =====================================================================
+-- Limpeza das conversas privadas vazias que duplicam outra do mesmo contato.
+--
+-- Antes da 0196, "Nova conversa" criava uma conversa nova e vazia quando o histórico estava sob outro identificador (@lid) ou em
+-- outro número conectado. Esta função junta cada uma dessas conversas vazias na conversa do mesmo contato que tem mensagens:
+--
+--  * só mexe em conversa SEM nenhuma mensagem e sem envio pendente, e só quando existe outra conversa do mesmo telefone (sem o 9
+--    do celular) COM mensagens: conversa vazia sem par é mantida;
+--  * a conversa mantida é a do mesmo número conectado, senão a mais recente em atividade;
+--  * o que a vazia tinha de útil passa para a mantida: o histórico de atendimento (transferências, etc.), os alertas, as etiquetas e,
+--    quando alguém TRANSFERIU a vazia depois da última atribuição da mantida, o responsável (quem só abriu a conversa, sem
+--    transferir, não muda o responsável da outra);
+--  * depois apaga a vazia. Pode rodar de novo: só encontra o que ainda sobrou.
+-- Só o banco chama (sem permissão para usuários); o script roda uma vez no fim desta migration e devolve a lista do que juntou.
+-- =====================================================================
+
+create or replace function public.cleanup_empty_duplicate_private_chats()
+returns table (empty_chat_id uuid, name text, phone text, kept_chat_id uuid, assignee_carried boolean)
+language plpgsql security definer set search_path = public as $$
+declare
+  e public.private_chats%rowtype;
+  m public.private_chats%rowtype;
+  v_carry boolean;
+begin
+  for e in
+    select c.* from public.private_chats c
+     where c.last_message_at is null
+       and public.phone_key(c.phone) is not null
+       and not exists (select 1 from public.private_messages x where x.chat_id = c.id)
+       and not exists (select 1 from public.private_outgoing o where o.chat_id = c.id and o.status in ('pending', 'sending'))
+     order by c.created_at
+  loop
+    select k.* into m from public.private_chats k
+     where k.company_id = e.company_id
+       and k.id <> e.id
+       and public.phone_key(k.phone) = public.phone_key(e.phone)
+       and exists (select 1 from public.private_messages y where y.chat_id = k.id)
+     order by (k.instance_id = e.instance_id) desc, k.last_message_at desc nulls last, k.created_at
+     limit 1;
+    if m.id is null then
+      continue; -- sem par com mensagens: fica
+    end if;
+
+    -- responsável: só passa quando houve transferência da vazia mais nova que a atribuição da mantida
+    v_carry := e.assigned_to is not null
+      and exists (
+        select 1 from public.private_chat_events ev
+         where ev.chat_id = e.id and ev.type = 'transferred'
+           and ev.created_at > coalesce(m.assigned_at, '-infinity'::timestamptz));
+    update public.private_chats set
+        tags = array(select distinct t from unnest(coalesce(m.tags, '{}') || coalesce(e.tags, '{}')) as t),
+        assigned_to = case when v_carry then e.assigned_to else m.assigned_to end,
+        assigned_at = case when v_carry then coalesce(e.assigned_at, now()) else m.assigned_at end,
+        closed_at = case when v_carry then null else m.closed_at end,
+        name = coalesce(m.name, e.name)
+     where id = m.id;
+
+    update public.private_chat_events set chat_id = m.id where chat_id = e.id;
+    update public.alerts set private_chat_id = m.id where private_chat_id = e.id;
+    delete from public.private_chats where id = e.id;
+
+    empty_chat_id := e.id; name := e.name; phone := e.phone; kept_chat_id := m.id; assignee_carried := v_carry;
+    return next;
+  end loop;
+end;
+$$;
+revoke all on function public.cleanup_empty_duplicate_private_chats() from public, anon, authenticated;
+
+-- junta as que já existem e mostra o que foi feito (nenhuma linha = nada para juntar)
+select * from public.cleanup_empty_duplicate_private_chats();
+
+notify pgrst, 'reload schema';
+$mig0197$);
+commit;
+
 -- segurança (0095): reaplica a trava de acesso sem login, também nas funções criadas acima
 do $lock$ begin if to_regprocedure('public.lock_down_public_access()') is not null then perform public.lock_down_public_access(); end if; end $lock$;
 commit;
@@ -10568,6 +10646,7 @@ from (values
   (185, 'Alerta em tela de mensagem privada não entregue (0194)', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'alerts' and column_name = 'user_ids')),
   (186, 'Histórico de desconexões dos números (0195)', to_regclass('public.whatsapp_connection_log') is not null),
   (187, 'Nova conversa reaproveita a conversa que a pessoa já tem (0196)', coalesce(pg_get_functiondef('public.start_private_chat(text,text,text)'::regprocedure) like '%0196%', false)),
-  (188, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
+  (188, 'Limpeza das conversas privadas vazias duplicadas (0197)', to_regprocedure('public.cleanup_empty_duplicate_private_chats()') is not null),
+  (189, 'Indicadores no catálogo: ' || (select count(*) from public.indicators), (select count(*) from public.indicators) >= 24)
 ) as t(ord, item, ok)
 order by ord;
